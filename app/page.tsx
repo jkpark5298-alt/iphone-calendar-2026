@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type View = "calendar" | "diary" | "info";
 type PhotoItem = { url: string; name: string; tag: string };
@@ -174,8 +174,7 @@ export default function HomePage() {
     localStorage.setItem("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
   }
 
-  async function addPhotos(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files || []);
+  async function savePhotoFiles(files: File[]) {
     if (!files.length) return;
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
@@ -194,7 +193,23 @@ export default function HomePage() {
     setPhotos(nextPhotos);
     setCalendarPhotos(nextCalendarPhotos);
     savePhotos(currentMonth, currentDay, nextPhotosForDay, nextCalendarPhotos);
+  }
+
+  async function addPhotos(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files || []);
+    await savePhotoFiles(files);
     event.target.value = "";
+  }
+
+  async function handlePhotoPaste(event: ClipboardEvent<HTMLDivElement>) {
+    const pastedFiles = Array.from(event.clipboardData.items)
+      .filter(item => item.type.startsWith("image/"))
+      .map(item => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+
+    if (!pastedFiles.length) return;
+    event.preventDefault();
+    await savePhotoFiles(pastedFiles);
   }
 
   function setCalendarPhoto(k: string, index: number) {
@@ -364,27 +379,27 @@ export default function HomePage() {
 
     return (
       <section>
-        <div className="page-head">
+        <div className="diary-head">
           <h1>2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</h1>
-          <div className="head-actions">
+          <div className="head-actions diary-actions">
             <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
             <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
           </div>
         </div>
 
-        <div className="meta">
-          <span>📍 경기도 파주시 운정 2동</span>
-          <span>☀️ 날씨: <strong>{weather}</strong></span>
-          <span>🌡 온도: <strong>{temp}</strong></span>
-          <span>🕒 조회시점: <strong>{weatherTime}</strong></span>
+        <div className="weather-line">
+          <span>🏠 집</span>
+          <span>☀️ {weather}</span>
+          <span>🌡 {temp}</span>
+          <span className="weather-time">🕒 {weatherTime}</span>
         </div>
 
-        <div className="notice">현재는 임시 날씨입니다. 실제 앱에서는 기상청 API를 연결해 조회 시점 기준 날씨와 온도를 가져오면 됩니다.</div>
+        <div className="notice compact-notice">임시 날씨입니다. 실제 앱에서는 기상청 API로 조회 시점 기준 날씨를 가져옵니다.</div>
 
-        <textarea value={diaryText} onChange={e => saveDiary(e.target.value, voiceText)} placeholder="오늘의 기록을 남겨보세요...." />
+        <textarea className="diary-textarea" value={diaryText} onChange={e => saveDiary(e.target.value, voiceText)} placeholder="오늘의 기록을 남겨보세요...." />
 
-        <div className="box">
-          <div className="box-head">
+        <div className="box photo-box" onPaste={handlePhotoPaste} tabIndex={0}>
+          <div className="box-head compact-box-head">
             <h3>Today 사진</h3>
             <div className="button-row">
               <label className="soft-btn">
@@ -398,7 +413,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {dayPhotos.length === 0 && <div className="empty-photo">사진을 찍거나 가져오면 현재 열려 있는 해당 일기장 날짜 기준으로 {tag(currentMonth, currentDay)} 자동 태그가 붙고, 선택한 사진이 월간 캘린더에 표시됩니다.</div>}
+          {dayPhotos.length === 0 && <div className="empty-photo">사진 찍기·가져오기·붙여넣기 가능 / {tag(currentMonth, currentDay)} 자동 태그</div>}
           <div className="photo-grid">
             {dayPhotos.map((photo, index) => (
               <div className="photo-card" key={`${photo.name}-${index}`}>
@@ -412,15 +427,15 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="box">
-          <div className="box-head">
+        <div className="box voice-box">
+          <div className="box-head compact-box-head">
             <h3>음성 메모 / 받아쓰기</h3>
             <div className="button-row">
               <button type="button" className="soft-btn" onClick={startRecording}>🎙 녹음 시작</button>
               <button type="button" className="soft-btn" onClick={stopRecording}>⏹ 녹음 정지</button>
             </div>
           </div>
-          <p className="muted">아이폰·아이패드에서는 입력창을 누른 뒤 키보드 마이크 버튼으로 받아쓰기를 사용할 수 있습니다.</p>
+          <p className="muted compact-muted">입력창을 누른 뒤 키보드 마이크 버튼으로 받아쓰기를 사용할 수 있습니다.</p>
           {audioUrl && <audio src={audioUrl} controls style={{ width: "100%", marginTop: 12 }} />}
           <div className="voice-save-row">
             <button type="button" className="soft-btn" onClick={shareVoiceMemoToIphoneMemo}>📝 아이폰 메모로 보내기</button>
