@@ -240,6 +240,21 @@ export default function HomePage() {
     }
   }
 
+  function deleteVoiceMemo() {
+    if (!audioUrl && !lastAudioFile) {
+      alert("삭제할 녹음 파일이 없습니다.");
+      return;
+    }
+
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+    }
+    setAudioUrl("");
+    setLastAudioFile(null);
+    audioChunksRef.current = [];
+    setVoiceStatus("녹음 파일 삭제됨");
+  }
+
   async function shareVoiceMemoToIphoneMemo() {
     if (!lastAudioFile) {
       alert("먼저 음성 메모를 녹음해 주세요.");
@@ -409,6 +424,7 @@ export default function HomePage() {
           {audioUrl && <audio src={audioUrl} controls style={{ width: "100%", marginTop: 12 }} />}
           <div className="voice-save-row">
             <button type="button" className="soft-btn" onClick={shareVoiceMemoToIphoneMemo}>📝 아이폰 메모로 보내기</button>
+            <button type="button" className="soft-btn delete-btn" onClick={deleteVoiceMemo}>🗑 녹음 삭제</button>
             <span className="voice-status">{voiceStatus}</span>
           </div>
           <textarea value={voiceText} onChange={e => saveDiary(diaryText, e.target.value)} style={{ minHeight: 140, marginTop: 12 }} placeholder="음성 받아쓰기 또는 녹음 내용을 정리해 보세요." />

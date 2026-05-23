@@ -290,6 +290,7 @@ textarea {
 }
 .voice-save-row { align-items: center; margin-top: 12px; }
 .voice-status { color: var(--deep); font-size: 14px; font-weight: 800; }
+.delete-btn { color: #9f3d3d; }
 .notice {
   background: #fff8e9;
   border-left: 5px solid #e8b34f;
