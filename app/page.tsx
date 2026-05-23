@@ -2,12 +2,32 @@
 
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
-type View = "calendar" | "diary" | "info";
+type View = "calendar" | "diary" | "info" | "schedule";
 type PhotoItem = { url: string; name: string; tag: string };
+type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple";
+type ScheduleItem = {
+  id: string;
+  title: string;
+  startTime: string;
+  endDate: string;
+  repeat: string;
+  color: ScheduleColor;
+};
 
 const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 const weekdayLabels = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const monthDays: Record<number, number> = { 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
+const scheduleColorLabels: Record<ScheduleColor, string> = {
+  yellow: "노란색",
+  blue: "파란색",
+  red: "빨간색",
+  green: "초록색",
+  lightGreen: "녹색",
+  orange: "주황색",
+  navy: "남색",
+  purple: "보라색",
+};
+
 const holidays: Record<string, string> = {
   "5-5": "어린이날",
   "5-24": "부처님오신날",
@@ -76,6 +96,12 @@ export default function HomePage() {
   const [infoText, setInfoText] = useState("");
   const [photos, setPhotos] = useState<Record<string, PhotoItem[]>>({});
   const [calendarPhotos, setCalendarPhotos] = useState<Record<string, string>>({});
+  const [schedules, setSchedules] = useState<Record<string, ScheduleItem[]>>({});
+  const [scheduleTitle, setScheduleTitle] = useState("");
+  const [scheduleStartTime, setScheduleStartTime] = useState("");
+  const [scheduleEndDate, setScheduleEndDate] = useState("");
+  const [scheduleRepeat, setScheduleRepeat] = useState("없음");
+  const [scheduleColor, setScheduleColor] = useState<ScheduleColor>("yellow");
   const [audioUrl, setAudioUrl] = useState("");
   const [voiceStatus, setVoiceStatus] = useState("녹음 파일 없음");
   const [lastAudioFile, setLastAudioFile] = useState<File | null>(null);
@@ -88,6 +114,8 @@ export default function HomePage() {
     try {
       const rawCalendar = localStorage.getItem("iphone-diary-2026-calendar-photos");
       if (rawCalendar) setCalendarPhotos(JSON.parse(rawCalendar));
+      const rawSchedules = localStorage.getItem("iphone-calendar-2026-schedules");
+      if (rawSchedules) setSchedules(JSON.parse(rawSchedules));
     } catch {
       setCalendarPhotos({});
     }
@@ -141,6 +169,26 @@ export default function HomePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function openSchedule(month: number, day: number) {
+    setCurrentMonth(month);
+    setCurrentDay(day);
+    setScheduleTitle("");
+    setScheduleStartTime("");
+    setScheduleEndDate(`2026-${pad(month)}-${pad(day)}`);
+    setScheduleRepeat("없음");
+    setScheduleColor("yellow");
+    setView("schedule");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function moveToTodayOnCalendar() {
+    const today = getSafeToday();
+    setCurrentMonth(today.month);
+    setCurrentDay(today.day);
+    setView("calendar");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function openTodayDiary() {
     const today = new Date();
     const year = today.getFullYear();
@@ -167,6 +215,42 @@ export default function HomePage() {
   function saveInfo(nextInfoText: string) {
     setInfoText(nextInfoText);
     localStorage.setItem(storageKey("info", currentMonth, currentDay), JSON.stringify({ infoText: nextInfoText }));
+  }
+
+  function saveSchedules(nextSchedules: Record<string, ScheduleItem[]>) {
+    setSchedules(nextSchedules);
+    localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
+  }
+
+  function addSchedule() {
+    const trimmedTitle = scheduleTitle.trim();
+    if (!trimmedTitle) {
+      alert("일정 제목을 입력해 주세요.");
+      return;
+    }
+
+    const k = key(currentMonth, currentDay);
+    const newSchedule: ScheduleItem = {
+      id: `${Date.now()}`,
+      title: trimmedTitle,
+      startTime: scheduleStartTime,
+      endDate: scheduleEndDate,
+      repeat: scheduleRepeat,
+      color: scheduleColor,
+    };
+    const nextSchedules = { ...schedules, [k]: [...(schedules[k] || []), newSchedule] };
+    saveSchedules(nextSchedules);
+    setScheduleTitle("");
+    setScheduleStartTime("");
+    setScheduleRepeat("없음");
+    alert("일정이 저장되었습니다.");
+  }
+
+  function deleteSchedule(scheduleId: string) {
+    const k = key(currentMonth, currentDay);
+    const nextForDay = (schedules[k] || []).filter(item => item.id !== scheduleId);
+    const nextSchedules = { ...schedules, [k]: nextForDay };
+    saveSchedules(nextSchedules);
   }
 
   function savePhotos(month: number, day: number, nextPhotos: PhotoItem[], nextCalendarPhotos: Record<string, string>) {
@@ -306,8 +390,10 @@ export default function HomePage() {
       const k = key(currentMonth, day);
       const holidayOrOff = isHolidayOrOff(currentMonth, day);
       const sunday = isSunday(currentMonth, day);
+      const daySchedules = schedules[k] || [];
+      const isSelected = currentDay === day;
       cells.push(
-        <div className={`day ${holidayOrOff ? "holiday-day" : ""}`} key={k}>
+        <div className={`day ${holidayOrOff ? "holiday-day" : ""} ${isSelected ? "selected-day" : ""}`} key={k}>
           <button
             type="button"
             className="day-hit"
@@ -333,6 +419,15 @@ export default function HomePage() {
           <div className="thumb">
             {calendarPhotos[k] ? <img src={calendarPhotos[k]} alt="캘린더 대표 사진" /> : "대표 사진 없음"}
           </div>
+          {daySchedules.length > 0 && (
+            <div className="schedule-chip-list">
+              {daySchedules.slice(0, 3).map(item => (
+                <div className={`schedule-chip schedule-${item.color}`} key={item.id}>
+                  {item.startTime && <span>{item.startTime}</span>} {item.title}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
@@ -352,14 +447,16 @@ export default function HomePage() {
           ))}
         </div>
 
-        <div className="section-title">
-          <h1>
-            <span className="main-title">2026년 아이폰 캘린더</span><br />
-            <span className="month-subtitle">2026. {pad(currentMonth)}</span>
+        <div className="section-title calendar-headline">
+          <h1 className="calendar-title-line">
+            <span className="main-title">2026년 아이폰 캘린더</span>
+            <span className="month-badge">{currentMonth}월</span>
           </h1>
-          <div className="head-actions">
-            <button type="button" className="pill-btn" onClick={openTodayDiary}>TODAY 일기장</button>
-            <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, 1)}>정보보관소</button>
+          <div className="head-actions calendar-top-actions">
+            <button type="button" className="today-circle" onClick={moveToTodayOnCalendar} aria-label="오늘 날짜로 이동">{todayDefault.day}</button>
+            <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
+            <button type="button" className="pill-btn compact-pill" onClick={openTodayDiary}>TODAY 일기장</button>
+            <button type="button" className="pill-btn compact-pill" onClick={() => openInfo(currentMonth, currentDay)}>정보보관소</button>
           </div>
         </div>
 
@@ -448,6 +545,82 @@ export default function HomePage() {
     );
   }
 
+  function ScheduleView() {
+    const k = key(currentMonth, currentDay);
+    const daySchedules = schedules[k] || [];
+
+    return (
+      <section>
+        <div className="schedule-page box">
+          <div className="schedule-head">
+            <h2>+ 일정 기록 ({pad(currentMonth)}.{pad(currentDay)})</h2>
+            <div className="head-actions schedule-actions">
+              <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
+              <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
+            </div>
+          </div>
+
+          <div className="schedule-form">
+            <label>
+              <span>제목</span>
+              <input value={scheduleTitle} onChange={e => setScheduleTitle(e.target.value)} placeholder="일정 제목" />
+            </label>
+            <label>
+              <span>시작시간</span>
+              <input type="time" value={scheduleStartTime} onChange={e => setScheduleStartTime(e.target.value)} />
+            </label>
+            <label>
+              <span>종료일</span>
+              <input type="date" value={scheduleEndDate} onChange={e => setScheduleEndDate(e.target.value)} />
+            </label>
+            <label>
+              <span>반복</span>
+              <select value={scheduleRepeat} onChange={e => setScheduleRepeat(e.target.value)}>
+                <option>없음</option>
+                <option>매일</option>
+                <option>매주</option>
+                <option>매월</option>
+                <option>매년</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="color-picker">
+            <span>색깔 선택</span>
+            <div className="color-options">
+              {(Object.keys(scheduleColorLabels) as ScheduleColor[]).map(color => (
+                <button
+                  type="button"
+                  key={color}
+                  className={`color-option schedule-${color} ${scheduleColor === color ? "active" : ""}`}
+                  onClick={() => setScheduleColor(color)}
+                >
+                  {scheduleColorLabels[color]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button type="button" className="save-schedule-btn" onClick={addSchedule}>일정 저장</button>
+
+          <div className="saved-schedules">
+            <h3>저장된 일정</h3>
+            {daySchedules.length === 0 && <p className="muted">아직 저장된 일정이 없습니다.</p>}
+            {daySchedules.map(item => (
+              <div className={`saved-schedule schedule-${item.color}`} key={item.id}>
+                <div>
+                  <strong>{item.title}</strong>
+                  <span>{item.startTime || "시간 없음"} · 종료일 {item.endDate || "미지정"} · 반복 {item.repeat}</span>
+                </div>
+                <button type="button" onClick={() => deleteSchedule(item.id)}>삭제</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   function InfoView() {
     return (
       <section>
@@ -470,6 +643,7 @@ export default function HomePage() {
       {view === "calendar" && <CalendarView />}
       {view === "diary" && <DiaryView />}
       {view === "info" && <InfoView />}
+      {view === "schedule" && <ScheduleView />}
     </main>
   );
 }
