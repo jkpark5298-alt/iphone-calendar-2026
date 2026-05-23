@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+.vercel
+.env
+.env.local
+.DS_Store
+*.log
+
+# 압축 풀어둔 임시 수정본 폴더
+iphone-calendar-2026-ui-update
