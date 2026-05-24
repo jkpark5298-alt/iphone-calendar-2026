@@ -138,9 +138,42 @@ button { touch-action: manipulation; }
   color: #777;
 }
 .info-title {
-  font-size: 25px;
+  font-size: 22px;
   line-height: 1.2;
   white-space: nowrap;
+  margin: 0;
+}
+.info-head {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+}
+.info-sub-date {
+  margin-top: 4px;
+  color: #7a817b;
+  font-weight: 800;
+  font-size: 15px;
+}
+.info-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.info-date-circle {
+  width: 38px;
+  height: 38px;
+  font-size: 17px;
+}
+.red-date-input {
+  width: 100%;
+  border: 1px solid #d6d6d2;
+  border-radius: 10px;
+  padding: 13px;
+  font-size: 18px;
+  background: white;
+  color: var(--text);
 }
 
 .head-actions {
@@ -206,9 +239,6 @@ button { touch-action: manipulation; }
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
-.weekday-red {
-  color: #ffd3d3;
-}
 .day {
   position: relative;
   min-height: 132px;
@@ -236,7 +266,7 @@ button { touch-action: manipulation; }
   gap: 6px;
   flex-wrap: nowrap;
 }
-.num { font-size: 17px; font-weight: 700; line-height: 1.05; }
+.num { font-size: 14px; font-weight: 600; line-height: 1.05; }
 .num-red { color: #e24141; }
 .holiday-day { background: #fffdfd; }
 .holiday {
@@ -249,13 +279,10 @@ button { touch-action: manipulation; }
   width: 100%;
   margin-top: 5px;
 }
-.off-label {
-  color: #df5b5b;
-}
 .thumb {
   position: relative;
   z-index: 2;
-  margin-top: 10px;
+  margin-top: 8px;
   height: 68px;
   border-radius: 8px;
   background: #f4f4f1;
@@ -266,6 +293,10 @@ button { touch-action: manipulation; }
   color: #999;
   font-size: 12px;
   overflow: hidden;
+}
+.empty-thumb {
+  background: transparent;
+  border-color: transparent;
 }
 .thumb img { width: 100%; height: 100%; object-fit: cover; }
 
@@ -385,8 +416,12 @@ textarea {
   .mini-btn { min-width: 32px; min-height: 32px; font-size: 13px; padding: 4px 7px; }
   .only-info { min-width: 24px; width: 24px; height: 24px; min-height: 24px; font-size: 12px; }
   .holiday { font-size: 10px; }
-  .thumb { height: 50px; }
-  .info-title { font-size: 18px; white-space: nowrap; }
+  .thumb { height: 42px; }
+  .info-title { font-size: 20px; white-space: nowrap; }
+  .info-sub-date { font-size: 13px; }
+  .info-nav-row { flex-wrap: nowrap; gap: 6px; }
+  .info-nav-row .pill-btn { padding: 9px 10px; font-size: 12px; }
+  .info-date-circle { width: 34px; height: 34px; min-width: 34px; font-size: 15px; }
   textarea { min-height: 300px; font-size: 16px; }
 
   .diary-head {
@@ -464,7 +499,8 @@ textarea {
   flex-wrap: nowrap;
 }
 .today-circle,
-.plus-btn {
+.plus-btn,
+.red-plus-btn {
   border: 0;
   cursor: pointer;
   font-weight: 900;
@@ -479,12 +515,17 @@ textarea {
   font-size: 20px;
   line-height: 1;
 }
-.plus-btn {
+.plus-btn,
+.red-plus-btn {
   width: 42px;
   height: 42px;
   border-radius: 14px;
   font-size: 28px;
   line-height: 1;
+}
+.red-plus-btn {
+  color: #e24141;
+  background: #fff2f2;
 }
 .compact-pill {
   padding: 10px 14px;
@@ -637,19 +678,20 @@ textarea {
     padding-bottom: 2px;
   }
   .today-circle,
-  .plus-btn {
+  .plus-btn,
+  .red-plus-btn {
     width: 36px;
     min-width: 36px;
     height: 36px;
   }
   .today-circle { font-size: 17px; }
-  .plus-btn { font-size: 24px; }
+  .plus-btn, .red-plus-btn { font-size: 24px; }
   .compact-pill {
     padding: 9px 11px;
     font-size: 12px;
   }
   .day { min-height: 110px; }
-  .num { font-size: 13px; font-weight: 600; }
+  .num { font-size: 12px; font-weight: 600; }
   .only-info { min-width: 22px; width: 22px; height: 22px; min-height: 22px; font-size: 11px; }
   .schedule-chip {
     font-size: 9px;

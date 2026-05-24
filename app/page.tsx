@@ -2,7 +2,7 @@
 
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
-type View = "calendar" | "diary" | "info" | "schedule";
+type View = "calendar" | "diary" | "info" | "schedule" | "redDate";
 type PhotoItem = { url: string; name: string; tag: string };
 type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple";
 type ScheduleItem = {
@@ -65,8 +65,8 @@ function isSunday(month: number, day: number) {
   return new Date(2026, month - 1, day).getDay() === 0;
 }
 
-function isHolidayOrOff(month: number, day: number) {
-  return Boolean(holidays[key(month, day)]) || isSunday(month, day);
+function isHoliday(month: number, day: number) {
+  return Boolean(holidays[key(month, day)]);
 }
 
 function storageKey(type: string, month: number, day: number) {
@@ -97,6 +97,8 @@ export default function HomePage() {
   const [photos, setPhotos] = useState<Record<string, PhotoItem[]>>({});
   const [calendarPhotos, setCalendarPhotos] = useState<Record<string, string>>({});
   const [schedules, setSchedules] = useState<Record<string, ScheduleItem[]>>({});
+  const [redDates, setRedDates] = useState<Record<number, number[]>>({});
+  const [redDateInput, setRedDateInput] = useState("");
   const [scheduleTitle, setScheduleTitle] = useState("");
   const [scheduleStartTime, setScheduleStartTime] = useState("");
   const [scheduleEndDate, setScheduleEndDate] = useState("");
@@ -116,6 +118,8 @@ export default function HomePage() {
       if (rawCalendar) setCalendarPhotos(JSON.parse(rawCalendar));
       const rawSchedules = localStorage.getItem("iphone-calendar-2026-schedules");
       if (rawSchedules) setSchedules(JSON.parse(rawSchedules));
+      const rawRedDates = localStorage.getItem("iphone-calendar-2026-red-dates");
+      if (rawRedDates) setRedDates(JSON.parse(rawRedDates));
     } catch {
       setCalendarPhotos({});
     }
@@ -179,6 +183,26 @@ export default function HomePage() {
     setScheduleColor("yellow");
     setView("schedule");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openRedDateInput() {
+    setRedDateInput((redDates[currentMonth] || []).join(","));
+    setView("redDate");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function saveRedDateInput() {
+    const parsedDays = redDateInput
+      .split(/[,.\s]+/)
+      .map(value => Number(value.trim()))
+      .filter(value => Number.isInteger(value) && value >= 1 && value <= monthDays[currentMonth]);
+
+    const uniqueDays = Array.from(new Set(parsedDays)).sort((a, b) => a - b);
+    const nextRedDates = { ...redDates, [currentMonth]: uniqueDays };
+    setRedDates(nextRedDates);
+    localStorage.setItem("iphone-calendar-2026-red-dates", JSON.stringify(nextRedDates));
+    alert(`${currentMonth}월 빨간 날짜가 저장되었습니다.`);
+    setView("calendar");
   }
 
   function moveToTodayOnCalendar() {
@@ -388,12 +412,12 @@ export default function HomePage() {
 
     for (let day = 1; day <= monthDays[currentMonth]; day++) {
       const k = key(currentMonth, day);
-      const holidayOrOff = isHolidayOrOff(currentMonth, day);
-      const sunday = isSunday(currentMonth, day);
+      const manuallyRed = (redDates[currentMonth] || []).includes(day);
+      const redMarked = isHoliday(currentMonth, day) || manuallyRed;
       const daySchedules = schedules[k] || [];
       const isSelected = currentDay === day;
       cells.push(
-        <div className={`day ${holidayOrOff ? "holiday-day" : ""} ${isSelected ? "selected-day" : ""}`} key={k}>
+        <div className={`day ${redMarked ? "holiday-day" : ""} ${isSelected ? "selected-day" : ""}`} key={k}>
           <button
             type="button"
             className="day-hit"
@@ -401,7 +425,7 @@ export default function HomePage() {
             aria-label={`${currentMonth}월 ${day}일 일기장으로 이동`}
           />
           <div className="day-top">
-            <span className={`num ${holidayOrOff ? "num-red" : ""}`}>{day}</span>
+            <span className={`num ${redMarked ? "num-red" : ""}`}>{day}</span>
             <button
               type="button"
               className="mini-btn info only-info"
@@ -415,9 +439,8 @@ export default function HomePage() {
             </button>
           </div>
           {holidays[k] && <div className="holiday">{holidays[k]}</div>}
-          {!holidays[k] && sunday && <div className="holiday off-label">휴무일</div>}
-          <div className="thumb">
-            {calendarPhotos[k] ? <img src={calendarPhotos[k]} alt="캘린더 대표 사진" /> : "대표 사진 없음"}
+          <div className={`thumb ${calendarPhotos[k] ? "" : "empty-thumb"}`}>
+            {calendarPhotos[k] ? <img src={calendarPhotos[k]} alt="캘린더 대표 사진" /> : null}
           </div>
           {daySchedules.length > 0 && (
             <div className="schedule-chip-list">
@@ -454,6 +477,7 @@ export default function HomePage() {
           </h1>
           <div className="head-actions calendar-top-actions">
             <button type="button" className="today-circle" onClick={moveToTodayOnCalendar} aria-label="오늘 날짜로 이동">{todayDefault.day}</button>
+            <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
             <button type="button" className="pill-btn compact-pill" onClick={openTodayDiary}>TODAY 일기장</button>
             <button type="button" className="pill-btn compact-pill" onClick={() => openInfo(currentMonth, currentDay)}>정보보관소</button>
@@ -461,7 +485,7 @@ export default function HomePage() {
         </div>
 
         <div className="calendar">
-          {weekdayLabels.map((label, index) => <div key={label} className={`weekday ${index === 0 ? "weekday-red" : ""}`}>{label}</div>)}
+          {weekdayLabels.map(label => <div key={label} className="weekday">{label}</div>)}
           {cells}
         </div>
       </section>
@@ -621,15 +645,39 @@ export default function HomePage() {
     );
   }
 
+  function RedDateView() {
+    return (
+      <section>
+        <div className="box red-date-page">
+          <div className="schedule-head">
+            <h2>빨간 날짜 표시 ({currentMonth}월)</h2>
+            <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
+          </div>
+          <p className="muted">빨간색으로 표시할 날짜만 입력하세요. 예: 6, 25</p>
+          <input
+            className="red-date-input"
+            value={redDateInput}
+            onChange={e => setRedDateInput(e.target.value)}
+            placeholder="예: 6, 25"
+            inputMode="numeric"
+          />
+          <button type="button" className="save-schedule-btn" onClick={saveRedDateInput}>빨간 날짜 저장</button>
+        </div>
+      </section>
+    );
+  }
+
   function InfoView() {
     return (
       <section>
-        <div className="box" style={{ border: "2px solid var(--deep)", minHeight: 720 }}>
-          <div className="page-head" style={{ marginTop: 0 }}>
-            <h2 className="info-title">📂 주요 정보 보관소 (2026. {pad(currentMonth)}. {pad(currentDay)})</h2>
-            <div className="head-actions">
+        <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }}>
+          <div className="info-head">
+            <h2 className="info-title">📂 주요 정보 보관소</h2>
+            <div className="info-sub-date">2026. {pad(currentMonth)}. {pad(currentDay)}</div>
+            <div className="info-nav-row">
               <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 월간 캘린더</button>
               <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
+              <button type="button" className="today-circle info-date-circle" onClick={() => openDiary(currentMonth, currentDay)}>{currentDay}</button>
             </div>
           </div>
           <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 520, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요." />
@@ -640,10 +688,11 @@ export default function HomePage() {
 
   return (
     <main className="app">
-      {view === "calendar" && <CalendarView />}
-      {view === "diary" && <DiaryView />}
-      {view === "info" && <InfoView />}
-      {view === "schedule" && <ScheduleView />}
+      {view === "calendar" && CalendarView()}
+      {view === "diary" && DiaryView()}
+      {view === "info" && InfoView()}
+      {view === "schedule" && ScheduleView()}
+      {view === "redDate" && RedDateView()}
     </main>
   );
 }
