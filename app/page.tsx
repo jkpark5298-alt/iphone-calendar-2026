@@ -122,6 +122,7 @@ export default function HomePage() {
   const [photos, setPhotos] = useState<Record<string, PhotoItem[]>>({});
   const [infoPhotos, setInfoPhotos] = useState<Record<string, PhotoItem[]>>({});
   const [calendarPhotos, setCalendarPhotos] = useState<Record<string, string>>({});
+  const [calendarPhotoIndexes, setCalendarPhotoIndexes] = useState<Record<string, number>>({});
   const [schedules, setSchedules] = useState<Record<string, ScheduleItem[]>>({});
   const [redDates, setRedDates] = useState<Record<number, number[]>>({});
   const [redDateInput, setRedDateInput] = useState("");
@@ -146,6 +147,8 @@ export default function HomePage() {
     try {
       const rawCalendar = localStorage.getItem("iphone-diary-2026-calendar-photos");
       if (rawCalendar) setCalendarPhotos(JSON.parse(rawCalendar));
+      const rawCalendarIndexes = localStorage.getItem("iphone-diary-2026-calendar-photo-indexes");
+      if (rawCalendarIndexes) setCalendarPhotoIndexes(JSON.parse(rawCalendarIndexes));
       const rawSchedules = localStorage.getItem("iphone-calendar-2026-schedules");
       if (rawSchedules) setSchedules(JSON.parse(rawSchedules));
       const rawRedDates = localStorage.getItem("iphone-calendar-2026-red-dates");
@@ -323,7 +326,7 @@ export default function HomePage() {
   }
 
   function saveInfoPhotos(month: number, day: number, nextPhotos: PhotoItem[]) {
-    localStorage.setItem(storageKey("infoPhotos", month, day), JSON.stringify(nextPhotos));
+    setLocalStorageSafely(storageKey("infoPhotos", month, day), JSON.stringify(nextPhotos));
   }
 
 
@@ -345,13 +348,9 @@ export default function HomePage() {
     });
   }
 
-  async function makeOptimizedImageDataUrl(file: File) {
-    const originalDataUrl = await readImageFileAsDataUrl(file);
-    if (!file.type.startsWith("image/")) return originalDataUrl;
-
+  async function makeImageDataUrl(dataUrl: string, maxSide = 1000, quality = 0.68) {
     try {
-      const image = await loadImage(originalDataUrl);
-      const maxSide = 1600;
+      const image = await loadImage(dataUrl);
       const ratio = Math.min(1, maxSide / Math.max(image.width, image.height));
       const width = Math.max(1, Math.round(image.width * ratio));
       const height = Math.max(1, Math.round(image.height * ratio));
@@ -360,13 +359,33 @@ export default function HomePage() {
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext("2d");
-      if (!ctx) return originalDataUrl;
+      if (!ctx) return dataUrl;
       ctx.drawImage(image, 0, 0, width, height);
 
-      const optimized = canvas.toDataURL("image/jpeg", 0.82);
-      return optimized.length < originalDataUrl.length ? optimized : originalDataUrl;
+      const optimized = canvas.toDataURL("image/jpeg", quality);
+      return optimized.length < dataUrl.length ? optimized : dataUrl;
     } catch {
-      return originalDataUrl;
+      return dataUrl;
+    }
+  }
+
+  async function makeOptimizedImageDataUrl(file: File) {
+    const originalDataUrl = await readImageFileAsDataUrl(file);
+    if (!file.type.startsWith("image/")) return originalDataUrl;
+    return makeImageDataUrl(originalDataUrl, 720, 0.62);
+  }
+
+  async function makeCalendarThumbDataUrl(dataUrl: string) {
+    return makeImageDataUrl(dataUrl, 420, 0.7);
+  }
+
+  function setLocalStorageSafely(storageName: string, value: string) {
+    try {
+      localStorage.setItem(storageName, value);
+      return true;
+    } catch {
+      alert("사진 저장 공간이 부족합니다. 사진 수를 줄이거나 기존 사진을 삭제한 뒤 다시 시도해 주세요.");
+      return false;
     }
   }
 
@@ -763,9 +782,11 @@ export default function HomePage() {
     saveSchedules(nextSchedules);
   }
 
-  function savePhotos(month: number, day: number, nextPhotos: PhotoItem[], nextCalendarPhotos: Record<string, string>) {
-    localStorage.setItem(storageKey("photos", month, day), JSON.stringify(nextPhotos));
-    localStorage.setItem("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
+  function savePhotos(month: number, day: number, nextPhotos: PhotoItem[], nextCalendarPhotos: Record<string, string>, nextCalendarPhotoIndexes = calendarPhotoIndexes) {
+    const okPhotos = setLocalStorageSafely(storageKey("photos", month, day), JSON.stringify(nextPhotos));
+    const okCalendar = setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
+    const okIndexes = setLocalStorageSafely("iphone-diary-2026-calendar-photo-indexes", JSON.stringify(nextCalendarPhotoIndexes));
+    return okPhotos && okCalendar && okIndexes;
   }
 
   async function savePhotoFiles(files: File[]) {
@@ -784,14 +805,20 @@ export default function HomePage() {
 
     const newItems = await Promise.all(files.map(readFile));
     const k = key(currentMonth, currentDay);
-    const nextPhotosForDay = [...(photos[k] || []), ...newItems];
+    const previousItems = photos[k] || [];
+    const nextPhotosForDay = [...previousItems, ...newItems];
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     const nextCalendarPhotos = { ...calendarPhotos };
-    if (!nextCalendarPhotos[k]) nextCalendarPhotos[k] = newItems[0].url;
+    const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes };
+    if (!nextCalendarPhotos[k]) {
+      nextCalendarPhotos[k] = await makeCalendarThumbDataUrl(newItems[0].url);
+      nextCalendarPhotoIndexes[k] = previousItems.length;
+    }
 
     setPhotos(nextPhotos);
     setCalendarPhotos(nextCalendarPhotos);
-    savePhotos(currentMonth, currentDay, nextPhotosForDay, nextCalendarPhotos);
+    setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
+    savePhotos(currentMonth, currentDay, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes);
   }
 
   async function addPhotos(event: ChangeEvent<HTMLInputElement>) {
@@ -811,14 +838,31 @@ export default function HomePage() {
     await savePhotoFiles(pastedFiles);
   }
 
-  function setCalendarPhoto(k: string, index: number) {
+  async function setCalendarPhoto(k: string, index: number) {
     const items = photos[k] || [];
     if (!items[index]) return;
-    const nextCalendarPhotos = { ...calendarPhotos, [k]: items[index].url };
+    const nextCalendarPhotos = { ...calendarPhotos, [k]: await makeCalendarThumbDataUrl(items[index].url) };
+    const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes, [k]: index };
     setCalendarPhotos(nextCalendarPhotos);
+    setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
     const [month, day] = k.split("-").map(Number);
-    savePhotos(month, day, items, nextCalendarPhotos);
+    savePhotos(month, day, items, nextCalendarPhotos, nextCalendarPhotoIndexes);
     alert("선택한 사진을 월간 캘린더에 붙였습니다.");
+  }
+
+  function openCalendarPhotoOriginal(k: string) {
+    const [month, day] = k.split("-").map(Number);
+    const dayItems = photos[k] || (() => {
+      try {
+        const raw = localStorage.getItem(storageKey("photos", month, day));
+        return raw ? JSON.parse(raw) as PhotoItem[] : [];
+      } catch {
+        return [];
+      }
+    })();
+    const selectedIndex = calendarPhotoIndexes[k] ?? 0;
+    const original = dayItems[selectedIndex]?.url || dayItems[0]?.url || calendarPhotos[k];
+    if (original) setOriginalImageUrl(original);
   }
 
   function deletePhoto(k: string, index: number) {
@@ -830,18 +874,26 @@ export default function HomePage() {
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     const nextCalendarPhotos = { ...calendarPhotos };
 
-    if (nextCalendarPhotos[k] === deletedUrl) {
+    const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes };
+    const selectedIndex = nextCalendarPhotoIndexes[k];
+
+    if (selectedIndex === index || nextCalendarPhotos[k] === deletedUrl) {
       if (nextPhotosForDay[0]) {
         nextCalendarPhotos[k] = nextPhotosForDay[0].url;
+        nextCalendarPhotoIndexes[k] = 0;
       } else {
         delete nextCalendarPhotos[k];
+        delete nextCalendarPhotoIndexes[k];
       }
+    } else if (typeof selectedIndex === "number" && selectedIndex > index) {
+      nextCalendarPhotoIndexes[k] = selectedIndex - 1;
     }
 
     setPhotos(nextPhotos);
     setCalendarPhotos(nextCalendarPhotos);
+    setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
     const [month, day] = k.split("-").map(Number);
-    savePhotos(month, day, nextPhotosForDay, nextCalendarPhotos);
+    savePhotos(month, day, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes);
   }
 
 
@@ -864,10 +916,10 @@ export default function HomePage() {
     return index;
   }
 
-  function attachDiaryPhotoToCalendar(k: string) {
+  async function attachDiaryPhotoToCalendar(k: string) {
     const index = getDiaryPhotoIndexFromUser(k, "캘린더에 붙이기");
     if (index === null) return;
-    setCalendarPhoto(k, index);
+    await setCalendarPhoto(k, index);
   }
 
   function deleteDiaryPhotoBySelect(k: string) {
@@ -1127,7 +1179,7 @@ export default function HomePage() {
                 className="calendar-thumb-button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  setOriginalImageUrl(calendarPhotos[k]);
+                  openCalendarPhotoOriginal(k);
                 }}
                 aria-label={`${currentMonth}월 ${day}일 대표 사진 원본 보기`}
               >
@@ -1206,15 +1258,17 @@ export default function HomePage() {
             <span className="weather-time">🕒 {weatherTime} · {weatherSource}</span>
           </div>
           <div className="button-row diary-photo-import-row">
-            <label className="soft-btn">
+            <label className="soft-btn compact-photo-btn">
               📷 사진찍기
               <input className="hidden-input" type="file" accept="image/*" capture="environment" multiple onChange={addPhotos} />
             </label>
-            <label className="soft-btn">
+            <label className="soft-btn compact-photo-btn">
               🖼 사진 가져오기
               <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
             </label>
-            <button type="button" className="soft-btn" onClick={pastePhotoFromClipboard}>📋 붙여넣기</button>
+            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 붙여넣기</button>
+            <button type="button" className="soft-btn compact-photo-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린더 붙이기</button>
+            <button type="button" className="soft-btn compact-photo-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>삭제</button>
           </div>
         </div>
 
@@ -1222,13 +1276,6 @@ export default function HomePage() {
           <textarea className="diary-textarea diary-main-textarea" value={diaryText} onChange={e => saveDiary(e.target.value, voiceText)} placeholder="오늘의 기록을 남겨보세요...." />
 
           <div className="box photo-box diary-photo-panel" onPaste={handlePhotoPaste} tabIndex={0}>
-            <div className="box-head compact-box-head diary-photo-action-head">
-              <div className="button-row diary-photo-main-actions">
-                <button type="button" className="soft-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린더 붙이기</button>
-                <button type="button" className="soft-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>삭제</button>
-              </div>
-            </div>
-
             {dayPhotos.length === 0 && <div className="empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
             <div className="diary-photo-grid-safe">
               {dayPhotos.map((photo, index) => (

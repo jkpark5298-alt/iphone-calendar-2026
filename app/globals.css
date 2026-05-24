@@ -1568,3 +1568,111 @@ textarea {
     max-height: 170px;
   }
 }
+
+/* 2026-05-25 diary photo/voice compact controls + safer layout */
+.diary-top-row {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+.diary-photo-import-row {
+  width: 100%;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 7px;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.compact-photo-btn {
+  padding: 8px 10px !important;
+  font-size: 12px !important;
+  min-height: 36px;
+}
+.diary-photo-panel {
+  min-height: 0;
+}
+.diary-main-textarea {
+  min-height: 520px;
+}
+.diary-photo-grid-safe {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.diary-photo-card-safe img {
+  max-height: 240px;
+}
+.voice-head-safe {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.voice-head-safe h3 {
+  flex: 0 0 auto;
+}
+.voice-main-actions {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  justify-content: flex-start;
+  gap: 7px;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.voice-main-actions .soft-btn {
+  padding: 8px 10px;
+  font-size: 12px;
+  min-height: 36px;
+}
+.voice-status {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.calendar-thumb-button img,
+.thumb img {
+  object-fit: contain !important;
+}
+
+@media (max-width: 820px) {
+  .diary-top-row {
+    grid-template-columns: 1fr;
+  }
+  .diary-photo-import-row {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+  }
+  .compact-photo-btn {
+    padding: 8px 9px !important;
+    font-size: 12px !important;
+  }
+  .diary-main-row {
+    grid-template-columns: minmax(0, 3fr) minmax(140px, 2fr);
+    gap: 8px;
+  }
+  .diary-main-textarea,
+  .diary-photo-panel {
+    min-height: 420px;
+  }
+  .diary-photo-grid-safe {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 7px;
+  }
+  .diary-photo-card-safe img {
+    max-height: 150px;
+  }
+  .empty-photo {
+    font-size: 12px;
+    padding: 10px 8px;
+  }
+  .voice-head-safe {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .voice-main-actions {
+    width: 100%;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+  }
+  .voice-main-actions .soft-btn {
+    padding: 8px 9px;
+    font-size: 12px;
+  }
+}
