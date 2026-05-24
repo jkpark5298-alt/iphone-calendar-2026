@@ -411,37 +411,145 @@ export default function HomePage() {
     }
   }
 
+  function getSupportedAudioMimeType() {
+    if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return "";
+    const candidates = [
+      "audio/mp4;codecs=mp4a.40.2",
+      "audio/mp4",
+      "audio/mpeg",
+      "audio/aac",
+      "audio/webm;codecs=opus",
+      "audio/webm",
+    ];
+    return candidates.find(type => MediaRecorder.isTypeSupported(type)) || "";
+  }
+
+  function getAudioExtension(type: string) {
+    const lowered = type.toLowerCase();
+    if (lowered.includes("mpeg") || lowered.includes("mp3")) return "mp3";
+    if (lowered.includes("mp4") || lowered.includes("m4a") || lowered.includes("aac")) return "m4a";
+    if (lowered.includes("webm")) return "webm";
+    return "m4a";
+  }
+
+  function normalizeAudioFileName(file: File) {
+    const extension = getAudioExtension(file.type || file.name);
+    const originalName = file.name || `diary_voice_${pad(currentMonth)}_${pad(currentDay)}.${extension}`;
+    const hasSupportedExtension = /\.(m4a|mp3|mp4|aac|webm)$/i.test(originalName);
+    return hasSupportedExtension ? originalName : `diary_voice_${pad(currentMonth)}_${pad(currentDay)}.${extension}`;
+  }
+
   async function startRecording() {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      alert("현재 브라우저에서는 웹앱 직접 녹음이 지원되지 않습니다. 아이폰의 음성메모 앱으로 녹음한 뒤 '음성파일 가져오기'를 사용해 주세요.");
+      setVoiceStatus("직접 녹음 미지원 - 음성파일 가져오기 사용");
+      return;
+    }
+
+    const currentRecorder = mediaRecorderRef.current;
+    if (currentRecorder && currentRecorder.state === "recording") {
+      setVoiceStatus("이미 녹음 중...");
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      setAudioUrl("");
       setLastAudioFile(null);
       setVoiceStatus("녹음 중...");
 
-      const mediaRecorder = new MediaRecorder(stream);
+      const mimeType = getSupportedAudioMimeType();
+      const options = mimeType ? { mimeType } : undefined;
+      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.ondataavailable = event => audioChunksRef.current.push(event.data);
+
+      mediaRecorder.ondataavailable = event => {
+        if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onerror = () => {
+        stream.getTracks().forEach(track => track.stop());
+        setVoiceStatus("녹음 오류 - 음성파일 가져오기 권장");
+        alert("아이폰 Safari에서 직접 녹음 오류가 발생했습니다. 음성메모 앱으로 녹음한 뒤 '음성파일 가져오기'를 사용해 주세요.");
+      };
+
       mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const file = new File([blob], `diary_voice_${pad(currentMonth)}_${pad(currentDay)}.webm`, { type: "audio/webm" });
+        stream.getTracks().forEach(track => track.stop());
+
+        if (!audioChunksRef.current.length) {
+          setVoiceStatus("녹음 데이터 없음 - 다시 시도");
+          return;
+        }
+
+        const finalType = mediaRecorder.mimeType || mimeType || "audio/mp4";
+        const blob = new Blob(audioChunksRef.current, { type: finalType });
+        const ext = getAudioExtension(finalType);
+        const file = new File([blob], `diary_voice_${pad(currentMonth)}_${pad(currentDay)}.${ext}`, { type: finalType });
         setLastAudioFile(file);
         setAudioUrl(URL.createObjectURL(blob));
         setVoiceStatus(`${tag(currentMonth, currentDay)} 녹음 완료`);
-        stream.getTracks().forEach(track => track.stop());
       };
-      mediaRecorder.start();
-    } catch {
-      alert("마이크 권한이 필요합니다. 아이폰/아이패드 설정에서 사파리 마이크 권한을 확인하세요.");
-      setVoiceStatus("마이크 권한 필요");
+
+      mediaRecorder.start(1000);
+    } catch (error) {
+      const message = error instanceof Error ? error.name : "UnknownError";
+      alert(`마이크 권한 또는 브라우저 녹음 오류입니다. (${message})
+아이폰 설정에서 Safari 마이크 권한을 확인하거나, 음성메모 앱으로 녹음 후 '음성파일 가져오기'를 사용해 주세요.`);
+      setVoiceStatus("마이크 권한/녹음 오류");
     }
   }
 
   function stopRecording() {
     const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
+    if (!recorder || recorder.state === "inactive") {
+      setVoiceStatus(lastAudioFile ? "녹음 완료" : "녹음 중 아님");
+      return;
+    }
+
+    try {
+      if (recorder.state === "recording") recorder.requestData();
       recorder.stop();
       setVoiceStatus("녹음 정리 중...");
+    } catch {
+      setVoiceStatus("녹음 정지 오류");
     }
+  }
+
+  function importVoiceFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const supportedAudio = /\.(m4a|mp3|mp4|aac|webm)$/i.test(file.name) || ["audio/mp4", "audio/x-m4a", "audio/mpeg", "audio/mp3", "audio/aac", "audio/webm"].includes(file.type);
+    if (!supportedAudio) {
+      alert("m4a, mp3 형식의 음성파일을 권장합니다. 이 파일은 일부 기기에서 재생되지 않을 수 있습니다.");
+    }
+
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    const normalizedFile = new File([file], normalizeAudioFileName(file), { type: file.type || "audio/mp4" });
+    const url = URL.createObjectURL(normalizedFile);
+    setLastAudioFile(normalizedFile);
+    setAudioUrl(url);
+    setVoiceStatus(`${tag(currentMonth, currentDay)} ${normalizedFile.name} 가져옴`);
+    event.target.value = "";
+  }
+
+  function saveVoiceMemoFile() {
+    if (!lastAudioFile) {
+      alert("저장할 음성 파일이 없습니다. 먼저 녹음하거나 음성파일을 가져와 주세요.");
+      return;
+    }
+
+    const url = URL.createObjectURL(lastAudioFile);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = normalizeAudioFileName(lastAudioFile);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setVoiceStatus("음성 파일 저장 실행");
   }
 
   function deleteVoiceMemo() {
@@ -478,12 +586,8 @@ export default function HomePage() {
       return;
     }
 
-    const url = URL.createObjectURL(lastAudioFile);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = lastAudioFile.name;
-    link.click();
-    setVoiceStatus("공유 미지원 - 파일 다운로드");
+    saveVoiceMemoFile();
+    setVoiceStatus("공유 미지원 - 파일 저장 실행");
   }
 
   function CalendarView() {
@@ -640,10 +744,15 @@ export default function HomePage() {
               <button type="button" className="soft-btn" onClick={stopRecording}>⏹ 녹음 정지</button>
             </div>
           </div>
-          <p className="muted compact-muted">입력창을 누른 뒤 키보드 마이크 버튼으로 받아쓰기를 사용할 수 있습니다.</p>
+          <p className="muted compact-muted">아이폰 전사/공유 안정성을 위해 m4a 또는 mp3 음성파일을 권장합니다. 직접 녹음은 지원 브라우저에서 m4a 우선으로 저장하고, 오류가 반복되면 아이폰 음성메모 앱에서 m4a로 녹음한 뒤 ‘음성파일 가져오기’를 사용하세요.</p>
           {audioUrl && <audio src={audioUrl} controls style={{ width: "100%", marginTop: 12 }} />}
           <div className="voice-save-row">
+            <label className="soft-btn">
+              🎧 음성파일 가져오기
+              <input className="hidden-input" type="file" accept="audio/m4a,audio/mp4,audio/mpeg,audio/mp3,.m4a,.mp3,.mp4,.aac,.webm" onChange={importVoiceFile} />
+            </label>
             <button type="button" className="soft-btn" onClick={shareVoiceMemoToIphoneMemo}>📝 아이폰 메모로 보내기</button>
+            <button type="button" className="soft-btn" onClick={saveVoiceMemoFile}>💾 파일 저장</button>
             <button type="button" className="soft-btn delete-btn" onClick={deleteVoiceMemo}>🗑 녹음 삭제</button>
             <span className="voice-status">{voiceStatus}</span>
           </div>
