@@ -3,7 +3,7 @@
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate";
-type PhotoItem = { url: string; name: string; tag: string; extraTag?: string; memo?: string };
+type PhotoItem = { url: string; name: string; tag: string; extraTag?: string; memo?: string; size?: string };
 type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple";
 type ScheduleItem = {
   id: string;
@@ -289,7 +289,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: infoTag(currentMonth, currentDay), extraTag: "", memo: "" });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: infoTag(currentMonth, currentDay), extraTag: "", memo: "", size: "fit" });
       reader.readAsDataURL(file);
     });
 
@@ -385,6 +385,46 @@ export default function HomePage() {
     saveInfoPhotos(month, day, nextPhotosForDay);
   }
 
+
+  function updateInfoPhotoSize(k: string, index: number, size: string) {
+    const items = infoPhotos[k] || [];
+    if (!items[index]) return;
+
+    const nextPhotosForDay = items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, size } : item
+    );
+    const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
+    setInfoPhotos(nextInfoPhotos);
+    const [month, day] = k.split("-").map(Number);
+    saveInfoPhotos(month, day, nextPhotosForDay);
+  }
+
+  function updateDiaryPhotoExtraTag(k: string, index: number, extraTag: string) {
+    const items = photos[k] || [];
+    if (!items[index]) return;
+
+    const nextPhotosForDay = items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, extraTag } : item
+    );
+    const nextPhotos = { ...photos, [k]: nextPhotosForDay };
+    setPhotos(nextPhotos);
+    const [month, day] = k.split("-").map(Number);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+  }
+
+  function updateDiaryPhotoMemo(k: string, index: number, memo: string) {
+    const items = photos[k] || [];
+    if (!items[index]) return;
+
+    const nextPhotosForDay = items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, memo } : item
+    );
+    const nextPhotos = { ...photos, [k]: nextPhotosForDay };
+    setPhotos(nextPhotos);
+    const [month, day] = k.split("-").map(Number);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+  }
+
   function saveSchedules(nextSchedules: Record<string, ScheduleItem[]>) {
     setSchedules(nextSchedules);
     localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
@@ -431,7 +471,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: infoTag(currentMonth, currentDay), extraTag: "", memo: "" });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: "" });
       reader.readAsDataURL(file);
     });
 
@@ -840,7 +880,22 @@ export default function HomePage() {
               <div className="photo-card" key={`${photo.name}-${index}`}>
                 <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
                 <div className="photo-caption">
-                  <span>{photo.tag} 해당 일기장 날짜 사진 {index + 1}</span>
+                  <label className="photo-tag-line diary-photo-tag-line">
+                    <span className="photo-tag-base">{photo.tag}</span>
+                    <input
+                      className="photo-extra-tag"
+                      value={photo.extraTag || ""}
+                      onChange={e => updateDiaryPhotoExtraTag(k, index, e.target.value)}
+                      placeholder="선물"
+                      aria-label="일기 사진 조회용 추가 태그"
+                    />
+                  </label>
+                  <textarea
+                    className="photo-memo-box"
+                    value={photo.memo || ""}
+                    onChange={e => updateDiaryPhotoMemo(k, index, e.target.value)}
+                    placeholder="사진 설명 메모를 입력하세요."
+                  />
                   <div className="photo-actions">
                     <button type="button" className="soft-btn" onClick={() => setCalendarPhoto(k, index)}>캘린더에 붙이기</button>
                     <button type="button" className="soft-btn delete-btn" onClick={() => deletePhoto(k, index)}>삭제</button>
@@ -1002,7 +1057,7 @@ export default function HomePage() {
           {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 {infoTag(currentMonth, currentDay)} 태그로 저장됩니다.</div>}
           <div className="photo-grid info-photo-grid integrated-info-photo-grid">
             {dayInfoPhotos.map((photo, index) => (
-              <div className="photo-card info-photo-card" key={`${photo.name}-${index}`}>
+              <div className={`photo-card info-photo-card info-photo-size-${photo.size || "fit"}`} key={`${photo.name}-${index}`}>
                 <button
                   type="button"
                   className="original-photo-btn"
@@ -1028,6 +1083,15 @@ export default function HomePage() {
                     onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
                     placeholder="사진 설명 메모를 입력하세요."
                   />
+                  <label className="photo-size-control">
+                    <span>사진 크기</span>
+                    <select value={photo.size || "fit"} onChange={e => updateInfoPhotoSize(k, index, e.target.value)}>
+                      <option value="small">작게</option>
+                      <option value="fit">맞춤</option>
+                      <option value="large">크게</option>
+                      <option value="original">원본비율</option>
+                    </select>
+                  </label>
                   <div className="photo-actions">
                     <button type="button" className="soft-btn" onClick={() => setOriginalImageUrl(photo.url)}>원본 보기</button>
                     <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>

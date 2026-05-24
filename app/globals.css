@@ -949,3 +949,79 @@ textarea {
   font-size: 14px;
   resize: vertical;
 }
+
+
+/* Diary photo tag/memo + info photo size controls */
+.photo-tag-line,
+.diary-photo-tag-line {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+.photo-tag-base {
+  font-weight: 900;
+  color: var(--deep);
+  white-space: nowrap;
+}
+.photo-extra-tag {
+  flex: 1;
+  min-width: 80px;
+  border: 0;
+  border-bottom: 1px solid #d6d6d6;
+  border-radius: 0;
+  padding: 7px 8px;
+  font-size: 14px;
+  background: transparent;
+  color: #222;
+}
+.photo-memo-box {
+  width: 100%;
+  min-height: 78px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  resize: vertical;
+  background: #fff;
+  color: #222;
+}
+.photo-size-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--deep);
+}
+.photo-size-control select {
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: #fff;
+  color: #222;
+  font-weight: 800;
+}
+.info-photo-size-small .original-photo-btn img { max-height: 220px; }
+.info-photo-size-fit .original-photo-btn img { max-height: 520px; }
+.info-photo-size-large .original-photo-btn img { max-height: 760px; }
+.info-photo-size-original .original-photo-btn img { max-height: none; }
+
+@media (prefers-color-scheme: dark) {
+  .photo-extra-tag,
+  .photo-memo-box,
+  .photo-size-control select {
+    background: #111;
+    color: #eee;
+    border-color: #444;
+  }
+}
+
+@media (max-width: 820px) {
+  .photo-extra-tag { font-size: 13px; min-width: 60px; }
+  .photo-memo-box { min-height: 68px; font-size: 13px; }
+  .info-photo-size-small .original-photo-btn img { max-height: 160px; }
+  .info-photo-size-fit .original-photo-btn img { max-height: 300px; }
+  .info-photo-size-large .original-photo-btn img { max-height: 460px; }
+}
