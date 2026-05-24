@@ -3,7 +3,7 @@
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate";
-type PhotoItem = { url: string; name: string; tag: string };
+type PhotoItem = { url: string; name: string; tag: string; extraTag?: string; memo?: string };
 type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple";
 type ScheduleItem = {
   id: string;
@@ -55,6 +55,10 @@ function key(month: number, day: number) {
 
 function tag(month: number, day: number) {
   return `#${pad(month)}/${pad(day)}#`;
+}
+
+function infoTag(month: number, day: number) {
+  return `#날짜(${pad(month)}/${pad(day)})#`;
 }
 
 function getWeekday(month: number, day: number) {
@@ -112,6 +116,7 @@ export default function HomePage() {
   const [temp, setTemp] = useState("-");
   const [weatherTime, setWeatherTime] = useState("-");
   const [weatherSource, setWeatherSource] = useState("기상청 연결 대기");
+  const [originalImageUrl, setOriginalImageUrl] = useState("");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -284,7 +289,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay) });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: infoTag(currentMonth, currentDay), extraTag: "", memo: "" });
       reader.readAsDataURL(file);
     });
 
@@ -354,6 +359,32 @@ export default function HomePage() {
     saveInfoPhotos(month, day, nextPhotosForDay);
   }
 
+  function updateInfoPhotoExtraTag(k: string, index: number, extraTag: string) {
+    const items = infoPhotos[k] || [];
+    if (!items[index]) return;
+
+    const nextPhotosForDay = items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, extraTag } : item
+    );
+    const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
+    setInfoPhotos(nextInfoPhotos);
+    const [month, day] = k.split("-").map(Number);
+    saveInfoPhotos(month, day, nextPhotosForDay);
+  }
+
+  function updateInfoPhotoMemo(k: string, index: number, memo: string) {
+    const items = infoPhotos[k] || [];
+    if (!items[index]) return;
+
+    const nextPhotosForDay = items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, memo } : item
+    );
+    const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
+    setInfoPhotos(nextInfoPhotos);
+    const [month, day] = k.split("-").map(Number);
+    saveInfoPhotos(month, day, nextPhotosForDay);
+  }
+
   function saveSchedules(nextSchedules: Record<string, ScheduleItem[]>) {
     setSchedules(nextSchedules);
     localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
@@ -400,7 +431,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay) });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: infoTag(currentMonth, currentDay), extraTag: "", memo: "" });
       reader.readAsDataURL(file);
     });
 
@@ -966,16 +997,39 @@ export default function HomePage() {
               <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
             </div>
           </div>
-          <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 420, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요. 이미지 붙여넣기·사진 가져오기도 가능합니다." />
+          <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 420, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요. 이미지 붙여넣기·사진 가져오기도 가능하며, 사진 아래에 메모를 남길 수 있습니다." />
 
-          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 {tag(currentMonth, currentDay)} 태그로 저장됩니다.</div>}
+          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 {infoTag(currentMonth, currentDay)} 태그로 저장됩니다.</div>}
           <div className="photo-grid info-photo-grid integrated-info-photo-grid">
             {dayInfoPhotos.map((photo, index) => (
               <div className="photo-card info-photo-card" key={`${photo.name}-${index}`}>
-                <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
-                <div className="photo-caption">
-                  <span>{photo.tag}</span>
+                <button
+                  type="button"
+                  className="original-photo-btn"
+                  onClick={() => setOriginalImageUrl(photo.url)}
+                  aria-label="사진 원본 크게 보기"
+                >
+                  <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
+                </button>
+                <div className="photo-caption info-photo-caption">
+                  <label className="info-photo-tag-line">
+                    <span className="info-photo-tag">{photo.tag}</span>
+                    <input
+                      className="info-photo-extra-tag"
+                      value={photo.extraTag || ""}
+                      onChange={e => updateInfoPhotoExtraTag(k, index, e.target.value)}
+                      placeholder="선물"
+                      aria-label="조회용 추가 태그"
+                    />
+                  </label>
+                  <textarea
+                    className="info-photo-memo-box"
+                    value={photo.memo || ""}
+                    onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
+                    placeholder="사진 설명 메모를 입력하세요."
+                  />
                   <div className="photo-actions">
+                    <button type="button" className="soft-btn" onClick={() => setOriginalImageUrl(photo.url)}>원본 보기</button>
                     <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>
                   </div>
                 </div>
@@ -994,6 +1048,14 @@ export default function HomePage() {
       {view === "info" && InfoView()}
       {view === "schedule" && ScheduleView()}
       {view === "redDate" && RedDateView()}
+      {originalImageUrl && (
+        <div className="original-image-modal" role="dialog" aria-modal="true" onClick={() => setOriginalImageUrl("")}>
+          <div className="original-image-panel" onClick={event => event.stopPropagation()}>
+            <button type="button" className="original-close-btn" onClick={() => setOriginalImageUrl("")}>닫기</button>
+            <img src={originalImageUrl} alt="원본 사진" />
+          </div>
+        </div>
+      )}
     </main>
   );
 }
