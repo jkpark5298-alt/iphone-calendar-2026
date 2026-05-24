@@ -900,7 +900,7 @@ export default function HomePage() {
                   <img
                     src={photo.url}
                     alt={`일기 사진 ${index + 1}`}
-                    style={{ maxHeight: `${photo.size || "360"}px` }}
+                    style={{ width: `${photo.size || "360"}px`, maxWidth: "100%" }}
                   />
                 </button>
                 <div className="photo-caption">
@@ -923,7 +923,7 @@ export default function HomePage() {
                   <div className="photo-size-control manual-size-control">
                     <div className="manual-size-head">
                       <span>사진 크기</span>
-                      <strong>{photo.size || "360"}px</strong>
+                      <strong>가로 {photo.size || "360"}px</strong>
                     </div>
                     <input
                       type="range"
@@ -932,7 +932,7 @@ export default function HomePage() {
                       step="20"
                       value={photo.size || "360"}
                       onChange={e => updateDiaryPhotoSize(k, index, e.target.value)}
-                      aria-label="일기장 사진 크기 조정"
+                      aria-label="일기장 사진 가로 크기 조정"
                     />
                   </div>
                   <div className="photo-actions">
@@ -1107,7 +1107,7 @@ export default function HomePage() {
                   <img
                     src={photo.url}
                     alt={`정보보관소 사진 ${index + 1}`}
-                    style={{ maxHeight: `${photo.size || "360"}px` }}
+                    style={{ width: `${photo.size || "360"}px`, maxWidth: "100%" }}
                   />
                 </button>
                 <div className="photo-caption info-photo-caption">
@@ -1130,7 +1130,7 @@ export default function HomePage() {
                   <div className="photo-size-control manual-size-control">
                     <div className="manual-size-head">
                       <span>사진 크기</span>
-                      <strong>{photo.size || "360"}px</strong>
+                      <strong>가로 {photo.size || "360"}px</strong>
                     </div>
                     <input
                       type="range"
@@ -1139,7 +1139,7 @@ export default function HomePage() {
                       step="20"
                       value={photo.size || "360"}
                       onChange={e => updateInfoPhotoSize(k, index, e.target.value)}
-                      aria-label="정보보관소 사진 크기 조정"
+                      aria-label="정보보관소 사진 가로 크기 조정"
                     />
                   </div>
                   <div className="photo-actions">

@@ -1055,3 +1055,32 @@ textarea {
   width: 100%;
   object-fit: contain;
 }
+
+
+/* Manual photo width slider fix: apply size to actual image width, not only max-height */
+.original-photo-btn {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: #0f1110;
+  cursor: zoom-in;
+  overflow: hidden;
+}
+.original-photo-btn img,
+.photo-card img,
+.info-photo-card .original-photo-btn img,
+.diary-original-photo-btn img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
+  display: block;
+  background: #0f1110;
+}
+.photo-size-control .manual-size-head span::after {
+  content: " 조정";
+}
