@@ -289,7 +289,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: infoTag(currentMonth, currentDay), extraTag: "", memo: "", size: "fit" });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: infoTag(currentMonth, currentDay), extraTag: "", memo: "", size: "360" });
       reader.readAsDataURL(file);
     });
 
@@ -425,6 +425,19 @@ export default function HomePage() {
     savePhotos(month, day, nextPhotosForDay, calendarPhotos);
   }
 
+  function updateDiaryPhotoSize(k: string, index: number, size: string) {
+    const items = photos[k] || [];
+    if (!items[index]) return;
+
+    const nextPhotosForDay = items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, size } : item
+    );
+    const nextPhotos = { ...photos, [k]: nextPhotosForDay };
+    setPhotos(nextPhotos);
+    const [month, day] = k.split("-").map(Number);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+  }
+
   function saveSchedules(nextSchedules: Record<string, ScheduleItem[]>) {
     setSchedules(nextSchedules);
     localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
@@ -471,7 +484,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: "" });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: "", size: "360" });
       reader.readAsDataURL(file);
     });
 
@@ -878,7 +891,18 @@ export default function HomePage() {
           <div className="photo-grid">
             {dayPhotos.map((photo, index) => (
               <div className="photo-card" key={`${photo.name}-${index}`}>
-                <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
+                <button
+                  type="button"
+                  className="original-photo-btn diary-original-photo-btn"
+                  onClick={() => setOriginalImageUrl(photo.url)}
+                  aria-label="일기 사진 원본 크게 보기"
+                >
+                  <img
+                    src={photo.url}
+                    alt={`일기 사진 ${index + 1}`}
+                    style={{ maxHeight: `${photo.size || "360"}px` }}
+                  />
+                </button>
                 <div className="photo-caption">
                   <label className="photo-tag-line diary-photo-tag-line">
                     <span className="photo-tag-base">{photo.tag}</span>
@@ -896,8 +920,24 @@ export default function HomePage() {
                     onChange={e => updateDiaryPhotoMemo(k, index, e.target.value)}
                     placeholder="사진 설명 메모를 입력하세요."
                   />
+                  <div className="photo-size-control manual-size-control">
+                    <div className="manual-size-head">
+                      <span>사진 크기</span>
+                      <strong>{photo.size || "360"}px</strong>
+                    </div>
+                    <input
+                      type="range"
+                      min="140"
+                      max="900"
+                      step="20"
+                      value={photo.size || "360"}
+                      onChange={e => updateDiaryPhotoSize(k, index, e.target.value)}
+                      aria-label="일기장 사진 크기 조정"
+                    />
+                  </div>
                   <div className="photo-actions">
                     <button type="button" className="soft-btn" onClick={() => setCalendarPhoto(k, index)}>캘린더에 붙이기</button>
+                    <button type="button" className="soft-btn" onClick={() => setOriginalImageUrl(photo.url)}>원본 보기</button>
                     <button type="button" className="soft-btn delete-btn" onClick={() => deletePhoto(k, index)}>삭제</button>
                   </div>
                 </div>
@@ -1057,14 +1097,18 @@ export default function HomePage() {
           {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 {infoTag(currentMonth, currentDay)} 태그로 저장됩니다.</div>}
           <div className="photo-grid info-photo-grid integrated-info-photo-grid">
             {dayInfoPhotos.map((photo, index) => (
-              <div className={`photo-card info-photo-card info-photo-size-${photo.size || "fit"}`} key={`${photo.name}-${index}`}>
+              <div className="photo-card info-photo-card" key={`${photo.name}-${index}`}>
                 <button
                   type="button"
                   className="original-photo-btn"
                   onClick={() => setOriginalImageUrl(photo.url)}
                   aria-label="사진 원본 크게 보기"
                 >
-                  <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
+                  <img
+                    src={photo.url}
+                    alt={`정보보관소 사진 ${index + 1}`}
+                    style={{ maxHeight: `${photo.size || "360"}px` }}
+                  />
                 </button>
                 <div className="photo-caption info-photo-caption">
                   <label className="info-photo-tag-line">
@@ -1083,15 +1127,21 @@ export default function HomePage() {
                     onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
                     placeholder="사진 설명 메모를 입력하세요."
                   />
-                  <label className="photo-size-control">
-                    <span>사진 크기</span>
-                    <select value={photo.size || "fit"} onChange={e => updateInfoPhotoSize(k, index, e.target.value)}>
-                      <option value="small">작게</option>
-                      <option value="fit">맞춤</option>
-                      <option value="large">크게</option>
-                      <option value="original">원본비율</option>
-                    </select>
-                  </label>
+                  <div className="photo-size-control manual-size-control">
+                    <div className="manual-size-head">
+                      <span>사진 크기</span>
+                      <strong>{photo.size || "360"}px</strong>
+                    </div>
+                    <input
+                      type="range"
+                      min="140"
+                      max="900"
+                      step="20"
+                      value={photo.size || "360"}
+                      onChange={e => updateInfoPhotoSize(k, index, e.target.value)}
+                      aria-label="정보보관소 사진 크기 조정"
+                    />
+                  </div>
                   <div className="photo-actions">
                     <button type="button" className="soft-btn" onClick={() => setOriginalImageUrl(photo.url)}>원본 보기</button>
                     <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>

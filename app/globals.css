@@ -1025,3 +1025,33 @@ textarea {
   .info-photo-size-fit .original-photo-btn img { max-height: 300px; }
   .info-photo-size-large .original-photo-btn img { max-height: 460px; }
 }
+
+
+.manual-size-control {
+  display: block;
+  width: 100%;
+}
+.manual-size-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.manual-size-head strong {
+  color: var(--deep);
+  font-size: 13px;
+}
+.manual-size-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--deep);
+}
+.info-photo-card .original-photo-btn img {
+  width: 100%;
+  object-fit: contain;
+}
+
+.diary-original-photo-btn img {
+  width: 100%;
+  object-fit: contain;
+}
