@@ -961,10 +961,9 @@ export default function HomePage() {
                   />
                   <div className="photo-size-control manual-size-control frame-size-control">
                     <div className="manual-size-head">
-                      <span>사진 틀 크기</span>
+                      <span>사진 크기</span>
                       <strong>{photo.size || "360"}px</strong>
                     </div>
-                    <p className="resize-help">사진 오른쪽 아래 ↘ 표시를 손가락으로 끌면 사진과 틀이 비율대로 함께 조정됩니다.</p>
                   </div>
                   <div className="photo-actions">
                     <button type="button" className="soft-btn" onClick={() => setCalendarPhoto(k, index)}>캘린더에 붙이기</button>
@@ -1164,10 +1163,9 @@ export default function HomePage() {
                   />
                   <div className="photo-size-control manual-size-control frame-size-control">
                     <div className="manual-size-head">
-                      <span>사진 틀 크기</span>
+                      <span>사진 크기</span>
                       <strong>{photo.size || "360"}px</strong>
                     </div>
-                    <p className="resize-help">사진 오른쪽 아래 ↘ 표시를 손가락으로 끌면 사진과 틀이 비율대로 함께 조정됩니다.</p>
                   </div>
                   <div className="photo-actions">
                     <button type="button" className="soft-btn" onClick={() => setOriginalImageUrl(photo.url)}>원본 보기</button>

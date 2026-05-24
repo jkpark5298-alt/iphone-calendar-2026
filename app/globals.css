@@ -1167,3 +1167,22 @@ textarea {
     font-size: 12px;
   }
 }
+
+
+/* Final photo edit: photo frame resize + memo height resize */
+.photo-memo-box,
+.info-photo-memo-box {
+  resize: vertical !important;
+  min-height: 96px;
+  max-height: 360px;
+  line-height: 1.5;
+}
+.frame-size-control {
+  margin-top: 8px;
+}
+.manual-size-head {
+  width: 100%;
+}
+.resize-help {
+  display: none !important;
+}
