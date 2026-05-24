@@ -3,7 +3,16 @@
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate";
-type PhotoItem = { url: string; name: string; tag: string; extraTag?: string; memo?: string; size?: string; memoHeight?: string };
+type PhotoItem = {
+  url: string;
+  name: string;
+  tag: string;
+  extraTag?: string;
+  memo?: string;
+  size?: string;
+  memoWidth?: string;
+  memoHeight?: string;
+};
 type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple";
 type ScheduleItem = {
   id: string;
@@ -297,7 +306,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: tag(currentMonth, currentDay), size: "360", memoHeight: "110" });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: tag(currentMonth, currentDay), size: "360", memoWidth: "360", memoHeight: "110" });
       reader.readAsDataURL(file);
     });
 
@@ -408,12 +417,12 @@ export default function HomePage() {
   }
 
 
-  function updateInfoPhotoMemoHeight(k: string, index: number, memoHeight: string) {
+  function updateInfoPhotoMemoFrame(k: string, index: number, memoWidth: string, memoHeight: string) {
     const items = infoPhotos[k] || [];
     if (!items[index]) return;
 
     const nextPhotosForDay = items.map((item, itemIndex) =>
-      itemIndex === index ? { ...item, memoHeight } : item
+      itemIndex === index ? { ...item, memoWidth, memoHeight } : item
     );
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
@@ -461,12 +470,12 @@ export default function HomePage() {
   }
 
 
-  function updateDiaryPhotoMemoHeight(k: string, index: number, memoHeight: string) {
+  function updateDiaryPhotoMemoFrame(k: string, index: number, memoWidth: string, memoHeight: string) {
     const items = photos[k] || [];
     if (!items[index]) return;
 
     const nextPhotosForDay = items.map((item, itemIndex) =>
-      itemIndex === index ? { ...item, memoHeight } : item
+      itemIndex === index ? { ...item, memoWidth, memoHeight } : item
     );
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
@@ -474,6 +483,100 @@ export default function HomePage() {
     savePhotos(month, day, nextPhotosForDay, calendarPhotos);
   }
 
+
+  function updateDiaryPhotoCardFrame(k: string, index: number, size: string, memoHeight: string) {
+    const items = photos[k] || [];
+    if (!items[index]) return;
+
+    const nextPhotosForDay = items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, size, memoWidth: size, memoHeight } : item
+    );
+    const nextPhotos = { ...photos, [k]: nextPhotosForDay };
+    setPhotos(nextPhotos);
+    const [month, day] = k.split("-").map(Number);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+  }
+
+  function updateInfoPhotoCardFrame(k: string, index: number, size: string, memoHeight: string) {
+    const items = infoPhotos[k] || [];
+    if (!items[index]) return;
+
+    const nextPhotosForDay = items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, size, memoWidth: size, memoHeight } : item
+    );
+    const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
+    setInfoPhotos(nextInfoPhotos);
+    const [month, day] = k.split("-").map(Number);
+    saveInfoPhotos(month, day, nextPhotosForDay);
+  }
+
+
+  function moveDiaryPhoto(k: string, index: number, direction: -1 | 1) {
+    const items = photos[k] || [];
+    const targetIndex = index + direction;
+    if (!items[index] || targetIndex < 0 || targetIndex >= items.length) return;
+
+    const nextPhotosForDay = [...items];
+    [nextPhotosForDay[index], nextPhotosForDay[targetIndex]] = [nextPhotosForDay[targetIndex], nextPhotosForDay[index]];
+    const nextPhotos = { ...photos, [k]: nextPhotosForDay };
+    setPhotos(nextPhotos);
+    const [month, day] = k.split("-").map(Number);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+  }
+
+  function moveInfoPhoto(k: string, index: number, direction: -1 | 1) {
+    const items = infoPhotos[k] || [];
+    const targetIndex = index + direction;
+    if (!items[index] || targetIndex < 0 || targetIndex >= items.length) return;
+
+    const nextPhotosForDay = [...items];
+    [nextPhotosForDay[index], nextPhotosForDay[targetIndex]] = [nextPhotosForDay[targetIndex], nextPhotosForDay[index]];
+    const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
+    setInfoPhotos(nextInfoPhotos);
+    const [month, day] = k.split("-").map(Number);
+    saveInfoPhotos(month, day, nextPhotosForDay);
+  }
+
+  function startPhotoCardResize(
+    event: React.PointerEvent<HTMLButtonElement>,
+    photoType: "diary" | "info",
+    photoKey: string,
+    index: number,
+    currentSize?: string,
+    currentMemoHeight?: string
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startSize = Number(currentSize || "360");
+    const startHeight = Number(currentMemoHeight || "110");
+    const minSize = 150;
+    const maxSize = Math.min(980, Math.max(180, window.innerWidth - 32));
+    const ratio = startHeight / Math.max(startSize, 1);
+
+    const applyFrame = (nextClientX: number, nextClientY: number) => {
+      const delta = Math.abs(nextClientX - startX) >= Math.abs(nextClientY - startY)
+        ? nextClientX - startX
+        : nextClientY - startY;
+      const nextSize = Math.max(minSize, Math.min(maxSize, Math.round(startSize + delta)));
+      const nextMemoHeight = Math.max(70, Math.min(420, Math.round(nextSize * ratio)));
+      if (photoType === "diary") updateDiaryPhotoCardFrame(photoKey, index, String(nextSize), String(nextMemoHeight));
+      if (photoType === "info") updateInfoPhotoCardFrame(photoKey, index, String(nextSize), String(nextMemoHeight));
+    };
+
+    const handlePointerMove = (moveEvent: PointerEvent) => applyFrame(moveEvent.clientX, moveEvent.clientY);
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  }
 
   function startPhotoFrameResize(
     event: React.PointerEvent<HTMLButtonElement>,
@@ -509,29 +612,36 @@ export default function HomePage() {
     window.addEventListener("pointercancel", handlePointerUp);
   }
 
-  function startMemoHeightResize(
+  function startMemoFrameResize(
     event: React.PointerEvent<HTMLButtonElement>,
     photoType: "diary" | "info",
     photoKey: string,
     index: number,
+    currentWidth?: string,
     currentHeight?: string
   ) {
     event.preventDefault();
     event.stopPropagation();
 
+    const startX = event.clientX;
     const startY = event.clientY;
+    const startWidth = Number(currentWidth || "360");
     const startHeight = Number(currentHeight || "110");
+    const minWidth = 150;
+    const maxWidth = Math.min(980, Math.max(180, window.innerWidth - 32));
     const minHeight = 72;
-    const maxHeight = 520;
+    const maxHeight = 560;
 
-    const applyHeight = (nextClientY: number) => {
-      const delta = nextClientY - startY;
-      const nextHeight = Math.max(minHeight, Math.min(maxHeight, Math.round(startHeight + delta)));
-      if (photoType === "diary") updateDiaryPhotoMemoHeight(photoKey, index, String(nextHeight));
-      if (photoType === "info") updateInfoPhotoMemoHeight(photoKey, index, String(nextHeight));
+    const applyFrame = (nextClientX: number, nextClientY: number) => {
+      const deltaX = nextClientX - startX;
+      const deltaY = nextClientY - startY;
+      const nextWidth = Math.max(minWidth, Math.min(maxWidth, Math.round(startWidth + deltaX)));
+      const nextHeight = Math.max(minHeight, Math.min(maxHeight, Math.round(startHeight + deltaY)));
+      if (photoType === "diary") updateDiaryPhotoMemoFrame(photoKey, index, String(nextWidth), String(nextHeight));
+      if (photoType === "info") updateInfoPhotoMemoFrame(photoKey, index, String(nextWidth), String(nextHeight));
     };
 
-    const handlePointerMove = (moveEvent: PointerEvent) => applyHeight(moveEvent.clientY);
+    const handlePointerMove = (moveEvent: PointerEvent) => applyFrame(moveEvent.clientX, moveEvent.clientY);
     const handlePointerUp = () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
@@ -589,7 +699,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: tag(currentMonth, currentDay), size: "360", memoHeight: "110" });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: tag(currentMonth, currentDay), size: "360", memoWidth: "360", memoHeight: "110" });
       reader.readAsDataURL(file);
     });
 
@@ -995,8 +1105,12 @@ export default function HomePage() {
           {dayPhotos.length === 0 && <div className="empty-photo">사진 찍기·가져오기·붙여넣기 가능 / 메모 첫머리에 {tag(currentMonth, currentDay)} 자동 입력<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
           <div className="photo-grid">
             {dayPhotos.map((photo, index) => (
-              <div className="photo-card" key={`${photo.name}-${index}`}>
-                <div className="resizable-photo-frame" style={{ width: `${photo.size || "360"}px` }}>
+              <div
+                className="photo-card unified-resize-card"
+                key={`${photo.name}-${index}`}
+                style={{ width: `${Math.max(Number(photo.size || "360"), Number(photo.memoWidth || photo.size || "360"))}px`, maxWidth: "100%" }}
+              >
+                <div className="resizable-photo-frame unified-photo-frame" style={{ width: `${photo.size || "360"}px` }}>
                   <button
                     type="button"
                     className="original-photo-btn diary-original-photo-btn"
@@ -1005,15 +1119,12 @@ export default function HomePage() {
                   >
                     <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
                   </button>
-                  <button
-                    type="button"
-                    className="photo-resize-handle"
-                    onPointerDown={(event) => startPhotoFrameResize(event, "diary", k, index, photo.size)}
-                    aria-label="일기 사진 틀 크기 손가락으로 조정"
-                  />
                 </div>
                 <div className="photo-caption">
-                  <div className="resizable-memo-frame" style={{ height: `${photo.memoHeight || "110"}px` }}>
+                  <div
+                    className="resizable-memo-frame unified-memo-frame"
+                    style={{ width: `${photo.memoWidth || photo.size || "360"}px`, height: `${photo.memoHeight || "110"}px` }}
+                  >
                     <textarea
                       className="photo-memo-box"
                       value={memoWithDateTag(photo.memo, currentMonth, currentDay)}
@@ -1023,26 +1134,24 @@ export default function HomePage() {
                     <button
                       type="button"
                       className="memo-resize-handle"
-                      onPointerDown={(event) => startMemoHeightResize(event, "diary", k, index, photo.memoHeight)}
-                      aria-label="일기 사진 메모 높이 손가락으로 조정"
+                      onPointerDown={(event) => startMemoFrameResize(event, "diary", k, index, photo.memoWidth || photo.size, photo.memoHeight)}
+                      aria-label="일기 사진 메모칸 크기 조정"
                     />
                   </div>
-                  <div className="photo-size-control manual-size-control frame-size-control">
-                    <div className="manual-size-head">
-                      <span>사진 크기</span>
-                      <strong>{photo.size || "360"}px</strong>
-                    </div>
-                    <div className="manual-size-head memo-height-head">
-                      <span>메모 높이</span>
-                      <strong>{photo.memoHeight || "110"}px</strong>
-                    </div>
-                  </div>
-                  <div className="photo-actions">
+                  <div className="photo-actions photo-position-actions">
+                    <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, -1)} disabled={index === 0}>← 이전</button>
+                    <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, 1)} disabled={index === dayPhotos.length - 1}>다음 →</button>
                     <button type="button" className="soft-btn" onClick={() => setCalendarPhoto(k, index)}>캘린더에 붙이기</button>
                     <button type="button" className="soft-btn" onClick={() => setOriginalImageUrl(photo.url)}>원본 보기</button>
                     <button type="button" className="soft-btn delete-btn" onClick={() => deletePhoto(k, index)}>삭제</button>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  className="card-resize-handle"
+                  onPointerDown={(event) => startPhotoCardResize(event, "diary", k, index, photo.size, photo.memoHeight)}
+                  aria-label="일기 사진과 메모 전체 틀 크기 조정"
+                />
               </div>
             ))}
           </div>
@@ -1199,8 +1308,12 @@ export default function HomePage() {
           {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 메모 첫머리에 {tag(currentMonth, currentDay)} 자동 태그가 입력됩니다.</div>}
           <div className="photo-grid info-photo-grid integrated-info-photo-grid">
             {dayInfoPhotos.map((photo, index) => (
-              <div className="photo-card info-photo-card" key={`${photo.name}-${index}`}>
-                <div className="resizable-photo-frame" style={{ width: `${photo.size || "360"}px` }}>
+              <div
+                className="photo-card info-photo-card unified-resize-card"
+                key={`${photo.name}-${index}`}
+                style={{ width: `${Math.max(Number(photo.size || "360"), Number(photo.memoWidth || photo.size || "360"))}px`, maxWidth: "100%" }}
+              >
+                <div className="resizable-photo-frame unified-photo-frame" style={{ width: `${photo.size || "360"}px` }}>
                   <button
                     type="button"
                     className="original-photo-btn"
@@ -1209,15 +1322,12 @@ export default function HomePage() {
                   >
                     <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
                   </button>
-                  <button
-                    type="button"
-                    className="photo-resize-handle"
-                    onPointerDown={(event) => startPhotoFrameResize(event, "info", k, index, photo.size)}
-                    aria-label="정보보관소 사진 틀 크기 손가락으로 조정"
-                  />
                 </div>
                 <div className="photo-caption info-photo-caption">
-                  <div className="resizable-memo-frame" style={{ height: `${photo.memoHeight || "110"}px` }}>
+                  <div
+                    className="resizable-memo-frame unified-memo-frame"
+                    style={{ width: `${photo.memoWidth || photo.size || "360"}px`, height: `${photo.memoHeight || "110"}px` }}
+                  >
                     <textarea
                       className="info-photo-memo-box"
                       value={memoWithDateTag(photo.memo, currentMonth, currentDay)}
@@ -1227,25 +1337,23 @@ export default function HomePage() {
                     <button
                       type="button"
                       className="memo-resize-handle"
-                      onPointerDown={(event) => startMemoHeightResize(event, "info", k, index, photo.memoHeight)}
-                      aria-label="정보보관소 사진 메모 높이 손가락으로 조정"
+                      onPointerDown={(event) => startMemoFrameResize(event, "info", k, index, photo.memoWidth || photo.size, photo.memoHeight)}
+                      aria-label="정보보관소 사진 메모칸 크기 조정"
                     />
                   </div>
-                  <div className="photo-size-control manual-size-control frame-size-control">
-                    <div className="manual-size-head">
-                      <span>사진 크기</span>
-                      <strong>{photo.size || "360"}px</strong>
-                    </div>
-                    <div className="manual-size-head memo-height-head">
-                      <span>메모 높이</span>
-                      <strong>{photo.memoHeight || "110"}px</strong>
-                    </div>
-                  </div>
-                  <div className="photo-actions">
+                  <div className="photo-actions photo-position-actions">
+                    <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, -1)} disabled={index === 0}>← 이전</button>
+                    <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, 1)} disabled={index === dayInfoPhotos.length - 1}>다음 →</button>
                     <button type="button" className="soft-btn" onClick={() => setOriginalImageUrl(photo.url)}>원본 보기</button>
                     <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  className="card-resize-handle"
+                  onPointerDown={(event) => startPhotoCardResize(event, "info", k, index, photo.size, photo.memoHeight)}
+                  aria-label="정보보관소 사진과 메모 전체 틀 크기 조정"
+                />
               </div>
             ))}
           </div>
