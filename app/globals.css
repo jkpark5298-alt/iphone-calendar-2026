@@ -721,3 +721,38 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+
+/* 추가 수정: 공휴일 기본 빨간색 해제, 직접 지정 날짜만 빨간색 */
+.holiday-neutral {
+  color: #8f8f8f !important;
+  font-weight: 700;
+}
+
+.today-day .today-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #2f80ed;
+  color: #ffffff !important;
+  font-weight: 800;
+}
+
+.weather-source {
+  color: #78908a;
+  font-size: 0.86em;
+}
+
+@media (max-width: 820px) {
+  .today-day .today-num {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+  }
+  .info-title {
+    font-size: 17px !important;
+  }
+}

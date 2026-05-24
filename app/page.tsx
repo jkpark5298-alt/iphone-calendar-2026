@@ -107,7 +107,10 @@ export default function HomePage() {
   const [audioUrl, setAudioUrl] = useState("");
   const [voiceStatus, setVoiceStatus] = useState("녹음 파일 없음");
   const [lastAudioFile, setLastAudioFile] = useState<File | null>(null);
+  const [weather, setWeather] = useState("조회 중");
+  const [temp, setTemp] = useState("-");
   const [weatherTime, setWeatherTime] = useState("-");
+  const [weatherSource, setWeatherSource] = useState("기상청 연결 대기");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -136,10 +139,11 @@ export default function HomePage() {
       const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay));
       const items = rawPhotos ? JSON.parse(rawPhotos) : [];
       setPhotos(prev => ({ ...prev, [key(currentMonth, currentDay)]: items }));
-      setWeatherTime(new Date().toLocaleString("ko-KR"));
+      fetchWeatherFromKma();
     } catch {
       setDiaryText("");
       setVoiceText("");
+      fetchWeatherFromKma();
     }
   }, [view, currentMonth, currentDay]);
 
@@ -153,6 +157,31 @@ export default function HomePage() {
       setInfoText("");
     }
   }, [view, currentMonth, currentDay]);
+
+  async function fetchWeatherFromKma() {
+    setWeather("조회 중");
+    setTemp("-");
+    setWeatherSource("기상청 조회 중");
+
+    try {
+      const response = await fetch("/api/weather", { cache: "no-store" });
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "weather error");
+      }
+
+      setWeather(data.weather || "확인 필요");
+      setTemp(data.temperature ? `${data.temperature}℃` : "-");
+      setWeatherTime(data.observedAt || new Date().toLocaleString("ko-KR"));
+      setWeatherSource("기상청");
+    } catch {
+      setWeather("기상청 연결 필요");
+      setTemp("-");
+      setWeatherTime(new Date().toLocaleString("ko-KR"));
+      setWeatherSource("KMA_SERVICE_KEY 필요");
+    }
+  }
 
   function openCalendar(month = currentMonth) {
     setCurrentMonth(month);
@@ -413,11 +442,12 @@ export default function HomePage() {
     for (let day = 1; day <= monthDays[currentMonth]; day++) {
       const k = key(currentMonth, day);
       const manuallyRed = (redDates[currentMonth] || []).includes(day);
-      const redMarked = isHoliday(currentMonth, day) || manuallyRed;
+      const redMarked = manuallyRed;
+      const isToday = todayDefault.month === currentMonth && todayDefault.day === day;
       const daySchedules = schedules[k] || [];
       const isSelected = currentDay === day;
       cells.push(
-        <div className={`day ${redMarked ? "holiday-day" : ""} ${isSelected ? "selected-day" : ""}`} key={k}>
+        <div className={`day ${redMarked ? "holiday-day" : ""} ${isToday ? "today-day" : ""} ${isSelected ? "selected-day" : ""}`} key={k}>
           <button
             type="button"
             className="day-hit"
@@ -425,7 +455,7 @@ export default function HomePage() {
             aria-label={`${currentMonth}월 ${day}일 일기장으로 이동`}
           />
           <div className="day-top">
-            <span className={`num ${redMarked ? "num-red" : ""}`}>{day}</span>
+            <span className={`num ${redMarked ? "num-red" : ""} ${isToday ? "today-num" : ""}`}>{day}</span>
             <button
               type="button"
               className="mini-btn info only-info"
@@ -438,7 +468,7 @@ export default function HomePage() {
               I
             </button>
           </div>
-          {holidays[k] && <div className="holiday">{holidays[k]}</div>}
+          {holidays[k] && <div className="holiday holiday-neutral">{holidays[k]}</div>}
           <div className={`thumb ${calendarPhotos[k] ? "" : "empty-thumb"}`}>
             {calendarPhotos[k] ? <img src={calendarPhotos[k]} alt="캘린더 대표 사진" /> : null}
           </div>
@@ -495,9 +525,6 @@ export default function HomePage() {
   function DiaryView() {
     const k = key(currentMonth, currentDay);
     const dayPhotos = photos[k] || [];
-    const weather = currentMonth === 5 ? "구름많음" : "맑음";
-    const temp = currentMonth === 5 ? "21℃" : "25℃";
-
     return (
       <section>
         <div className="diary-head">
@@ -513,9 +540,10 @@ export default function HomePage() {
           <span>☀️ {weather}</span>
           <span>🌡 {temp}</span>
           <span className="weather-time">🕒 {weatherTime}</span>
+          <span className="weather-source">{weatherSource}</span>
         </div>
 
-        <div className="notice compact-notice">임시 날씨입니다. 실제 앱에서는 기상청 API로 조회 시점 기준 날씨를 가져옵니다.</div>
+        <div className="notice compact-notice">날씨는 기상청 단기예보 API 기준입니다. Vercel 환경변수 KMA_SERVICE_KEY가 필요합니다.</div>
 
         <textarea className="diary-textarea" value={diaryText} onChange={e => saveDiary(e.target.value, voiceText)} placeholder="오늘의 기록을 남겨보세요...." />
 
@@ -677,7 +705,7 @@ export default function HomePage() {
             <div className="info-nav-row">
               <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 월간 캘린더</button>
               <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
-              <button type="button" className="today-circle info-date-circle" onClick={() => openDiary(currentMonth, currentDay)}>{currentDay}</button>
+              <button type="button" className="today-circle info-date-circle" onClick={() => openCalendar(currentMonth)}>{currentDay}</button>
             </div>
           </div>
           <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 520, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요." />
