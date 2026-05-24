@@ -134,6 +134,7 @@ export default function HomePage() {
   const [weatherTime, setWeatherTime] = useState("-");
   const [weatherSource, setWeatherSource] = useState("기상청 연결 대기");
   const [originalImageUrl, setOriginalImageUrl] = useState("");
+  const [selectedDiaryPhotoIndex, setSelectedDiaryPhotoIndex] = useState<number | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -162,6 +163,7 @@ export default function HomePage() {
       const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay));
       const items = rawPhotos ? JSON.parse(rawPhotos) : [];
       setPhotos(prev => ({ ...prev, [key(currentMonth, currentDay)]: items }));
+      setSelectedDiaryPhotoIndex(null);
       fetchWeatherFromKma();
     } catch {
       setDiaryText("");
@@ -306,7 +308,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: tag(currentMonth, currentDay), size: "360", memoWidth: "360", memoHeight: "110" });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: "", size: "360", memoWidth: "360", memoHeight: "110" });
       reader.readAsDataURL(file);
     });
 
@@ -699,7 +701,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: tag(currentMonth, currentDay), size: "360", memoWidth: "360", memoHeight: "110" });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: "", size: "360", memoWidth: "360", memoHeight: "110" });
       reader.readAsDataURL(file);
     });
 
@@ -763,6 +765,25 @@ export default function HomePage() {
     setCalendarPhotos(nextCalendarPhotos);
     const [month, day] = k.split("-").map(Number);
     savePhotos(month, day, nextPhotosForDay, nextCalendarPhotos);
+  }
+
+  function setSelectedPhotoToCalendar(k: string) {
+    if (selectedDiaryPhotoIndex === null || !photos[k]?.[selectedDiaryPhotoIndex]) {
+      alert("캘린더에 붙일 사진을 먼저 선택해 주세요.");
+      return;
+    }
+
+    setCalendarPhoto(k, selectedDiaryPhotoIndex);
+  }
+
+  function deleteSelectedDiaryPhoto(k: string) {
+    if (selectedDiaryPhotoIndex === null || !photos[k]?.[selectedDiaryPhotoIndex]) {
+      alert("삭제할 사진을 먼저 선택해 주세요.");
+      return;
+    }
+
+    deletePhoto(k, selectedDiaryPhotoIndex);
+    setSelectedDiaryPhotoIndex(null);
   }
 
   async function pastePhotoFromClipboard() {
@@ -1009,7 +1030,19 @@ export default function HomePage() {
           </div>
           {holidays[k] && <div className="holiday holiday-neutral">{holidays[k]}</div>}
           <div className={`thumb ${calendarPhotos[k] ? "" : "empty-thumb"}`}>
-            {calendarPhotos[k] ? <img src={calendarPhotos[k]} alt="캘린더 대표 사진" /> : null}
+            {calendarPhotos[k] ? (
+              <button
+                type="button"
+                className="calendar-photo-button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setOriginalImageUrl(calendarPhotos[k]);
+                }}
+                aria-label={`${currentMonth}월 ${day}일 대표 사진 원본 보기`}
+              >
+                <img src={calendarPhotos[k]} alt="캘린더 대표 사진" />
+              </button>
+            ) : null}
           </div>
           {daySchedules.length > 0 && (
             <div className="schedule-chip-list">
@@ -1064,6 +1097,8 @@ export default function HomePage() {
   function DiaryView() {
     const k = key(currentMonth, currentDay);
     const dayPhotos = photos[k] || [];
+    const selectedPhotoExists = selectedDiaryPhotoIndex !== null && Boolean(dayPhotos[selectedDiaryPhotoIndex]);
+
     return (
       <section>
         <div className="diary-head">
@@ -1084,76 +1119,62 @@ export default function HomePage() {
 
         <div className="notice compact-notice">날씨는 기상청 단기예보 API 기준입니다. Vercel 환경변수 KMA_SERVICE_KEY가 필요합니다.</div>
 
-        <textarea className="diary-textarea" value={diaryText} onChange={e => saveDiary(e.target.value, voiceText)} placeholder="오늘의 기록을 남겨보세요...." />
-
-        <div className="box photo-box" onPaste={handlePhotoPaste} tabIndex={0}>
-          <div className="box-head compact-box-head">
-            <h3>Today 사진</h3>
-            <div className="button-row">
-              <label className="soft-btn">
-                📷 사진찍기
-                <input className="hidden-input" type="file" accept="image/*" capture="environment" multiple onChange={addPhotos} />
-              </label>
-              <label className="soft-btn">
-                🖼 사진 가져오기
-                <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
-              </label>
-              <button type="button" className="soft-btn" onClick={pastePhotoFromClipboard}>📋 붙여넣기</button>
-            </div>
+        <div className="diary-main-row">
+          <div className="diary-writing-pane">
+            <textarea className="diary-textarea diary-textarea-full" value={diaryText} onChange={e => saveDiary(e.target.value, voiceText)} placeholder="오늘의 기록을 남겨보세요...." />
           </div>
 
-          {dayPhotos.length === 0 && <div className="empty-photo">사진 찍기·가져오기·붙여넣기 가능 / 메모 첫머리에 {tag(currentMonth, currentDay)} 자동 입력<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
-          <div className="photo-grid">
-            {dayPhotos.map((photo, index) => (
-              <div
-                className="photo-card unified-resize-card"
-                key={`${photo.name}-${index}`}
-                style={{ width: `${Math.max(Number(photo.size || "360"), Number(photo.memoWidth || photo.size || "360"))}px`, maxWidth: "100%" }}
-              >
-                <div className="resizable-photo-frame unified-photo-frame" style={{ width: `${photo.size || "360"}px` }}>
-                  <button
-                    type="button"
-                    className="original-photo-btn diary-original-photo-btn"
-                    onClick={() => setOriginalImageUrl(photo.url)}
-                    aria-label="일기 사진 원본 크게 보기"
-                  >
-                    <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
-                  </button>
+          <div className="diary-photo-pane">
+            <div className="box photo-box diary-photo-box" onPaste={handlePhotoPaste} tabIndex={0}>
+              <div className="box-head compact-box-head diary-photo-head">
+                <h3>Today 사진</h3>
+                <div className="button-row diary-photo-title-actions">
+                  <button type="button" className="soft-btn" onClick={() => setSelectedPhotoToCalendar(k)} disabled={!selectedPhotoExists}>캘린더 붙이기</button>
+                  <button type="button" className="soft-btn delete-btn" onClick={() => deleteSelectedDiaryPhoto(k)} disabled={!selectedPhotoExists}>삭제</button>
                 </div>
-                <div className="photo-caption">
-                  <div
-                    className="resizable-memo-frame unified-memo-frame"
-                    style={{ width: `${photo.memoWidth || photo.size || "360"}px`, height: `${photo.memoHeight || "110"}px` }}
-                  >
-                    <textarea
-                      className="photo-memo-box"
-                      value={memoWithDateTag(photo.memo, currentMonth, currentDay)}
-                      onChange={e => updateDiaryPhotoMemo(k, index, e.target.value)}
-                      placeholder={`${tag(currentMonth, currentDay)}선물 / 사진 메모`}
-                    />
-                    <button
-                      type="button"
-                      className="memo-resize-handle"
-                      onPointerDown={(event) => startMemoFrameResize(event, "diary", k, index, photo.memoWidth || photo.size, photo.memoHeight)}
-                      aria-label="일기 사진 메모칸 크기 조정"
-                    />
-                  </div>
-                  <div className="photo-actions photo-position-actions">
-                    <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, -1)} disabled={index === 0}>← 이전</button>
-                    <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, 1)} disabled={index === dayPhotos.length - 1}>다음 →</button>
-                    <button type="button" className="soft-btn" onClick={() => setCalendarPhoto(k, index)}>캘린더에 붙이기</button>
-                    <button type="button" className="soft-btn" onClick={() => setOriginalImageUrl(photo.url)}>원본 보기</button>
-                    <button type="button" className="soft-btn delete-btn" onClick={() => deletePhoto(k, index)}>삭제</button>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="card-resize-handle"
-                  onPointerDown={(event) => startPhotoCardResize(event, "diary", k, index, photo.size, photo.memoHeight)}
-                  aria-label="일기 사진과 메모 전체 틀 크기 조정"
-                />
               </div>
-            ))}
+
+              <div className="button-row diary-photo-add-row">
+                <label className="soft-btn">
+                  📷 사진찍기
+                  <input className="hidden-input" type="file" accept="image/*" capture="environment" multiple onChange={addPhotos} />
+                </label>
+                <label className="soft-btn">
+                  🖼 사진 가져오기
+                  <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
+                </label>
+                <button type="button" className="soft-btn" onClick={pastePhotoFromClipboard}>📋 붙여넣기</button>
+              </div>
+
+              {dayPhotos.length === 0 && <div className="empty-photo">사진 찍기·가져오기·붙여넣기 가능<br />사진을 누르면 원본 보기로 열립니다.</div>}
+              <div className="diary-simple-photo-grid">
+                {dayPhotos.map((photo, index) => {
+                  const selected = selectedDiaryPhotoIndex === index;
+                  return (
+                    <div
+                      className={`diary-simple-photo-card ${selected ? "selected-photo-card" : ""}`}
+                      key={`${photo.name}-${index}`}
+                    >
+                      <button
+                        type="button"
+                        className="diary-simple-photo-button"
+                        onClick={() => setOriginalImageUrl(photo.url)}
+                        aria-label={`일기 사진 ${index + 1} 원본 보기`}
+                      >
+                        <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
+                      </button>
+                      <div className="photo-actions diary-simple-actions">
+                        <button type="button" className={`soft-btn ${selected ? "selected-soft-btn" : ""}`} onClick={() => setSelectedDiaryPhotoIndex(index)}>
+                          {selected ? "선택됨" : "선택"}
+                        </button>
+                        <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, -1)} disabled={index === 0}>←</button>
+                        <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, 1)} disabled={index === dayPhotos.length - 1}>→</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1288,7 +1309,7 @@ export default function HomePage() {
 
     return (
       <section>
-        <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }} onPaste={handleInfoPhotoPaste} tabIndex={0}>
+        <div className="box info-box safe-info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }} onPaste={handleInfoPhotoPaste} tabIndex={0}>
           <div className="info-head">
             <h2 className="info-title">📂 주요 정보 보관소</h2>
             <div className="info-sub-date">2026. {pad(currentMonth)}. {pad(currentDay)}</div>
@@ -1303,57 +1324,32 @@ export default function HomePage() {
               <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
             </div>
           </div>
-          <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 420, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요. 이미지 붙여넣기·사진 가져오기도 가능하며, 사진 아래에 메모를 남길 수 있습니다." />
 
-          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 메모 첫머리에 {tag(currentMonth, currentDay)} 자동 태그가 입력됩니다.</div>}
-          <div className="photo-grid info-photo-grid integrated-info-photo-grid">
+          <textarea className="safe-info-textarea" value={infoText} onChange={e => saveInfo(e.target.value)} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요." />
+
+          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">사진을 가져오거나 붙여넣으면 아래에 추가됩니다. 사진 아래에 이어서 내용을 입력할 수 있습니다.</div>}
+          <div className="safe-info-photo-list">
             {dayInfoPhotos.map((photo, index) => (
-              <div
-                className="photo-card info-photo-card unified-resize-card"
-                key={`${photo.name}-${index}`}
-                style={{ width: `${Math.max(Number(photo.size || "360"), Number(photo.memoWidth || photo.size || "360"))}px`, maxWidth: "100%" }}
-              >
-                <div className="resizable-photo-frame unified-photo-frame" style={{ width: `${photo.size || "360"}px` }}>
-                  <button
-                    type="button"
-                    className="original-photo-btn"
-                    onClick={() => setOriginalImageUrl(photo.url)}
-                    aria-label="사진 원본 크게 보기"
-                  >
-                    <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
-                  </button>
-                </div>
-                <div className="photo-caption info-photo-caption">
-                  <div
-                    className="resizable-memo-frame unified-memo-frame"
-                    style={{ width: `${photo.memoWidth || photo.size || "360"}px`, height: `${photo.memoHeight || "110"}px` }}
-                  >
-                    <textarea
-                      className="info-photo-memo-box"
-                      value={memoWithDateTag(photo.memo, currentMonth, currentDay)}
-                      onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
-                      placeholder={`${tag(currentMonth, currentDay)}선물 / 사진 메모`}
-                    />
-                    <button
-                      type="button"
-                      className="memo-resize-handle"
-                      onPointerDown={(event) => startMemoFrameResize(event, "info", k, index, photo.memoWidth || photo.size, photo.memoHeight)}
-                      aria-label="정보보관소 사진 메모칸 크기 조정"
-                    />
-                  </div>
-                  <div className="photo-actions photo-position-actions">
-                    <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, -1)} disabled={index === 0}>← 이전</button>
-                    <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, 1)} disabled={index === dayInfoPhotos.length - 1}>다음 →</button>
-                    <button type="button" className="soft-btn" onClick={() => setOriginalImageUrl(photo.url)}>원본 보기</button>
-                    <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>
-                  </div>
-                </div>
+              <div className="safe-info-photo-block" key={`${photo.name}-${index}`}>
                 <button
                   type="button"
-                  className="card-resize-handle"
-                  onPointerDown={(event) => startPhotoCardResize(event, "info", k, index, photo.size, photo.memoHeight)}
-                  aria-label="정보보관소 사진과 메모 전체 틀 크기 조정"
+                  className="safe-info-photo-button"
+                  onClick={() => setOriginalImageUrl(photo.url)}
+                  aria-label={`정보보관소 사진 ${index + 1} 원본 보기`}
+                >
+                  <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
+                </button>
+                <textarea
+                  className="safe-info-photo-text"
+                  value={photo.memo || ""}
+                  onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
+                  placeholder="사진 아래에 내용을 입력하세요."
                 />
+                <div className="photo-actions safe-info-photo-actions">
+                  <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, -1)} disabled={index === 0}>← 이전</button>
+                  <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, 1)} disabled={index === dayInfoPhotos.length - 1}>다음 →</button>
+                  <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>
+                </div>
               </div>
             ))}
           </div>
