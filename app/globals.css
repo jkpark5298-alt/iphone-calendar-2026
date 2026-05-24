@@ -360,6 +360,15 @@ textarea {
   font-weight: 800;
   color: var(--deep);
 }
+.photo-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.photo-actions .soft-btn {
+  padding: 8px 11px;
+  font-size: 12px;
+}
 .empty-photo {
   min-height: 92px;
   border: 1px dashed #c8c8c8;
@@ -482,6 +491,10 @@ textarea {
     min-height: 76px;
     font-size: 13px;
     padding: 12px;
+  }
+  .photo-actions .soft-btn {
+    padding: 7px 10px;
+    font-size: 12px;
   }
   .photo-card img {
     height: 130px;

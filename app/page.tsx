@@ -221,16 +221,16 @@ export default function HomePage() {
   }
 
   function saveRedDateInput() {
-    const parsedDays = redDateInput
-      .split(/[,.\s]+/)
-      .map(value => Number(value.trim()))
+    const parsedDays = (redDateInput.match(/\d+/g) || [])
+      .map(value => Number(value))
       .filter(value => Number.isInteger(value) && value >= 1 && value <= monthDays[currentMonth]);
 
     const uniqueDays = Array.from(new Set(parsedDays)).sort((a, b) => a - b);
     const nextRedDates = { ...redDates, [currentMonth]: uniqueDays };
     setRedDates(nextRedDates);
+    setRedDateInput(uniqueDays.join(", "));
     localStorage.setItem("iphone-calendar-2026-red-dates", JSON.stringify(nextRedDates));
-    alert(`${currentMonth}월 빨간 날짜가 저장되었습니다.`);
+    alert(uniqueDays.length ? `${currentMonth}월 ${uniqueDays.join(", ")}일을 빨간 날짜로 저장했습니다.` : `${currentMonth}월 빨간 날짜를 모두 해제했습니다.`);
     setView("calendar");
   }
 
@@ -357,6 +357,58 @@ export default function HomePage() {
     const [month, day] = k.split("-").map(Number);
     savePhotos(month, day, items, nextCalendarPhotos);
     alert("선택한 사진을 월간 캘린더에 붙였습니다.");
+  }
+
+  function deletePhoto(k: string, index: number) {
+    const items = photos[k] || [];
+    if (!items[index]) return;
+
+    const deletedUrl = items[index].url;
+    const nextPhotosForDay = items.filter((_, itemIndex) => itemIndex !== index);
+    const nextPhotos = { ...photos, [k]: nextPhotosForDay };
+    const nextCalendarPhotos = { ...calendarPhotos };
+
+    if (nextCalendarPhotos[k] === deletedUrl) {
+      if (nextPhotosForDay[0]) {
+        nextCalendarPhotos[k] = nextPhotosForDay[0].url;
+      } else {
+        delete nextCalendarPhotos[k];
+      }
+    }
+
+    setPhotos(nextPhotos);
+    setCalendarPhotos(nextCalendarPhotos);
+    const [month, day] = k.split("-").map(Number);
+    savePhotos(month, day, nextPhotosForDay, nextCalendarPhotos);
+  }
+
+  async function pastePhotoFromClipboard() {
+    try {
+      const clipboard = navigator.clipboard as Clipboard & { read?: () => Promise<ClipboardItem[]> };
+      if (!clipboard.read) {
+        alert("이 브라우저에서는 이미지 붙여넣기를 지원하지 않습니다. 사진 가져오기를 사용해 주세요.");
+        return;
+      }
+
+      const clipboardItems = await clipboard.read();
+      const files: File[] = [];
+
+      for (const item of clipboardItems) {
+        const imageType = item.types.find(type => type.startsWith("image/"));
+        if (!imageType) continue;
+        const blob = await item.getType(imageType);
+        files.push(new File([blob], `pasted_${Date.now()}.png`, { type: imageType }));
+      }
+
+      if (!files.length) {
+        alert("클립보드에 붙여넣을 이미지가 없습니다.");
+        return;
+      }
+
+      await savePhotoFiles(files);
+    } catch {
+      alert("아이폰 Safari에서는 이미지 붙여넣기가 제한될 수 있습니다. 복사한 이미지가 붙지 않으면 사진 가져오기를 사용해 주세요.");
+    }
   }
 
   async function startRecording() {
@@ -559,17 +611,21 @@ export default function HomePage() {
                 🖼 사진 가져오기
                 <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
               </label>
+              <button type="button" className="soft-btn" onClick={pastePhotoFromClipboard}>📋 붙여넣기</button>
             </div>
           </div>
 
-          {dayPhotos.length === 0 && <div className="empty-photo">사진 찍기·가져오기·붙여넣기 가능 / {tag(currentMonth, currentDay)} 자동 태그</div>}
+          {dayPhotos.length === 0 && <div className="empty-photo">사진 찍기·가져오기·붙여넣기 가능 / {tag(currentMonth, currentDay)} 자동 태그<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
           <div className="photo-grid">
             {dayPhotos.map((photo, index) => (
               <div className="photo-card" key={`${photo.name}-${index}`}>
                 <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
                 <div className="photo-caption">
                   <span>{photo.tag} 해당 일기장 날짜 사진 {index + 1}</span>
-                  <button type="button" className="soft-btn" onClick={() => setCalendarPhoto(k, index)}>캘린더에 붙이기</button>
+                  <div className="photo-actions">
+                    <button type="button" className="soft-btn" onClick={() => setCalendarPhoto(k, index)}>캘린더에 붙이기</button>
+                    <button type="button" className="soft-btn delete-btn" onClick={() => deletePhoto(k, index)}>삭제</button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -681,13 +737,14 @@ export default function HomePage() {
             <h2>빨간 날짜 표시 ({currentMonth}월)</h2>
             <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
           </div>
-          <p className="muted">빨간색으로 표시할 날짜만 입력하세요. 예: 6, 25</p>
+          <p className="muted">빨간색으로 표시할 날짜를 쉼표로 여러 개 입력하세요. 예: 6, 25, 30</p>
           <input
             className="red-date-input"
             value={redDateInput}
             onChange={e => setRedDateInput(e.target.value)}
             placeholder="예: 6, 25"
-            inputMode="numeric"
+            inputMode="text"
+            autoComplete="off"
           />
           <button type="button" className="save-schedule-btn" onClick={saveRedDateInput}>빨간 날짜 저장</button>
         </div>
