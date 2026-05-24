@@ -1499,13 +1499,26 @@ textarea {
 }
 
 .safe-info-photo-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 14px;
   margin-top: 14px;
+  align-items: start;
+}
+
+.safe-info-photo-list.safe-info-photo-count-1 {
+  grid-template-columns: 1fr;
+}
+
+.safe-info-photo-list.safe-info-photo-count-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.safe-info-photo-list.safe-info-photo-count-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .safe-info-photo-block {
+  min-width: 0;
   border: 1px solid #ddd;
   border-radius: 12px;
   background: #fffefb;
@@ -1594,13 +1607,27 @@ textarea {
     min-height: 330px;
   }
 
+  .safe-info-photo-list {
+    gap: 8px;
+  }
+
+  .safe-info-photo-block {
+    padding: 6px;
+  }
+
   .safe-info-photo-button img {
-    max-height: 360px;
+    max-height: 260px;
   }
 
   .safe-info-photo-text {
     min-height: 90px;
-    font-size: 14px;
+    font-size: 13px;
+    padding: 9px;
+  }
+
+  .safe-info-photo-actions .soft-btn {
+    padding: 6px 8px;
+    font-size: 11px;
   }
 }
 

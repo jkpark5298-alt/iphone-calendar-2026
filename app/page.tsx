@@ -1328,7 +1328,7 @@ export default function HomePage() {
           <textarea className="safe-info-textarea" value={infoText} onChange={e => saveInfo(e.target.value)} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요." />
 
           {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">사진을 가져오거나 붙여넣으면 아래에 추가됩니다. 사진 아래에 이어서 내용을 입력할 수 있습니다.</div>}
-          <div className="safe-info-photo-list">
+          <div className={`safe-info-photo-list safe-info-photo-count-${Math.min(dayInfoPhotos.length, 3)}`}>
             {dayInfoPhotos.map((photo, index) => (
               <div className="safe-info-photo-block" key={`${photo.name}-${index}`}>
                 <button
