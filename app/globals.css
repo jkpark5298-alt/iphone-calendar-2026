@@ -1186,3 +1186,71 @@ textarea {
 .resize-help {
   display: none !important;
 }
+
+
+/* Separate photo frame resize and memo height resize */
+.resizable-memo-frame {
+  position: relative;
+  width: 100%;
+  min-height: 72px;
+  max-height: 520px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  touch-action: none;
+}
+.resizable-memo-frame .photo-memo-box,
+.resizable-memo-frame .info-photo-memo-box {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  resize: none !important;
+  padding: 10px 46px 10px 12px;
+  background: transparent;
+}
+.memo-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 40px;
+  height: 36px;
+  border: 0;
+  border-radius: 12px 0 0 0;
+  background: rgba(255, 255, 255, 0.94);
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 5;
+}
+.memo-resize-handle::before {
+  content: "↕";
+  color: #53675e;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 36px;
+}
+.memo-height-head {
+  margin-top: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  .resizable-memo-frame {
+    background: #111;
+    border-color: #444;
+  }
+  .memo-resize-handle {
+    background: rgba(255, 255, 255, 0.92);
+  }
+}
+@media (max-width: 820px) {
+  .memo-resize-handle {
+    width: 46px;
+    height: 42px;
+  }
+  .memo-resize-handle::before {
+    font-size: 20px;
+    line-height: 42px;
+  }
+}

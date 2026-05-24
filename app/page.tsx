@@ -3,7 +3,7 @@
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate";
-type PhotoItem = { url: string; name: string; tag: string; extraTag?: string; memo?: string; size?: string };
+type PhotoItem = { url: string; name: string; tag: string; extraTag?: string; memo?: string; size?: string; memoHeight?: string };
 type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple";
 type ScheduleItem = {
   id: string;
@@ -59,6 +59,14 @@ function tag(month: number, day: number) {
 
 function infoTag(month: number, day: number) {
   return `#날짜(${pad(month)}/${pad(day)})#`;
+}
+
+function memoWithDateTag(memo: string | undefined, month: number, day: number) {
+  const dateTag = tag(month, day);
+  const currentMemo = memo || "";
+  if (currentMemo.startsWith("#")) return currentMemo;
+  if (currentMemo.trim()) return `${dateTag}${currentMemo}`;
+  return dateTag;
 }
 
 function getWeekday(month: number, day: number) {
@@ -289,7 +297,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: infoTag(currentMonth, currentDay), extraTag: "", memo: "", size: "360" });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: tag(currentMonth, currentDay), size: "360", memoHeight: "110" });
       reader.readAsDataURL(file);
     });
 
@@ -399,6 +407,20 @@ export default function HomePage() {
     saveInfoPhotos(month, day, nextPhotosForDay);
   }
 
+
+  function updateInfoPhotoMemoHeight(k: string, index: number, memoHeight: string) {
+    const items = infoPhotos[k] || [];
+    if (!items[index]) return;
+
+    const nextPhotosForDay = items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, memoHeight } : item
+    );
+    const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
+    setInfoPhotos(nextInfoPhotos);
+    const [month, day] = k.split("-").map(Number);
+    saveInfoPhotos(month, day, nextPhotosForDay);
+  }
+
   function updateDiaryPhotoExtraTag(k: string, index: number, extraTag: string) {
     const items = photos[k] || [];
     if (!items[index]) return;
@@ -439,6 +461,20 @@ export default function HomePage() {
   }
 
 
+  function updateDiaryPhotoMemoHeight(k: string, index: number, memoHeight: string) {
+    const items = photos[k] || [];
+    if (!items[index]) return;
+
+    const nextPhotosForDay = items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, memoHeight } : item
+    );
+    const nextPhotos = { ...photos, [k]: nextPhotosForDay };
+    setPhotos(nextPhotos);
+    const [month, day] = k.split("-").map(Number);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+  }
+
+
   function startPhotoFrameResize(
     event: React.PointerEvent<HTMLButtonElement>,
     photoType: "diary" | "info",
@@ -462,6 +498,40 @@ export default function HomePage() {
     };
 
     const handlePointerMove = (moveEvent: PointerEvent) => applySize(moveEvent.clientX);
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  }
+
+  function startMemoHeightResize(
+    event: React.PointerEvent<HTMLButtonElement>,
+    photoType: "diary" | "info",
+    photoKey: string,
+    index: number,
+    currentHeight?: string
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startY = event.clientY;
+    const startHeight = Number(currentHeight || "110");
+    const minHeight = 72;
+    const maxHeight = 520;
+
+    const applyHeight = (nextClientY: number) => {
+      const delta = nextClientY - startY;
+      const nextHeight = Math.max(minHeight, Math.min(maxHeight, Math.round(startHeight + delta)));
+      if (photoType === "diary") updateDiaryPhotoMemoHeight(photoKey, index, String(nextHeight));
+      if (photoType === "info") updateInfoPhotoMemoHeight(photoKey, index, String(nextHeight));
+    };
+
+    const handlePointerMove = (moveEvent: PointerEvent) => applyHeight(moveEvent.clientY);
     const handlePointerUp = () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
@@ -519,7 +589,7 @@ export default function HomePage() {
 
     const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: "", size: "360" });
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: tag(currentMonth, currentDay), size: "360", memoHeight: "110" });
       reader.readAsDataURL(file);
     });
 
@@ -922,7 +992,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {dayPhotos.length === 0 && <div className="empty-photo">사진 찍기·가져오기·붙여넣기 가능 / {tag(currentMonth, currentDay)} 자동 태그<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
+          {dayPhotos.length === 0 && <div className="empty-photo">사진 찍기·가져오기·붙여넣기 가능 / 메모 첫머리에 {tag(currentMonth, currentDay)} 자동 입력<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
           <div className="photo-grid">
             {dayPhotos.map((photo, index) => (
               <div className="photo-card" key={`${photo.name}-${index}`}>
@@ -943,26 +1013,28 @@ export default function HomePage() {
                   />
                 </div>
                 <div className="photo-caption">
-                  <label className="photo-tag-line diary-photo-tag-line">
-                    <span className="photo-tag-base">{photo.tag}</span>
-                    <input
-                      className="photo-extra-tag"
-                      value={photo.extraTag || ""}
-                      onChange={e => updateDiaryPhotoExtraTag(k, index, e.target.value)}
-                      placeholder="선물"
-                      aria-label="일기 사진 조회용 추가 태그"
+                  <div className="resizable-memo-frame" style={{ height: `${photo.memoHeight || "110"}px` }}>
+                    <textarea
+                      className="photo-memo-box"
+                      value={memoWithDateTag(photo.memo, currentMonth, currentDay)}
+                      onChange={e => updateDiaryPhotoMemo(k, index, e.target.value)}
+                      placeholder={`${tag(currentMonth, currentDay)}선물 / 사진 메모`}
                     />
-                  </label>
-                  <textarea
-                    className="photo-memo-box"
-                    value={photo.memo || ""}
-                    onChange={e => updateDiaryPhotoMemo(k, index, e.target.value)}
-                    placeholder="사진 설명 메모를 입력하세요."
-                  />
+                    <button
+                      type="button"
+                      className="memo-resize-handle"
+                      onPointerDown={(event) => startMemoHeightResize(event, "diary", k, index, photo.memoHeight)}
+                      aria-label="일기 사진 메모 높이 손가락으로 조정"
+                    />
+                  </div>
                   <div className="photo-size-control manual-size-control frame-size-control">
                     <div className="manual-size-head">
                       <span>사진 크기</span>
                       <strong>{photo.size || "360"}px</strong>
+                    </div>
+                    <div className="manual-size-head memo-height-head">
+                      <span>메모 높이</span>
+                      <strong>{photo.memoHeight || "110"}px</strong>
                     </div>
                   </div>
                   <div className="photo-actions">
@@ -1124,7 +1196,7 @@ export default function HomePage() {
           </div>
           <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 420, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요. 이미지 붙여넣기·사진 가져오기도 가능하며, 사진 아래에 메모를 남길 수 있습니다." />
 
-          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 {infoTag(currentMonth, currentDay)} 태그로 저장됩니다.</div>}
+          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 메모 첫머리에 {tag(currentMonth, currentDay)} 자동 태그가 입력됩니다.</div>}
           <div className="photo-grid info-photo-grid integrated-info-photo-grid">
             {dayInfoPhotos.map((photo, index) => (
               <div className="photo-card info-photo-card" key={`${photo.name}-${index}`}>
@@ -1145,26 +1217,28 @@ export default function HomePage() {
                   />
                 </div>
                 <div className="photo-caption info-photo-caption">
-                  <label className="info-photo-tag-line">
-                    <span className="info-photo-tag">{photo.tag}</span>
-                    <input
-                      className="info-photo-extra-tag"
-                      value={photo.extraTag || ""}
-                      onChange={e => updateInfoPhotoExtraTag(k, index, e.target.value)}
-                      placeholder="선물"
-                      aria-label="조회용 추가 태그"
+                  <div className="resizable-memo-frame" style={{ height: `${photo.memoHeight || "110"}px` }}>
+                    <textarea
+                      className="info-photo-memo-box"
+                      value={memoWithDateTag(photo.memo, currentMonth, currentDay)}
+                      onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
+                      placeholder={`${tag(currentMonth, currentDay)}선물 / 사진 메모`}
                     />
-                  </label>
-                  <textarea
-                    className="info-photo-memo-box"
-                    value={photo.memo || ""}
-                    onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
-                    placeholder="사진 설명 메모를 입력하세요."
-                  />
+                    <button
+                      type="button"
+                      className="memo-resize-handle"
+                      onPointerDown={(event) => startMemoHeightResize(event, "info", k, index, photo.memoHeight)}
+                      aria-label="정보보관소 사진 메모 높이 손가락으로 조정"
+                    />
+                  </div>
                   <div className="photo-size-control manual-size-control frame-size-control">
                     <div className="manual-size-head">
                       <span>사진 크기</span>
                       <strong>{photo.size || "360"}px</strong>
+                    </div>
+                    <div className="manual-size-head memo-height-head">
+                      <span>메모 높이</span>
+                      <strong>{photo.memoHeight || "110"}px</strong>
                     </div>
                   </div>
                   <div className="photo-actions">
