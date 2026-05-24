@@ -94,6 +94,10 @@ function storageKey(type: string, month: number, day: number) {
   return `iphone-diary-2026-${type}-${pad(month)}-${pad(day)}`;
 }
 
+function weatherStorageKey(month: number, day: number) {
+  return `iphone-diary-2026-weather-${pad(month)}-${pad(day)}`;
+}
+
 function getSafeToday() {
   const today = new Date();
   const year = today.getFullYear();
@@ -134,7 +138,6 @@ export default function HomePage() {
   const [weatherTime, setWeatherTime] = useState("-");
   const [weatherSource, setWeatherSource] = useState("기상청 연결 대기");
   const [originalImageUrl, setOriginalImageUrl] = useState("");
-  const [selectedDiaryPhotoIndex, setSelectedDiaryPhotoIndex] = useState<number | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -163,7 +166,15 @@ export default function HomePage() {
       const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay));
       const items = rawPhotos ? JSON.parse(rawPhotos) : [];
       setPhotos(prev => ({ ...prev, [key(currentMonth, currentDay)]: items }));
-      setSelectedDiaryPhotoIndex(null);
+
+      const rawWeather = localStorage.getItem(weatherStorageKey(currentMonth, currentDay));
+      if (rawWeather) {
+        const cachedWeather = JSON.parse(rawWeather);
+        setWeather(cachedWeather.weather || "확인 필요");
+        setTemp(cachedWeather.temperature || "-");
+        setWeatherTime(cachedWeather.observedAt || "-");
+        setWeatherSource(cachedWeather.source || "기상청");
+      }
       fetchWeatherFromKma();
     } catch {
       setDiaryText("");
@@ -200,10 +211,22 @@ export default function HomePage() {
         throw new Error(data.message || "weather error");
       }
 
-      setWeather(data.weather || "확인 필요");
-      setTemp(data.temperature ? `${data.temperature}℃` : "-");
-      setWeatherTime(data.observedAt || new Date().toLocaleString("ko-KR"));
+      const nextTemperature = data.temperature
+        ? String(data.temperature).includes("℃")
+          ? String(data.temperature)
+          : `${data.temperature}℃`
+        : "-";
+      const nextWeather = data.weather || "확인 필요";
+      const nextObservedAt = data.observedAt || new Date().toLocaleString("ko-KR");
+
+      setWeather(nextWeather);
+      setTemp(nextTemperature);
+      setWeatherTime(nextObservedAt);
       setWeatherSource("기상청");
+      localStorage.setItem(
+        weatherStorageKey(currentMonth, currentDay),
+        JSON.stringify({ weather: nextWeather, temperature: nextTemperature, observedAt: nextObservedAt, source: "기상청" })
+      );
     } catch {
       setWeather("기상청 연결 필요");
       setTemp("-");
@@ -254,7 +277,7 @@ export default function HomePage() {
       .map(value => Number(value))
       .filter(value => Number.isInteger(value) && value >= 1 && value <= monthDays[currentMonth]);
 
-    const uniqueDays = Array.from(new Set(parsedDays)).sort((a, b) => a - b);
+    const uniqueDays = Array.from(new Set<number>(parsedDays)).sort((a: number, b: number) => a - b);
     const nextRedDates = { ...redDates, [currentMonth]: uniqueDays };
     setRedDates(nextRedDates);
     setRedDateInput(uniqueDays.join(", "));
@@ -303,13 +326,62 @@ export default function HomePage() {
     localStorage.setItem(storageKey("infoPhotos", month, day), JSON.stringify(nextPhotos));
   }
 
+
+  function readImageFileAsDataUrl(file: File) {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("이미지 파일을 읽지 못했습니다."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadImage(dataUrl: string) {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("이미지를 불러오지 못했습니다."));
+      image.src = dataUrl;
+    });
+  }
+
+  async function makeOptimizedImageDataUrl(file: File) {
+    const originalDataUrl = await readImageFileAsDataUrl(file);
+    if (!file.type.startsWith("image/")) return originalDataUrl;
+
+    try {
+      const image = await loadImage(originalDataUrl);
+      const maxSide = 1600;
+      const ratio = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * ratio));
+      const height = Math.max(1, Math.round(image.height * ratio));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return originalDataUrl;
+      ctx.drawImage(image, 0, 0, width, height);
+
+      const optimized = canvas.toDataURL("image/jpeg", 0.82);
+      return optimized.length < originalDataUrl.length ? optimized : originalDataUrl;
+    } catch {
+      return originalDataUrl;
+    }
+  }
+
   async function saveInfoPhotoFiles(files: File[]) {
     if (!files.length) return;
 
-    const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: "", size: "360", memoWidth: "360", memoHeight: "110" });
-      reader.readAsDataURL(file);
+    const readFile = async (file: File): Promise<PhotoItem> => ({
+      url: await makeOptimizedImageDataUrl(file),
+      name: file.name,
+      tag: tag(currentMonth, currentDay),
+      extraTag: "",
+      memo: "",
+      size: "360",
+      memoWidth: "360",
+      memoHeight: "110",
     });
 
     const newItems = await Promise.all(files.map(readFile));
@@ -322,13 +394,13 @@ export default function HomePage() {
   }
 
   async function addInfoPhotos(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files || []);
+    const files = Array.from(event.target.files || []) as File[];
     await saveInfoPhotoFiles(files);
     event.target.value = "";
   }
 
   async function handleInfoPhotoPaste(event: ClipboardEvent<HTMLDivElement>) {
-    const pastedFiles = Array.from(event.clipboardData.items)
+    const pastedFiles = (Array.from(event.clipboardData.items) as DataTransferItem[])
       .filter(item => item.type.startsWith("image/"))
       .map(item => item.getAsFile())
       .filter((file): file is File => Boolean(file));
@@ -699,10 +771,15 @@ export default function HomePage() {
   async function savePhotoFiles(files: File[]) {
     if (!files.length) return;
 
-    const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay), extraTag: "", memo: "", size: "360", memoWidth: "360", memoHeight: "110" });
-      reader.readAsDataURL(file);
+    const readFile = async (file: File): Promise<PhotoItem> => ({
+      url: await makeOptimizedImageDataUrl(file),
+      name: file.name,
+      tag: tag(currentMonth, currentDay),
+      extraTag: "",
+      memo: "",
+      size: "360",
+      memoWidth: "360",
+      memoHeight: "110",
     });
 
     const newItems = await Promise.all(files.map(readFile));
@@ -718,13 +795,13 @@ export default function HomePage() {
   }
 
   async function addPhotos(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files || []);
+    const files = Array.from(event.target.files || []) as File[];
     await savePhotoFiles(files);
     event.target.value = "";
   }
 
   async function handlePhotoPaste(event: ClipboardEvent<HTMLDivElement>) {
-    const pastedFiles = Array.from(event.clipboardData.items)
+    const pastedFiles = (Array.from(event.clipboardData.items) as DataTransferItem[])
       .filter(item => item.type.startsWith("image/"))
       .map(item => item.getAsFile())
       .filter((file): file is File => Boolean(file));
@@ -767,23 +844,37 @@ export default function HomePage() {
     savePhotos(month, day, nextPhotosForDay, nextCalendarPhotos);
   }
 
-  function setSelectedPhotoToCalendar(k: string) {
-    if (selectedDiaryPhotoIndex === null || !photos[k]?.[selectedDiaryPhotoIndex]) {
-      alert("캘린더에 붙일 사진을 먼저 선택해 주세요.");
-      return;
+
+  function getDiaryPhotoIndexFromUser(k: string, actionName: string) {
+    const items = photos[k] || [];
+    if (!items.length) {
+      alert("선택할 사진이 없습니다.");
+      return null;
     }
 
-    setCalendarPhoto(k, selectedDiaryPhotoIndex);
+    const input = window.prompt(`${actionName}할 사진 번호를 입력하세요. (1~${items.length})`);
+    if (!input) return null;
+
+    const index = Number(input.trim()) - 1;
+    if (!Number.isInteger(index) || index < 0 || index >= items.length) {
+      alert("사진 번호가 올바르지 않습니다.");
+      return null;
+    }
+
+    return index;
   }
 
-  function deleteSelectedDiaryPhoto(k: string) {
-    if (selectedDiaryPhotoIndex === null || !photos[k]?.[selectedDiaryPhotoIndex]) {
-      alert("삭제할 사진을 먼저 선택해 주세요.");
-      return;
-    }
+  function attachDiaryPhotoToCalendar(k: string) {
+    const index = getDiaryPhotoIndexFromUser(k, "캘린더에 붙이기");
+    if (index === null) return;
+    setCalendarPhoto(k, index);
+  }
 
-    deletePhoto(k, selectedDiaryPhotoIndex);
-    setSelectedDiaryPhotoIndex(null);
+  function deleteDiaryPhotoBySelect(k: string) {
+    const index = getDiaryPhotoIndexFromUser(k, "삭제");
+    if (index === null) return;
+    if (!window.confirm(`${index + 1}번 사진을 삭제할까요?`)) return;
+    deletePhoto(k, index);
   }
 
   async function pastePhotoFromClipboard() {
@@ -1033,7 +1124,7 @@ export default function HomePage() {
             {calendarPhotos[k] ? (
               <button
                 type="button"
-                className="calendar-photo-button"
+                className="calendar-thumb-button"
                 onClick={(event) => {
                   event.stopPropagation();
                   setOriginalImageUrl(calendarPhotos[k]);
@@ -1097,8 +1188,6 @@ export default function HomePage() {
   function DiaryView() {
     const k = key(currentMonth, currentDay);
     const dayPhotos = photos[k] || [];
-    const selectedPhotoExists = selectedDiaryPhotoIndex !== null && Boolean(dayPhotos[selectedDiaryPhotoIndex]);
-
     return (
       <section>
         <div className="diary-head">
@@ -1109,95 +1198,77 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="weather-line">
-          <span>🏠 집</span>
-          <span>☀️ {weather}</span>
-          <span>🌡 {temp}</span>
-          <span className="weather-time">🕒 {weatherTime}</span>
-          <span className="weather-source">{weatherSource}</span>
+        <div className="diary-top-row">
+          <div className="weather-line diary-weather-line">
+            <span>🏠 집</span>
+            <span>☀️ {weather}</span>
+            <span>🌡 {temp}</span>
+            <span className="weather-time">🕒 {weatherTime} · {weatherSource}</span>
+          </div>
+          <div className="button-row diary-photo-import-row">
+            <label className="soft-btn">
+              📷 사진찍기
+              <input className="hidden-input" type="file" accept="image/*" capture="environment" multiple onChange={addPhotos} />
+            </label>
+            <label className="soft-btn">
+              🖼 사진 가져오기
+              <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
+            </label>
+            <button type="button" className="soft-btn" onClick={pastePhotoFromClipboard}>📋 붙여넣기</button>
+          </div>
         </div>
 
-        <div className="notice compact-notice">날씨는 기상청 단기예보 API 기준입니다. Vercel 환경변수 KMA_SERVICE_KEY가 필요합니다.</div>
-
         <div className="diary-main-row">
-          <div className="diary-writing-pane">
-            <textarea className="diary-textarea diary-textarea-full" value={diaryText} onChange={e => saveDiary(e.target.value, voiceText)} placeholder="오늘의 기록을 남겨보세요...." />
-          </div>
+          <textarea className="diary-textarea diary-main-textarea" value={diaryText} onChange={e => saveDiary(e.target.value, voiceText)} placeholder="오늘의 기록을 남겨보세요...." />
 
-          <div className="diary-photo-pane">
-            <div className="box photo-box diary-photo-box" onPaste={handlePhotoPaste} tabIndex={0}>
-              <div className="box-head compact-box-head diary-photo-head">
-                <h3>Today 사진</h3>
-                <div className="button-row diary-photo-title-actions">
-                  <button type="button" className="soft-btn" onClick={() => setSelectedPhotoToCalendar(k)} disabled={!selectedPhotoExists}>캘린더 붙이기</button>
-                  <button type="button" className="soft-btn delete-btn" onClick={() => deleteSelectedDiaryPhoto(k)} disabled={!selectedPhotoExists}>삭제</button>
+          <div className="box photo-box diary-photo-panel" onPaste={handlePhotoPaste} tabIndex={0}>
+            <div className="box-head compact-box-head diary-photo-action-head">
+              <div className="button-row diary-photo-main-actions">
+                <button type="button" className="soft-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린더 붙이기</button>
+                <button type="button" className="soft-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>삭제</button>
+              </div>
+            </div>
+
+            {dayPhotos.length === 0 && <div className="empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
+            <div className="diary-photo-grid-safe">
+              {dayPhotos.map((photo, index) => (
+                <div className="diary-photo-card-safe" key={`${photo.name}-${index}`}>
+                  <div className="photo-number-badge">{index + 1}</div>
+                  <button
+                    type="button"
+                    className="original-photo-btn diary-original-photo-btn"
+                    onClick={() => setOriginalImageUrl(photo.url)}
+                    aria-label="일기 사진 원본 크게 보기"
+                  >
+                    <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
+                  </button>
+                  <div className="photo-actions safe-photo-actions">
+                    <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, -1)} disabled={index === 0}>←</button>
+                    <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, 1)} disabled={index === dayPhotos.length - 1}>→</button>
+                  </div>
                 </div>
-              </div>
-
-              <div className="button-row diary-photo-add-row">
-                <label className="soft-btn">
-                  📷 사진찍기
-                  <input className="hidden-input" type="file" accept="image/*" capture="environment" multiple onChange={addPhotos} />
-                </label>
-                <label className="soft-btn">
-                  🖼 사진 가져오기
-                  <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
-                </label>
-                <button type="button" className="soft-btn" onClick={pastePhotoFromClipboard}>📋 붙여넣기</button>
-              </div>
-
-              {dayPhotos.length === 0 && <div className="empty-photo">사진 찍기·가져오기·붙여넣기 가능<br />사진을 누르면 원본 보기로 열립니다.</div>}
-              <div className="diary-simple-photo-grid">
-                {dayPhotos.map((photo, index) => {
-                  const selected = selectedDiaryPhotoIndex === index;
-                  return (
-                    <div
-                      className={`diary-simple-photo-card ${selected ? "selected-photo-card" : ""}`}
-                      key={`${photo.name}-${index}`}
-                    >
-                      <button
-                        type="button"
-                        className="diary-simple-photo-button"
-                        onClick={() => setOriginalImageUrl(photo.url)}
-                        aria-label={`일기 사진 ${index + 1} 원본 보기`}
-                      >
-                        <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
-                      </button>
-                      <div className="photo-actions diary-simple-actions">
-                        <button type="button" className={`soft-btn ${selected ? "selected-soft-btn" : ""}`} onClick={() => setSelectedDiaryPhotoIndex(index)}>
-                          {selected ? "선택됨" : "선택"}
-                        </button>
-                        <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, -1)} disabled={index === 0}>←</button>
-                        <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, 1)} disabled={index === dayPhotos.length - 1}>→</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              ))}
             </div>
           </div>
         </div>
 
         <div className="box voice-box">
-          <div className="box-head compact-box-head">
+          <div className="box-head compact-box-head voice-head-safe">
             <h3>음성 메모 / 받아쓰기</h3>
-            <div className="button-row">
+            <div className="button-row voice-main-actions">
               <button type="button" className="soft-btn" onClick={startRecording}>🎙 녹음 시작</button>
               <button type="button" className="soft-btn" onClick={stopRecording}>⏹ 녹음 정지</button>
+              <button type="button" className="soft-btn delete-btn" onClick={deleteVoiceMemo}>🗑 녹음 삭제</button>
+              <button type="button" className="soft-btn" onClick={saveVoiceMemoFile}>💾 파일 저장</button>
+              <button type="button" className="soft-btn" onClick={shareVoiceMemoToIphoneMemo}>📝 아이폰 메모로 보내기</button>
+              <label className="soft-btn">
+                🎧 음성파일 가져오기
+                <input className="hidden-input" type="file" accept="audio/m4a,audio/mp4,audio/mpeg,audio/mp3,.m4a,.mp3,.mp4,.aac,.webm" onChange={importVoiceFile} />
+              </label>
+              <span className="voice-status">{voiceStatus}</span>
             </div>
           </div>
-          <p className="muted compact-muted">아이폰 전사/공유 안정성을 위해 m4a 또는 mp3 음성파일을 권장합니다. 직접 녹음은 지원 브라우저에서 m4a 우선으로 저장하고, 오류가 반복되면 아이폰 음성메모 앱에서 m4a로 녹음한 뒤 ‘음성파일 가져오기’를 사용하세요.</p>
           {audioUrl && <audio src={audioUrl} controls style={{ width: "100%", marginTop: 12 }} />}
-          <div className="voice-save-row">
-            <label className="soft-btn">
-              🎧 음성파일 가져오기
-              <input className="hidden-input" type="file" accept="audio/m4a,audio/mp4,audio/mpeg,audio/mp3,.m4a,.mp3,.mp4,.aac,.webm" onChange={importVoiceFile} />
-            </label>
-            <button type="button" className="soft-btn" onClick={shareVoiceMemoToIphoneMemo}>📝 아이폰 메모로 보내기</button>
-            <button type="button" className="soft-btn" onClick={saveVoiceMemoFile}>💾 파일 저장</button>
-            <button type="button" className="soft-btn delete-btn" onClick={deleteVoiceMemo}>🗑 녹음 삭제</button>
-            <span className="voice-status">{voiceStatus}</span>
-          </div>
           <textarea value={voiceText} onChange={e => saveDiary(diaryText, e.target.value)} style={{ minHeight: 140, marginTop: 12 }} placeholder="음성 받아쓰기 또는 녹음 내용을 정리해 보세요." />
         </div>
       </section>
@@ -1306,10 +1377,11 @@ export default function HomePage() {
   function InfoView() {
     const k = key(currentMonth, currentDay);
     const dayInfoPhotos = infoPhotos[k] || [];
+    const infoPhotoCountClass = `count-${Math.min(Math.max(dayInfoPhotos.length, 1), 3)}`;
 
     return (
       <section>
-        <div className="box info-box safe-info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }} onPaste={handleInfoPhotoPaste} tabIndex={0}>
+        <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }} onPaste={handleInfoPhotoPaste} tabIndex={0}>
           <div className="info-head">
             <h2 className="info-title">📂 주요 정보 보관소</h2>
             <div className="info-sub-date">2026. {pad(currentMonth)}. {pad(currentDay)}</div>
@@ -1324,28 +1396,27 @@ export default function HomePage() {
               <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
             </div>
           </div>
+          <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 360, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요." />
 
-          <textarea className="safe-info-textarea" value={infoText} onChange={e => saveInfo(e.target.value)} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요." />
-
-          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">사진을 가져오거나 붙여넣으면 아래에 추가됩니다. 사진 아래에 이어서 내용을 입력할 수 있습니다.</div>}
-          <div className={`safe-info-photo-list safe-info-photo-count-${Math.min(dayInfoPhotos.length, 3)}`}>
+          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 이곳에 정리됩니다.</div>}
+          <div className={`info-photo-grid-safe ${infoPhotoCountClass}`}>
             {dayInfoPhotos.map((photo, index) => (
-              <div className="safe-info-photo-block" key={`${photo.name}-${index}`}>
+              <div className="info-photo-card-safe" key={`${photo.name}-${index}`}>
                 <button
                   type="button"
-                  className="safe-info-photo-button"
+                  className="original-photo-btn info-original-photo-btn"
                   onClick={() => setOriginalImageUrl(photo.url)}
-                  aria-label={`정보보관소 사진 ${index + 1} 원본 보기`}
+                  aria-label="정보보관소 사진 원본 크게 보기"
                 >
                   <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
                 </button>
                 <textarea
-                  className="safe-info-photo-text"
+                  className="info-photo-note-safe"
                   value={photo.memo || ""}
                   onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
                   placeholder="사진 아래에 내용을 입력하세요."
                 />
-                <div className="photo-actions safe-info-photo-actions">
+                <div className="photo-actions safe-photo-actions">
                   <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, -1)} disabled={index === 0}>← 이전</button>
                   <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, 1)} disabled={index === dayInfoPhotos.length - 1}>다음 →</button>
                   <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>

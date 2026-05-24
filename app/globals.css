@@ -1373,277 +1373,198 @@ textarea {
   cursor: not-allowed;
 }
 
-
-/* Safe photo layout update: diary 3:2 row, simple photos, calendar contain thumbnails */
-.calendar-photo-button {
-  width: 100%;
-  height: 100%;
-  display: flex;
+/* Safe photo layout update: diary 3:2, two-column diary photos, three-column info photos */
+.diary-top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(240px, 2fr);
+  gap: 12px;
   align-items: center;
-  justify-content: center;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  cursor: zoom-in;
-  position: relative;
-  z-index: 3;
+  margin: 8px 0 10px;
 }
-
-.calendar-photo-button img,
-.thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain !important;
-  background: #f4f4f1;
+.diary-weather-line {
+  margin: 0;
 }
-
+.diary-photo-import-row {
+  justify-content: flex-end;
+}
 .diary-main-row {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr);
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
   gap: 14px;
   align-items: stretch;
   margin-bottom: 14px;
 }
-
-.diary-writing-pane,
-.diary-photo-pane {
-  min-width: 0;
-}
-
-.diary-textarea-full {
-  min-height: 560px;
+.diary-main-textarea {
+  min-height: 520px;
   height: 100%;
 }
-
-.diary-photo-box {
-  height: 100%;
+.diary-photo-panel {
   margin-bottom: 0;
+  min-height: 520px;
+  display: flex;
+  flex-direction: column;
 }
-
-.diary-photo-head {
-  align-items: center;
+.diary-photo-action-head {
+  justify-content: flex-end;
 }
-
-.diary-photo-title-actions {
-  gap: 7px;
+.diary-photo-main-actions {
+  width: 100%;
+  justify-content: flex-end;
 }
-
-.diary-photo-title-actions .soft-btn:disabled,
-.diary-simple-actions .soft-btn:disabled,
-.safe-info-photo-actions .soft-btn:disabled {
-  opacity: 0.42;
-  cursor: not-allowed;
-}
-
-.diary-photo-add-row {
-  margin-bottom: 10px;
-}
-
-.diary-simple-photo-grid {
+.diary-photo-grid-safe {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 10px;
 }
-
-.diary-simple-photo-card {
+.diary-photo-card-safe,
+.info-photo-card-safe {
+  position: relative;
   border: 1px solid #ddd;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fffefb;
-  padding: 8px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  overflow: hidden;
 }
-
-.diary-simple-photo-card.selected-photo-card {
-  border-color: #2f80ed;
-  box-shadow: 0 0 0 2px rgba(47, 128, 237, 0.16);
-}
-
-.diary-simple-photo-button {
-  display: flex;
+.photo-number-badge {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  left: 8px;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.62);
+  color: white;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  border: 0;
-  padding: 0;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #f5f5f2;
-  cursor: zoom-in;
+  font-size: 12px;
+  font-weight: 900;
 }
-
-.diary-simple-photo-button img {
+.diary-photo-card-safe .original-photo-btn,
+.info-photo-card-safe .original-photo-btn {
   width: 100%;
-  max-height: 320px;
+  background: #0f1110;
+}
+.diary-photo-card-safe img,
+.info-photo-card-safe img {
+  width: 100%;
+  height: auto;
+  max-height: 360px;
   object-fit: contain;
   display: block;
-  background: #f5f5f2;
+  background: #0f1110;
 }
-
-.diary-simple-actions {
-  margin-top: 8px;
+.safe-photo-actions {
+  padding: 8px;
+  gap: 6px;
 }
-
-.selected-soft-btn {
-  background: #e6f0ff !important;
-  color: #2f80ed !important;
+.safe-photo-actions .soft-btn {
+  padding: 7px 10px;
+  font-size: 12px;
 }
-
-.safe-info-box {
-  overflow: hidden;
-}
-
-.safe-info-textarea {
-  min-height: 360px;
-  border-style: dashed;
-}
-
-.safe-info-photo-list {
+.info-photo-grid-safe {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   margin-top: 14px;
-  align-items: start;
 }
-
-.safe-info-photo-list.safe-info-photo-count-1 {
+.info-photo-grid-safe.count-1 {
   grid-template-columns: 1fr;
 }
-
-.safe-info-photo-list.safe-info-photo-count-2 {
+.info-photo-grid-safe.count-2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-
-.safe-info-photo-list.safe-info-photo-count-3 {
+.info-photo-grid-safe.count-3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-
-.safe-info-photo-block {
-  min-width: 0;
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  background: #fffefb;
-  padding: 10px;
-}
-
-.safe-info-photo-button {
+.info-photo-note-safe {
   width: 100%;
+  min-height: 94px;
+  border: 0;
+  border-top: 1px solid #ddd;
+  border-radius: 0;
+  padding: 11px 12px;
+  font-size: 14px;
+  resize: vertical;
+  background: #fff;
+  color: #222;
+}
+.calendar-thumb-button {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: zoom-in;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 0;
-  border-radius: 10px;
-  padding: 0;
-  background: #f5f5f2;
-  overflow: hidden;
-  cursor: zoom-in;
 }
-
-.safe-info-photo-button img {
+.thumb img {
   width: 100%;
-  max-height: 520px;
-  object-fit: contain;
+  height: 100%;
+  object-fit: contain !important;
   display: block;
-  background: #f5f5f2;
+  background: #f4f4f1;
 }
-
-.safe-info-photo-text {
-  min-height: 110px;
-  margin-top: 10px;
-  font-size: 15px;
-  resize: vertical;
+.voice-head-safe {
+  align-items: flex-start;
 }
-
-.safe-info-photo-actions {
-  margin-top: 8px;
+.voice-main-actions {
+  flex: 1;
+  justify-content: flex-end;
 }
 
 @media (max-width: 820px) {
-  .diary-main-row {
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  .diary-top-row {
+    grid-template-columns: 1fr;
     gap: 8px;
   }
-
-  .diary-textarea-full {
-    min-height: 520px;
-    padding: 12px;
-    font-size: 15px;
+  .diary-photo-import-row {
+    justify-content: flex-start;
   }
-
-  .diary-photo-box {
-    padding: 10px;
+  .diary-main-row {
+    grid-template-columns: minmax(0, 3fr) minmax(150px, 2fr);
+    gap: 8px;
   }
-
-  .diary-photo-head {
-    flex-direction: column;
-    align-items: flex-start;
+  .diary-main-textarea,
+  .diary-photo-panel {
+    min-height: 420px;
+  }
+  .diary-photo-grid-safe {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 7px;
   }
-
-  .diary-photo-title-actions,
-  .diary-photo-add-row {
-    gap: 5px;
+  .diary-photo-card-safe img {
+    max-height: 170px;
   }
-
-  .diary-photo-title-actions .soft-btn,
-  .diary-photo-add-row .soft-btn {
-    padding: 7px 9px;
-    font-size: 11px;
+  .diary-photo-main-actions {
+    justify-content: flex-start;
   }
-
-  .diary-simple-photo-card {
-    padding: 6px;
+  .info-photo-grid-safe.count-1,
+  .info-photo-grid-safe.count-2,
+  .info-photo-grid-safe.count-3 {
+    grid-template-columns: 1fr;
   }
-
-  .diary-simple-photo-button img {
-    max-height: 220px;
+  .info-photo-card-safe img {
+    max-height: 300px;
   }
-
-  .diary-simple-actions .soft-btn {
-    padding: 6px 8px;
-    font-size: 11px;
-  }
-
-  .safe-info-textarea {
-    min-height: 330px;
-  }
-
-  .safe-info-photo-list {
-    gap: 8px;
-  }
-
-  .safe-info-photo-block {
-    padding: 6px;
-  }
-
-  .safe-info-photo-button img {
-    max-height: 260px;
-  }
-
-  .safe-info-photo-text {
-    min-height: 90px;
-    font-size: 13px;
-    padding: 9px;
-  }
-
-  .safe-info-photo-actions .soft-btn {
-    padding: 6px 8px;
-    font-size: 11px;
+  .voice-main-actions {
+    justify-content: flex-start;
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .calendar-photo-button img,
-  .thumb img,
-  .diary-simple-photo-button,
-  .diary-simple-photo-button img,
-  .safe-info-photo-button,
-  .safe-info-photo-button img {
-    background: #151817;
+/* Keep info photos in the requested ratio even on iPhone/iPad: 1=full, 2=half, 3=max three per row */
+@media (max-width: 820px) {
+  .info-photo-grid-safe.count-1 { grid-template-columns: 1fr; }
+  .info-photo-grid-safe.count-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .info-photo-grid-safe.count-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .info-photo-note-safe {
+    min-height: 72px;
+    font-size: 12px;
+    padding: 8px;
   }
-
-  .diary-simple-photo-card,
-  .safe-info-photo-block {
-    background: #171b1a;
-    border-color: #3a3a3a;
+  .info-photo-card-safe img {
+    max-height: 170px;
   }
 }
