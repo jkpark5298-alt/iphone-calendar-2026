@@ -951,7 +951,7 @@ export default function HomePage() {
 
     return (
       <section>
-        <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }}>
+        <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }} onPaste={handleInfoPhotoPaste} tabIndex={0}>
           <div className="info-head">
             <h2 className="info-title">📂 주요 정보 보관소</h2>
             <div className="info-sub-date">2026. {pad(currentMonth)}. {pad(currentDay)}</div>
@@ -959,35 +959,28 @@ export default function HomePage() {
               <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 월간 캘린더</button>
               <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
               <button type="button" className="today-circle info-date-circle" onClick={() => openCalendar(currentMonth)}>{currentDay}</button>
+              <label className="soft-btn info-action-btn">
+                🖼 사진 가져오기
+                <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
+              </label>
+              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
             </div>
           </div>
-          <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 420, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요." />
+          <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 420, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요. 이미지 붙여넣기·사진 가져오기도 가능합니다." />
 
-          <div className="box info-photo-box" onPaste={handleInfoPhotoPaste} tabIndex={0}>
-            <div className="box-head compact-box-head">
-              <h3>정보 사진</h3>
-              <div className="button-row">
-                <label className="soft-btn">
-                  🖼 사진 가져오기
-                  <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
-                </label>
-                <button type="button" className="soft-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
-              </div>
-            </div>
-            {dayInfoPhotos.length === 0 && <div className="empty-photo">정보보관소 이미지 붙여넣기·사진 가져오기 가능 / {tag(currentMonth, currentDay)} 자동 태그</div>}
-            <div className="photo-grid info-photo-grid">
-              {dayInfoPhotos.map((photo, index) => (
-                <div className="photo-card info-photo-card" key={`${photo.name}-${index}`}>
-                  <img src={photo.url} alt={`정보 사진 ${index + 1}`} />
-                  <div className="photo-caption">
-                    <span>{photo.tag}</span>
-                    <div className="photo-actions">
-                      <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>
-                    </div>
+          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 {tag(currentMonth, currentDay)} 태그로 저장됩니다.</div>}
+          <div className="photo-grid info-photo-grid integrated-info-photo-grid">
+            {dayInfoPhotos.map((photo, index) => (
+              <div className="photo-card info-photo-card" key={`${photo.name}-${index}`}>
+                <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
+                <div className="photo-caption">
+                  <span>{photo.tag}</span>
+                  <div className="photo-actions">
+                    <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
