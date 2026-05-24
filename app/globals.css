@@ -1084,3 +1084,86 @@ textarea {
 .photo-size-control .manual-size-head span::after {
   content: " 조정";
 }
+
+/* Touch/mouse frame resize for diary and info photos */
+.photo-card {
+  align-self: start;
+}
+
+.resizable-photo-frame {
+  position: relative;
+  max-width: 100%;
+  margin: 0 auto;
+  border: 1px solid rgba(83, 103, 94, 0.35);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f1110;
+  touch-action: none;
+}
+
+.resizable-photo-frame .original-photo-btn {
+  width: 100%;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.resizable-photo-frame .original-photo-btn img {
+  width: 100% !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: contain;
+  display: block;
+}
+
+.photo-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 12px 0 0 0;
+  background: rgba(255, 255, 255, 0.94);
+  cursor: nwse-resize;
+  touch-action: none;
+  z-index: 5;
+}
+
+.photo-resize-handle::before {
+  content: "↘";
+  color: #53675e;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 36px;
+}
+
+.frame-size-control {
+  margin-top: 10px;
+}
+
+.resize-help {
+  margin: 4px 0 0;
+  color: #6f7f78;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@media (max-width: 820px) {
+  .photo-resize-handle {
+    width: 44px;
+    height: 44px;
+  }
+
+  .photo-resize-handle::before {
+    font-size: 20px;
+    line-height: 44px;
+  }
+
+  .resize-help {
+    font-size: 12px;
+  }
+}

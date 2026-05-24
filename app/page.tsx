@@ -438,6 +438,41 @@ export default function HomePage() {
     savePhotos(month, day, nextPhotosForDay, calendarPhotos);
   }
 
+
+  function startPhotoFrameResize(
+    event: React.PointerEvent<HTMLButtonElement>,
+    photoType: "diary" | "info",
+    photoKey: string,
+    index: number,
+    currentSize?: string
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startSize = Number(currentSize || "360");
+    const minSize = 120;
+    const maxSize = Math.min(980, Math.max(160, window.innerWidth - 32));
+
+    const applySize = (nextClientX: number) => {
+      const delta = nextClientX - startX;
+      const nextSize = Math.max(minSize, Math.min(maxSize, Math.round(startSize + delta)));
+      if (photoType === "diary") updateDiaryPhotoSize(photoKey, index, String(nextSize));
+      if (photoType === "info") updateInfoPhotoSize(photoKey, index, String(nextSize));
+    };
+
+    const handlePointerMove = (moveEvent: PointerEvent) => applySize(moveEvent.clientX);
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  }
+
   function saveSchedules(nextSchedules: Record<string, ScheduleItem[]>) {
     setSchedules(nextSchedules);
     localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
@@ -891,18 +926,22 @@ export default function HomePage() {
           <div className="photo-grid">
             {dayPhotos.map((photo, index) => (
               <div className="photo-card" key={`${photo.name}-${index}`}>
-                <button
-                  type="button"
-                  className="original-photo-btn diary-original-photo-btn"
-                  onClick={() => setOriginalImageUrl(photo.url)}
-                  aria-label="일기 사진 원본 크게 보기"
-                >
-                  <img
-                    src={photo.url}
-                    alt={`일기 사진 ${index + 1}`}
-                    style={{ width: `${photo.size || "360"}px`, maxWidth: "100%" }}
+                <div className="resizable-photo-frame" style={{ width: `${photo.size || "360"}px` }}>
+                  <button
+                    type="button"
+                    className="original-photo-btn diary-original-photo-btn"
+                    onClick={() => setOriginalImageUrl(photo.url)}
+                    aria-label="일기 사진 원본 크게 보기"
+                  >
+                    <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
+                  </button>
+                  <button
+                    type="button"
+                    className="photo-resize-handle"
+                    onPointerDown={(event) => startPhotoFrameResize(event, "diary", k, index, photo.size)}
+                    aria-label="일기 사진 틀 크기 손가락으로 조정"
                   />
-                </button>
+                </div>
                 <div className="photo-caption">
                   <label className="photo-tag-line diary-photo-tag-line">
                     <span className="photo-tag-base">{photo.tag}</span>
@@ -920,20 +959,12 @@ export default function HomePage() {
                     onChange={e => updateDiaryPhotoMemo(k, index, e.target.value)}
                     placeholder="사진 설명 메모를 입력하세요."
                   />
-                  <div className="photo-size-control manual-size-control">
+                  <div className="photo-size-control manual-size-control frame-size-control">
                     <div className="manual-size-head">
-                      <span>사진 크기</span>
-                      <strong>가로 {photo.size || "360"}px</strong>
+                      <span>사진 틀 크기</span>
+                      <strong>{photo.size || "360"}px</strong>
                     </div>
-                    <input
-                      type="range"
-                      min="140"
-                      max="900"
-                      step="20"
-                      value={photo.size || "360"}
-                      onChange={e => updateDiaryPhotoSize(k, index, e.target.value)}
-                      aria-label="일기장 사진 가로 크기 조정"
-                    />
+                    <p className="resize-help">사진 오른쪽 아래 ↘ 표시를 손가락으로 끌면 사진과 틀이 비율대로 함께 조정됩니다.</p>
                   </div>
                   <div className="photo-actions">
                     <button type="button" className="soft-btn" onClick={() => setCalendarPhoto(k, index)}>캘린더에 붙이기</button>
@@ -1098,18 +1129,22 @@ export default function HomePage() {
           <div className="photo-grid info-photo-grid integrated-info-photo-grid">
             {dayInfoPhotos.map((photo, index) => (
               <div className="photo-card info-photo-card" key={`${photo.name}-${index}`}>
-                <button
-                  type="button"
-                  className="original-photo-btn"
-                  onClick={() => setOriginalImageUrl(photo.url)}
-                  aria-label="사진 원본 크게 보기"
-                >
-                  <img
-                    src={photo.url}
-                    alt={`정보보관소 사진 ${index + 1}`}
-                    style={{ width: `${photo.size || "360"}px`, maxWidth: "100%" }}
+                <div className="resizable-photo-frame" style={{ width: `${photo.size || "360"}px` }}>
+                  <button
+                    type="button"
+                    className="original-photo-btn"
+                    onClick={() => setOriginalImageUrl(photo.url)}
+                    aria-label="사진 원본 크게 보기"
+                  >
+                    <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
+                  </button>
+                  <button
+                    type="button"
+                    className="photo-resize-handle"
+                    onPointerDown={(event) => startPhotoFrameResize(event, "info", k, index, photo.size)}
+                    aria-label="정보보관소 사진 틀 크기 손가락으로 조정"
                   />
-                </button>
+                </div>
                 <div className="photo-caption info-photo-caption">
                   <label className="info-photo-tag-line">
                     <span className="info-photo-tag">{photo.tag}</span>
@@ -1127,20 +1162,12 @@ export default function HomePage() {
                     onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
                     placeholder="사진 설명 메모를 입력하세요."
                   />
-                  <div className="photo-size-control manual-size-control">
+                  <div className="photo-size-control manual-size-control frame-size-control">
                     <div className="manual-size-head">
-                      <span>사진 크기</span>
-                      <strong>가로 {photo.size || "360"}px</strong>
+                      <span>사진 틀 크기</span>
+                      <strong>{photo.size || "360"}px</strong>
                     </div>
-                    <input
-                      type="range"
-                      min="140"
-                      max="900"
-                      step="20"
-                      value={photo.size || "360"}
-                      onChange={e => updateInfoPhotoSize(k, index, e.target.value)}
-                      aria-label="정보보관소 사진 가로 크기 조정"
-                    />
+                    <p className="resize-help">사진 오른쪽 아래 ↘ 표시를 손가락으로 끌면 사진과 틀이 비율대로 함께 조정됩니다.</p>
                   </div>
                   <div className="photo-actions">
                     <button type="button" className="soft-btn" onClick={() => setOriginalImageUrl(photo.url)}>원본 보기</button>
