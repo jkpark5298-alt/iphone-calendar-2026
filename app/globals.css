@@ -382,6 +382,16 @@ textarea {
   margin-top: 10px;
   padding: 14px;
 }
+.info-photo-box {
+  margin-top: 14px;
+  padding: 14px;
+}
+.info-photo-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.info-photo-card img {
+  max-height: 380px;
+}
 .button-row, .voice-save-row {
   display: flex;
   flex-wrap: wrap;
@@ -492,12 +502,20 @@ textarea {
     font-size: 13px;
     padding: 12px;
   }
+  .info-photo-box {
+    padding: 12px;
+    margin-top: 12px;
+  }
+  .info-photo-card img {
+    max-height: 320px;
+  }
   .photo-actions .soft-btn {
     padding: 7px 10px;
     font-size: 12px;
   }
   .photo-card img {
-    height: 130px;
+    height: auto;
+    max-height: 360px;
   }
   .compact-muted {
     font-size: 13px;

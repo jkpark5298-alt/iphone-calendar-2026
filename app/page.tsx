@@ -95,6 +95,7 @@ export default function HomePage() {
   const [voiceText, setVoiceText] = useState("");
   const [infoText, setInfoText] = useState("");
   const [photos, setPhotos] = useState<Record<string, PhotoItem[]>>({});
+  const [infoPhotos, setInfoPhotos] = useState<Record<string, PhotoItem[]>>({});
   const [calendarPhotos, setCalendarPhotos] = useState<Record<string, string>>({});
   const [schedules, setSchedules] = useState<Record<string, ScheduleItem[]>>({});
   const [redDates, setRedDates] = useState<Record<number, number[]>>({});
@@ -153,6 +154,10 @@ export default function HomePage() {
       const raw = localStorage.getItem(storageKey("info", currentMonth, currentDay));
       const data = raw ? JSON.parse(raw) : {};
       setInfoText(data.infoText || "");
+
+      const rawInfoPhotos = localStorage.getItem(storageKey("infoPhotos", currentMonth, currentDay));
+      const items = rawInfoPhotos ? JSON.parse(rawInfoPhotos) : [];
+      setInfoPhotos(prev => ({ ...prev, [key(currentMonth, currentDay)]: items }));
     } catch {
       setInfoText("");
     }
@@ -268,6 +273,85 @@ export default function HomePage() {
   function saveInfo(nextInfoText: string) {
     setInfoText(nextInfoText);
     localStorage.setItem(storageKey("info", currentMonth, currentDay), JSON.stringify({ infoText: nextInfoText }));
+  }
+
+  function saveInfoPhotos(month: number, day: number, nextPhotos: PhotoItem[]) {
+    localStorage.setItem(storageKey("infoPhotos", month, day), JSON.stringify(nextPhotos));
+  }
+
+  async function saveInfoPhotoFiles(files: File[]) {
+    if (!files.length) return;
+
+    const readFile = (file: File) => new Promise<PhotoItem>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ url: String(reader.result), name: file.name, tag: tag(currentMonth, currentDay) });
+      reader.readAsDataURL(file);
+    });
+
+    const newItems = await Promise.all(files.map(readFile));
+    const k = key(currentMonth, currentDay);
+    const nextPhotosForDay = [...(infoPhotos[k] || []), ...newItems];
+    const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
+
+    setInfoPhotos(nextInfoPhotos);
+    saveInfoPhotos(currentMonth, currentDay, nextPhotosForDay);
+  }
+
+  async function addInfoPhotos(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files || []);
+    await saveInfoPhotoFiles(files);
+    event.target.value = "";
+  }
+
+  async function handleInfoPhotoPaste(event: ClipboardEvent<HTMLDivElement>) {
+    const pastedFiles = Array.from(event.clipboardData.items)
+      .filter(item => item.type.startsWith("image/"))
+      .map(item => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+
+    if (!pastedFiles.length) return;
+    event.preventDefault();
+    await saveInfoPhotoFiles(pastedFiles);
+  }
+
+  async function pasteInfoPhotoFromClipboard() {
+    try {
+      const clipboard = navigator.clipboard as Clipboard & { read?: () => Promise<ClipboardItem[]> };
+      if (!clipboard.read) {
+        alert("이 브라우저에서는 이미지 붙여넣기를 지원하지 않습니다. 사진 가져오기를 사용해 주세요.");
+        return;
+      }
+
+      const clipboardItems = await clipboard.read();
+      const files: File[] = [];
+
+      for (const item of clipboardItems) {
+        const imageType = item.types.find(type => type.startsWith("image/"));
+        if (!imageType) continue;
+        const blob = await item.getType(imageType);
+        files.push(new File([blob], `info_pasted_${Date.now()}.png`, { type: imageType }));
+      }
+
+      if (!files.length) {
+        alert("클립보드에 붙여넣을 이미지가 없습니다.");
+        return;
+      }
+
+      await saveInfoPhotoFiles(files);
+    } catch {
+      alert("아이폰 Safari에서는 이미지 붙여넣기가 제한될 수 있습니다. 사진 가져오기를 사용해 주세요.");
+    }
+  }
+
+  function deleteInfoPhoto(k: string, index: number) {
+    const items = infoPhotos[k] || [];
+    if (!items[index]) return;
+
+    const nextPhotosForDay = items.filter((_, itemIndex) => itemIndex !== index);
+    const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
+    setInfoPhotos(nextInfoPhotos);
+    const [month, day] = k.split("-").map(Number);
+    saveInfoPhotos(month, day, nextPhotosForDay);
   }
 
   function saveSchedules(nextSchedules: Record<string, ScheduleItem[]>) {
@@ -862,6 +946,9 @@ export default function HomePage() {
   }
 
   function InfoView() {
+    const k = key(currentMonth, currentDay);
+    const dayInfoPhotos = infoPhotos[k] || [];
+
     return (
       <section>
         <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }}>
@@ -874,7 +961,34 @@ export default function HomePage() {
               <button type="button" className="today-circle info-date-circle" onClick={() => openCalendar(currentMonth)}>{currentDay}</button>
             </div>
           </div>
-          <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 520, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요." />
+          <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 420, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요." />
+
+          <div className="box info-photo-box" onPaste={handleInfoPhotoPaste} tabIndex={0}>
+            <div className="box-head compact-box-head">
+              <h3>정보 사진</h3>
+              <div className="button-row">
+                <label className="soft-btn">
+                  🖼 사진 가져오기
+                  <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
+                </label>
+                <button type="button" className="soft-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
+              </div>
+            </div>
+            {dayInfoPhotos.length === 0 && <div className="empty-photo">정보보관소 이미지 붙여넣기·사진 가져오기 가능 / {tag(currentMonth, currentDay)} 자동 태그</div>}
+            <div className="photo-grid info-photo-grid">
+              {dayInfoPhotos.map((photo, index) => (
+                <div className="photo-card info-photo-card" key={`${photo.name}-${index}`}>
+                  <img src={photo.url} alt={`정보 사진 ${index + 1}`} />
+                  <div className="photo-caption">
+                    <span>{photo.tag}</span>
+                    <div className="photo-actions">
+                      <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
     );
