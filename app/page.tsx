@@ -920,9 +920,11 @@ export default function HomePage() {
 
     saveCalendarMarks(nextMarks);
 
-    if (isSupabaseConfigured && supabase) {
+    const supabaseClient = supabase;
+
+    if (isSupabaseConfigured && supabaseClient) {
       uniqueDays.forEach(day => {
-        void supabase
+        void supabaseClient
           .from("calendar_marks")
           .upsert(
             {
