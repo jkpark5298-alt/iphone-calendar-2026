@@ -13,6 +13,9 @@ type PhotoItem = {
   size?: string;
   memoWidth?: string;
   memoHeight?: string;
+  storagePath?: string;
+  id?: string;
+  isCalendarPhoto?: boolean;
 };
 type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple";
 type OriginalImageTarget = { type: "diary"; photoKey: string; index: number } | null;
@@ -223,6 +226,96 @@ export default function HomePage() {
     return data as { info_text?: string | null } | null;
   }
 
+
+  function photoItemFromSupabaseRow(row: any, month: number, day: number): PhotoItem {
+    const storagePath = row.storage_path || "";
+    const fallbackName = storagePath.split("/").pop() || "photo.jpg";
+
+    return {
+      id: row.id,
+      url: row.public_url,
+      name: fallbackName,
+      tag: tag(month, day),
+      extraTag: "",
+      memo: row.caption || "",
+      size: "360",
+      memoWidth: "360",
+      memoHeight: "110",
+      storagePath,
+      isCalendarPhoto: Boolean(row.is_calendar_photo),
+    };
+  }
+
+  async function loadDiaryPhotosFromSupabase(month: number, day: number) {
+    if (!isSupabaseConfigured || !supabase) return null;
+
+    const { data, error } = await supabase
+      .from("diary_photos")
+      .select("id, storage_path, public_url, sort_order, is_calendar_photo")
+      .eq("entry_date", entryDate(month, day))
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.warn("Supabase diary photo load error:", error.message);
+      return null;
+    }
+
+    return (data || []).map(row => photoItemFromSupabaseRow(row, month, day));
+  }
+
+  async function loadInfoPhotosFromSupabase(month: number, day: number) {
+    if (!isSupabaseConfigured || !supabase) return null;
+
+    const { data, error } = await supabase
+      .from("info_photos")
+      .select("id, storage_path, public_url, caption, sort_order")
+      .eq("entry_date", entryDate(month, day))
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.warn("Supabase info photo load error:", error.message);
+      return null;
+    }
+
+    return (data || []).map(row => photoItemFromSupabaseRow(row, month, day));
+  }
+
+  async function loadCalendarPhotosFromSupabase() {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const { data, error } = await supabase
+      .from("diary_photos")
+      .select("entry_date, public_url, sort_order")
+      .eq("is_calendar_photo", true);
+
+    if (error) {
+      console.warn("Supabase calendar photo load error:", error.message);
+      return;
+    }
+
+    const nextCalendarPhotos: Record<string, string> = {};
+    const nextCalendarPhotoIndexes: Record<string, number> = {};
+
+    (data || []).forEach(row => {
+      const parts = String(row.entry_date || "").split("-");
+      if (parts.length !== 3) return;
+      const month = Number(parts[1]);
+      const day = Number(parts[2]);
+      const photoKey = key(month, day);
+      nextCalendarPhotos[photoKey] = row.public_url;
+      nextCalendarPhotoIndexes[photoKey] = Number(row.sort_order || 0);
+    });
+
+    if (Object.keys(nextCalendarPhotos).length) {
+      setCalendarPhotos(prev => ({ ...prev, ...nextCalendarPhotos }));
+      setCalendarPhotoIndexes(prev => ({ ...prev, ...nextCalendarPhotoIndexes }));
+      setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
+      setLocalStorageSafely("iphone-diary-2026-calendar-photo-indexes", JSON.stringify(nextCalendarPhotoIndexes));
+    }
+  }
+
   function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string) {
     if (!isSupabaseConfigured || !supabase) return;
 
@@ -291,6 +384,8 @@ export default function HomePage() {
     } catch {
       setCalendarPhotos({});
     }
+
+    void loadCalendarPhotosFromSupabase();
   }, []);
 
   useEffect(() => {
@@ -343,6 +438,24 @@ export default function HomePage() {
       }
     });
 
+    loadDiaryPhotosFromSupabase(currentMonth, currentDay).then(remoteItems => {
+      if (!isActive || !remoteItems || !remoteItems.length) return;
+
+      const photoKey = key(currentMonth, currentDay);
+      setPhotos(prev => ({ ...prev, [photoKey]: remoteItems }));
+      setLocalStorageSafely(storageKey("photos", currentMonth, currentDay), JSON.stringify(remoteItems));
+
+      const calendarIndex = remoteItems.findIndex(item => item.isCalendarPhoto);
+      if (calendarIndex >= 0) {
+        const nextCalendarPhotos = { ...calendarPhotos, [photoKey]: remoteItems[calendarIndex].url };
+        const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes, [photoKey]: calendarIndex };
+        setCalendarPhotos(nextCalendarPhotos);
+        setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
+        setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
+        setLocalStorageSafely("iphone-diary-2026-calendar-photo-indexes", JSON.stringify(nextCalendarPhotoIndexes));
+      }
+    });
+
     fetchWeatherFromKma();
 
     return () => {
@@ -373,6 +486,14 @@ export default function HomePage() {
       const remoteInfoText = remoteData.info_text || "";
       setInfoText(remoteInfoText);
       localStorage.setItem(storageKey("info", currentMonth, currentDay), JSON.stringify({ infoText: remoteInfoText }));
+    });
+
+    loadInfoPhotosFromSupabase(currentMonth, currentDay).then(remoteItems => {
+      if (!isActive || !remoteItems || !remoteItems.length) return;
+
+      const photoKey = key(currentMonth, currentDay);
+      setInfoPhotos(prev => ({ ...prev, [photoKey]: remoteItems }));
+      setLocalStorageSafely(storageKey("infoPhotos", currentMonth, currentDay), JSON.stringify(remoteItems));
     });
 
     return () => {
@@ -605,23 +726,124 @@ export default function HomePage() {
     }
   }
 
+
+  function dataUrlToBlob(dataUrl: string) {
+    const [header, body] = dataUrl.split(",");
+    const mime = header.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
+    const binary = atob(body);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
+
+  function safeFileName(name: string) {
+    const normalized = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    return normalized || "photo.jpg";
+  }
+
+  async function uploadPhotoToSupabase(file: File, bucket: "diary-photos" | "info-photos", month: number, day: number, sortOrder: number) {
+    if (!isSupabaseConfigured || !supabase) return null;
+
+    try {
+      const optimizedDataUrl = await makeOptimizedImageDataUrl(file);
+      const blob = dataUrlToBlob(optimizedDataUrl);
+      const folder = `${entryDate(month, day)}`;
+      const storagePath = `${folder}/${Date.now()}-${sortOrder}-${safeFileName(file.name || "photo.jpg")}.jpg`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(storagePath, blob, {
+          contentType: "image/jpeg",
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+      return {
+        url: data.publicUrl,
+        name: file.name || "photo.jpg",
+        tag: tag(month, day),
+        extraTag: "",
+        memo: "",
+        size: "360",
+        memoWidth: "360",
+        memoHeight: "110",
+        storagePath,
+      } satisfies PhotoItem;
+    } catch (error) {
+      console.warn("Supabase photo upload error:", error instanceof Error ? error.message : error);
+      return null;
+    }
+  }
+
+  async function saveDiaryPhotoRecordToSupabase(month: number, day: number, item: PhotoItem, sortOrder: number, isCalendarPhoto = false) {
+    if (!isSupabaseConfigured || !supabase || !item.storagePath) return;
+
+    const { error } = await supabase.from("diary_photos").insert({
+      entry_date: entryDate(month, day),
+      storage_path: item.storagePath,
+      public_url: item.url,
+      sort_order: sortOrder,
+      is_calendar_photo: isCalendarPhoto,
+    });
+
+    if (error) console.warn("Supabase diary photo record error:", error.message);
+  }
+
+  async function saveInfoPhotoRecordToSupabase(month: number, day: number, item: PhotoItem, sortOrder: number) {
+    if (!isSupabaseConfigured || !supabase || !item.storagePath) return;
+
+    const { error } = await supabase.from("info_photos").insert({
+      entry_date: entryDate(month, day),
+      storage_path: item.storagePath,
+      public_url: item.url,
+      caption: item.memo || "",
+      sort_order: sortOrder,
+    });
+
+    if (error) console.warn("Supabase info photo record error:", error.message);
+  }
+
+  async function deleteSupabasePhoto(bucket: "diary-photos" | "info-photos", table: "diary_photos" | "info_photos", storagePath?: string) {
+    if (!isSupabaseConfigured || !supabase || !storagePath) return;
+
+    const { error: storageError } = await supabase.storage.from(bucket).remove([storagePath]);
+    if (storageError) console.warn("Supabase photo storage delete error:", storageError.message);
+
+    const { error: tableError } = await supabase.from(table).delete().eq("storage_path", storagePath);
+    if (tableError) console.warn("Supabase photo table delete error:", tableError.message);
+  }
+
   async function saveInfoPhotoFiles(files: File[]) {
     if (!files.length) return;
 
-    const readFile = async (file: File): Promise<PhotoItem> => ({
-      url: await makeOptimizedImageDataUrl(file),
-      name: file.name,
-      tag: tag(currentMonth, currentDay),
-      extraTag: "",
-      memo: "",
-      size: "360",
-      memoWidth: "360",
-      memoHeight: "110",
-    });
-
-    const newItems = await Promise.all(files.map(readFile));
     const k = key(currentMonth, currentDay);
-    const nextPhotosForDay = [...(infoPhotos[k] || []), ...newItems];
+    const previousItems = infoPhotos[k] || [];
+    const newItems: PhotoItem[] = [];
+
+    for (const [offset, file] of files.entries()) {
+      const sortOrder = previousItems.length + offset;
+      const uploadedItem = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, sortOrder);
+
+      if (uploadedItem) {
+        newItems.push(uploadedItem);
+        await saveInfoPhotoRecordToSupabase(currentMonth, currentDay, uploadedItem, sortOrder);
+      } else {
+        newItems.push({
+          url: await makeOptimizedImageDataUrl(file),
+          name: file.name,
+          tag: tag(currentMonth, currentDay),
+          extraTag: "",
+          memo: "",
+          size: "360",
+          memoWidth: "360",
+          memoHeight: "110",
+        });
+      }
+    }
+
+    const nextPhotosForDay = [...previousItems, ...newItems];
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
 
     setInfoPhotos(nextInfoPhotos);
@@ -674,15 +896,17 @@ export default function HomePage() {
     }
   }
 
-  function deleteInfoPhoto(k: string, index: number) {
+  async function deleteInfoPhoto(k: string, index: number) {
     const items = infoPhotos[k] || [];
     if (!items[index]) return;
 
+    const deletingItem = items[index];
     const nextPhotosForDay = items.filter((_, itemIndex) => itemIndex !== index);
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
     const [month, day] = k.split("-").map(Number);
     saveInfoPhotos(month, day, nextPhotosForDay);
+    await deleteSupabasePhoto("info-photos", "info_photos", deletingItem.storagePath);
   }
 
   function updateInfoPhotoExtraTag(k: string, index: number, extraTag: string) {
@@ -1008,20 +1232,31 @@ export default function HomePage() {
   async function savePhotoFiles(files: File[]) {
     if (!files.length) return;
 
-    const readFile = async (file: File): Promise<PhotoItem> => ({
-      url: await makeOptimizedImageDataUrl(file),
-      name: file.name,
-      tag: tag(currentMonth, currentDay),
-      extraTag: "",
-      memo: "",
-      size: "360",
-      memoWidth: "360",
-      memoHeight: "110",
-    });
-
-    const newItems = await Promise.all(files.map(readFile));
     const k = key(currentMonth, currentDay);
     const previousItems = photos[k] || [];
+    const newItems: PhotoItem[] = [];
+
+    for (const [offset, file] of files.entries()) {
+      const sortOrder = previousItems.length + offset;
+      const uploadedItem = await uploadPhotoToSupabase(file, "diary-photos", currentMonth, currentDay, sortOrder);
+
+      if (uploadedItem) {
+        newItems.push(uploadedItem);
+        await saveDiaryPhotoRecordToSupabase(currentMonth, currentDay, uploadedItem, sortOrder, previousItems.length === 0 && offset === 0);
+      } else {
+        newItems.push({
+          url: await makeOptimizedImageDataUrl(file),
+          name: file.name,
+          tag: tag(currentMonth, currentDay),
+          extraTag: "",
+          memo: "",
+          size: "360",
+          memoWidth: "360",
+          memoHeight: "110",
+        });
+      }
+    }
+
     const nextPhotosForDay = [...previousItems, ...newItems];
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     const nextCalendarPhotos = { ...calendarPhotos };
@@ -1063,6 +1298,22 @@ export default function HomePage() {
     setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
     const [month, day] = k.split("-").map(Number);
     savePhotos(month, day, items, nextCalendarPhotos, nextCalendarPhotoIndexes);
+
+    if (isSupabaseConfigured && supabase && items[index].storagePath) {
+      const targetDate = entryDate(month, day);
+      const { error: clearError } = await supabase
+        .from("diary_photos")
+        .update({ is_calendar_photo: false })
+        .eq("entry_date", targetDate);
+      if (clearError) console.warn("Supabase calendar photo clear error:", clearError.message);
+
+      const { error: setError } = await supabase
+        .from("diary_photos")
+        .update({ is_calendar_photo: true })
+        .eq("storage_path", items[index].storagePath);
+      if (setError) console.warn("Supabase calendar photo set error:", setError.message);
+    }
+
     alert("선택한 사진을 월간 캘린더에 붙였습니다.");
   }
 
@@ -1081,11 +1332,12 @@ export default function HomePage() {
     if (original) setOriginalImageUrl(original);
   }
 
-  function deletePhoto(k: string, index: number) {
+  async function deletePhoto(k: string, index: number) {
     const items = photos[k] || [];
     if (!items[index]) return;
 
-    const deletedUrl = items[index].url;
+    const deletingItem = items[index];
+    const deletedUrl = deletingItem.url;
     const nextPhotosForDay = items.filter((_, itemIndex) => itemIndex !== index);
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     const nextCalendarPhotos = { ...calendarPhotos };
@@ -1110,6 +1362,7 @@ export default function HomePage() {
     setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
     const [month, day] = k.split("-").map(Number);
     savePhotos(month, day, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes);
+    await deleteSupabasePhoto("diary-photos", "diary_photos", deletingItem.storagePath);
   }
 
   function openDiaryOriginalPhoto(photoKey: string, index: number) {
@@ -1124,11 +1377,11 @@ export default function HomePage() {
     setOriginalImageTarget(null);
   }
 
-  function deleteOriginalDiaryPhoto() {
+  async function deleteOriginalDiaryPhoto() {
     if (!originalImageTarget) return;
     const itemNumber = originalImageTarget.index + 1;
     if (!window.confirm(`${itemNumber}번째 사진을 삭제할까요?`)) return;
-    deletePhoto(originalImageTarget.photoKey, originalImageTarget.index);
+    await deletePhoto(originalImageTarget.photoKey, originalImageTarget.index);
     closeOriginalImage();
   }
 
@@ -1158,11 +1411,11 @@ export default function HomePage() {
     await setCalendarPhoto(k, index);
   }
 
-  function deleteDiaryPhotoBySelect(k: string) {
+  async function deleteDiaryPhotoBySelect(k: string) {
     const index = getDiaryPhotoIndexFromUser(k, "삭제");
     if (index === null) return;
     if (!window.confirm(`${index + 1}번 사진을 삭제할까요?`)) return;
-    deletePhoto(k, index);
+    await deletePhoto(k, index);
   }
 
   async function pastePhotoFromClipboard() {
