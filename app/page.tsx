@@ -3,7 +3,7 @@
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
-type View = "calendar" | "diary" | "info" | "schedule" | "redDate";
+type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
   url: string;
   name: string;
@@ -26,6 +26,12 @@ type ScheduleItem = {
   endDate: string;
   repeat: string;
   color: ScheduleColor;
+};
+type CalendarMarkType = "C" | "A" | "심야" | "노조";
+type CalendarMarkItem = {
+  id: string;
+  type: CalendarMarkType;
+  plus: boolean;
 };
 type SearchResult = {
   type: "diary" | "info";
@@ -53,6 +59,13 @@ const scheduleColorLabels: Record<ScheduleColor, string> = {
   orange: "주황색",
   navy: "남색",
   purple: "보라색",
+};
+
+const calendarMarkLabels: Record<CalendarMarkType, string> = {
+  C: "C",
+  A: "A",
+  심야: "심야",
+  노조: "노조",
 };
 
 const holidays: Record<string, string> = {
@@ -192,6 +205,10 @@ export default function HomePage() {
   const [schedules, setSchedules] = useState<Record<string, ScheduleItem[]>>({});
   const [redDates, setRedDates] = useState<Record<number, number[]>>({});
   const [redDateInput, setRedDateInput] = useState("");
+  const [calendarMarks, setCalendarMarks] = useState<Record<string, CalendarMarkItem[]>>({});
+  const [markDateInput, setMarkDateInput] = useState("");
+  const [markType, setMarkType] = useState<CalendarMarkType>("C");
+  const [markPlus, setMarkPlus] = useState(false);
   const [scheduleTitle, setScheduleTitle] = useState("");
   const [scheduleStartTime, setScheduleStartTime] = useState("");
   const [scheduleEndDate, setScheduleEndDate] = useState("");
@@ -362,6 +379,43 @@ export default function HomePage() {
     setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
     setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
     setLocalStorageSafely("iphone-diary-2026-calendar-photo-indexes", JSON.stringify(nextCalendarPhotoIndexes));
+  }
+
+  async function loadCalendarMarksFromSupabase() {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const { data, error } = await supabase
+      .from("calendar_marks")
+      .select("id, month, day, mark_type, plus")
+      .order("month", { ascending: true })
+      .order("day", { ascending: true });
+
+    if (error) {
+      console.warn("Supabase calendar mark load error:", error.message);
+      return;
+    }
+
+    const nextMarks: Record<string, CalendarMarkItem[]> = {};
+    (data || []).forEach((row: any) => {
+      const month = Number(row.month);
+      const day = Number(row.day);
+      const type = row.mark_type as CalendarMarkType;
+      if (!monthDays[month] || day < 1 || day > monthDays[month]) return;
+      if (!["C", "A", "심야", "노조"].includes(type)) return;
+
+      const markKey = key(month, day);
+      nextMarks[markKey] = [
+        ...(nextMarks[markKey] || []),
+        {
+          id: row.id || `${markKey}-${type}-${row.plus ? "plus" : "base"}`,
+          type,
+          plus: Boolean(row.plus),
+        },
+      ];
+    });
+
+    setCalendarMarks(nextMarks);
+    localStorage.setItem("iphone-calendar-2026-marks", JSON.stringify(nextMarks));
   }
 
   function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string) {
@@ -579,11 +633,14 @@ export default function HomePage() {
       if (rawSchedules) setSchedules(JSON.parse(rawSchedules));
       const rawRedDates = localStorage.getItem("iphone-calendar-2026-red-dates");
       if (rawRedDates) setRedDates(JSON.parse(rawRedDates));
+      const rawMarks = localStorage.getItem("iphone-calendar-2026-marks");
+      if (rawMarks) setCalendarMarks(JSON.parse(rawMarks));
     } catch {
       setCalendarPhotos({});
     }
 
     void loadCalendarPhotosFromSupabase();
+    void loadCalendarMarksFromSupabase();
   }, []);
 
   useEffect(() => {
@@ -818,6 +875,95 @@ export default function HomePage() {
     localStorage.setItem("iphone-calendar-2026-red-dates", JSON.stringify(nextRedDates));
     alert(uniqueDays.length ? `${currentMonth}월 ${uniqueDays.join(", ")}일을 빨간 날짜로 저장했습니다.` : `${currentMonth}월 빨간 날짜를 모두 해제했습니다.`);
     setView("calendar");
+  }
+
+  function openCalendarMarkInput() {
+    setMarkDateInput("");
+    setMarkType("C");
+    setMarkPlus(false);
+    setView("markDate");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function saveCalendarMarks(nextMarks: Record<string, CalendarMarkItem[]>) {
+    setCalendarMarks(nextMarks);
+    localStorage.setItem("iphone-calendar-2026-marks", JSON.stringify(nextMarks));
+  }
+
+  function addCalendarMarks() {
+    const parsedDays = (markDateInput.match(/\d+/g) || [])
+      .map(value => Number(value))
+      .filter(value => Number.isInteger(value) && value >= 1 && value <= monthDays[currentMonth]);
+
+    const uniqueDays = Array.from(new Set<number>(parsedDays)).sort((a: number, b: number) => a - b);
+    if (!uniqueDays.length) {
+      alert("표시할 날짜를 입력해 주세요. 예: 1, 3, 15");
+      return;
+    }
+
+    const nextPlus = markType === "노조" ? false : markPlus;
+    const nextMarks = { ...calendarMarks };
+
+    uniqueDays.forEach(day => {
+      const markKey = key(currentMonth, day);
+      const current = nextMarks[markKey] || [];
+      const exists = current.some(item => item.type === markType && item.plus === nextPlus);
+      if (!exists) {
+        current.push({
+          id: `${Date.now()}-${currentMonth}-${day}-${markType}-${nextPlus ? "plus" : "base"}`,
+          type: markType,
+          plus: nextPlus,
+        });
+      }
+      nextMarks[markKey] = current;
+    });
+
+    saveCalendarMarks(nextMarks);
+
+    if (isSupabaseConfigured && supabase) {
+      uniqueDays.forEach(day => {
+        void supabase
+          .from("calendar_marks")
+          .upsert(
+            {
+              month: currentMonth,
+              day,
+              mark_type: markType,
+              plus: nextPlus,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "month,day,mark_type,plus" }
+          )
+          .then(({ error }) => {
+            if (error) console.warn("Supabase calendar mark save error:", error.message);
+          });
+      });
+    }
+
+    setMarkDateInput(uniqueDays.join(", "));
+    alert(`${currentMonth}월 ${uniqueDays.join(", ")}일에 ${markType}${nextPlus ? "+" : ""} 표시를 저장했습니다.`);
+  }
+
+  function deleteCalendarMark(month: number, day: number, mark: CalendarMarkItem) {
+    const markKey = key(month, day);
+    const nextMarks = {
+      ...calendarMarks,
+      [markKey]: (calendarMarks[markKey] || []).filter(item => !(item.type === mark.type && item.plus === mark.plus)),
+    };
+    saveCalendarMarks(nextMarks);
+
+    if (isSupabaseConfigured && supabase) {
+      void supabase
+        .from("calendar_marks")
+        .delete()
+        .eq("month", month)
+        .eq("day", day)
+        .eq("mark_type", mark.type)
+        .eq("plus", mark.plus)
+        .then(({ error }) => {
+          if (error) console.warn("Supabase calendar mark delete error:", error.message);
+        });
+    }
   }
 
   function moveToTodayOnCalendar() {
@@ -1886,6 +2032,7 @@ export default function HomePage() {
       const redMarked = manuallyRed;
       const isToday = todayDefault.month === currentMonth && todayDefault.day === day;
       const daySchedules = schedules[k] || [];
+      const dayMarks = calendarMarks[k] || [];
       const isSelected = currentDay === day;
       cells.push(
         <div className={`day ${redMarked ? "holiday-day" : ""} ${isToday ? "today-day" : ""} ${isSelected ? "selected-day" : ""}`} key={k}>
@@ -1897,6 +2044,18 @@ export default function HomePage() {
           />
           <div className="day-top">
             <span className={`num ${redMarked ? "num-red" : ""} ${isToday ? "today-num" : ""}`}>{day}</span>
+            {dayMarks.length > 0 && (
+              <div className="calendar-mark-list" aria-label={`${currentMonth}월 ${day}일 표시`}>
+                {dayMarks.slice(0, 4).map(mark => (
+                  <span
+                    key={`${mark.type}-${mark.plus}`}
+                    className={`calendar-mark calendar-mark-${mark.type === "심야" ? "night" : mark.type === "노조" ? "union" : mark.type.toLowerCase()}`}
+                  >
+                    {calendarMarkLabels[mark.type]}{mark.plus ? "+" : ""}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           {holidays[k] && <div className="holiday holiday-neutral">{holidays[k]}</div>}
           <div className={`thumb ${calendarPhotos[k] ? "" : "empty-thumb"}`}>
@@ -1950,6 +2109,7 @@ export default function HomePage() {
           <div className="head-actions calendar-top-actions">
             <button type="button" className="today-circle" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
+            <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">C/A</button>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
             <button type="button" className="mini-btn info calendar-info-top-btn" onClick={() => openInfo(currentMonth, currentDay)} aria-label="선택 날짜 정보보관소로 이동">I</button>
             <button type="button" className="pill-btn compact-pill" onClick={() => openDatePicker("diary")}>일기장</button>
@@ -2187,6 +2347,81 @@ export default function HomePage() {
     );
   }
 
+  function MarkDateView() {
+    const monthMarkEntries = Object.entries(calendarMarks)
+      .filter(([markKey]) => markKey.startsWith(`${currentMonth}-`))
+      .flatMap(([markKey, items]) => {
+        const day = Number(markKey.split("-")[1]);
+        return items.map(item => ({ day, item }));
+      })
+      .sort((a, b) => a.day - b.day || a.item.type.localeCompare(b.item.type));
+
+    return (
+      <section>
+        <div className="box mark-date-page">
+          <div className="schedule-head">
+            <h2>근무/표시 입력 ({currentMonth}월)</h2>
+            <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
+          </div>
+
+          <div className="mark-type-options">
+            {(Object.keys(calendarMarkLabels) as CalendarMarkType[]).map(type => (
+              <button
+                type="button"
+                key={type}
+                className={`mark-type-btn mark-type-${type === "심야" ? "night" : type === "노조" ? "union" : type.toLowerCase()} ${markType === type ? "active" : ""}`}
+                onClick={() => {
+                  setMarkType(type);
+                  if (type === "노조") setMarkPlus(false);
+                }}
+              >
+                {calendarMarkLabels[type]}
+              </button>
+            ))}
+          </div>
+
+          <label className="mark-plus-option">
+            <input
+              type="checkbox"
+              checked={markPlus && markType !== "노조"}
+              onChange={event => setMarkPlus(event.target.checked)}
+              disabled={markType === "노조"}
+            />
+            <span>+ 표시 추가 {markType === "노조" ? "(노조는 + 제외)" : `→ ${markType}+`}</span>
+          </label>
+
+          <p className="muted">날짜를 쉼표로 여러 개 입력하세요. 예: 1, 3, 15</p>
+          <input
+            className="red-date-input"
+            value={markDateInput}
+            onChange={event => setMarkDateInput(event.target.value)}
+            placeholder="예: 1, 3, 15"
+            inputMode="text"
+            autoComplete="off"
+          />
+
+          <button type="button" className="save-schedule-btn" onClick={addCalendarMarks}>
+            {markType}{markType !== "노조" && markPlus ? "+" : ""} 표시 저장
+          </button>
+
+          <div className="saved-marks">
+            <h3>이번 달 저장 표시</h3>
+            {monthMarkEntries.length === 0 && <p className="muted">아직 저장된 표시가 없습니다.</p>}
+            {monthMarkEntries.map(({ day, item }) => (
+              <div className="saved-mark-row" key={`${day}-${item.type}-${item.plus}`}>
+                <span>{currentMonth}/{day}</span>
+                <span className={`calendar-mark calendar-mark-${item.type === "심야" ? "night" : item.type === "노조" ? "union" : item.type.toLowerCase()}`}>
+                  {calendarMarkLabels[item.type]}{item.plus ? "+" : ""}
+                </span>
+                <button type="button" className="soft-btn delete-btn" onClick={() => deleteCalendarMark(currentMonth, day, item)}>삭제</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   function RedDateView() {
     return (
       <section>
@@ -2283,6 +2518,7 @@ export default function HomePage() {
       {view === "info" && InfoView()}
       {view === "schedule" && ScheduleView()}
       {view === "redDate" && RedDateView()}
+      {view === "markDate" && MarkDateView()}
       {datePickerMode && (
         <div className="date-picker-modal" role="dialog" aria-modal="true" onClick={() => setDatePickerMode(null)}>
           <div className="date-picker-panel" onClick={event => event.stopPropagation()}>
