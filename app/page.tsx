@@ -959,10 +959,36 @@ export default function HomePage() {
     saveInfoPhotos(month, day, nextPhotosForDay);
   }
 
+  function saveInfoPhotoMemoToSupabase(item: PhotoItem, memo: string) {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    if (item.id) {
+      void supabase
+        .from("info_photos")
+        .update({ caption: memo })
+        .eq("id", item.id)
+        .then(({ error }) => {
+          if (error) console.warn("Supabase info photo memo save error:", error.message);
+        });
+      return;
+    }
+
+    if (item.storagePath) {
+      void supabase
+        .from("info_photos")
+        .update({ caption: memo })
+        .eq("storage_path", item.storagePath)
+        .then(({ error }) => {
+          if (error) console.warn("Supabase info photo memo save error:", error.message);
+        });
+    }
+  }
+
   function updateInfoPhotoMemo(k: string, index: number, memo: string) {
     const items = infoPhotos[k] || [];
     if (!items[index]) return;
 
+    const currentItem = items[index];
     const nextPhotosForDay = items.map((item, itemIndex) =>
       itemIndex === index ? { ...item, memo } : item
     );
@@ -970,6 +996,7 @@ export default function HomePage() {
     setInfoPhotos(nextInfoPhotos);
     const [month, day] = k.split("-").map(Number);
     saveInfoPhotos(month, day, nextPhotosForDay);
+    saveInfoPhotoMemoToSupabase(currentItem, memo);
   }
 
 
