@@ -1237,7 +1237,7 @@ export default function HomePage() {
             <button type="button" className="month-badge month-diary-link" onClick={() => openDiary(currentMonth, currentDay)} aria-label="선택 날짜 일기장으로 이동">{currentMonth}월</button>
           </h1>
           <div className="head-actions calendar-top-actions">
-            <button type="button" className="today-circle" onClick={moveToTodayOnCalendar} aria-label="오늘 날짜로 이동">{todayDefault.day}</button>
+            <button type="button" className="today-circle" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
             <button type="button" className="mini-btn info calendar-info-top-btn" onClick={() => openInfo(currentMonth, currentDay)} aria-label="선택 날짜 정보보관소로 이동">I</button>
