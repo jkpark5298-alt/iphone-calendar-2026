@@ -145,6 +145,7 @@ export default function HomePage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   const diaryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const infoTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   function resizeTextareaToContent(element: HTMLTextAreaElement | null) {
     if (!element) return;
@@ -214,6 +215,11 @@ export default function HomePage() {
     if (view !== "diary") return;
     requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
   }, [view, diaryText, currentMonth, currentDay]);
+
+  useEffect(() => {
+    if (view !== "info") return;
+    requestAnimationFrame(() => resizeTextareaToContent(infoTextareaRef.current));
+  }, [view, infoText, currentMonth, currentDay]);
 
   async function fetchWeatherFromKma() {
     setWeather("조회 중");
@@ -1472,7 +1478,14 @@ export default function HomePage() {
               <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
             </div>
           </div>
-          <textarea value={infoText} onChange={e => saveInfo(e.target.value)} style={{ minHeight: 360, borderStyle: "dashed" }} placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요." />
+          <textarea
+            ref={infoTextareaRef}
+            className="info-main-textarea"
+            value={infoText}
+            onInput={e => resizeTextareaToContent(e.currentTarget)}
+            onChange={e => saveInfo(e.target.value)}
+            placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요."
+          />
 
           {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 이곳에 정리됩니다.</div>}
           <div className={`info-photo-grid-safe ${infoPhotoCountClass}`}>
