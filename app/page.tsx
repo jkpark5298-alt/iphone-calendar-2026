@@ -27,6 +27,19 @@ type ScheduleItem = {
   repeat: string;
   color: ScheduleColor;
 };
+type SearchResult = {
+  type: "diary" | "info";
+  entryDate: string;
+  month: number;
+  day: number;
+  text: string;
+};
+type GoogleScheduleItem = {
+  title: string;
+  start?: string;
+  end?: string;
+  allDay?: boolean;
+};
 
 const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 const weekdayLabels = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -107,6 +120,21 @@ function entryDate(month: number, day: number) {
   return `2026-${pad(month)}-${pad(day)}`;
 }
 
+function monthDayFromEntryDate(value: string) {
+  const match = String(value || "").match(/^2026-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  if (month < 5 || month > 12 || day < 1 || day > (monthDays[month] || 31)) return null;
+  return { month, day };
+}
+
+function normalizeInfoPhotoMemo(value: string | undefined) {
+  const memo = value || "";
+  if (!memo.trim()) return "#";
+  return memo.startsWith("#") ? memo : `#${memo}`;
+}
+
 
 function normalizeUrlForHref(url: string) {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
@@ -180,6 +208,11 @@ export default function HomePage() {
   const [originalImageTarget, setOriginalImageTarget] = useState<OriginalImageTarget>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
   const [datePickerValue, setDatePickerValue] = useState(`2026-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchStatus, setSearchStatus] = useState("검색어를 입력하세요.");
+  const [googleSchedules, setGoogleSchedules] = useState<GoogleScheduleItem[]>([]);
+  const [googleScheduleStatus, setGoogleScheduleStatus] = useState("구글 일정 대기");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -252,7 +285,7 @@ export default function HomePage() {
       name: fallbackName,
       tag: tag(month, day),
       extraTag: "",
-      memo: row.caption || "",
+      memo: normalizeInfoPhotoMemo(row.caption || ""),
       size: "360",
       memoWidth: "360",
       memoHeight: "110",
@@ -385,6 +418,122 @@ export default function HomePage() {
         if (error) console.warn("Supabase weather save error:", error.message);
       });
   }
+  async function searchDiaryAndInfo() {
+    const keyword = searchKeyword.trim();
+
+    if (!keyword) {
+      setSearchResults([]);
+      setSearchStatus("검색어를 입력하세요.");
+      return;
+    }
+
+    if (!isSupabaseConfigured || !supabase) {
+      setSearchResults([]);
+      setSearchStatus("Supabase 연결 후 검색할 수 있습니다.");
+      return;
+    }
+
+    setSearchStatus("검색 중...");
+    const pattern = `%${keyword}%`;
+
+    const [diaryRes, infoRes, infoMemoRes] = await Promise.all([
+      supabase
+        .from("diary_entries")
+        .select("entry_date, diary_text, voice_text")
+        .or(`diary_text.ilike.${pattern},voice_text.ilike.${pattern}`)
+        .order("entry_date", { ascending: true }),
+      supabase
+        .from("info_entries")
+        .select("entry_date, info_text")
+        .ilike("info_text", pattern)
+        .order("entry_date", { ascending: true }),
+      supabase
+        .from("info_photos")
+        .select("entry_date, caption")
+        .ilike("caption", pattern)
+        .order("entry_date", { ascending: true }),
+    ]);
+
+    const errors = [diaryRes.error, infoRes.error, infoMemoRes.error].filter(Boolean);
+    if (errors.length) {
+      console.warn("Supabase search error:", errors.map(error => error?.message).join(" / "));
+      setSearchResults([]);
+      setSearchStatus("검색 중 오류가 발생했습니다.");
+      return;
+    }
+
+    const nextResults: SearchResult[] = [];
+
+    (diaryRes.data || []).forEach((row: any) => {
+      const date = monthDayFromEntryDate(row.entry_date);
+      if (!date) return;
+      const text = [row.diary_text, row.voice_text].filter(Boolean).join(" / ");
+      nextResults.push({
+        type: "diary",
+        entryDate: row.entry_date,
+        month: date.month,
+        day: date.day,
+        text: text || "일기장 검색 결과",
+      });
+    });
+
+    (infoRes.data || []).forEach((row: any) => {
+      const date = monthDayFromEntryDate(row.entry_date);
+      if (!date) return;
+      nextResults.push({
+        type: "info",
+        entryDate: row.entry_date,
+        month: date.month,
+        day: date.day,
+        text: row.info_text || "정보보관소 검색 결과",
+      });
+    });
+
+    (infoMemoRes.data || []).forEach((row: any) => {
+      const date = monthDayFromEntryDate(row.entry_date);
+      if (!date) return;
+      nextResults.push({
+        type: "info",
+        entryDate: row.entry_date,
+        month: date.month,
+        day: date.day,
+        text: row.caption || "정보보관소 사진 메모 검색 결과",
+      });
+    });
+
+    const unique = new Map<string, SearchResult>();
+    nextResults.forEach(result => {
+      const uniqueKey = `${result.type}-${result.entryDate}-${result.text.slice(0, 40)}`;
+      if (!unique.has(uniqueKey)) unique.set(uniqueKey, result);
+    });
+
+    const results = Array.from(unique.values()).slice(0, 30);
+    setSearchResults(results);
+    setSearchStatus(results.length ? `${results.length}개 검색 결과` : "검색 결과가 없습니다.");
+  }
+
+  async function loadGoogleSchedulesForDay(month: number, day: number) {
+    setGoogleScheduleStatus("구글 일정 조회 중");
+    setGoogleSchedules([]);
+
+    try {
+      const response = await fetch(`/api/google-calendar?date=${entryDate(month, day)}`, { cache: "no-store" });
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "google calendar error");
+      }
+
+      const items = Array.isArray(data.items) ? data.items : [];
+      setGoogleSchedules(items);
+      setGoogleScheduleStatus(items.length ? `${items.length}개 일정` : "구글 일정 없음");
+    } catch (error) {
+      console.warn("Google calendar load error:", error instanceof Error ? error.message : error);
+      setGoogleSchedules([]);
+      setGoogleScheduleStatus("구글 일정 연결 필요");
+    }
+  }
+
 
   useEffect(() => {
     try {
@@ -489,6 +638,7 @@ export default function HomePage() {
     });
 
     fetchWeatherFromKma();
+    void loadGoogleSchedulesForDay(currentMonth, currentDay);
 
     return () => {
       isActive = false;
@@ -802,7 +952,7 @@ export default function HomePage() {
         name: file.name || "photo.jpg",
         tag: tag(month, day),
         extraTag: "",
-        memo: "",
+        memo: bucket === "info-photos" ? "#" : "",
         size: "360",
         memoWidth: "360",
         memoHeight: "110",
@@ -835,7 +985,7 @@ export default function HomePage() {
       entry_date: entryDate(month, day),
       storage_path: item.storagePath,
       public_url: item.url,
-      caption: item.memo || "",
+      caption: normalizeInfoPhotoMemo(item.memo),
       sort_order: sortOrder,
     });
 
@@ -988,15 +1138,16 @@ export default function HomePage() {
     const items = infoPhotos[k] || [];
     if (!items[index]) return;
 
+    const normalizedMemo = normalizeInfoPhotoMemo(memo);
     const currentItem = items[index];
     const nextPhotosForDay = items.map((item, itemIndex) =>
-      itemIndex === index ? { ...item, memo } : item
+      itemIndex === index ? { ...item, memo: normalizedMemo } : item
     );
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
     const [month, day] = k.split("-").map(Number);
     saveInfoPhotos(month, day, nextPhotosForDay);
-    saveInfoPhotoMemoToSupabase(currentItem, memo);
+    saveInfoPhotoMemoToSupabase(currentItem, normalizedMemo);
   }
 
 
@@ -1772,6 +1923,35 @@ export default function HomePage() {
           </div>
         </div>
 
+        <div className="calendar-search-box">
+          <div className="calendar-search-row">
+            <input
+              className="calendar-search-input"
+              value={searchKeyword}
+              onChange={e => setSearchKeyword(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") void searchDiaryAndInfo(); }}
+              placeholder="일기장/정보보관소 검색어 입력"
+            />
+            <button type="button" className="soft-btn" onClick={() => void searchDiaryAndInfo()}>검색</button>
+          </div>
+          <div className="calendar-search-status">{searchStatus}</div>
+          {searchResults.length > 0 && (
+            <div className="calendar-search-results">
+              {searchResults.map((result, index) => (
+                <button
+                  type="button"
+                  key={`${result.type}-${result.entryDate}-${index}`}
+                  className="calendar-search-result"
+                  onClick={() => result.type === "diary" ? openDiary(result.month, result.day) : openInfo(result.month, result.day)}
+                >
+                  <strong>{result.type === "diary" ? "일기장" : "정보보관소"} · {pad(result.month)}/{pad(result.day)}</strong>
+                  <span>{result.text.length > 70 ? `${result.text.slice(0, 70)}...` : result.text}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="calendar">
           {weekdayLabels.map(label => <div key={label} className="weekday">{label}</div>)}
           {cells}
@@ -1799,7 +1979,25 @@ export default function HomePage() {
             <span>🏠 집</span>
             <span>☀️ {weather}</span>
             <span>🌡 {temp}</span>
-            <span className="weather-time">🕒 {weatherTime} · <button type="button" className="weather-refresh-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button></span>
+            <span className="weather-time-inline">🕒 {weatherTime}</span>
+            <button type="button" className="weather-refresh-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
+          </div>
+          <div className="google-schedule-box">
+            <div className="google-schedule-head">
+              <strong>구글 일정</strong>
+              <button type="button" className="google-refresh-btn" onClick={() => void loadGoogleSchedulesForDay(currentMonth, currentDay)}>새로고침</button>
+              <span>{googleScheduleStatus}</span>
+            </div>
+            {googleSchedules.length > 0 && (
+              <div className="google-schedule-list">
+                {googleSchedules.map((item, index) => (
+                  <div className="google-schedule-item" key={`${item.title}-${index}`}>
+                    <span className="google-schedule-time">{item.allDay ? "종일" : item.start || "시간 없음"}</span>
+                    <span className="google-schedule-title">{item.title}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="button-row diary-photo-import-row">
             <label className="soft-btn compact-photo-btn">
@@ -2015,12 +2213,12 @@ export default function HomePage() {
                 </button>
                 <textarea
                   className="info-photo-note-safe"
-                  value={photo.memo || ""}
+                  value={normalizeInfoPhotoMemo(photo.memo)}
                   onFocus={e => expandInfoPhotoNote(e.currentTarget)}
                   onInput={e => expandInfoPhotoNote(e.currentTarget)}
                   onBlur={e => collapseInfoPhotoNote(e.currentTarget)}
                   onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
-                  placeholder="사진 아래에 내용을 입력하세요."
+                  placeholder="# 사진 아래에 내용을 입력하세요."
                 />
                 <div className="photo-actions safe-photo-actions">
                   <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, -1)} disabled={index === 0}>← 이전</button>
