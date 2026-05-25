@@ -144,6 +144,13 @@ export default function HomePage() {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
+  const diaryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function resizeTextareaToContent(element: HTMLTextAreaElement | null) {
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${Math.max(element.scrollHeight, 180)}px`;
+  }
 
   useEffect(() => {
     try {
@@ -202,6 +209,11 @@ export default function HomePage() {
       setInfoText("");
     }
   }, [view, currentMonth, currentDay]);
+
+  useEffect(() => {
+    if (view !== "diary") return;
+    requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
+  }, [view, diaryText, currentMonth, currentDay]);
 
   async function fetchWeatherFromKma() {
     setWeather("조회 중");
@@ -1290,7 +1302,14 @@ export default function HomePage() {
           </div>
         </div>
 
-        <textarea className="diary-textarea diary-main-textarea diary-full-textarea" value={diaryText} onChange={e => saveDiary(e.target.value, voiceText)} placeholder="오늘의 기록을 남겨보세요...." />
+        <textarea
+          ref={diaryTextareaRef}
+          className="diary-textarea diary-main-textarea diary-full-textarea"
+          value={diaryText}
+          onInput={e => resizeTextareaToContent(e.currentTarget)}
+          onChange={e => saveDiary(e.target.value, voiceText)}
+          placeholder="오늘의 기록을 남겨보세요...."
+        />
 
         <div className="diary-photo-section" onPaste={handlePhotoPaste} tabIndex={0}>
           {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
