@@ -308,12 +308,12 @@ export default function HomePage() {
       nextCalendarPhotoIndexes[photoKey] = Number(row.sort_order || 0);
     });
 
-    if (Object.keys(nextCalendarPhotos).length) {
-      setCalendarPhotos(prev => ({ ...prev, ...nextCalendarPhotos }));
-      setCalendarPhotoIndexes(prev => ({ ...prev, ...nextCalendarPhotoIndexes }));
-      setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
-      setLocalStorageSafely("iphone-diary-2026-calendar-photo-indexes", JSON.stringify(nextCalendarPhotoIndexes));
-    }
+    // Supabase 사용 시 캘린더 대표사진도 서버값을 기준으로 맞춥니다.
+    // 예전 localStorage 대표사진이 남아서 기기마다 다르게 보이는 문제를 줄입니다.
+    setCalendarPhotos(nextCalendarPhotos);
+    setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
+    setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
+    setLocalStorageSafely("iphone-diary-2026-calendar-photo-indexes", JSON.stringify(nextCalendarPhotoIndexes));
   }
 
   function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string) {
@@ -392,35 +392,44 @@ export default function HomePage() {
     if (view !== "diary") return;
 
     let isActive = true;
+    const photoKey = key(currentMonth, currentDay);
 
-    try {
-      const raw = localStorage.getItem(storageKey("diary", currentMonth, currentDay));
-      const data = raw ? JSON.parse(raw) : {};
-      setDiaryText(data.diaryText || "");
-      setVoiceText(data.voiceText || "");
-
-      const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay));
-      const items = rawPhotos ? JSON.parse(rawPhotos) : [];
-      setPhotos(prev => ({ ...prev, [key(currentMonth, currentDay)]: items }));
-
-      const rawWeather = localStorage.getItem(weatherStorageKey(currentMonth, currentDay));
-      if (rawWeather) {
-        const cachedWeather = JSON.parse(rawWeather);
-        setWeather(cachedWeather.weather || "확인 필요");
-        setTemp(cachedWeather.temperature || "-");
-        setWeatherTime(cachedWeather.observedAt || "-");
-        setWeatherSource(cachedWeather.source || "기상청");
-      }
-    } catch {
+    // Supabase가 설정된 상태에서는 서버 데이터를 우선합니다.
+    // 예전 localStorage 데이터가 기기마다 달라서 아이폰/PC가 다르게 보이는 문제를 방지합니다.
+    if (isSupabaseConfigured && supabase) {
       setDiaryText("");
       setVoiceText("");
+      setPhotos(prev => ({ ...prev, [photoKey]: [] }));
+    } else {
+      try {
+        const raw = localStorage.getItem(storageKey("diary", currentMonth, currentDay));
+        const data = raw ? JSON.parse(raw) : {};
+        setDiaryText(data.diaryText || "");
+        setVoiceText(data.voiceText || "");
+
+        const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay));
+        const items = rawPhotos ? JSON.parse(rawPhotos) : [];
+        setPhotos(prev => ({ ...prev, [photoKey]: items }));
+
+        const rawWeather = localStorage.getItem(weatherStorageKey(currentMonth, currentDay));
+        if (rawWeather) {
+          const cachedWeather = JSON.parse(rawWeather);
+          setWeather(cachedWeather.weather || "확인 필요");
+          setTemp(cachedWeather.temperature || "-");
+          setWeatherTime(cachedWeather.observedAt || "-");
+          setWeatherSource(cachedWeather.source || "기상청");
+        }
+      } catch {
+        setDiaryText("");
+        setVoiceText("");
+      }
     }
 
     loadDiaryEntryFromSupabase(currentMonth, currentDay).then(remoteData => {
-      if (!isActive || !remoteData) return;
+      if (!isActive) return;
 
-      const remoteDiaryText = remoteData.diary_text || "";
-      const remoteVoiceText = remoteData.voice_text || "";
+      const remoteDiaryText = remoteData?.diary_text || "";
+      const remoteVoiceText = remoteData?.voice_text || "";
       setDiaryText(remoteDiaryText);
       setVoiceText(remoteVoiceText);
       localStorage.setItem(
@@ -428,7 +437,7 @@ export default function HomePage() {
         JSON.stringify({ diaryText: remoteDiaryText, voiceText: remoteVoiceText })
       );
 
-      const remoteWeather = remoteData.weather;
+      const remoteWeather = remoteData?.weather;
       if (remoteWeather && typeof remoteWeather === "object") {
         setWeather(remoteWeather.weather || "확인 필요");
         setTemp(remoteWeather.temperature || "-");
@@ -439,9 +448,8 @@ export default function HomePage() {
     });
 
     loadDiaryPhotosFromSupabase(currentMonth, currentDay).then(remoteItems => {
-      if (!isActive || !remoteItems || !remoteItems.length) return;
+      if (!isActive || !remoteItems) return;
 
-      const photoKey = key(currentMonth, currentDay);
       setPhotos(prev => ({ ...prev, [photoKey]: remoteItems }));
       setLocalStorageSafely(storageKey("photos", currentMonth, currentDay), JSON.stringify(remoteItems));
 
@@ -449,6 +457,15 @@ export default function HomePage() {
       if (calendarIndex >= 0) {
         const nextCalendarPhotos = { ...calendarPhotos, [photoKey]: remoteItems[calendarIndex].url };
         const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes, [photoKey]: calendarIndex };
+        setCalendarPhotos(nextCalendarPhotos);
+        setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
+        setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
+        setLocalStorageSafely("iphone-diary-2026-calendar-photo-indexes", JSON.stringify(nextCalendarPhotoIndexes));
+      } else if (isSupabaseConfigured && supabase) {
+        const nextCalendarPhotos = { ...calendarPhotos };
+        const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes };
+        delete nextCalendarPhotos[photoKey];
+        delete nextCalendarPhotoIndexes[photoKey];
         setCalendarPhotos(nextCalendarPhotos);
         setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
         setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
@@ -467,31 +484,36 @@ export default function HomePage() {
     if (view !== "info") return;
 
     let isActive = true;
+    const photoKey = key(currentMonth, currentDay);
 
-    try {
-      const raw = localStorage.getItem(storageKey("info", currentMonth, currentDay));
-      const data = raw ? JSON.parse(raw) : {};
-      setInfoText(data.infoText || "");
-
-      const rawInfoPhotos = localStorage.getItem(storageKey("infoPhotos", currentMonth, currentDay));
-      const items = rawInfoPhotos ? JSON.parse(rawInfoPhotos) : [];
-      setInfoPhotos(prev => ({ ...prev, [key(currentMonth, currentDay)]: items }));
-    } catch {
+    if (isSupabaseConfigured && supabase) {
       setInfoText("");
+      setInfoPhotos(prev => ({ ...prev, [photoKey]: [] }));
+    } else {
+      try {
+        const raw = localStorage.getItem(storageKey("info", currentMonth, currentDay));
+        const data = raw ? JSON.parse(raw) : {};
+        setInfoText(data.infoText || "");
+
+        const rawInfoPhotos = localStorage.getItem(storageKey("infoPhotos", currentMonth, currentDay));
+        const items = rawInfoPhotos ? JSON.parse(rawInfoPhotos) : [];
+        setInfoPhotos(prev => ({ ...prev, [photoKey]: items }));
+      } catch {
+        setInfoText("");
+      }
     }
 
     loadInfoEntryFromSupabase(currentMonth, currentDay).then(remoteData => {
-      if (!isActive || !remoteData) return;
+      if (!isActive) return;
 
-      const remoteInfoText = remoteData.info_text || "";
+      const remoteInfoText = remoteData?.info_text || "";
       setInfoText(remoteInfoText);
       localStorage.setItem(storageKey("info", currentMonth, currentDay), JSON.stringify({ infoText: remoteInfoText }));
     });
 
     loadInfoPhotosFromSupabase(currentMonth, currentDay).then(remoteItems => {
-      if (!isActive || !remoteItems || !remoteItems.length) return;
+      if (!isActive || !remoteItems) return;
 
-      const photoKey = key(currentMonth, currentDay);
       setInfoPhotos(prev => ({ ...prev, [photoKey]: remoteItems }));
       setLocalStorageSafely(storageKey("infoPhotos", currentMonth, currentDay), JSON.stringify(remoteItems));
     });
