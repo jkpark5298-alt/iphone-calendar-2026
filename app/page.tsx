@@ -14,6 +14,7 @@ type PhotoItem = {
   memoHeight?: string;
 };
 type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple";
+type OriginalImageTarget = { type: "diary"; photoKey: string; index: number } | null;
 type ScheduleItem = {
   id: string;
   title: string;
@@ -98,6 +99,35 @@ function weatherStorageKey(month: number, day: number) {
   return `iphone-diary-2026-weather-${pad(month)}-${pad(day)}`;
 }
 
+
+function normalizeUrlForHref(url: string) {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
+function extractUrls(text: string) {
+  const matches = text.match(/(?:https?:\/\/|www\.)[^\s<>()]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s<>()]*)?/g) || [];
+  return Array.from(new Set(matches.map(value => value.replace(/[.,!?;:)]+$/g, ""))));
+}
+
+function HyperlinkPreview({ text }: { text: string }) {
+  const urls = extractUrls(text);
+
+  if (!urls.length) return null;
+
+  return (
+    <div className="auto-link-box">
+      <div className="auto-link-title">🔗 자동 생성 링크</div>
+      <div className="auto-link-list">
+        {urls.map(url => (
+          <a key={url} href={normalizeUrlForHref(url)} target="_blank" rel="noreferrer" className="auto-link-item">
+            {url}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function getSafeToday() {
   const today = new Date();
   const year = today.getFullYear();
@@ -139,6 +169,7 @@ export default function HomePage() {
   const [weatherTime, setWeatherTime] = useState("-");
   const [weatherSource, setWeatherSource] = useState("기상청 연결 대기");
   const [originalImageUrl, setOriginalImageUrl] = useState("");
+  const [originalImageTarget, setOriginalImageTarget] = useState<OriginalImageTarget>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
   const [datePickerValue, setDatePickerValue] = useState(`2026-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
 
@@ -941,6 +972,26 @@ export default function HomePage() {
     savePhotos(month, day, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes);
   }
 
+  function openDiaryOriginalPhoto(photoKey: string, index: number) {
+    const item = photos[photoKey]?.[index];
+    if (!item) return;
+    setOriginalImageUrl(item.url);
+    setOriginalImageTarget({ type: "diary", photoKey, index });
+  }
+
+  function closeOriginalImage() {
+    setOriginalImageUrl("");
+    setOriginalImageTarget(null);
+  }
+
+  function deleteOriginalDiaryPhoto() {
+    if (!originalImageTarget) return;
+    const itemNumber = originalImageTarget.index + 1;
+    if (!window.confirm(`${itemNumber}번째 사진을 삭제할까요?`)) return;
+    deletePhoto(originalImageTarget.photoKey, originalImageTarget.index);
+    closeOriginalImage();
+  }
+
 
   function getDiaryPhotoIndexFromUser(k: string, actionName: string) {
     const items = photos[k] || [];
@@ -1316,6 +1367,7 @@ export default function HomePage() {
           onChange={e => saveDiary(e.target.value, voiceText)}
           placeholder="오늘의 기록을 남겨보세요...."
         />
+        <HyperlinkPreview text={diaryText} />
 
         <div className="diary-photo-section" onPaste={handlePhotoPaste} tabIndex={0}>
           {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
@@ -1328,21 +1380,10 @@ export default function HomePage() {
                 <button
                   type="button"
                   className="diary-photo-open-btn"
-                  onClick={() => setOriginalImageUrl(photo.url)}
+                  onClick={() => openDiaryOriginalPhoto(k, index)}
                   aria-label="일기 사진 원본 크게 보기"
                 >
                   <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
-                </button>
-                <button
-                  type="button"
-                  className="photo-inline-delete-btn"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (window.confirm(`${index + 1}번째 사진을 삭제할까요?`)) deletePhoto(k, index);
-                  }}
-                  aria-label="일기 사진 삭제"
-                >
-                  삭제
                 </button>
               </div>
             ))}
@@ -1501,6 +1542,7 @@ export default function HomePage() {
             onChange={e => saveInfo(e.target.value)}
             placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요."
           />
+          <HyperlinkPreview text={infoText} />
 
           {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 이곳에 정리됩니다.</div>}
           <div className={`info-photo-grid-safe ${infoPhotoCountClass}`}>
@@ -1559,9 +1601,14 @@ export default function HomePage() {
         </div>
       )}
       {originalImageUrl && (
-        <div className="original-image-modal" role="dialog" aria-modal="true" onClick={() => setOriginalImageUrl("")}>
+        <div className="original-image-modal" role="dialog" aria-modal="true" onClick={closeOriginalImage}>
           <div className="original-image-panel" onClick={event => event.stopPropagation()}>
-            <button type="button" className="original-close-btn" onClick={() => setOriginalImageUrl("")}>닫기</button>
+            <div className="original-modal-actions">
+              {originalImageTarget?.type === "diary" && (
+                <button type="button" className="original-delete-btn" onClick={deleteOriginalDiaryPhoto}>사진 삭제</button>
+              )}
+              <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
+            </div>
             <img src={originalImageUrl} alt="원본 사진" />
           </div>
         </div>
