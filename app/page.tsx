@@ -501,6 +501,40 @@ export default function HomePage() {
       });
     });
 
+    Object.entries(schedules).forEach(([scheduleKey, items]) => {
+      const [monthText, dayText] = scheduleKey.split("-");
+      const month = Number(monthText);
+      const day = Number(dayText);
+      if (!month || !day) return;
+
+      items.forEach(item => {
+        const scheduleText = `${item.startTime ? `${item.startTime} ` : ""}${item.title}`;
+        const searchText = [scheduleText, item.repeat, item.endDate].filter(Boolean).join(" / ");
+        if (!searchText.toLowerCase().includes(keyword.toLowerCase())) return;
+
+        nextResults.push({
+          type: "diary",
+          entryDate: entryDate(month, day),
+          month,
+          day,
+          text: `캘린더 일정 · ${scheduleText}`,
+        });
+      });
+    });
+
+    googleSchedules.forEach(item => {
+      const googleText = [item.title, item.start, item.end, item.allDay ? "종일" : ""].filter(Boolean).join(" / ");
+      if (!googleText.toLowerCase().includes(keyword.toLowerCase())) return;
+
+      nextResults.push({
+        type: "diary",
+        entryDate: entryDate(currentMonth, currentDay),
+        month: currentMonth,
+        day: currentDay,
+        text: `구글 일정 · ${item.allDay ? "종일" : item.start || "시간 없음"} ${item.title}`,
+      });
+    });
+
     const unique = new Map<string, SearchResult>();
     nextResults.forEach(result => {
       const uniqueKey = `${result.type}-${result.entryDate}-${result.text.slice(0, 40)}`;
@@ -1963,6 +1997,7 @@ export default function HomePage() {
   function DiaryView() {
     const k = key(currentMonth, currentDay);
     const dayPhotos = photos[k] || [];
+    const daySchedules = schedules[k] || [];
     const diaryPhotoCountClass = `count-${Math.min(Math.max(dayPhotos.length, 1), 4)}`;
     return (
       <section>
@@ -1982,21 +2017,29 @@ export default function HomePage() {
             <span className="weather-time-inline">🕒 {weatherTime}</span>
             <button type="button" className="weather-refresh-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
           </div>
-          <div className="google-schedule-box">
+          <div className="google-schedule-box diary-schedule-box">
             <div className="google-schedule-head">
-              <strong>구글 일정</strong>
-              <button type="button" className="google-refresh-btn" onClick={() => void loadGoogleSchedulesForDay(currentMonth, currentDay)}>새로고침</button>
-              <span>{googleScheduleStatus}</span>
+              <strong>일정</strong>
+              <button type="button" className="google-refresh-btn" onClick={() => void loadGoogleSchedulesForDay(currentMonth, currentDay)}>구글 새로고침</button>
+              <span>{daySchedules.length + googleSchedules.length}개 일정</span>
             </div>
-            {googleSchedules.length > 0 && (
+            {(daySchedules.length > 0 || googleSchedules.length > 0) ? (
               <div className="google-schedule-list">
+                {daySchedules.map(item => (
+                  <div className="google-schedule-item app-schedule-item" key={item.id}>
+                    <span className="google-schedule-time">{item.startTime || "시간 없음"}</span>
+                    <span className="google-schedule-title">캘린더 · {item.title}</span>
+                  </div>
+                ))}
                 {googleSchedules.map((item, index) => (
                   <div className="google-schedule-item" key={`${item.title}-${index}`}>
                     <span className="google-schedule-time">{item.allDay ? "종일" : item.start || "시간 없음"}</span>
-                    <span className="google-schedule-title">{item.title}</span>
+                    <span className="google-schedule-title">구글 · {item.title}</span>
                   </div>
                 ))}
               </div>
+            ) : (
+              <div className="google-schedule-empty">저장된 일정이 없습니다.</div>
             )}
           </div>
           <div className="button-row diary-photo-import-row">

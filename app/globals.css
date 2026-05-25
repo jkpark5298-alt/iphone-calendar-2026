@@ -2640,3 +2640,14 @@ textarea {
     font-size: 12px;
   }
 }
+
+/* Diary integrated schedule box: app calendar schedules + Google schedules */
+.google-schedule-empty {
+  color: #7f8883;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 2px 0;
+}
+.app-schedule-item .google-schedule-title {
+  font-weight: 900;
+}
