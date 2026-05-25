@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate";
 type PhotoItem = {
@@ -99,6 +100,10 @@ function weatherStorageKey(month: number, day: number) {
   return `iphone-diary-2026-weather-${pad(month)}-${pad(day)}`;
 }
 
+function entryDate(month: number, day: number) {
+  return `2026-${pad(month)}-${pad(day)}`;
+}
+
 
 function normalizeUrlForHref(url: string) {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
@@ -184,6 +189,95 @@ export default function HomePage() {
     element.style.height = `${Math.max(element.scrollHeight, 180)}px`;
   }
 
+  async function loadDiaryEntryFromSupabase(month: number, day: number) {
+    if (!isSupabaseConfigured || !supabase) return null;
+
+    const { data, error } = await supabase
+      .from("diary_entries")
+      .select("diary_text, voice_text, weather")
+      .eq("entry_date", entryDate(month, day))
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Supabase diary load error:", error.message);
+      return null;
+    }
+
+    return data as { diary_text?: string | null; voice_text?: string | null; weather?: any } | null;
+  }
+
+  async function loadInfoEntryFromSupabase(month: number, day: number) {
+    if (!isSupabaseConfigured || !supabase) return null;
+
+    const { data, error } = await supabase
+      .from("info_entries")
+      .select("info_text")
+      .eq("entry_date", entryDate(month, day))
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Supabase info load error:", error.message);
+      return null;
+    }
+
+    return data as { info_text?: string | null } | null;
+  }
+
+  function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string) {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    void supabase
+      .from("diary_entries")
+      .upsert(
+        {
+          entry_date: entryDate(month, day),
+          diary_text: nextDiaryText,
+          voice_text: nextVoiceText,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "entry_date" }
+      )
+      .then(({ error }) => {
+        if (error) console.warn("Supabase diary save error:", error.message);
+      });
+  }
+
+  function saveInfoEntryToSupabase(month: number, day: number, nextInfoText: string) {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    void supabase
+      .from("info_entries")
+      .upsert(
+        {
+          entry_date: entryDate(month, day),
+          info_text: nextInfoText,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "entry_date" }
+      )
+      .then(({ error }) => {
+        if (error) console.warn("Supabase info save error:", error.message);
+      });
+  }
+
+  function saveWeatherToSupabase(month: number, day: number, weatherData: Record<string, string>) {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    void supabase
+      .from("diary_entries")
+      .upsert(
+        {
+          entry_date: entryDate(month, day),
+          weather: weatherData,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "entry_date" }
+      )
+      .then(({ error }) => {
+        if (error) console.warn("Supabase weather save error:", error.message);
+      });
+  }
+
   useEffect(() => {
     try {
       const rawCalendar = localStorage.getItem("iphone-diary-2026-calendar-photos");
@@ -201,6 +295,9 @@ export default function HomePage() {
 
   useEffect(() => {
     if (view !== "diary") return;
+
+    let isActive = true;
+
     try {
       const raw = localStorage.getItem(storageKey("diary", currentMonth, currentDay));
       const data = raw ? JSON.parse(raw) : {};
@@ -219,16 +316,45 @@ export default function HomePage() {
         setWeatherTime(cachedWeather.observedAt || "-");
         setWeatherSource(cachedWeather.source || "기상청");
       }
-      fetchWeatherFromKma();
     } catch {
       setDiaryText("");
       setVoiceText("");
-      fetchWeatherFromKma();
     }
+
+    loadDiaryEntryFromSupabase(currentMonth, currentDay).then(remoteData => {
+      if (!isActive || !remoteData) return;
+
+      const remoteDiaryText = remoteData.diary_text || "";
+      const remoteVoiceText = remoteData.voice_text || "";
+      setDiaryText(remoteDiaryText);
+      setVoiceText(remoteVoiceText);
+      localStorage.setItem(
+        storageKey("diary", currentMonth, currentDay),
+        JSON.stringify({ diaryText: remoteDiaryText, voiceText: remoteVoiceText })
+      );
+
+      const remoteWeather = remoteData.weather;
+      if (remoteWeather && typeof remoteWeather === "object") {
+        setWeather(remoteWeather.weather || "확인 필요");
+        setTemp(remoteWeather.temperature || "-");
+        setWeatherTime(remoteWeather.observedAt || "-");
+        setWeatherSource(remoteWeather.source || "기상청");
+        localStorage.setItem(weatherStorageKey(currentMonth, currentDay), JSON.stringify(remoteWeather));
+      }
+    });
+
+    fetchWeatherFromKma();
+
+    return () => {
+      isActive = false;
+    };
   }, [view, currentMonth, currentDay]);
 
   useEffect(() => {
     if (view !== "info") return;
+
+    let isActive = true;
+
     try {
       const raw = localStorage.getItem(storageKey("info", currentMonth, currentDay));
       const data = raw ? JSON.parse(raw) : {};
@@ -240,6 +366,18 @@ export default function HomePage() {
     } catch {
       setInfoText("");
     }
+
+    loadInfoEntryFromSupabase(currentMonth, currentDay).then(remoteData => {
+      if (!isActive || !remoteData) return;
+
+      const remoteInfoText = remoteData.info_text || "";
+      setInfoText(remoteInfoText);
+      localStorage.setItem(storageKey("info", currentMonth, currentDay), JSON.stringify({ infoText: remoteInfoText }));
+    });
+
+    return () => {
+      isActive = false;
+    };
   }, [view, currentMonth, currentDay]);
 
   useEffect(() => {
@@ -276,11 +414,11 @@ export default function HomePage() {
       setWeather(nextWeather);
       setTemp(nextTemperature);
       setWeatherTime(nextObservedAt);
+      const weatherSnapshot = { weather: nextWeather, temperature: nextTemperature, observedAt: nextObservedAt, source: "기상청" };
+
       setWeatherSource("기상청");
-      localStorage.setItem(
-        weatherStorageKey(currentMonth, currentDay),
-        JSON.stringify({ weather: nextWeather, temperature: nextTemperature, observedAt: nextObservedAt, source: "기상청" })
-      );
+      localStorage.setItem(weatherStorageKey(currentMonth, currentDay), JSON.stringify(weatherSnapshot));
+      saveWeatherToSupabase(currentMonth, currentDay, weatherSnapshot);
     } catch {
       setWeather("기상청 연결 필요");
       setTemp("-");
@@ -394,11 +532,13 @@ export default function HomePage() {
       storageKey("diary", currentMonth, currentDay),
       JSON.stringify({ diaryText: nextDiaryText, voiceText: nextVoiceText })
     );
+    saveDiaryEntryToSupabase(currentMonth, currentDay, nextDiaryText, nextVoiceText);
   }
 
   function saveInfo(nextInfoText: string) {
     setInfoText(nextInfoText);
     localStorage.setItem(storageKey("info", currentMonth, currentDay), JSON.stringify({ infoText: nextInfoText }));
+    saveInfoEntryToSupabase(currentMonth, currentDay, nextInfoText);
   }
 
   function saveInfoPhotos(month: number, day: number, nextPhotos: PhotoItem[]) {
