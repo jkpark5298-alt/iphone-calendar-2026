@@ -1321,15 +1321,30 @@ export default function HomePage() {
           {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
           <div className={`diary-photo-grid-safe diary-photo-gallery ${diaryPhotoCountClass}`}>
             {dayPhotos.map((photo, index) => (
-              <button
-                type="button"
-                className="diary-photo-card-safe diary-gallery-photo"
+              <div
+                className="diary-photo-card-safe diary-gallery-photo diary-photo-item-with-delete"
                 key={`${photo.name}-${index}`}
-                onClick={() => setOriginalImageUrl(photo.url)}
-                aria-label="일기 사진 원본 크게 보기"
               >
-                <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
-              </button>
+                <button
+                  type="button"
+                  className="diary-photo-open-btn"
+                  onClick={() => setOriginalImageUrl(photo.url)}
+                  aria-label="일기 사진 원본 크게 보기"
+                >
+                  <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
+                </button>
+                <button
+                  type="button"
+                  className="photo-inline-delete-btn"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (window.confirm(`${index + 1}번째 사진을 삭제할까요?`)) deletePhoto(k, index);
+                  }}
+                  aria-label="일기 사진 삭제"
+                >
+                  삭제
+                </button>
+              </div>
             ))}
           </div>
         </div>
