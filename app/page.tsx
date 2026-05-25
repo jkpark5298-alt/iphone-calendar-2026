@@ -1234,7 +1234,7 @@ export default function HomePage() {
         <div className="section-title calendar-headline">
           <h1 className="calendar-title-line">
             <span className="main-title">2026년 아이폰 캘린더</span>
-            <span className="month-badge">{currentMonth}월</span>
+            <button type="button" className="month-badge month-diary-link" onClick={() => openDiary(currentMonth, currentDay)} aria-label="선택 날짜 일기장으로 이동">{currentMonth}월</button>
           </h1>
           <div className="head-actions calendar-top-actions">
             <button type="button" className="today-circle" onClick={moveToTodayOnCalendar} aria-label="오늘 날짜로 이동">{todayDefault.day}</button>
@@ -1257,7 +1257,7 @@ export default function HomePage() {
   function DiaryView() {
     const k = key(currentMonth, currentDay);
     const dayPhotos = photos[k] || [];
-    const diaryPhotoCountClass = `count-${Math.min(Math.max(dayPhotos.length, 1), 2)}`;
+    const diaryPhotoCountClass = `count-${Math.min(Math.max(dayPhotos.length, 1), 4)}`;
     return (
       <section>
         <div className="diary-head">
@@ -1448,7 +1448,7 @@ export default function HomePage() {
             <div className="info-nav-row">
               <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 월간 캘린더</button>
               <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
-              <button type="button" className="today-circle info-date-circle" onClick={() => openCalendar(currentMonth)}>{currentDay}</button>
+              <button type="button" className="today-circle info-date-circle" onClick={() => openDatePicker("info")} aria-label="정보보관소 날짜 선택">{currentDay}</button>
               <label className="soft-btn info-action-btn">
                 🖼 사진 가져오기
                 <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
