@@ -1676,3 +1676,154 @@ textarea {
     font-size: 12px;
   }
 }
+
+
+/* 2026-05-25 requested refinements: diary photo auto layout, clickable KMA, calendar top info/date picker */
+.weather-refresh-btn {
+  border: 0;
+  background: transparent;
+  color: var(--deep);
+  font: inherit;
+  font-weight: 900;
+  padding: 0 2px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.calendar-info-top-btn {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 16px;
+}
+
+/* 오늘 날짜는 배경을 채우지 않고 파란 테두리만 표시한다. 글자색은 빨간 날짜와 충돌하지 않게 기존 색을 따른다. */
+.today-day .today-num {
+  background: transparent !important;
+  color: inherit !important;
+  border: 2px solid #2f80ed;
+  box-shadow: 0 0 0 2px rgba(47, 128, 237, 0.12);
+}
+.today-day .today-num.num-red {
+  color: #e24141 !important;
+}
+
+.holiday,
+.holiday-neutral {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: clamp(8px, 1.1vw, 11px) !important;
+  letter-spacing: -0.04em;
+}
+
+/* 일기장 사진: 숫자/좌우 이동 없이 장수에 따라 자동 크기 배치 */
+.diary-photo-grid-safe.count-1 {
+  grid-template-columns: 1fr !important;
+}
+.diary-photo-grid-safe.count-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+.diary-photo-card-safe {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.diary-photo-card-safe .original-photo-btn {
+  height: 100%;
+}
+.diary-photo-card-safe img {
+  width: 100%;
+  height: auto;
+  max-height: 280px;
+  object-fit: contain;
+}
+.diary-photo-grid-safe.count-1 .diary-photo-card-safe img {
+  max-height: 420px;
+}
+
+/* 정보보관소 상단 버튼이 아이폰에서 밖으로 벗어나지 않도록 정리 */
+.info-nav-row {
+  width: 100%;
+  flex-wrap: wrap !important;
+  overflow: visible !important;
+}
+.info-nav-row .pill-btn,
+.info-nav-row .soft-btn,
+.info-nav-row .today-circle {
+  flex: 0 0 auto;
+}
+.info-action-btn {
+  max-width: 100%;
+}
+
+.date-picker-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0,0,0,0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.date-picker-panel {
+  width: min(92vw, 360px);
+  border-radius: 18px;
+  background: #fff;
+  padding: 18px;
+  box-shadow: 0 18px 45px rgba(0,0,0,0.28);
+}
+.date-picker-panel h3 {
+  margin: 0 0 12px;
+  color: var(--deep);
+  font-size: 20px;
+}
+.date-picker-panel input[type="date"] {
+  width: 100%;
+  border: 1px solid #d6d6d2;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 17px;
+  color: var(--text);
+  background: #fff;
+}
+.date-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+@media (max-width: 820px) {
+  .calendar-info-top-btn {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+  .info-nav-row {
+    gap: 6px;
+  }
+  .info-nav-row .pill-btn,
+  .info-nav-row .soft-btn {
+    padding: 8px 9px;
+    font-size: 12px;
+  }
+  .info-date-circle {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+  }
+  .diary-photo-card-safe img {
+    max-height: 190px;
+  }
+  .diary-photo-grid-safe.count-1 .diary-photo-card-safe img {
+    max-height: 300px;
+  }
+  .holiday,
+  .holiday-neutral {
+    font-size: 8px !important;
+  }
+}

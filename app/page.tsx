@@ -139,6 +139,8 @@ export default function HomePage() {
   const [weatherTime, setWeatherTime] = useState("-");
   const [weatherSource, setWeatherSource] = useState("기상청 연결 대기");
   const [originalImageUrl, setOriginalImageUrl] = useState("");
+  const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
+  const [datePickerValue, setDatePickerValue] = useState(`2026-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -309,6 +311,31 @@ export default function HomePage() {
     }
 
     openDiary(5, 24);
+  }
+
+  function openDatePicker(mode: "diary" | "info") {
+    setDatePickerMode(mode);
+    setDatePickerValue(`2026-${pad(currentMonth)}-${pad(currentDay)}`);
+  }
+
+  function applyDatePicker() {
+    if (!datePickerMode) return;
+    const match = datePickerValue.match(/^2026-(\d{2})-(\d{2})$/);
+    if (!match) {
+      alert("2026년 5월~12월 날짜를 선택해 주세요.");
+      return;
+    }
+
+    const month = Number(match[1]);
+    const day = Number(match[2]);
+    if (month < 5 || month > 12 || day < 1 || day > monthDays[month]) {
+      alert("2026년 5월~12월 범위 안의 날짜를 선택해 주세요.");
+      return;
+    }
+
+    setDatePickerMode(null);
+    if (datePickerMode === "diary") openDiary(month, day);
+    if (datePickerMode === "info") openInfo(month, day);
   }
 
   function saveDiary(nextDiaryText: string, nextVoiceText: string) {
@@ -1159,17 +1186,6 @@ export default function HomePage() {
           />
           <div className="day-top">
             <span className={`num ${redMarked ? "num-red" : ""} ${isToday ? "today-num" : ""}`}>{day}</span>
-            <button
-              type="button"
-              className="mini-btn info only-info"
-              onClick={(e) => {
-                e.stopPropagation();
-                openInfo(currentMonth, day);
-              }}
-              aria-label={`${currentMonth}월 ${day}일 주요 정보 보관소로 이동`}
-            >
-              I
-            </button>
           </div>
           {holidays[k] && <div className="holiday holiday-neutral">{holidays[k]}</div>}
           <div className={`thumb ${calendarPhotos[k] ? "" : "empty-thumb"}`}>
@@ -1224,8 +1240,9 @@ export default function HomePage() {
             <button type="button" className="today-circle" onClick={moveToTodayOnCalendar} aria-label="오늘 날짜로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
-            <button type="button" className="pill-btn compact-pill" onClick={openTodayDiary}>TODAY 일기장</button>
-            <button type="button" className="pill-btn compact-pill" onClick={() => openInfo(currentMonth, currentDay)}>정보보관소</button>
+            <button type="button" className="mini-btn info calendar-info-top-btn" onClick={() => openInfo(currentMonth, currentDay)} aria-label="선택 날짜 정보보관소로 이동">I</button>
+            <button type="button" className="pill-btn compact-pill" onClick={() => openDatePicker("diary")}>일기장</button>
+            <button type="button" className="pill-btn compact-pill" onClick={() => openDatePicker("info")}>정보보관소</button>
           </div>
         </div>
 
@@ -1240,6 +1257,7 @@ export default function HomePage() {
   function DiaryView() {
     const k = key(currentMonth, currentDay);
     const dayPhotos = photos[k] || [];
+    const diaryPhotoCountClass = `count-${Math.min(Math.max(dayPhotos.length, 1), 2)}`;
     return (
       <section>
         <div className="diary-head">
@@ -1255,7 +1273,7 @@ export default function HomePage() {
             <span>🏠 집</span>
             <span>☀️ {weather}</span>
             <span>🌡 {temp}</span>
-            <span className="weather-time">🕒 {weatherTime} · {weatherSource}</span>
+            <span className="weather-time">🕒 {weatherTime} · <button type="button" className="weather-refresh-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button></span>
           </div>
           <div className="button-row diary-photo-import-row">
             <label className="soft-btn compact-photo-btn">
@@ -1277,10 +1295,9 @@ export default function HomePage() {
 
           <div className="box photo-box diary-photo-panel" onPaste={handlePhotoPaste} tabIndex={0}>
             {dayPhotos.length === 0 && <div className="empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
-            <div className="diary-photo-grid-safe">
+            <div className={`diary-photo-grid-safe ${diaryPhotoCountClass}`}>
               {dayPhotos.map((photo, index) => (
                 <div className="diary-photo-card-safe" key={`${photo.name}-${index}`}>
-                  <div className="photo-number-badge">{index + 1}</div>
                   <button
                     type="button"
                     className="original-photo-btn diary-original-photo-btn"
@@ -1289,10 +1306,6 @@ export default function HomePage() {
                   >
                     <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
                   </button>
-                  <div className="photo-actions safe-photo-actions">
-                    <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, -1)} disabled={index === 0}>←</button>
-                    <button type="button" className="soft-btn" onClick={() => moveDiaryPhoto(k, index, 1)} disabled={index === dayPhotos.length - 1}>→</button>
-                  </div>
                 </div>
               ))}
             </div>
@@ -1431,7 +1444,7 @@ export default function HomePage() {
         <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }} onPaste={handleInfoPhotoPaste} tabIndex={0}>
           <div className="info-head">
             <h2 className="info-title">📂 주요 정보 보관소</h2>
-            <div className="info-sub-date">2026. {pad(currentMonth)}. {pad(currentDay)}</div>
+            <div className="info-sub-date">2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</div>
             <div className="info-nav-row">
               <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 월간 캘린더</button>
               <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
@@ -1483,6 +1496,24 @@ export default function HomePage() {
       {view === "info" && InfoView()}
       {view === "schedule" && ScheduleView()}
       {view === "redDate" && RedDateView()}
+      {datePickerMode && (
+        <div className="date-picker-modal" role="dialog" aria-modal="true" onClick={() => setDatePickerMode(null)}>
+          <div className="date-picker-panel" onClick={event => event.stopPropagation()}>
+            <h3>{datePickerMode === "diary" ? "일기장 날짜 선택" : "정보보관소 날짜 선택"}</h3>
+            <input
+              type="date"
+              min="2026-05-01"
+              max="2026-12-31"
+              value={datePickerValue}
+              onChange={event => setDatePickerValue(event.target.value)}
+            />
+            <div className="date-picker-actions">
+              <button type="button" className="soft-btn" onClick={() => setDatePickerMode(null)}>취소</button>
+              <button type="button" className="pill-btn" onClick={applyDatePicker}>이동</button>
+            </div>
+          </div>
+        </div>
+      )}
       {originalImageUrl && (
         <div className="original-image-modal" role="dialog" aria-modal="true" onClick={() => setOriginalImageUrl("")}>
           <div className="original-image-panel" onClick={event => event.stopPropagation()}>
