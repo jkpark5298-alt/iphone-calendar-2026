@@ -1290,25 +1290,22 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="diary-main-row">
-          <textarea className="diary-textarea diary-main-textarea" value={diaryText} onChange={e => saveDiary(e.target.value, voiceText)} placeholder="오늘의 기록을 남겨보세요...." />
+        <textarea className="diary-textarea diary-main-textarea diary-full-textarea" value={diaryText} onChange={e => saveDiary(e.target.value, voiceText)} placeholder="오늘의 기록을 남겨보세요...." />
 
-          <div className="box photo-box diary-photo-panel" onPaste={handlePhotoPaste} tabIndex={0}>
-            {dayPhotos.length === 0 && <div className="empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
-            <div className={`diary-photo-grid-safe ${diaryPhotoCountClass}`}>
-              {dayPhotos.map((photo, index) => (
-                <div className="diary-photo-card-safe" key={`${photo.name}-${index}`}>
-                  <button
-                    type="button"
-                    className="original-photo-btn diary-original-photo-btn"
-                    onClick={() => setOriginalImageUrl(photo.url)}
-                    aria-label="일기 사진 원본 크게 보기"
-                  >
-                    <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
-                  </button>
-                </div>
-              ))}
-            </div>
+        <div className="diary-photo-section" onPaste={handlePhotoPaste} tabIndex={0}>
+          {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
+          <div className={`diary-photo-grid-safe diary-photo-gallery ${diaryPhotoCountClass}`}>
+            {dayPhotos.map((photo, index) => (
+              <button
+                type="button"
+                className="diary-photo-card-safe diary-gallery-photo"
+                key={`${photo.name}-${index}`}
+                onClick={() => setOriginalImageUrl(photo.url)}
+                aria-label="일기 사진 원본 크게 보기"
+              >
+                <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
+              </button>
+            ))}
           </div>
         </div>
 
