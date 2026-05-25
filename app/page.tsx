@@ -192,6 +192,21 @@ export default function HomePage() {
     element.style.height = `${Math.max(element.scrollHeight, 180)}px`;
   }
 
+  function expandInfoPhotoNote(element: HTMLTextAreaElement | null) {
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${Math.max(element.scrollHeight, 74)}px`;
+  }
+
+  function collapseInfoPhotoNote(element: HTMLTextAreaElement | null) {
+    if (!element) return;
+    element.style.height = "";
+    requestAnimationFrame(() => {
+      element.scrollTop = 0;
+      element.setSelectionRange(0, 0);
+    });
+  }
+
   async function loadDiaryEntryFromSupabase(month: number, day: number) {
     if (!isSupabaseConfigured || !supabase) return null;
 
@@ -1974,6 +1989,9 @@ export default function HomePage() {
                 <textarea
                   className="info-photo-note-safe"
                   value={photo.memo || ""}
+                  onFocus={e => expandInfoPhotoNote(e.currentTarget)}
+                  onInput={e => expandInfoPhotoNote(e.currentTarget)}
+                  onBlur={e => collapseInfoPhotoNote(e.currentTarget)}
                   onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
                   placeholder="사진 아래에 내용을 입력하세요."
                 />
