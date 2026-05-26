@@ -2513,16 +2513,21 @@ ${text}` : text;
               <div className={`saved-schedule schedule-${item.color}`} key={item.id}>
                 <div>
                   <strong>{item.title}</strong>
-                  <span>{item.startDate || entryDate(currentMonth, currentDay)} · {item.startTime || "08:00"} ~ {item.endDate || item.startDate || entryDate(currentMonth, currentDay)} · {item.endTime || "24:00"} · 반복 {item.repeat}</span>
+                  <span>
+                    {item.startDate || entryDate(currentMonth, currentDay)} · {item.startTime || "08:00"}
+                    {" ~ "}
+                    {item.endDate || item.startDate || entryDate(currentMonth, currentDay)} · {item.endTime || "24:00"}
+                    {" · 반복 "}
+                    {item.repeat}
+                  </span>
                 </div>
                 <div className="saved-schedule-actions">
-                  <button type="button" onClick={() => editSchedule(item)}>수정</button>
-                  <div className="saved-schedule-actions">
                   <button type="button" onClick={() => editSchedule(item)}>수정</button>
                   <button type="button" onClick={() => deleteSchedule(item.id)}>삭제</button>
                 </div>
               </div>
             ))}
+          </div>
           </div>
         </div>
       </section>
