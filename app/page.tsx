@@ -1798,6 +1798,15 @@ export default function HomePage() {
     setScheduleColor("yellow");
   }
 
+
+  function openScheduleEditorForItem(item: ScheduleItem, month: number, day: number) {
+    setCurrentMonth(month);
+    setCurrentDay(day);
+    editSchedule(item);
+    setView("schedule");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function deleteSchedule(scheduleId: string) {
     const k = key(currentMonth, currentDay);
     const nextForDay = (schedules[k] || []).filter(item => item.id !== scheduleId);
@@ -2265,9 +2274,18 @@ export default function HomePage() {
           {daySchedules.length > 0 && (
             <div className="schedule-chip-list">
               {daySchedules.slice(0, 3).map(item => (
-                <div className={`schedule-chip schedule-${item.color}`} key={`${item.id}-${day}`}>
+                <button
+                  type="button"
+                  className={`schedule-chip schedule-${item.color} schedule-chip-button`}
+                  key={`${item.id}-${day}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openScheduleEditorForItem(item, currentMonth, day);
+                  }}
+                  aria-label={`${item.title} 일정 수정`}
+                >
                   {item.startTime && <span>{item.startTime}</span>} {item.title}
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -2346,7 +2364,7 @@ export default function HomePage() {
   function DiaryView() {
     const k = key(currentMonth, currentDay);
     const dayPhotos = photos[k] || [];
-    const daySchedules = schedules[k] || [];
+    const daySchedules = getVisibleSchedulesForDay(schedules, currentMonth, currentDay);
     const diaryPhotoCountClass = `count-${Math.min(Math.max(dayPhotos.length, 1), 4)}`;
     return (
       <section>
@@ -2377,7 +2395,7 @@ export default function HomePage() {
                 {daySchedules.map(item => (
                   <div className="google-schedule-item app-schedule-item" key={item.id}>
                     <span className="google-schedule-time">{item.startTime || "시간 없음"}</span>
-                    <span className="google-schedule-title">캘린더 · {item.title}</span>
+                    <span className="google-schedule-title">입력 · {item.title}</span>
                   </div>
                 ))}
                 {googleSchedules.map((item, index) => (

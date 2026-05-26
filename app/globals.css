@@ -2879,3 +2879,21 @@ textarea {
     gap: 6px !important;
   }
 }
+
+/* schedule click edit and diary input label 2026-05-26 */
+.schedule-chip-button {
+  border: 0;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.schedule-chip-button:active {
+  transform: scale(0.99);
+}
+
+.schedule-chip-button:focus-visible {
+  outline: 2px solid rgba(83, 103, 94, 0.45);
+  outline-offset: 2px;
+}
