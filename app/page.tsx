@@ -41,35 +41,35 @@ type GoogleScheduleItem = {
   allDay?: boolean;
 };
 
-const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+const weekdays = ["??, "??, "??, "??, "�?, "�?, "??];
 const weekdayLabels = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const monthDays: Record<number, number> = { 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
 const scheduleColorLabels: Record<ScheduleColor, string> = {
-  yellow: "노란색",
-  blue: "파란색",
-  red: "빨간색",
-  green: "초록색",
-  lightGreen: "녹색",
-  orange: "주황색",
-  navy: "남색",
-  purple: "보라색",
+  yellow: "?��???,
+  blue: "?��???,
+  red: "빨간??,
+  green: "초록??,
+  lightGreen: "?�색",
+  orange: "주황??,
+  navy: "?�색",
+  purple: "보라??,
 };
 
 const holidays: Record<string, string> = {
-  "5-5": "어린이날",
-  "5-24": "부처님오신날",
-  "5-25": "대체공휴일",
-  "6-3": "지방선거",
-  "6-6": "현충일",
-  "8-15": "광복절",
-  "8-17": "대체공휴일",
+  "5-5": "?�린?�날",
+  "5-24": "부처님?�신??,
+  "5-25": "?�체공?�일",
+  "6-3": "지방선�?,
+  "6-6": "?�충??,
+  "8-15": "광복??,
+  "8-17": "?�체공?�일",
   "9-24": "추석",
   "9-25": "추석",
   "9-26": "추석",
-  "10-3": "개천절",
-  "10-5": "대체공휴일",
-  "10-9": "한글날",
-  "12-25": "성탄절",
+  "10-3": "개천??,
+  "10-5": "?�체공?�일",
+  "10-9": "?��???,
+  "12-25": "?�탄??,
 };
 
 function pad(n: number) {
@@ -85,7 +85,7 @@ function tag(month: number, day: number) {
 }
 
 function infoTag(month: number, day: number) {
-  return `#날짜(${pad(month)}/${pad(day)})#`;
+  return `#?�짜(${pad(month)}/${pad(day)})#`;
 }
 
 function memoWithDateTag(memo: string | undefined, month: number, day: number) {
@@ -152,7 +152,7 @@ function HyperlinkPreview({ text }: { text: string }) {
 
   return (
     <div className="auto-link-box">
-      <div className="auto-link-title">🔗 자동 생성 링크</div>
+      <div className="auto-link-title">?�� ?�동 ?�성 링크</div>
       <div className="auto-link-list">
         {urls.map(url => (
           <a key={url} href={normalizeUrlForHref(url)} target="_blank" rel="noreferrer" className="auto-link-item">
@@ -195,24 +195,24 @@ export default function HomePage() {
   const [scheduleTitle, setScheduleTitle] = useState("");
   const [scheduleStartTime, setScheduleStartTime] = useState("");
   const [scheduleEndDate, setScheduleEndDate] = useState("");
-  const [scheduleRepeat, setScheduleRepeat] = useState("없음");
+  const [scheduleRepeat, setScheduleRepeat] = useState("?�음");
   const [scheduleColor, setScheduleColor] = useState<ScheduleColor>("yellow");
   const [audioUrl, setAudioUrl] = useState("");
-  const [voiceStatus, setVoiceStatus] = useState("녹음 파일 없음");
+  const [voiceStatus, setVoiceStatus] = useState("?�음 ?�일 ?�음");
   const [lastAudioFile, setLastAudioFile] = useState<File | null>(null);
-  const [weather, setWeather] = useState("조회 중");
+  const [weather, setWeather] = useState("조회 �?);
   const [temp, setTemp] = useState("-");
   const [weatherTime, setWeatherTime] = useState("-");
-  const [weatherSource, setWeatherSource] = useState("기상청 연결 대기");
+  const [weatherSource, setWeatherSource] = useState("기상�??�결 ?��?);
   const [originalImageUrl, setOriginalImageUrl] = useState("");
   const [originalImageTarget, setOriginalImageTarget] = useState<OriginalImageTarget>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
   const [datePickerValue, setDatePickerValue] = useState(`2026-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [searchStatus, setSearchStatus] = useState("검색어를 입력하세요.");
+  const [searchStatus, setSearchStatus] = useState("검?�어�??�력?�세??");
   const [googleSchedules, setGoogleSchedules] = useState<GoogleScheduleItem[]>([]);
-  const [googleScheduleStatus, setGoogleScheduleStatus] = useState("구글 일정 대기");
+  const [googleScheduleStatus, setGoogleScheduleStatus] = useState("구�? ?�정 ?��?);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -253,14 +253,14 @@ export default function HomePage() {
     try {
       const text = await navigator.clipboard.readText();
       if (!text.trim()) {
-        alert("클립보드에 붙일 글이 없습니다.");
+        alert("?�립보드??붙일 글???�습?�다.");
         return;
       }
       const nextText = diaryText ? `${diaryText}\n${text}` : text;
       saveDiary(nextText, voiceText);
       requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
     } catch {
-      alert("브라우저에서 클립보드 읽기를 허용하지 않았습니다. 입력칸을 길게 눌러 붙여넣어 주세요.");
+      alert("브라?��??�서 ?�립보드 ?�기�??�용?��? ?�았?�니?? ?�력칸을 길게 ?�러 붙여?�어 주세??");
     }
   }
 
@@ -268,14 +268,14 @@ export default function HomePage() {
     try {
       const text = await navigator.clipboard.readText();
       if (!text.trim()) {
-        alert("클립보드에 붙일 글이 없습니다.");
+        alert("?�립보드??붙일 글???�습?�다.");
         return;
       }
       const nextText = infoText ? `${infoText}\n${text}` : text;
       saveInfo(nextText);
       requestAnimationFrame(() => resizeTextareaToContent(infoTextareaRef.current));
     } catch {
-      alert("브라우저에서 클립보드 읽기를 허용하지 않았습니다. 입력칸을 길게 눌러 붙여넣어 주세요.");
+      alert("브라?��??�서 ?�립보드 ?�기�??�용?��? ?�았?�니?? ?�력칸을 길게 ?�러 붙여?�어 주세??");
     }
   }
 
@@ -395,8 +395,8 @@ export default function HomePage() {
       nextCalendarPhotoIndexes[photoKey] = Number(row.sort_order || 0);
     });
 
-    // Supabase 사용 시 캘린더 대표사진도 서버값을 기준으로 맞춥니다.
-    // 예전 localStorage 대표사진이 남아서 기기마다 다르게 보이는 문제를 줄입니다.
+    // Supabase ?�용 ??캘린???�?�사진도 ?�버값을 기�??�로 맞춥?�다.
+    // ?�전 localStorage ?�?�사진이 ?�아??기기마다 ?�르�?보이??문제�?줄입?�다.
     setCalendarPhotos(nextCalendarPhotos);
     setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
     setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
@@ -462,17 +462,17 @@ export default function HomePage() {
 
     if (!keyword) {
       setSearchResults([]);
-      setSearchStatus("검색어를 입력하세요.");
+      setSearchStatus("검?�어�??�력?�세??");
       return;
     }
 
     if (!isSupabaseConfigured || !supabase) {
       setSearchResults([]);
-      setSearchStatus("Supabase 연결 후 검색할 수 있습니다.");
+      setSearchStatus("Supabase ?�결 ??검?�할 ???�습?�다.");
       return;
     }
 
-    setSearchStatus("검색 중...");
+    setSearchStatus("검??�?..");
     const pattern = `%${keyword}%`;
 
     const [diaryRes, infoRes, infoMemoRes] = await Promise.all([
@@ -497,7 +497,7 @@ export default function HomePage() {
     if (errors.length) {
       console.warn("Supabase search error:", errors.map(error => error?.message).join(" / "));
       setSearchResults([]);
-      setSearchStatus("검색 중 오류가 발생했습니다.");
+      setSearchStatus("검??�??�류가 발생?�습?�다.");
       return;
     }
 
@@ -512,7 +512,7 @@ export default function HomePage() {
         entryDate: row.entry_date,
         month: date.month,
         day: date.day,
-        text: text || "일기장 검색 결과",
+        text: text || "?�기??검??결과",
       });
     });
 
@@ -524,7 +524,7 @@ export default function HomePage() {
         entryDate: row.entry_date,
         month: date.month,
         day: date.day,
-        text: row.info_text || "정보보관소 검색 결과",
+        text: row.info_text || "?�보보�???검??결과",
       });
     });
 
@@ -536,7 +536,7 @@ export default function HomePage() {
         entryDate: row.entry_date,
         month: date.month,
         day: date.day,
-        text: row.caption || "정보보관소 사진 메모 검색 결과",
+        text: row.caption || "?�보보�????�진 메모 검??결과",
       });
     });
 
@@ -556,7 +556,7 @@ export default function HomePage() {
           entryDate: entryDate(month, day),
           month,
           day,
-          text: `캘린더 일정 · ${scheduleText}`,
+          text: `캘린???�정 · ${scheduleText}`,
         });
       });
     });
@@ -570,7 +570,7 @@ export default function HomePage() {
         entryDate: entryDate(currentMonth, currentDay),
         month: currentMonth,
         day: currentDay,
-        text: `구글 일정 · ${item.allDay ? "종일" : item.start || "시간 없음"} ${item.title}`,
+        text: `구�? ?�정 · ${item.allDay ? "종일" : item.start || "?�간 ?�음"} ${item.title}`,
       });
     });
 
@@ -582,11 +582,11 @@ export default function HomePage() {
 
     const results = Array.from(unique.values()).slice(0, 30);
     setSearchResults(results);
-    setSearchStatus(results.length ? `${results.length}개 검색 결과` : "검색 결과가 없습니다.");
+    setSearchStatus(results.length ? `${results.length}�?검??결과` : "검??결과가 ?�습?�다.");
   }
 
   async function loadGoogleSchedulesForDay(month: number, day: number) {
-    setGoogleScheduleStatus("구글 일정 조회 중");
+    setGoogleScheduleStatus("구�? ?�정 조회 �?);
     setGoogleSchedules([]);
 
     try {
@@ -599,11 +599,11 @@ export default function HomePage() {
 
       const items = Array.isArray(data.items) ? data.items : [];
       setGoogleSchedules(items);
-      setGoogleScheduleStatus(items.length ? `${items.length}개 일정` : "구글 일정 없음");
+      setGoogleScheduleStatus(items.length ? `${items.length}�??�정` : "구�? ?�정 ?�음");
     } catch (error) {
       console.warn("Google calendar load error:", error instanceof Error ? error.message : error);
       setGoogleSchedules([]);
-      setGoogleScheduleStatus("구글 일정 연결 필요");
+      setGoogleScheduleStatus("구�? ?�정 ?�결 ?�요");
     }
   }
 
@@ -631,8 +631,8 @@ export default function HomePage() {
     let isActive = true;
     const photoKey = key(currentMonth, currentDay);
 
-    // Supabase가 설정된 상태에서는 서버 데이터를 우선합니다.
-    // 예전 localStorage 데이터가 기기마다 달라서 아이폰/PC가 다르게 보이는 문제를 방지합니다.
+    // Supabase가 ?�정???�태?�서???�버 ?�이?��? ?�선?�니??
+    // ?�전 localStorage ?�이?��? 기기마다 ?�라???�이??PC가 ?�르�?보이??문제�?방�??�니??
     if (isSupabaseConfigured && supabase) {
       setDiaryText("");
       setVoiceText("");
@@ -651,10 +651,10 @@ export default function HomePage() {
         const rawWeather = localStorage.getItem(weatherStorageKey(currentMonth, currentDay));
         if (rawWeather) {
           const cachedWeather = JSON.parse(rawWeather);
-          setWeather(cachedWeather.weather || "확인 필요");
+          setWeather(cachedWeather.weather || "?�인 ?�요");
           setTemp(cachedWeather.temperature || "-");
           setWeatherTime(cachedWeather.observedAt || "-");
-          setWeatherSource(cachedWeather.source || "기상청");
+          setWeatherSource(cachedWeather.source || "기상�?);
         }
       } catch {
         setDiaryText("");
@@ -676,10 +676,10 @@ export default function HomePage() {
 
       const remoteWeather = remoteData?.weather;
       if (remoteWeather && typeof remoteWeather === "object") {
-        setWeather(remoteWeather.weather || "확인 필요");
+        setWeather(remoteWeather.weather || "?�인 ?�요");
         setTemp(remoteWeather.temperature || "-");
         setWeatherTime(remoteWeather.observedAt || "-");
-        setWeatherSource(remoteWeather.source || "기상청");
+        setWeatherSource(remoteWeather.source || "기상�?);
         localStorage.setItem(weatherStorageKey(currentMonth, currentDay), JSON.stringify(remoteWeather));
       }
     });
@@ -772,9 +772,9 @@ export default function HomePage() {
   }, [view, infoText, currentMonth, currentDay]);
 
   async function fetchWeatherFromKma() {
-    setWeather("조회 중");
+    setWeather("조회 �?);
     setTemp("-");
-    setWeatherSource("기상청 조회 중");
+    setWeatherSource("기상�?조회 �?);
 
     try {
       const response = await fetch("/api/weather", { cache: "no-store" });
@@ -785,26 +785,26 @@ export default function HomePage() {
       }
 
       const nextTemperature = data.temperature
-        ? String(data.temperature).includes("℃")
+        ? String(data.temperature).includes("??)
           ? String(data.temperature)
-          : `${data.temperature}℃`
+          : `${data.temperature}??
         : "-";
-      const nextWeather = data.weather || "확인 필요";
+      const nextWeather = data.weather || "?�인 ?�요";
       const nextObservedAt = data.observedAt || new Date().toLocaleString("ko-KR");
 
       setWeather(nextWeather);
       setTemp(nextTemperature);
       setWeatherTime(nextObservedAt);
-      const weatherSnapshot = { weather: nextWeather, temperature: nextTemperature, observedAt: nextObservedAt, source: "기상청" };
+      const weatherSnapshot = { weather: nextWeather, temperature: nextTemperature, observedAt: nextObservedAt, source: "기상�? };
 
-      setWeatherSource("기상청");
+      setWeatherSource("기상�?);
       localStorage.setItem(weatherStorageKey(currentMonth, currentDay), JSON.stringify(weatherSnapshot));
       saveWeatherToSupabase(currentMonth, currentDay, weatherSnapshot);
     } catch {
-      setWeather("기상청 연결 필요");
+      setWeather("기상�??�결 ?�요");
       setTemp("-");
       setWeatherTime(new Date().toLocaleString("ko-KR"));
-      setWeatherSource("KMA_SERVICE_KEY 필요");
+      setWeatherSource("KMA_SERVICE_KEY ?�요");
     }
   }
 
@@ -833,7 +833,7 @@ export default function HomePage() {
     setScheduleTitle("");
     setScheduleStartTime("");
     setScheduleEndDate(`2026-${pad(month)}-${pad(day)}`);
-    setScheduleRepeat("없음");
+    setScheduleRepeat("?�음");
     setScheduleColor("yellow");
     setView("schedule");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -855,7 +855,7 @@ export default function HomePage() {
     setRedDates(nextRedDates);
     setRedDateInput(uniqueDays.join(", "));
     localStorage.setItem("iphone-calendar-2026-red-dates", JSON.stringify(nextRedDates));
-    alert(uniqueDays.length ? `${currentMonth}월 ${uniqueDays.join(", ")}일을 빨간 날짜로 저장했습니다.` : `${currentMonth}월 빨간 날짜를 모두 해제했습니다.`);
+    alert(uniqueDays.length ? `${currentMonth}??${uniqueDays.join(", ")}?�을 빨간 ?�짜�??�?�했?�니??` : `${currentMonth}??빨간 ?�짜�?모두 ?�제?�습?�다.`);
     setView("calendar");
   }
 
@@ -890,14 +890,14 @@ export default function HomePage() {
     if (!datePickerMode) return;
     const match = datePickerValue.match(/^2026-(\d{2})-(\d{2})$/);
     if (!match) {
-      alert("2026년 5월~12월 날짜를 선택해 주세요.");
+      alert("2026??5??12???�짜�??�택??주세??");
       return;
     }
 
     const month = Number(match[1]);
     const day = Number(match[2]);
     if (month < 5 || month > 12 || day < 1 || day > monthDays[month]) {
-      alert("2026년 5월~12월 범위 안의 날짜를 선택해 주세요.");
+      alert("2026??5??12??범위 ?�의 ?�짜�??�택??주세??");
       return;
     }
 
@@ -931,7 +931,7 @@ export default function HomePage() {
     return new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(new Error("이미지 파일을 읽지 못했습니다."));
+      reader.onerror = () => reject(new Error("?��?지 ?�일???��? 못했?�니??"));
       reader.readAsDataURL(file);
     });
   }
@@ -940,7 +940,7 @@ export default function HomePage() {
     return new Promise<HTMLImageElement>((resolve, reject) => {
       const image = new Image();
       image.onload = () => resolve(image);
-      image.onerror = () => reject(new Error("이미지를 불러오지 못했습니다."));
+      image.onerror = () => reject(new Error("?��?지�?불러?��? 못했?�니??"));
       image.src = dataUrl;
     });
   }
@@ -981,7 +981,7 @@ export default function HomePage() {
       localStorage.setItem(storageName, value);
       return true;
     } catch {
-      alert("사진 저장 공간이 부족합니다. 사진 수를 줄이거나 기존 사진을 삭제한 뒤 다시 시도해 주세요.");
+      alert("?�진 ?�??공간??부족합?�다. ?�진 ?��? 줄이거나 기존 ?�진????��?????�시 ?�도??주세??");
       return false;
     }
   }
@@ -1131,7 +1131,7 @@ export default function HomePage() {
     try {
       const clipboard = navigator.clipboard as Clipboard & { read?: () => Promise<ClipboardItem[]> };
       if (!clipboard.read) {
-        alert("이 브라우저에서는 이미지 붙여넣기를 지원하지 않습니다. 사진 가져오기를 사용해 주세요.");
+        alert("??브라?��??�서???��?지 붙여?�기�?지?�하지 ?�습?�다. ?�진 가?�오기�? ?�용??주세??");
         return;
       }
 
@@ -1146,13 +1146,13 @@ export default function HomePage() {
       }
 
       if (!files.length) {
-        alert("클립보드에 붙여넣을 이미지가 없습니다.");
+        alert("?�립보드??붙여?�을 ?��?지가 ?�습?�다.");
         return;
       }
 
       await saveInfoPhotoFiles(files);
     } catch {
-      alert("아이폰 Safari에서는 이미지 붙여넣기가 제한될 수 있습니다. 사진 가져오기를 사용해 주세요.");
+      alert("?�이??Safari?�서???��?지 붙여?�기가 ?�한?????�습?�다. ?�진 가?�오기�? ?�용??주세??");
     }
   }
 
@@ -1482,7 +1482,7 @@ export default function HomePage() {
   function addSchedule() {
     const trimmedTitle = scheduleTitle.trim();
     if (!trimmedTitle) {
-      alert("일정 제목을 입력해 주세요.");
+      alert("?�정 ?�목???�력??주세??");
       return;
     }
 
@@ -1499,8 +1499,8 @@ export default function HomePage() {
     saveSchedules(nextSchedules);
     setScheduleTitle("");
     setScheduleStartTime("");
-    setScheduleRepeat("없음");
-    alert("일정이 저장되었습니다.");
+    setScheduleRepeat("?�음");
+    alert("?�정???�?�되?�습?�다.");
   }
 
   function deleteSchedule(scheduleId: string) {
@@ -1602,7 +1602,7 @@ export default function HomePage() {
       if (setError) console.warn("Supabase calendar photo set error:", setError.message);
     }
 
-    alert("선택한 사진을 월간 캘린더에 붙였습니다.");
+    alert("?�택???�진???�간 캘린?�에 붙�??�니??");
   }
 
   function openCalendarPhotoOriginal(k: string) {
@@ -1668,7 +1668,7 @@ export default function HomePage() {
   async function deleteOriginalDiaryPhoto() {
     if (!originalImageTarget) return;
     const itemNumber = originalImageTarget.index + 1;
-    if (!window.confirm(`${itemNumber}번째 사진을 삭제할까요?`)) return;
+    if (!window.confirm(`${itemNumber}번째 ?�진????��?�까??`)) return;
     await deletePhoto(originalImageTarget.photoKey, originalImageTarget.index);
     closeOriginalImage();
   }
@@ -1677,16 +1677,16 @@ export default function HomePage() {
   function getDiaryPhotoIndexFromUser(k: string, actionName: string) {
     const items = photos[k] || [];
     if (!items.length) {
-      alert("선택할 사진이 없습니다.");
+      alert("?�택???�진???�습?�다.");
       return null;
     }
 
-    const input = window.prompt(`${actionName}할 사진 번호를 입력하세요. (1~${items.length})`);
+    const input = window.prompt(`${actionName}???�진 번호�??�력?�세?? (1~${items.length})`);
     if (!input) return null;
 
     const index = Number(input.trim()) - 1;
     if (!Number.isInteger(index) || index < 0 || index >= items.length) {
-      alert("사진 번호가 올바르지 않습니다.");
+      alert("?�진 번호가 ?�바르�? ?�습?�다.");
       return null;
     }
 
@@ -1694,15 +1694,15 @@ export default function HomePage() {
   }
 
   async function attachDiaryPhotoToCalendar(k: string) {
-    const index = getDiaryPhotoIndexFromUser(k, "캘린더에 붙이기");
+    const index = getDiaryPhotoIndexFromUser(k, "캘린?�에 붙이�?);
     if (index === null) return;
     await setCalendarPhoto(k, index);
   }
 
   async function deleteDiaryPhotoBySelect(k: string) {
-    const index = getDiaryPhotoIndexFromUser(k, "삭제");
+    const index = getDiaryPhotoIndexFromUser(k, "??��");
     if (index === null) return;
-    if (!window.confirm(`${index + 1}번 사진을 삭제할까요?`)) return;
+    if (!window.confirm(`${index + 1}�??�진????��?�까??`)) return;
     await deletePhoto(k, index);
   }
 
@@ -1710,7 +1710,7 @@ export default function HomePage() {
     try {
       const clipboard = navigator.clipboard as Clipboard & { read?: () => Promise<ClipboardItem[]> };
       if (!clipboard.read) {
-        alert("이 브라우저에서는 이미지 붙여넣기를 지원하지 않습니다. 사진 가져오기를 사용해 주세요.");
+        alert("??브라?��??�서???��?지 붙여?�기�?지?�하지 ?�습?�다. ?�진 가?�오기�? ?�용??주세??");
         return;
       }
 
@@ -1725,13 +1725,13 @@ export default function HomePage() {
       }
 
       if (!files.length) {
-        alert("클립보드에 붙여넣을 이미지가 없습니다.");
+        alert("?�립보드??붙여?�을 ?��?지가 ?�습?�다.");
         return;
       }
 
       await savePhotoFiles(files);
     } catch {
-      alert("아이폰 Safari에서는 이미지 붙여넣기가 제한될 수 있습니다. 복사한 이미지가 붙지 않으면 사진 가져오기를 사용해 주세요.");
+      alert("?�이??Safari?�서???��?지 붙여?�기가 ?�한?????�습?�다. 복사???��?지가 붙�? ?�으�??�진 가?�오기�? ?�용??주세??");
     }
   }
 
@@ -1765,14 +1765,14 @@ export default function HomePage() {
 
   async function startRecording() {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      alert("현재 브라우저에서는 웹앱 직접 녹음이 지원되지 않습니다. 아이폰의 음성메모 앱으로 녹음한 뒤 '음성파일 가져오기'를 사용해 주세요.");
-      setVoiceStatus("직접 녹음 미지원 - 음성파일 가져오기 사용");
+      alert("?�재 브라?��??�서???�앱 직접 ?�음??지?�되지 ?�습?�다. ?�이?�의 ?�성메모 ?�으�??�음????'?�성?�일 가?�오�?�??�용??주세??");
+      setVoiceStatus("직접 ?�음 미�???- ?�성?�일 가?�오�??�용");
       return;
     }
 
     const currentRecorder = mediaRecorderRef.current;
     if (currentRecorder && currentRecorder.state === "recording") {
-      setVoiceStatus("이미 녹음 중...");
+      setVoiceStatus("?��? ?�음 �?..");
       return;
     }
 
@@ -1782,7 +1782,7 @@ export default function HomePage() {
       if (audioUrl) URL.revokeObjectURL(audioUrl);
       setAudioUrl("");
       setLastAudioFile(null);
-      setVoiceStatus("녹음 중...");
+      setVoiceStatus("?�음 �?..");
 
       const mimeType = getSupportedAudioMimeType();
       const options = mimeType ? { mimeType } : undefined;
@@ -1795,15 +1795,15 @@ export default function HomePage() {
 
       mediaRecorder.onerror = () => {
         stream.getTracks().forEach(track => track.stop());
-        setVoiceStatus("녹음 오류 - 음성파일 가져오기 권장");
-        alert("아이폰 Safari에서 직접 녹음 오류가 발생했습니다. 음성메모 앱으로 녹음한 뒤 '음성파일 가져오기'를 사용해 주세요.");
+        setVoiceStatus("?�음 ?�류 - ?�성?�일 가?�오�?권장");
+        alert("?�이??Safari?�서 직접 ?�음 ?�류가 발생?�습?�다. ?�성메모 ?�으�??�음????'?�성?�일 가?�오�?�??�용??주세??");
       };
 
       mediaRecorder.onstop = () => {
         stream.getTracks().forEach(track => track.stop());
 
         if (!audioChunksRef.current.length) {
-          setVoiceStatus("녹음 데이터 없음 - 다시 시도");
+          setVoiceStatus("?�음 ?�이???�음 - ?�시 ?�도");
           return;
         }
 
@@ -1813,31 +1813,31 @@ export default function HomePage() {
         const file = new File([blob], `diary_voice_${pad(currentMonth)}_${pad(currentDay)}.${ext}`, { type: finalType });
         setLastAudioFile(file);
         setAudioUrl(URL.createObjectURL(blob));
-        setVoiceStatus(`${tag(currentMonth, currentDay)} 녹음 완료`);
+        setVoiceStatus(`${tag(currentMonth, currentDay)} ?�음 ?�료`);
       };
 
       mediaRecorder.start(1000);
     } catch (error) {
       const message = error instanceof Error ? error.name : "UnknownError";
-      alert(`마이크 권한 또는 브라우저 녹음 오류입니다. (${message})
-아이폰 설정에서 Safari 마이크 권한을 확인하거나, 음성메모 앱으로 녹음 후 '음성파일 가져오기'를 사용해 주세요.`);
-      setVoiceStatus("마이크 권한/녹음 오류");
+      alert(`마이??권한 ?�는 브라?��? ?�음 ?�류?�니?? (${message})
+?�이???�정?�서 Safari 마이??권한???�인?�거?? ?�성메모 ?�으�??�음 ??'?�성?�일 가?�오�?�??�용??주세??`);
+      setVoiceStatus("마이??권한/?�음 ?�류");
     }
   }
 
   function stopRecording() {
     const recorder = mediaRecorderRef.current;
     if (!recorder || recorder.state === "inactive") {
-      setVoiceStatus(lastAudioFile ? "녹음 완료" : "녹음 중 아님");
+      setVoiceStatus(lastAudioFile ? "?�음 ?�료" : "?�음 �??�님");
       return;
     }
 
     try {
       if (recorder.state === "recording") recorder.requestData();
       recorder.stop();
-      setVoiceStatus("녹음 정리 중...");
+      setVoiceStatus("?�음 ?�리 �?..");
     } catch {
-      setVoiceStatus("녹음 정지 오류");
+      setVoiceStatus("?�음 ?��? ?�류");
     }
   }
 
@@ -1847,7 +1847,7 @@ export default function HomePage() {
 
     const supportedAudio = /\.(m4a|mp3|mp4|aac|webm)$/i.test(file.name) || ["audio/mp4", "audio/x-m4a", "audio/mpeg", "audio/mp3", "audio/aac", "audio/webm"].includes(file.type);
     if (!supportedAudio) {
-      alert("m4a, mp3 형식의 음성파일을 권장합니다. 이 파일은 일부 기기에서 재생되지 않을 수 있습니다.");
+      alert("m4a, mp3 ?�식???�성?�일??권장?�니?? ???�일?� ?��? 기기?�서 ?�생?��? ?�을 ???�습?�다.");
     }
 
     if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -1855,13 +1855,13 @@ export default function HomePage() {
     const url = URL.createObjectURL(normalizedFile);
     setLastAudioFile(normalizedFile);
     setAudioUrl(url);
-    setVoiceStatus(`${tag(currentMonth, currentDay)} ${normalizedFile.name} 가져옴`);
+    setVoiceStatus(`${tag(currentMonth, currentDay)} ${normalizedFile.name} 가?�옴`);
     event.target.value = "";
   }
 
   function saveVoiceMemoFile() {
     if (!lastAudioFile) {
-      alert("저장할 음성 파일이 없습니다. 먼저 녹음하거나 음성파일을 가져와 주세요.");
+      alert("?�?�할 ?�성 ?�일???�습?�다. 먼�? ?�음?�거???�성?�일??가?��? 주세??");
       return;
     }
 
@@ -1873,12 +1873,12 @@ export default function HomePage() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    setVoiceStatus("음성 파일 저장 실행");
+    setVoiceStatus("?�성 ?�일 ?�???�행");
   }
 
   function deleteVoiceMemo() {
     if (!audioUrl && !lastAudioFile) {
-      alert("삭제할 녹음 파일이 없습니다.");
+      alert("??��???�음 ?�일???�습?�다.");
       return;
     }
 
@@ -1888,30 +1888,30 @@ export default function HomePage() {
     setAudioUrl("");
     setLastAudioFile(null);
     audioChunksRef.current = [];
-    setVoiceStatus("녹음 파일 삭제됨");
+    setVoiceStatus("?�음 ?�일 ??��??);
   }
 
   async function shareVoiceMemoToIphoneMemo() {
     if (!lastAudioFile) {
-      alert("먼저 음성 메모를 녹음해 주세요.");
+      alert("먼�? ?�성 메모�??�음??주세??");
       return;
     }
 
-    const memoText = `${tag(currentMonth, currentDay)} 2026. ${pad(currentMonth)}. ${pad(currentDay)} (${getWeekday(currentMonth, currentDay)})\n\n음성 메모 파일을 첨부합니다.\n\n받아쓰기 정리:\n${voiceText || ""}`;
+    const memoText = `${tag(currentMonth, currentDay)} 2026. ${pad(currentMonth)}. ${pad(currentDay)} (${getWeekday(currentMonth, currentDay)})\n\n?�성 메모 ?�일??첨�??�니??\n\n받아?�기 ?�리:\n${voiceText || ""}`;
     const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
 
     if (nav.canShare?.({ files: [lastAudioFile] }) && navigator.share) {
       try {
-        await navigator.share({ title: `${tag(currentMonth, currentDay)} 음성 메모`, text: memoText, files: [lastAudioFile] });
-        setVoiceStatus("공유창 열림 - 메모 선택");
+        await navigator.share({ title: `${tag(currentMonth, currentDay)} ?�성 메모`, text: memoText, files: [lastAudioFile] });
+        setVoiceStatus("공유�??�림 - 메모 ?�택");
       } catch {
-        setVoiceStatus("공유 취소 또는 실패");
+        setVoiceStatus("공유 취소 ?�는 ?�패");
       }
       return;
     }
 
     saveVoiceMemoFile();
-    setVoiceStatus("공유 미지원 - 파일 저장 실행");
+    setVoiceStatus("공유 미�???- ?�일 ?�???�행");
   }
 
   function CalendarView() {
@@ -1932,7 +1932,7 @@ export default function HomePage() {
             type="button"
             className="day-hit"
             onClick={() => openDiary(currentMonth, day)}
-            aria-label={`${currentMonth}월 ${day}일 일기장으로 이동`}
+            aria-label={`${currentMonth}??${day}???�기?�으�??�동`}
           />
           <div className="day-top">
             <span className={`num ${redMarked ? "num-red" : ""} ${isToday ? "today-num" : ""}`}>{day}</span>
@@ -1947,9 +1947,9 @@ export default function HomePage() {
                   event.stopPropagation();
                   openCalendarPhotoOriginal(k);
                 }}
-                aria-label={`${currentMonth}월 ${day}일 대표 사진 원본 보기`}
+                aria-label={`${currentMonth}??${day}???�???�진 ?�본 보기`}
               >
-                <img src={calendarPhotos[k]} alt="캘린더 대표 사진" />
+                <img src={calendarPhotos[k]} alt="캘린???�???�진" />
               </button>
             ) : null}
           </div>
@@ -1976,23 +1976,22 @@ export default function HomePage() {
               className={`month-tab ${month === currentMonth ? "active" : ""}`}
               onClick={() => openCalendar(month)}
             >
-              {month}월
-            </button>
+              {month}??            </button>
           ))}
         </div>
 
         <div className="section-title calendar-headline">
           <h1 className="calendar-title-line">
-            <span className="main-title">2026년 아이폰 캘린더</span>
-            <button type="button" className="month-badge month-diary-link" onClick={() => openDiary(currentMonth, currentDay)} aria-label="선택 날짜 일기장으로 이동">{currentMonth}월</button>
+            <span className="main-title">2026???�이??캘린??/span>
+            <button type="button" className="month-badge month-diary-link" onClick={() => openDiary(currentMonth, currentDay)} aria-label="?�택 ?�짜 ?�기?�으�??�동">{currentMonth}??/button>
           </h1>
           <div className="head-actions calendar-top-actions">
-            <button type="button" className="today-circle" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
-            <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
-            <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
-            <button type="button" className="mini-btn info calendar-info-top-btn" onClick={() => openInfo(currentMonth, currentDay)} aria-label="선택 날짜 정보보관소로 이동">I</button>
-            <button type="button" className="pill-btn compact-pill" onClick={() => openDatePicker("diary")}>일기장</button>
-            <button type="button" className="pill-btn compact-pill" onClick={() => openDatePicker("info")}>정보보관소</button>
+            <button type="button" className="today-circle" onClick={openTodayDiary} aria-label="?�늘 ?�짜 ?�기?�으�??�동">{todayDefault.day}</button>
+            <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 ?�짜 ?�시">+</button>
+            <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="?�정 추�?">+</button>
+            <button type="button" className="mini-btn info calendar-info-top-btn" onClick={() => openInfo(currentMonth, currentDay)} aria-label="?�택 ?�짜 ?�보보�??�로 ?�동">I</button>
+            <button type="button" className="pill-btn compact-pill" onClick={() => openDatePicker("diary")}>?�기??/button>
+            <button type="button" className="pill-btn compact-pill" onClick={() => openDatePicker("info")}>?�보보�???/button>
           </div>
         </div>
 
@@ -2003,9 +2002,9 @@ export default function HomePage() {
               value={searchKeyword}
               onChange={e => setSearchKeyword(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") void searchDiaryAndInfo(); }}
-              placeholder="일기장/정보보관소 검색어 입력"
+              placeholder="?�기???�보보�???검?�어 ?�력"
             />
-            <button type="button" className="soft-btn" onClick={() => void searchDiaryAndInfo()}>검색</button>
+            <button type="button" className="soft-btn" onClick={() => void searchDiaryAndInfo()}>검??/button>
           </div>
           <div className="calendar-search-status">{searchStatus}</div>
           {searchResults.length > 0 && (
@@ -2017,7 +2016,7 @@ export default function HomePage() {
                   className="calendar-search-result"
                   onClick={() => result.type === "diary" ? openDiary(result.month, result.day) : openInfo(result.month, result.day)}
                 >
-                  <strong>{result.type === "diary" ? "일기장" : "정보보관소"} · {pad(result.month)}/{pad(result.day)}</strong>
+                  <strong>{result.type === "diary" ? "?�기?? : "?�보보�???} · {pad(result.month)}/{pad(result.day)}</strong>
                   <span>{result.text.length > 70 ? `${result.text.slice(0, 70)}...` : result.text}</span>
                 </button>
               ))}
@@ -2043,62 +2042,61 @@ export default function HomePage() {
         <div className="diary-head">
           <h1>2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</h1>
           <div className="head-actions diary-actions">
-            <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
-            <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
+            <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>?�� 캘린??/button>
+            <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>?�� ?�보 ?�동</button>
           </div>
         </div>
 
         <div className="diary-top-row">
           <div className="weather-line diary-weather-line">
-            <span>🏠 집</span>
-            <span>☀️ {weather}</span>
-            <span>🌡 {temp}</span>
-            <span className="weather-time-inline">🕒 {weatherTime}</span>
+            <span>?�� �?/span>
+            <span>?��?{weather}</span>
+            <span>?�� {temp}</span>
+            <span className="weather-time-inline">?�� {weatherTime}</span>
             <button type="button" className="weather-refresh-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
           </div>
           <div className="google-schedule-box diary-schedule-box">
             <div className="google-schedule-head">
-              <strong>일정</strong>
-              <button type="button" className="google-refresh-btn" onClick={() => void loadGoogleSchedulesForDay(currentMonth, currentDay)}>구글 새로고침</button>
-              <span>{daySchedules.length + googleSchedules.length}개 일정</span>
+              <strong>?�정</strong>
+              <button type="button" className="google-refresh-btn" onClick={() => void loadGoogleSchedulesForDay(currentMonth, currentDay)}>구�? ?�로고침</button>
+              <span>{daySchedules.length + googleSchedules.length}�??�정</span>
             </div>
             {(daySchedules.length > 0 || googleSchedules.length > 0) ? (
               <div className="google-schedule-list">
                 {daySchedules.map(item => (
                   <div className="google-schedule-item app-schedule-item" key={item.id}>
-                    <span className="google-schedule-time">{item.startTime || "시간 없음"}</span>
-                    <span className="google-schedule-title">캘린더 · {item.title}</span>
+                    <span className="google-schedule-time">{item.startTime || "?�간 ?�음"}</span>
+                    <span className="google-schedule-title">캘린??· {item.title}</span>
                   </div>
                 ))}
                 {googleSchedules.map((item, index) => (
                   <div className="google-schedule-item" key={`${item.title}-${index}`}>
-                    <span className="google-schedule-time">{item.allDay ? "종일" : item.start || "시간 없음"}</span>
-                    <span className="google-schedule-title">구글 · {item.title}</span>
+                    <span className="google-schedule-time">{item.allDay ? "종일" : item.start || "?�간 ?�음"}</span>
+                    <span className="google-schedule-title">구�? · {item.title}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="google-schedule-empty">저장된 일정이 없습니다.</div>
+              <div className="google-schedule-empty">?�?�된 ?�정???�습?�다.</div>
             )}
           </div>
           <div className="button-row diary-photo-import-row">
             <label className="soft-btn compact-photo-btn">
-              📷 사진찍기
+              ?�� ?�진찍기
               <input className="hidden-input" type="file" accept="image/*" capture="environment" multiple onChange={addPhotos} />
             </label>
             <label className="soft-btn compact-photo-btn">
-              🖼 사진 가져오기
-              <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
+              ?�� ?�진 가?�오�?              <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
             </label>
-            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 붙여넣기</button>
-            <button type="button" className="soft-btn compact-photo-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린더 붙이기</button>
-            <button type="button" className="soft-btn compact-photo-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>삭제</button>
+            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>?�� 붙여?�기</button>
+            <button type="button" className="soft-btn compact-photo-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린??붙이�?/button>
+            <button type="button" className="soft-btn compact-photo-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>??��</button>
           </div>
         </div>
 
         <div className="text-paste-row">
-          <button type="button" className="soft-btn text-paste-btn" onClick={pasteCopiedTextToDiary}>복사한 글 붙이기</button>
-          <span className="text-paste-help">문자·카톡·메모에서 복사한 글을 일기장 본문에 붙이고 바로 저장합니다.</span>
+          <button type="button" className="soft-btn text-paste-btn" onClick={pasteCopiedTextToDiary}>복사??글 붙이�?/button>
+          <span className="text-paste-help">문자·카톡·메모?�서 복사??글???�기??본문??붙이�?바로 ?�?�합?�다.</span>
         </div>
         <textarea
           ref={diaryTextareaRef}
@@ -2107,12 +2105,12 @@ export default function HomePage() {
           onInput={e => resizeTextareaToContent(e.currentTarget)}
           onPaste={handleDiaryTextPaste}
           onChange={e => saveDiary(e.target.value, voiceText)}
-          placeholder="오늘의 기록을 남겨보세요...."
+          placeholder="?�늘??기록???�겨보세??..."
         />
         <HyperlinkPreview text={diaryText} />
 
         <div className="diary-photo-section" onPaste={handlePhotoPaste} tabIndex={0}>
-          {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
+          {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">?�진??찍거??가?�오�??�기???�?�됩?�다.<br />?�이?�에??붙여?�기가 ???�면 ?�진 가?�오기�? ?�용?�세??</div>}
           <div className={`diary-photo-grid-safe diary-photo-gallery ${diaryPhotoCountClass}`}>
             {dayPhotos.map((photo, index) => (
               <div
@@ -2123,9 +2121,9 @@ export default function HomePage() {
                   type="button"
                   className="diary-photo-open-btn"
                   onClick={() => openDiaryOriginalPhoto(k, index)}
-                  aria-label="일기 사진 원본 크게 보기"
+                  aria-label="?�기 ?�진 ?�본 ?�게 보기"
                 >
-                  <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
+                  <img src={photo.url} alt={`?�기 ?�진 ${index + 1}`} />
                 </button>
               </div>
             ))}
@@ -2134,22 +2132,21 @@ export default function HomePage() {
 
         <div className="box voice-box">
           <div className="box-head compact-box-head voice-head-safe">
-            <h3>음성 메모 / 받아쓰기</h3>
+            <h3>?�성 메모 / 받아?�기</h3>
             <div className="button-row voice-main-actions">
-              <button type="button" className="soft-btn" onClick={startRecording}>🎙 녹음 시작</button>
-              <button type="button" className="soft-btn" onClick={stopRecording}>⏹ 녹음 정지</button>
-              <button type="button" className="soft-btn delete-btn" onClick={deleteVoiceMemo}>🗑 녹음 삭제</button>
-              <button type="button" className="soft-btn" onClick={saveVoiceMemoFile}>💾 파일 저장</button>
-              <button type="button" className="soft-btn" onClick={shareVoiceMemoToIphoneMemo}>📝 아이폰 메모로 보내기</button>
+              <button type="button" className="soft-btn" onClick={startRecording}>?�� ?�음 ?�작</button>
+              <button type="button" className="soft-btn" onClick={stopRecording}>???�음 ?��?</button>
+              <button type="button" className="soft-btn delete-btn" onClick={deleteVoiceMemo}>?�� ?�음 ??��</button>
+              <button type="button" className="soft-btn" onClick={saveVoiceMemoFile}>?�� ?�일 ?�??/button>
+              <button type="button" className="soft-btn" onClick={shareVoiceMemoToIphoneMemo}>?�� ?�이??메모�?보내�?/button>
               <label className="soft-btn">
-                🎧 음성파일 가져오기
-                <input className="hidden-input" type="file" accept="audio/m4a,audio/mp4,audio/mpeg,audio/mp3,.m4a,.mp3,.mp4,.aac,.webm" onChange={importVoiceFile} />
+                ?�� ?�성?�일 가?�오�?                <input className="hidden-input" type="file" accept="audio/m4a,audio/mp4,audio/mpeg,audio/mp3,.m4a,.mp3,.mp4,.aac,.webm" onChange={importVoiceFile} />
               </label>
               <span className="voice-status">{voiceStatus}</span>
             </div>
           </div>
           {audioUrl && <audio src={audioUrl} controls style={{ width: "100%", marginTop: 12 }} />}
-          <textarea value={voiceText} onChange={e => saveDiary(diaryText, e.target.value)} style={{ minHeight: 140, marginTop: 12 }} placeholder="음성 받아쓰기 또는 녹음 내용을 정리해 보세요." />
+          <textarea value={voiceText} onChange={e => saveDiary(diaryText, e.target.value)} style={{ minHeight: 140, marginTop: 12 }} placeholder="?�성 받아?�기 ?�는 ?�음 ?�용???�리??보세??" />
         </div>
       </section>
     );
@@ -2163,30 +2160,30 @@ export default function HomePage() {
       <section>
         <div className="schedule-page box">
           <div className="schedule-head">
-            <h2>+ 일정 기록 ({pad(currentMonth)}.{pad(currentDay)})</h2>
+            <h2>+ ?�정 기록 ({pad(currentMonth)}.{pad(currentDay)})</h2>
             <div className="head-actions schedule-actions">
-              <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
-              <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
+              <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>?�� 캘린??/button>
+              <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>?�️ ?�기</button>
             </div>
           </div>
 
           <div className="schedule-form">
             <label>
-              <span>제목</span>
-              <input value={scheduleTitle} onChange={e => setScheduleTitle(e.target.value)} placeholder="일정 제목" />
+              <span>?�목</span>
+              <input value={scheduleTitle} onChange={e => setScheduleTitle(e.target.value)} placeholder="?�정 ?�목" />
             </label>
             <label>
-              <span>시작시간</span>
+              <span>?�작?�간</span>
               <input type="time" value={scheduleStartTime} onChange={e => setScheduleStartTime(e.target.value)} />
             </label>
             <label>
-              <span>종료일</span>
+              <span>종료??/span>
               <input type="date" value={scheduleEndDate} onChange={e => setScheduleEndDate(e.target.value)} />
             </label>
             <label>
               <span>반복</span>
               <select value={scheduleRepeat} onChange={e => setScheduleRepeat(e.target.value)}>
-                <option>없음</option>
+                <option>?�음</option>
                 <option>매일</option>
                 <option>매주</option>
                 <option>매월</option>
@@ -2196,7 +2193,7 @@ export default function HomePage() {
           </div>
 
           <div className="color-picker">
-            <span>색깔 선택</span>
+            <span>?�깔 ?�택</span>
             <div className="color-options">
               {(Object.keys(scheduleColorLabels) as ScheduleColor[]).map(color => (
                 <button
@@ -2211,18 +2208,18 @@ export default function HomePage() {
             </div>
           </div>
 
-          <button type="button" className="save-schedule-btn" onClick={addSchedule}>일정 저장</button>
+          <button type="button" className="save-schedule-btn" onClick={addSchedule}>?�정 ?�??/button>
 
           <div className="saved-schedules">
-            <h3>저장된 일정</h3>
-            {daySchedules.length === 0 && <p className="muted">아직 저장된 일정이 없습니다.</p>}
+            <h3>?�?�된 ?�정</h3>
+            {daySchedules.length === 0 && <p className="muted">?�직 ?�?�된 ?�정???�습?�다.</p>}
             {daySchedules.map(item => (
               <div className={`saved-schedule schedule-${item.color}`} key={item.id}>
                 <div>
                   <strong>{item.title}</strong>
-                  <span>{item.startTime || "시간 없음"} · 종료일 {item.endDate || "미지정"} · 반복 {item.repeat}</span>
+                  <span>{item.startTime || "?�간 ?�음"} · 종료??{item.endDate || "미�???} · 반복 {item.repeat}</span>
                 </div>
-                <button type="button" onClick={() => deleteSchedule(item.id)}>삭제</button>
+                <button type="button" onClick={() => deleteSchedule(item.id)}>??��</button>
               </div>
             ))}
           </div>
@@ -2236,19 +2233,19 @@ export default function HomePage() {
       <section>
         <div className="box red-date-page">
           <div className="schedule-head">
-            <h2>빨간 날짜 표시 ({currentMonth}월)</h2>
-            <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
+            <h2>빨간 ?�짜 ?�시 ({currentMonth}??</h2>
+            <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>?�� 캘린??/button>
           </div>
-          <p className="muted">빨간색으로 표시할 날짜를 쉼표로 여러 개 입력하세요. 예: 6, 25, 30</p>
+          <p className="muted">빨간?�으�??�시???�짜�??�표�??�러 �??�력?�세?? ?? 6, 25, 30</p>
           <input
             className="red-date-input"
             value={redDateInput}
             onChange={e => setRedDateInput(e.target.value)}
-            placeholder="예: 6, 25"
+            placeholder="?? 6, 25"
             inputMode="text"
             autoComplete="off"
           />
-          <button type="button" className="save-schedule-btn" onClick={saveRedDateInput}>빨간 날짜 저장</button>
+          <button type="button" className="save-schedule-btn" onClick={saveRedDateInput}>빨간 ?�짜 ?�??/button>
         </div>
       </section>
     );
@@ -2263,22 +2260,21 @@ export default function HomePage() {
       <section>
         <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }} onPaste={handleInfoPhotoPaste} tabIndex={0}>
           <div className="info-head">
-            <h2 className="info-title">📂 주요 정보 보관소</h2>
+            <h2 className="info-title">?�� 주요 ?�보 보�???/h2>
             <div className="info-sub-date">2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</div>
             <div className="info-nav-row">
-              <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 월간 캘린더</button>
-              <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
-              <button type="button" className="today-circle info-date-circle" onClick={() => openDatePicker("info")} aria-label="정보보관소 날짜 선택">{currentDay}</button>
+              <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>?�� ?�간 캘린??/button>
+              <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>?�️ ?�기</button>
+              <button type="button" className="today-circle info-date-circle" onClick={() => openDatePicker("info")} aria-label="?�보보�????�짜 ?�택">{currentDay}</button>
               <label className="soft-btn info-action-btn">
-                🖼 사진 가져오기
-                <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
+                ?�� ?�진 가?�오�?                <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
               </label>
-              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
+              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>?�� 붙여?�기</button>
             </div>
           </div>
           <div className="text-paste-row info-text-paste-row">
-            <button type="button" className="soft-btn text-paste-btn" onClick={pasteCopiedTextToInfo}>복사한 글 붙이기</button>
-            <span className="text-paste-help">문자·카톡·웹페이지에서 복사한 글을 정보보관소 본문에 붙이고 바로 저장합니다.</span>
+            <button type="button" className="soft-btn text-paste-btn" onClick={pasteCopiedTextToInfo}>복사??글 붙이�?/button>
+            <span className="text-paste-help">문자·카톡·?�페?��??�서 복사??글???�보보�???본문??붙이�?바로 ?�?�합?�다.</span>
           </div>
           <textarea
             ref={infoTextareaRef}
@@ -2287,11 +2283,11 @@ export default function HomePage() {
             onInput={e => resizeTextareaToContent(e.currentTarget)}
             onPaste={handleInfoTextPaste}
             onChange={e => saveInfo(e.target.value)}
-            placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요."
+            placeholder="?�늘??중요???�크?? ?�보, ?�정, 링크, 메모�?기록?�세??"
           />
           <HyperlinkPreview text={infoText} />
 
-          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 이곳에 정리됩니다.</div>}
+          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">?��?지�?붙여?�거???�진??가?�오�??�곳???�리?�니??</div>}
           <div className={`info-photo-grid-safe ${infoPhotoCountClass}`}>
             {dayInfoPhotos.map((photo, index) => (
               <div className="info-photo-card-safe" key={`${photo.name}-${index}`}>
@@ -2299,9 +2295,9 @@ export default function HomePage() {
                   type="button"
                   className="original-photo-btn info-original-photo-btn"
                   onClick={() => setOriginalImageUrl(photo.url)}
-                  aria-label="정보보관소 사진 원본 크게 보기"
+                  aria-label="?�보보�????�진 ?�본 ?�게 보기"
                 >
-                  <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
+                  <img src={photo.url} alt={`?�보보�????�진 ${index + 1}`} />
                 </button>
                 <textarea
                   className="info-photo-note-safe"
@@ -2310,12 +2306,12 @@ export default function HomePage() {
                   onInput={e => expandInfoPhotoNote(e.currentTarget)}
                   onBlur={e => collapseInfoPhotoNote(e.currentTarget)}
                   onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
-                  placeholder="# 사진 아래에 내용을 입력하세요."
+                  placeholder="# ?�진 ?�래???�용???�력?�세??"
                 />
                 <div className="photo-actions safe-photo-actions">
-                  <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, -1)} disabled={index === 0}>← 이전</button>
-                  <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, 1)} disabled={index === dayInfoPhotos.length - 1}>다음 →</button>
-                  <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>
+                  <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, -1)} disabled={index === 0}>???�전</button>
+                  <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, 1)} disabled={index === dayInfoPhotos.length - 1}>?�음 ??/button>
+                  <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>??��</button>
                 </div>
               </div>
             ))}
@@ -2335,7 +2331,7 @@ export default function HomePage() {
       {datePickerMode && (
         <div className="date-picker-modal" role="dialog" aria-modal="true" onClick={() => setDatePickerMode(null)}>
           <div className="date-picker-panel" onClick={event => event.stopPropagation()}>
-            <h3>{datePickerMode === "diary" ? "일기장 날짜 선택" : "정보보관소 날짜 선택"}</h3>
+            <h3>{datePickerMode === "diary" ? "?�기???�짜 ?�택" : "?�보보�????�짜 ?�택"}</h3>
             <input
               type="date"
               min="2026-05-01"
@@ -2345,7 +2341,7 @@ export default function HomePage() {
             />
             <div className="date-picker-actions">
               <button type="button" className="soft-btn" onClick={() => setDatePickerMode(null)}>취소</button>
-              <button type="button" className="pill-btn" onClick={applyDatePicker}>이동</button>
+              <button type="button" className="pill-btn" onClick={applyDatePicker}>?�동</button>
             </div>
           </div>
         </div>
@@ -2355,14 +2351,15 @@ export default function HomePage() {
           <div className="original-image-panel" onClick={event => event.stopPropagation()}>
             <div className="original-modal-actions">
               {originalImageTarget?.type === "diary" && (
-                <button type="button" className="original-delete-btn" onClick={deleteOriginalDiaryPhoto}>사진 삭제</button>
+                <button type="button" className="original-delete-btn" onClick={deleteOriginalDiaryPhoto}>?�진 ??��</button>
               )}
-              <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
+              <button type="button" className="original-close-btn" onClick={closeOriginalImage}>?�기</button>
             </div>
-            <img src={originalImageUrl} alt="원본 사진" />
+            <img src={originalImageUrl} alt="?�본 ?�진" />
           </div>
         </div>
       )}
     </main>
   );
 }
+
