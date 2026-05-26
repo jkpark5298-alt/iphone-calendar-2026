@@ -257,6 +257,65 @@ export default function HomePage() {
     });
   }
 
+  function handleScheduleTitlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const pastedText = event.clipboardData.getData("text/plain");
+    if (!pastedText) return;
+
+    event.preventDefault();
+    const target = event.currentTarget;
+    const start = target.selectionStart ?? scheduleTitle.length;
+    const end = target.selectionEnd ?? scheduleTitle.length;
+    const nextTitle = `${scheduleTitle.slice(0, start)}${pastedText}${scheduleTitle.slice(end)}`;
+    setScheduleTitle(nextTitle);
+
+    requestAnimationFrame(() => {
+      const cursor = start + pastedText.length;
+      target.selectionStart = cursor;
+      target.selectionEnd = cursor;
+      target.focus();
+    });
+  }
+
+  function handleDiaryTextPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    requestAnimationFrame(() => saveDiary(event.currentTarget.value, voiceText));
+  }
+
+  function handleInfoTextPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    requestAnimationFrame(() => saveInfo(event.currentTarget.value));
+  }
+
+  async function pastePlainTextToDiary() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) {
+        alert("클립보드에 붙여넣을 텍스트가 없습니다.");
+        return;
+      }
+      const nextText = diaryText ? `${diaryText}
+${text}` : text;
+      saveDiary(nextText, voiceText);
+      requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
+    } catch {
+      alert("브라우저에서 텍스트 붙여넣기를 허용하지 않았습니다. 입력칸을 길게 누르거나 Ctrl+V로 붙여넣어 주세요.");
+    }
+  }
+
+  async function pastePlainTextToInfo() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) {
+        alert("클립보드에 붙여넣을 텍스트가 없습니다.");
+        return;
+      }
+      const nextText = infoText ? `${infoText}
+${text}` : text;
+      saveInfo(nextText);
+      requestAnimationFrame(() => resizeTextareaToContent(infoTextareaRef.current));
+    } catch {
+      alert("브라우저에서 텍스트 붙여넣기를 허용하지 않았습니다. 입력칸을 길게 누르거나 Ctrl+V로 붙여넣어 주세요.");
+    }
+  }
+
   async function loadDiaryEntryFromSupabase(month: number, day: number) {
     if (!isSupabaseConfigured || !supabase) return null;
 
@@ -2178,6 +2237,7 @@ export default function HomePage() {
             <span>🌡 {temp}</span>
             <span className="weather-time-inline">🕒 {weatherTime}</span>
             <button type="button" className="weather-refresh-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
+            <button type="button" className="weather-move-btn" onClick={() => openDatePicker("diary")}>이동</button>
           </div>
           <div className="google-schedule-box diary-schedule-box">
             <div className="google-schedule-head">
@@ -2219,11 +2279,16 @@ export default function HomePage() {
           </div>
         </div>
 
+        <div className="text-paste-row">
+          <button type="button" className="soft-btn text-paste-btn" onClick={pastePlainTextToDiary}>본문 붙여넣기</button>
+          <span className="text-paste-help">문자/카톡 내용은 입력칸에 바로 붙여넣거나 이 버튼을 사용하세요.</span>
+        </div>
         <textarea
           ref={diaryTextareaRef}
           className="diary-textarea diary-main-textarea diary-full-textarea"
           value={diaryText}
           onInput={e => resizeTextareaToContent(e.currentTarget)}
+          onPaste={handleDiaryTextPaste}
           onChange={e => saveDiary(e.target.value, voiceText)}
           placeholder="오늘의 기록을 남겨보세요...."
         />
@@ -2289,9 +2354,15 @@ export default function HomePage() {
           </div>
 
           <div className="schedule-form">
-            <label>
+            <label className="schedule-title-field">
               <span>제목</span>
-              <input value={scheduleTitle} onChange={e => setScheduleTitle(e.target.value)} placeholder="일정 제목" />
+              <textarea
+                className="schedule-title-textarea"
+                value={scheduleTitle}
+                onPaste={handleScheduleTitlePaste}
+                onChange={e => setScheduleTitle(e.target.value)}
+                placeholder="문자/카톡 내용을 붙여넣을 수 있습니다."
+              />
             </label>
             <label>
               <span>시작시간</span>
@@ -2469,11 +2540,16 @@ export default function HomePage() {
               <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
             </div>
           </div>
+          <div className="text-paste-row info-text-paste-row">
+            <button type="button" className="soft-btn text-paste-btn" onClick={pastePlainTextToInfo}>본문 붙여넣기</button>
+            <span className="text-paste-help">문자/카톡/웹페이지 내용은 입력칸에 바로 붙여넣거나 이 버튼을 사용하세요.</span>
+          </div>
           <textarea
             ref={infoTextareaRef}
             className="info-main-textarea"
             value={infoText}
             onInput={e => resizeTextareaToContent(e.currentTarget)}
+            onPaste={handleInfoTextPaste}
             onChange={e => saveInfo(e.target.value)}
             placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요."
           />

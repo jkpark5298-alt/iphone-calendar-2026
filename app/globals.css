@@ -2770,3 +2770,69 @@ textarea {
     gap: 8px;
   }
 }
+
+/* 2026-05-26: paste stability + diary date move button */
+.weather-move-btn {
+  border: 0;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #315f9f;
+  padding: 7px 11px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.text-paste-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 0 8px;
+}
+.text-paste-btn {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.text-paste-help {
+  color: #7a817b;
+  font-size: 13px;
+  font-weight: 700;
+}
+.info-text-paste-row {
+  margin-top: 10px;
+}
+.schedule-title-field {
+  grid-column: 1 / -1;
+}
+.schedule-title-textarea {
+  min-height: 96px;
+  resize: vertical;
+  white-space: pre-wrap;
+}
+.schedule-form .schedule-title-textarea {
+  width: 100%;
+  border: 1px solid #d6d6d2;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 16px;
+  background: white;
+  color: var(--text);
+}
+@media (max-width: 820px) {
+  .weather-move-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .text-paste-row {
+    gap: 6px;
+    margin: 5px 0 7px;
+  }
+  .text-paste-help {
+    font-size: 12px;
+  }
+  .schedule-title-textarea {
+    min-height: 86px;
+    font-size: 15px;
+  }
+}
