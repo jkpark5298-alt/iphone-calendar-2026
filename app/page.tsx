@@ -2090,7 +2090,7 @@ export default function HomePage() {
               🖼 사진 가져오기
               <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
             </label>
-            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 붙여넣기</button>
+            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 사진 붙여넣기</button>
             <button type="button" className="soft-btn compact-photo-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린더 붙이기</button>
             <button type="button" className="soft-btn compact-photo-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>삭제</button>
           </div>
@@ -2273,7 +2273,7 @@ export default function HomePage() {
                 🖼 사진 가져오기
                 <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
               </label>
-              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
+              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 사진 붙여넣기</button>
             </div>
           </div>
           <div className="text-paste-row info-text-paste-row">
