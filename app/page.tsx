@@ -3,7 +3,7 @@
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
-type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
+type View = "calendar" | "diary" | "info" | "schedule" | "redDate";
 type PhotoItem = {
   url: string;
   name: string;
@@ -22,18 +22,10 @@ type OriginalImageTarget = { type: "diary"; photoKey: string; index: number } | 
 type ScheduleItem = {
   id: string;
   title: string;
-  startDate: string;
   startTime: string;
   endDate: string;
-  endTime: string;
   repeat: string;
   color: ScheduleColor;
-};
-type CalendarMarkType = "C" | "A" | "심야" | "노조";
-type CalendarMarkItem = {
-  id: string;
-  type: CalendarMarkType;
-  plus: boolean;
 };
 type SearchResult = {
   type: "diary" | "info";
@@ -61,13 +53,6 @@ const scheduleColorLabels: Record<ScheduleColor, string> = {
   orange: "주황색",
   navy: "남색",
   purple: "보라색",
-};
-
-const calendarMarkLabels: Record<CalendarMarkType, string> = {
-  C: "C",
-  A: "A",
-  심야: "심야",
-  노조: "노조",
 };
 
 const holidays: Record<string, string> = {
@@ -144,21 +129,6 @@ function monthDayFromEntryDate(value: string) {
   return { month, day };
 }
 
-
-function getWeatherIcon(value: string) {
-  const text = String(value || "");
-
-  if (text.includes("눈")) return "❄️";
-  if (text.includes("비/눈") || text.includes("빗방울/눈")) return "🌨️";
-  if (text.includes("비") || text.includes("빗방울")) return "🌧️";
-  if (text.includes("소나기")) return "🌦️";
-  if (text.includes("흐림")) return "☁️";
-  if (text.includes("구름")) return "⛅";
-  if (text.includes("맑음")) return "☀️";
-
-  return "🌤️";
-}
-
 function normalizeInfoPhotoMemo(value: string | undefined) {
   const memo = value || "";
   if (!memo.trim()) return "#";
@@ -222,18 +192,11 @@ export default function HomePage() {
   const [schedules, setSchedules] = useState<Record<string, ScheduleItem[]>>({});
   const [redDates, setRedDates] = useState<Record<number, number[]>>({});
   const [redDateInput, setRedDateInput] = useState("");
-  const [calendarMarks, setCalendarMarks] = useState<Record<string, CalendarMarkItem[]>>({});
-  const [markDateInput, setMarkDateInput] = useState("");
-  const [markType, setMarkType] = useState<CalendarMarkType>("C");
-  const [markPlus, setMarkPlus] = useState(false);
   const [scheduleTitle, setScheduleTitle] = useState("");
-  const [scheduleStartDate, setScheduleStartDate] = useState(`2026-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [scheduleStartTime, setScheduleStartTime] = useState("");
-  const [scheduleEndTime, setScheduleEndTime] = useState("24:00");
   const [scheduleEndDate, setScheduleEndDate] = useState("");
   const [scheduleRepeat, setScheduleRepeat] = useState("없음");
   const [scheduleColor, setScheduleColor] = useState<ScheduleColor>("yellow");
-  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
   const [voiceStatus, setVoiceStatus] = useState("녹음 파일 없음");
   const [lastAudioFile, setLastAudioFile] = useState<File | null>(null);
@@ -277,24 +240,6 @@ export default function HomePage() {
     });
   }
 
-  function handleScheduleTitlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
-    const pastedText = event.clipboardData.getData("text/plain");
-    if (!pastedText) return;
-
-    event.preventDefault();
-    const target = event.currentTarget;
-    const start = target.selectionStart ?? scheduleTitle.length;
-    const end = target.selectionEnd ?? scheduleTitle.length;
-    const nextTitle = `${scheduleTitle.slice(0, start)}${pastedText}${scheduleTitle.slice(end)}`;
-    setScheduleTitle(nextTitle);
-
-    requestAnimationFrame(() => {
-      const cursor = start + pastedText.length;
-      target.selectionStart = cursor;
-      target.selectionEnd = cursor;
-      target.focus();
-    });
-  }
 
   function handleDiaryTextPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     requestAnimationFrame(() => saveDiary(event.currentTarget.value, voiceText));
@@ -304,35 +249,33 @@ export default function HomePage() {
     requestAnimationFrame(() => saveInfo(event.currentTarget.value));
   }
 
-  async function pastePlainTextToDiary() {
+  async function pasteCopiedTextToDiary() {
     try {
       const text = await navigator.clipboard.readText();
       if (!text.trim()) {
-        alert("클립보드에 붙여넣을 텍스트가 없습니다.");
+        alert("클립보드에 붙일 글이 없습니다.");
         return;
       }
-      const nextText = diaryText ? `${diaryText}
-${text}` : text;
+      const nextText = diaryText ? `${diaryText}\n${text}` : text;
       saveDiary(nextText, voiceText);
       requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
     } catch {
-      alert("브라우저에서 텍스트 붙여넣기를 허용하지 않았습니다. 입력칸을 길게 누르거나 Ctrl+V로 붙여넣어 주세요.");
+      alert("브라우저에서 클립보드 읽기를 허용하지 않았습니다. 입력칸을 길게 눌러 붙여넣어 주세요.");
     }
   }
 
-  async function pastePlainTextToInfo() {
+  async function pasteCopiedTextToInfo() {
     try {
       const text = await navigator.clipboard.readText();
       if (!text.trim()) {
-        alert("클립보드에 붙여넣을 텍스트가 없습니다.");
+        alert("클립보드에 붙일 글이 없습니다.");
         return;
       }
-      const nextText = infoText ? `${infoText}
-${text}` : text;
+      const nextText = infoText ? `${infoText}\n${text}` : text;
       saveInfo(nextText);
       requestAnimationFrame(() => resizeTextareaToContent(infoTextareaRef.current));
     } catch {
-      alert("브라우저에서 텍스트 붙여넣기를 허용하지 않았습니다. 입력칸을 길게 누르거나 Ctrl+V로 붙여넣어 주세요.");
+      alert("브라우저에서 클립보드 읽기를 허용하지 않았습니다. 입력칸을 길게 눌러 붙여넣어 주세요.");
     }
   }
 
@@ -458,43 +401,6 @@ ${text}` : text;
     setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
     setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
     setLocalStorageSafely("iphone-diary-2026-calendar-photo-indexes", JSON.stringify(nextCalendarPhotoIndexes));
-  }
-
-  async function loadCalendarMarksFromSupabase() {
-    if (!isSupabaseConfigured || !supabase) return;
-
-    const { data, error } = await supabase
-      .from("calendar_marks")
-      .select("id, month, day, mark_type, plus")
-      .order("month", { ascending: true })
-      .order("day", { ascending: true });
-
-    if (error) {
-      console.warn("Supabase calendar mark load error:", error.message);
-      return;
-    }
-
-    const nextMarks: Record<string, CalendarMarkItem[]> = {};
-    (data || []).forEach((row: any) => {
-      const month = Number(row.month);
-      const day = Number(row.day);
-      const type = row.mark_type as CalendarMarkType;
-      if (!monthDays[month] || day < 1 || day > monthDays[month]) return;
-      if (!["C", "A", "심야", "노조"].includes(type)) return;
-
-      const markKey = key(month, day);
-      nextMarks[markKey] = [
-        ...(nextMarks[markKey] || []),
-        {
-          id: row.id || `${markKey}-${type}-${row.plus ? "plus" : "base"}`,
-          type,
-          plus: Boolean(row.plus),
-        },
-      ];
-    });
-
-    setCalendarMarks(nextMarks);
-    localStorage.setItem("iphone-calendar-2026-marks", JSON.stringify(nextMarks));
   }
 
   function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string) {
@@ -712,14 +618,11 @@ ${text}` : text;
       if (rawSchedules) setSchedules(JSON.parse(rawSchedules));
       const rawRedDates = localStorage.getItem("iphone-calendar-2026-red-dates");
       if (rawRedDates) setRedDates(JSON.parse(rawRedDates));
-      const rawMarks = localStorage.getItem("iphone-calendar-2026-marks");
-      if (rawMarks) setCalendarMarks(JSON.parse(rawMarks));
     } catch {
       setCalendarPhotos({});
     }
 
     void loadCalendarPhotosFromSupabase();
-    void loadCalendarMarksFromSupabase();
   }, []);
 
   useEffect(() => {
@@ -928,13 +831,10 @@ ${text}` : text;
     setCurrentMonth(month);
     setCurrentDay(day);
     setScheduleTitle("");
-    setScheduleStartDate(`2026-${pad(month)}-${pad(day)}`);
-    setScheduleStartTime("08:00");
+    setScheduleStartTime("");
     setScheduleEndDate(`2026-${pad(month)}-${pad(day)}`);
-    setScheduleEndTime("24:00");
     setScheduleRepeat("없음");
     setScheduleColor("yellow");
-    setEditingScheduleId(null);
     setView("schedule");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -957,97 +857,6 @@ ${text}` : text;
     localStorage.setItem("iphone-calendar-2026-red-dates", JSON.stringify(nextRedDates));
     alert(uniqueDays.length ? `${currentMonth}월 ${uniqueDays.join(", ")}일을 빨간 날짜로 저장했습니다.` : `${currentMonth}월 빨간 날짜를 모두 해제했습니다.`);
     setView("calendar");
-  }
-
-  function openCalendarMarkInput() {
-    setMarkDateInput("");
-    setMarkType("C");
-    setMarkPlus(false);
-    setView("markDate");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function saveCalendarMarks(nextMarks: Record<string, CalendarMarkItem[]>) {
-    setCalendarMarks(nextMarks);
-    localStorage.setItem("iphone-calendar-2026-marks", JSON.stringify(nextMarks));
-  }
-
-  function addCalendarMarks() {
-    const parsedDays = (markDateInput.match(/\d+/g) || [])
-      .map(value => Number(value))
-      .filter(value => Number.isInteger(value) && value >= 1 && value <= monthDays[currentMonth]);
-
-    const uniqueDays = Array.from(new Set<number>(parsedDays)).sort((a: number, b: number) => a - b);
-    if (!uniqueDays.length) {
-      alert("표시할 날짜를 입력해 주세요. 예: 1, 3, 15");
-      return;
-    }
-
-    const nextPlus = markType === "노조" ? false : markPlus;
-    const nextMarks = { ...calendarMarks };
-
-    uniqueDays.forEach(day => {
-      const markKey = key(currentMonth, day);
-      const current = nextMarks[markKey] || [];
-      const exists = current.some(item => item.type === markType && item.plus === nextPlus);
-      if (!exists) {
-        current.push({
-          id: `${Date.now()}-${currentMonth}-${day}-${markType}-${nextPlus ? "plus" : "base"}`,
-          type: markType,
-          plus: nextPlus,
-        });
-      }
-      nextMarks[markKey] = current;
-    });
-
-    saveCalendarMarks(nextMarks);
-
-    const supabaseClient = supabase;
-
-    if (isSupabaseConfigured && supabaseClient) {
-      uniqueDays.forEach(day => {
-        void supabaseClient
-          .from("calendar_marks")
-          .upsert(
-            {
-              month: currentMonth,
-              day,
-              mark_type: markType,
-              plus: nextPlus,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "month,day,mark_type,plus" }
-          )
-          .then(({ error }) => {
-            if (error) console.warn("Supabase calendar mark save error:", error.message);
-          });
-      });
-    }
-
-    setMarkDateInput(uniqueDays.join(", "));
-    alert(`${currentMonth}월 ${uniqueDays.join(", ")}일에 ${markType}${nextPlus ? "+" : ""} 표시를 저장했습니다.`);
-  }
-
-  function deleteCalendarMark(month: number, day: number, mark: CalendarMarkItem) {
-    const markKey = key(month, day);
-    const nextMarks = {
-      ...calendarMarks,
-      [markKey]: (calendarMarks[markKey] || []).filter(item => !(item.type === mark.type && item.plus === mark.plus)),
-    };
-    saveCalendarMarks(nextMarks);
-
-    if (isSupabaseConfigured && supabase) {
-      void supabase
-        .from("calendar_marks")
-        .delete()
-        .eq("month", month)
-        .eq("day", day)
-        .eq("mark_type", mark.type)
-        .eq("plus", mark.plus)
-        .then(({ error }) => {
-          if (error) console.warn("Supabase calendar mark delete error:", error.message);
-        });
-    }
   }
 
   function moveToTodayOnCalendar() {
@@ -1677,82 +1486,21 @@ ${text}` : text;
       return;
     }
 
-    const selectedDate = `2026-${pad(currentMonth)}-${pad(currentDay)}`;
-    const nextStartDate = scheduleStartDate || selectedDate;
-    const nextEndDate = scheduleEndDate || nextStartDate;
-    const nextStartTime = scheduleStartTime || "08:00";
-    const nextEndTime = scheduleEndTime || "24:00";
-    const nextKey = key(Number(nextStartDate.slice(5, 7)), Number(nextStartDate.slice(8, 10)));
-    const currentKey = key(currentMonth, currentDay);
-
-    const scheduleData: ScheduleItem = {
-      id: editingScheduleId || `${Date.now()}`,
+    const k = key(currentMonth, currentDay);
+    const newSchedule: ScheduleItem = {
+      id: `${Date.now()}`,
       title: trimmedTitle,
-      startDate: nextStartDate,
-      startTime: nextStartTime,
-      endDate: nextEndDate,
-      endTime: nextEndTime,
+      startTime: scheduleStartTime,
+      endDate: scheduleEndDate,
       repeat: scheduleRepeat,
       color: scheduleColor,
     };
-
-    let nextSchedules: Record<string, ScheduleItem[]> = { ...schedules };
-
-    if (editingScheduleId) {
-      // 기존 위치가 어디든 먼저 제거한 뒤, 시작일 기준 위치에 수정본만 다시 넣습니다.
-      Object.keys(nextSchedules).forEach(scheduleKey => {
-        nextSchedules[scheduleKey] = (nextSchedules[scheduleKey] || []).filter(item => item.id !== editingScheduleId);
-      });
-      nextSchedules[nextKey] = [...(nextSchedules[nextKey] || []), scheduleData];
-    } else {
-      nextSchedules[nextKey] = [...(nextSchedules[nextKey] || []), scheduleData];
-    }
-
-    Object.keys(nextSchedules).forEach(scheduleKey => {
-      if ((nextSchedules[scheduleKey] || []).length === 0) delete nextSchedules[scheduleKey];
-    });
-
+    const nextSchedules = { ...schedules, [k]: [...(schedules[k] || []), newSchedule] };
     saveSchedules(nextSchedules);
-
-    const viewMonth = Number(nextStartDate.slice(5, 7));
-    const viewDay = Number(nextStartDate.slice(8, 10));
-    setCurrentMonth(viewMonth);
-    setCurrentDay(viewDay);
-
     setScheduleTitle("");
-    setScheduleStartDate(nextStartDate);
-    setScheduleStartTime("08:00");
-    setScheduleEndDate(nextStartDate);
-    setScheduleEndTime("24:00");
+    setScheduleStartTime("");
     setScheduleRepeat("없음");
-    setScheduleColor("yellow");
-    setEditingScheduleId(null);
-    alert(editingScheduleId ? "일정이 수정되었습니다." : "일정이 저장되었습니다.");
-  }
-
-  function editSchedule(item: ScheduleItem) {
-    const selectedDate = `2026-${pad(currentMonth)}-${pad(currentDay)}`;
-    setEditingScheduleId(item.id);
-    setScheduleTitle(item.title);
-    setScheduleStartDate(item.startDate || selectedDate);
-    setScheduleStartTime(item.startTime || "08:00");
-    setScheduleEndDate(item.endDate || item.startDate || selectedDate);
-    setScheduleEndTime(item.endTime || "24:00");
-    setScheduleRepeat(item.repeat || "없음");
-    setScheduleColor(item.color || "yellow");
-    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
-  }
-
-  function cancelScheduleEdit() {
-    const selectedDate = `2026-${pad(currentMonth)}-${pad(currentDay)}`;
-    setEditingScheduleId(null);
-    setScheduleTitle("");
-    setScheduleStartDate(selectedDate);
-    setScheduleStartTime("08:00");
-    setScheduleEndDate(selectedDate);
-    setScheduleEndTime("24:00");
-    setScheduleRepeat("없음");
-    setScheduleColor("yellow");
+    alert("일정이 저장되었습니다.");
   }
 
   function deleteSchedule(scheduleId: string) {
@@ -1760,7 +1508,6 @@ ${text}` : text;
     const nextForDay = (schedules[k] || []).filter(item => item.id !== scheduleId);
     const nextSchedules = { ...schedules, [k]: nextForDay };
     saveSchedules(nextSchedules);
-    if (editingScheduleId === scheduleId) cancelScheduleEdit();
   }
 
   function savePhotos(month: number, day: number, nextPhotos: PhotoItem[], nextCalendarPhotos: Record<string, string>, nextCalendarPhotoIndexes = calendarPhotoIndexes) {
@@ -2178,7 +1925,6 @@ ${text}` : text;
       const redMarked = manuallyRed;
       const isToday = todayDefault.month === currentMonth && todayDefault.day === day;
       const daySchedules = schedules[k] || [];
-      const dayMarks = calendarMarks[k] || [];
       const isSelected = currentDay === day;
       cells.push(
         <div className={`day ${redMarked ? "holiday-day" : ""} ${isToday ? "today-day" : ""} ${isSelected ? "selected-day" : ""}`} key={k}>
@@ -2190,18 +1936,6 @@ ${text}` : text;
           />
           <div className="day-top">
             <span className={`num ${redMarked ? "num-red" : ""} ${isToday ? "today-num" : ""}`}>{day}</span>
-            {dayMarks.length > 0 && (
-              <div className="calendar-mark-list" aria-label={`${currentMonth}월 ${day}일 표시`}>
-                {dayMarks.slice(0, 4).map(mark => (
-                  <span
-                    key={`${mark.type}-${mark.plus}`}
-                    className={`calendar-mark calendar-mark-${mark.type === "심야" ? "night" : mark.type === "노조" ? "union" : mark.type.toLowerCase()}`}
-                  >
-                    {calendarMarkLabels[mark.type]}{mark.plus ? "+" : ""}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
           {holidays[k] && <div className="holiday holiday-neutral">{holidays[k]}</div>}
           <div className={`thumb ${calendarPhotos[k] ? "" : "empty-thumb"}`}>
@@ -2255,7 +1989,6 @@ ${text}` : text;
           <div className="head-actions calendar-top-actions">
             <button type="button" className="today-circle" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
-            <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
             <button type="button" className="mini-btn info calendar-info-top-btn" onClick={() => openInfo(currentMonth, currentDay)} aria-label="선택 날짜 정보보관소로 이동">I</button>
             <button type="button" className="pill-btn compact-pill" onClick={() => openDatePicker("diary")}>일기장</button>
@@ -2318,11 +2051,10 @@ ${text}` : text;
         <div className="diary-top-row">
           <div className="weather-line diary-weather-line">
             <span>🏠 집</span>
-            <span>{getWeatherIcon(weather)} {weather}</span>
+            <span>☀️ {weather}</span>
             <span>🌡 {temp}</span>
             <span className="weather-time-inline">🕒 {weatherTime}</span>
             <button type="button" className="weather-refresh-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
-            <button type="button" className="weather-move-btn" onClick={() => openDatePicker("diary")}>이동</button>
           </div>
           <div className="google-schedule-box diary-schedule-box">
             <div className="google-schedule-head">
@@ -2334,7 +2066,7 @@ ${text}` : text;
               <div className="google-schedule-list">
                 {daySchedules.map(item => (
                   <div className="google-schedule-item app-schedule-item" key={item.id}>
-                    <span className="google-schedule-time">{item.startTime || "08:00"}~{item.endTime || "24:00"}</span>
+                    <span className="google-schedule-time">{item.startTime || "시간 없음"}</span>
                     <span className="google-schedule-title">캘린더 · {item.title}</span>
                   </div>
                 ))}
@@ -2358,15 +2090,15 @@ ${text}` : text;
               🖼 사진 가져오기
               <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
             </label>
-            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 사진 붙여넣기</button>
+            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 붙여넣기</button>
             <button type="button" className="soft-btn compact-photo-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린더 붙이기</button>
             <button type="button" className="soft-btn compact-photo-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>삭제</button>
           </div>
         </div>
 
         <div className="text-paste-row">
-          <button type="button" className="soft-btn text-paste-btn" onClick={pastePlainTextToDiary}>복사한 글 붙이기</button>
-          <span className="text-paste-help">문자/카톡 내용은 입력칸에 바로 붙여넣거나 이 버튼을 사용하세요.</span>
+          <button type="button" className="soft-btn text-paste-btn" onClick={pasteCopiedTextToDiary}>복사한 글 붙이기</button>
+          <span className="text-paste-help">문자·카톡·메모에서 복사한 글을 일기장 본문에 붙이고 바로 저장합니다.</span>
         </div>
         <textarea
           ref={diaryTextareaRef}
@@ -2441,34 +2173,15 @@ ${text}` : text;
           <div className="schedule-form">
             <label>
               <span>제목</span>
-              <textarea
-                className="schedule-title-textarea"
-                value={scheduleTitle}
-                onChange={e => setScheduleTitle(e.target.value)}
-                placeholder="문자/카톡 내용을 붙여넣어 일정 제목을 입력하세요."
-              />
-            </label>
-            <label>
-              <span>시작일</span>
-              <input type="date" value={scheduleStartDate} onChange={e => setScheduleStartDate(e.target.value)} />
-            </label>
-            <label>
-              <span>종료일</span>
-              <input type="date" value={scheduleEndDate} onChange={e => setScheduleEndDate(e.target.value)} />
+              <input value={scheduleTitle} onChange={e => setScheduleTitle(e.target.value)} placeholder="일정 제목" />
             </label>
             <label>
               <span>시작시간</span>
               <input type="time" value={scheduleStartTime} onChange={e => setScheduleStartTime(e.target.value)} />
             </label>
             <label>
-              <span>종료시간</span>
-              <input
-                type="text"
-                value={scheduleEndTime}
-                onChange={e => setScheduleEndTime(e.target.value)}
-                placeholder="24:00"
-                inputMode="numeric"
-              />
+              <span>종료일</span>
+              <input type="date" value={scheduleEndDate} onChange={e => setScheduleEndDate(e.target.value)} />
             </label>
             <label>
               <span>반복</span>
@@ -2481,6 +2194,7 @@ ${text}` : text;
               </select>
             </label>
           </div>
+
           <div className="color-picker">
             <span>색깔 선택</span>
             <div className="color-options">
@@ -2497,14 +2211,7 @@ ${text}` : text;
             </div>
           </div>
 
-          <button type="button" className="save-schedule-btn" onClick={addSchedule}>
-            {editingScheduleId ? "일정 수정 저장" : "일정 저장"}
-          </button>
-          {editingScheduleId && (
-            <button type="button" className="cancel-schedule-edit-btn" onClick={cancelScheduleEdit}>
-              수정 취소
-            </button>
-          )}
+          <button type="button" className="save-schedule-btn" onClick={addSchedule}>일정 저장</button>
 
           <div className="saved-schedules">
             <h3>저장된 일정</h3>
@@ -2513,94 +2220,9 @@ ${text}` : text;
               <div className={`saved-schedule schedule-${item.color}`} key={item.id}>
                 <div>
                   <strong>{item.title}</strong>
-                  <span>
-                    {item.startDate || entryDate(currentMonth, currentDay)} · {item.startTime || "08:00"}
-                    {" ~ "}
-                    {item.endDate || item.startDate || entryDate(currentMonth, currentDay)} · {item.endTime || "24:00"}
-                    {" · 반복 "}
-                    {item.repeat}
-                  </span>
+                  <span>{item.startTime || "시간 없음"} · 종료일 {item.endDate || "미지정"} · 반복 {item.repeat}</span>
                 </div>
-                <div className="saved-schedule-actions">
-                  <button type="button" onClick={() => editSchedule(item)}>수정</button>
-                  <button type="button" onClick={() => deleteSchedule(item.id)}>삭제</button>
-                </div>
-              </div>
-            ))}
-          </div>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  function MarkDateView() {
-    const monthMarkEntries = Object.entries(calendarMarks)
-      .filter(([markKey]) => markKey.startsWith(`${currentMonth}-`))
-      .flatMap(([markKey, items]) => {
-        const day = Number(markKey.split("-")[1]);
-        return items.map(item => ({ day, item }));
-      })
-      .sort((a, b) => a.day - b.day || a.item.type.localeCompare(b.item.type));
-
-    return (
-      <section>
-        <div className="box mark-date-page">
-          <div className="schedule-head">
-            <h2>근무/표시 입력 ({currentMonth}월)</h2>
-            <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
-          </div>
-
-          <div className="mark-type-options">
-            {(Object.keys(calendarMarkLabels) as CalendarMarkType[]).map(type => (
-              <button
-                type="button"
-                key={type}
-                className={`mark-type-btn mark-type-${type === "심야" ? "night" : type === "노조" ? "union" : type.toLowerCase()} ${markType === type ? "active" : ""}`}
-                onClick={() => {
-                  setMarkType(type);
-                  if (type === "노조") setMarkPlus(false);
-                }}
-              >
-                {calendarMarkLabels[type]}
-              </button>
-            ))}
-          </div>
-
-          <label className="mark-plus-option">
-            <input
-              type="checkbox"
-              checked={markPlus && markType !== "노조"}
-              onChange={event => setMarkPlus(event.target.checked)}
-              disabled={markType === "노조"}
-            />
-            <span>+ 표시 추가 {markType === "노조" ? "(노조는 + 제외)" : `→ ${markType}+`}</span>
-          </label>
-
-          <p className="muted">날짜를 쉼표로 여러 개 입력하세요. 예: 1, 3, 15</p>
-          <input
-            className="red-date-input"
-            value={markDateInput}
-            onChange={event => setMarkDateInput(event.target.value)}
-            placeholder="예: 1, 3, 15"
-            inputMode="text"
-            autoComplete="off"
-          />
-
-          <button type="button" className="save-schedule-btn" onClick={addCalendarMarks}>
-            {markType}{markType !== "노조" && markPlus ? "+" : ""} 표시 저장
-          </button>
-
-          <div className="saved-marks">
-            <h3>이번 달 저장 표시</h3>
-            {monthMarkEntries.length === 0 && <p className="muted">아직 저장된 표시가 없습니다.</p>}
-            {monthMarkEntries.map(({ day, item }) => (
-              <div className="saved-mark-row" key={`${day}-${item.type}-${item.plus}`}>
-                <span>{currentMonth}/{day}</span>
-                <span className={`calendar-mark calendar-mark-${item.type === "심야" ? "night" : item.type === "노조" ? "union" : item.type.toLowerCase()}`}>
-                  {calendarMarkLabels[item.type]}{item.plus ? "+" : ""}
-                </span>
-                <button type="button" className="soft-btn delete-btn" onClick={() => deleteCalendarMark(currentMonth, day, item)}>삭제</button>
+                <button type="button" onClick={() => deleteSchedule(item.id)}>삭제</button>
               </div>
             ))}
           </div>
@@ -2651,12 +2273,12 @@ ${text}` : text;
                 🖼 사진 가져오기
                 <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
               </label>
-              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 사진 붙여넣기</button>
+              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
             </div>
           </div>
           <div className="text-paste-row info-text-paste-row">
-            <button type="button" className="soft-btn text-paste-btn" onClick={pastePlainTextToInfo}>복사한 글 붙이기</button>
-            <span className="text-paste-help">문자/카톡/웹페이지 내용은 입력칸에 바로 붙여넣거나 이 버튼을 사용하세요.</span>
+            <button type="button" className="soft-btn text-paste-btn" onClick={pasteCopiedTextToInfo}>복사한 글 붙이기</button>
+            <span className="text-paste-help">문자·카톡·웹페이지에서 복사한 글을 정보보관소 본문에 붙이고 바로 저장합니다.</span>
           </div>
           <textarea
             ref={infoTextareaRef}
@@ -2710,7 +2332,6 @@ ${text}` : text;
       {view === "info" && InfoView()}
       {view === "schedule" && ScheduleView()}
       {view === "redDate" && RedDateView()}
-      {view === "markDate" && MarkDateView()}
       {datePickerMode && (
         <div className="date-picker-modal" role="dialog" aria-modal="true" onClick={() => setDatePickerMode(null)}>
           <div className="date-picker-panel" onClick={event => event.stopPropagation()}>
