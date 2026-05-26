@@ -22,6 +22,7 @@ type OriginalImageTarget = { type: "diary"; photoKey: string; index: number } | 
 type ScheduleItem = {
   id: string;
   title: string;
+  startDate?: string;
   startTime: string;
   endDate: string;
   repeat: string;
@@ -117,9 +118,10 @@ function parseScheduleEndDate(value: string | undefined, fallbackTime: number) {
 }
 
 function scheduleCoversCalendarDay(scheduleKey: string, item: ScheduleItem, month: number, day: number) {
-  const startTime = parseScheduleKeyDate(scheduleKey);
-  if (startTime === null) return false;
+  const fallbackStartTime = parseScheduleKeyDate(scheduleKey);
+  if (fallbackStartTime === null) return false;
 
+  const startTime = parseScheduleEndDate(item.startDate, fallbackStartTime);
   const currentTime = new Date(2026, month - 1, day).getTime();
   const endTime = parseScheduleEndDate(item.endDate, startTime);
 
@@ -271,6 +273,7 @@ export default function HomePage() {
   const [markType, setMarkType] = useState<CalendarMarkType>("C");
   const [markPlus, setMarkPlus] = useState(false);
   const [scheduleTitle, setScheduleTitle] = useState("");
+  const [scheduleStartDate, setScheduleStartDate] = useState(`2026-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [scheduleStartTime, setScheduleStartTime] = useState("");
   const [scheduleEndDate, setScheduleEndDate] = useState("");
   const [scheduleRepeat, setScheduleRepeat] = useState("없음");
@@ -950,6 +953,7 @@ export default function HomePage() {
     setCurrentMonth(month);
     setCurrentDay(day);
     setScheduleTitle("");
+    setScheduleStartDate(`2026-${pad(month)}-${pad(day)}`);
     setScheduleStartTime("");
     setScheduleEndDate(`2026-${pad(month)}-${pad(day)}`);
     setScheduleRepeat("없음");
@@ -1699,12 +1703,16 @@ export default function HomePage() {
       return;
     }
 
-    const k = key(currentMonth, currentDay);
+    const selectedStartDate = scheduleStartDate || `2026-${pad(currentMonth)}-${pad(currentDay)}`;
+    const startMonth = Number(selectedStartDate.slice(5, 7));
+    const startDay = Number(selectedStartDate.slice(8, 10));
+    const k = key(startMonth, startDay);
     const scheduleData: ScheduleItem = {
       id: editingScheduleId || `${Date.now()}`,
       title: trimmedTitle,
+      startDate: selectedStartDate,
       startTime: scheduleStartTime,
-      endDate: scheduleEndDate,
+      endDate: scheduleEndDate || selectedStartDate,
       repeat: scheduleRepeat,
       color: scheduleColor,
     };
@@ -1718,6 +1726,7 @@ export default function HomePage() {
     saveSchedules(nextSchedules);
 
     setScheduleTitle("");
+    setScheduleStartDate(`2026-${pad(currentMonth)}-${pad(currentDay)}`);
     setScheduleStartTime("");
     setScheduleRepeat("없음");
     setScheduleColor("yellow");
@@ -1728,6 +1737,7 @@ export default function HomePage() {
   function editSchedule(item: ScheduleItem) {
     setEditingScheduleId(item.id);
     setScheduleTitle(item.title);
+    setScheduleStartDate(item.startDate || `2026-${pad(currentMonth)}-${pad(currentDay)}`);
     setScheduleStartTime(item.startTime || "");
     setScheduleEndDate(item.endDate || `2026-${pad(currentMonth)}-${pad(currentDay)}`);
     setScheduleRepeat(item.repeat || "없음");
@@ -2432,6 +2442,10 @@ export default function HomePage() {
               <input value={scheduleTitle} onChange={e => setScheduleTitle(e.target.value)} placeholder="일정 제목" />
             </label>
             <label>
+              <span>시작일</span>
+              <input type="date" value={scheduleStartDate} onChange={e => setScheduleStartDate(e.target.value)} />
+            </label>
+            <label>
               <span>시작시간</span>
               <input type="time" value={scheduleStartTime} onChange={e => setScheduleStartTime(e.target.value)} />
             </label>
@@ -2483,7 +2497,7 @@ export default function HomePage() {
               <div className={`saved-schedule schedule-${item.color}`} key={item.id}>
                 <div>
                   <strong>{item.title}</strong>
-                  <span>{item.startTime || "시간 없음"} · 종료일 {item.endDate || "미지정"} · 반복 {item.repeat}</span>
+                  <span>시작일 {item.startDate || "미지정"} · {item.startTime || "시간 없음"} · 종료일 {item.endDate || "미지정"} · 반복 {item.repeat}</span>
                 </div>
                 <div className="saved-schedule-actions">
                   <button type="button" onClick={() => editSchedule(item)}>수정</button>
