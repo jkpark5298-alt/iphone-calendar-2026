@@ -10,6 +10,7 @@ type PhotoItem = {
   tag: string;
   extraTag?: string;
   memo?: string;
+  memoHidden?: boolean;
   size?: string;
   memoWidth?: string;
   memoHeight?: string;
@@ -1500,7 +1501,7 @@ export default function HomePage() {
     const normalizedMemo = normalizeInfoPhotoMemo(memo);
     const currentItem = items[index];
     const nextPhotosForDay = items.map((item, itemIndex) =>
-      itemIndex === index ? { ...item, memo: normalizedMemo } : item
+      itemIndex === index ? { ...item, memo: normalizedMemo, memoHidden: false } : item
     );
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
@@ -1516,7 +1517,7 @@ export default function HomePage() {
     if (!targetItem) return;
 
     const nextPhotosForDay = items.map((item, itemIndex) =>
-      itemIndex === index ? { ...item, memo: "", extraTag: "" } : item
+      itemIndex === index ? { ...item, memo: "", extraTag: "", memoHidden: true } : item
     );
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
@@ -2832,7 +2833,7 @@ function MarkDateView() {
                 >
                   <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
                 </button>
-                {normalizeInfoPhotoMemo(photo.memo) && (
+                {!photo.memoHidden && (
                   <textarea
                     className="info-photo-note-safe"
                     value={normalizeInfoPhotoMemo(photo.memo)}
