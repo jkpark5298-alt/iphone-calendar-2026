@@ -214,6 +214,7 @@ export default function HomePage() {
   const [scheduleEndDate, setScheduleEndDate] = useState("");
   const [scheduleRepeat, setScheduleRepeat] = useState("없음");
   const [scheduleColor, setScheduleColor] = useState<ScheduleColor>("yellow");
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
   const [voiceStatus, setVoiceStatus] = useState("녹음 파일 없음");
   const [lastAudioFile, setLastAudioFile] = useState<File | null>(null);
@@ -1671,6 +1672,25 @@ ${text}` : text;
     alert("일정이 저장되었습니다.");
   }
 
+  function editSchedule(item: ScheduleItem) {
+    setEditingScheduleId(item.id);
+    setScheduleTitle(item.title);
+    setScheduleStartTime(item.startTime || "");
+    setScheduleEndDate(item.endDate || `2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleRepeat(item.repeat || "없음");
+    setScheduleColor(item.color || "yellow");
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }
+
+  function cancelScheduleEdit() {
+    setEditingScheduleId(null);
+    setScheduleTitle("");
+    setScheduleStartTime("");
+    setScheduleEndDate(`2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleRepeat("없음");
+    setScheduleColor("yellow");
+  }
+
   function deleteSchedule(scheduleId: string) {
     const k = key(currentMonth, currentDay);
     const nextForDay = (schedules[k] || []).filter(item => item.id !== scheduleId);
@@ -2400,7 +2420,14 @@ ${text}` : text;
             </div>
           </div>
 
-          <button type="button" className="save-schedule-btn" onClick={addSchedule}>일정 저장</button>
+          <button type="button" className="save-schedule-btn" onClick={addSchedule}>
+            {editingScheduleId ? "일정 수정 저장" : "일정 저장"}
+          </button>
+          {editingScheduleId && (
+            <button type="button" className="cancel-schedule-edit-btn" onClick={cancelScheduleEdit}>
+              수정 취소
+            </button>
+          )}
 
           <div className="saved-schedules">
             <h3>저장된 일정</h3>
@@ -2411,7 +2438,10 @@ ${text}` : text;
                   <strong>{item.title}</strong>
                   <span>{item.startTime || "시간 없음"} · 종료일 {item.endDate || "미지정"} · 반복 {item.repeat}</span>
                 </div>
-                <button type="button" onClick={() => deleteSchedule(item.id)}>삭제</button>
+                <div className="saved-schedule-actions">
+                  <button type="button" onClick={() => editSchedule(item)}>수정</button>
+                  <button type="button" onClick={() => deleteSchedule(item.id)}>삭제</button>
+                </div>
               </div>
             ))}
           </div>
