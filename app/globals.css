@@ -2653,146 +2653,17 @@ textarea {
 }
 
 
-/* Calendar work/union/night marks */
-.mark-btn {
-  border: 0;
-  cursor: pointer;
-  font-weight: 900;
-  color: #ffffff;
-  background: #914141;
-  box-shadow: 0 0 0 1px rgba(83, 103, 94, 0.14) inset;
-  width: 52px;
-  height: 42px;
-  border-radius: 14px;
-  font-size: 14px;
-  line-height: 1;
-  white-space: nowrap;
-}
-.calendar-mark-list {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.calendar-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  min-height: 18px;
-  padding: 2px 5px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 900;
-  line-height: 1;
-  color: #fff;
-  white-space: nowrap;
-}
-.calendar-mark-c { background: #914141; }
-.calendar-mark-a { background: #2f80ed; }
-.calendar-mark-night { background: #f2c94c; color: #2b2412; }
-.calendar-mark-union { background: #f2a7c8; color: #402030; }
-
-.mark-date-page {
-  max-width: 760px;
-  margin: 0 auto;
-}
-.mark-type-options {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 9px;
-  margin-bottom: 12px;
-}
-.mark-type-btn {
-  border: 2px solid transparent;
-  border-radius: 12px;
-  padding: 13px 8px;
-  font-size: 16px;
-  font-weight: 900;
-  cursor: pointer;
-}
-.mark-type-btn.active {
-  border-color: var(--deep);
-  box-shadow: 0 0 0 2px rgba(83, 103, 94, 0.12);
-}
-.mark-type-c { background: #914141; color: #fff; }
-.mark-type-a { background: #2f80ed; color: #fff; }
-.mark-type-night { background: #f2c94c; color: #2b2412; }
-.mark-type-union { background: #f2a7c8; color: #402030; }
-.mark-plus-option {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 10px 0 14px;
-  font-weight: 900;
-  color: var(--deep);
-}
-.mark-plus-option input {
-  width: 18px;
-  height: 18px;
-}
-.saved-marks {
-  margin-top: 18px;
-}
-.saved-mark-row {
-  display: grid;
-  grid-template-columns: 80px auto 72px;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 0;
-  border-bottom: 1px solid rgba(83, 103, 94, 0.16);
-  font-weight: 900;
-}
-.saved-mark-row .soft-btn {
-  padding: 7px 10px;
-  font-size: 12px;
-}
-
-@media (max-width: 820px) {
-  .mark-btn {
-    width: 48px;
-    min-width: 48px;
-    height: 36px;
-    font-size: 12px;
-  }
-  .calendar-mark {
-    min-width: 18px;
-    min-height: 16px;
-    padding: 2px 4px;
-    font-size: 9px;
-  }
-  .mark-type-options {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .saved-mark-row {
-    grid-template-columns: 64px auto 64px;
-    gap: 8px;
-  }
-}
-
-/* 2026-05-26: paste stability + diary date move button */
-.weather-move-btn {
-  border: 0;
-  border-radius: 999px;
-  background: #eef4ff;
-  color: #315f9f;
-  padding: 7px 11px;
-  font-size: 13px;
-  font-weight: 900;
-  cursor: pointer;
-  white-space: nowrap;
-}
+/* Copied text paste action */
 .text-paste-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin: 6px 0 8px;
+  margin: 8px 0 10px;
 }
 .text-paste-btn {
-  padding: 8px 12px;
-  font-size: 13px;
+  background: #eef3ef;
+  color: var(--deep);
 }
 .text-paste-help {
   color: #7a817b;
@@ -2800,39 +2671,19 @@ textarea {
   font-weight: 700;
 }
 .info-text-paste-row {
-  margin-top: 10px;
-}
-.schedule-title-field {
-  grid-column: 1 / -1;
-}
-.schedule-title-textarea {
-  min-height: 96px;
-  resize: vertical;
-  white-space: pre-wrap;
-}
-.schedule-form .schedule-title-textarea {
-  width: 100%;
-  border: 1px solid #d6d6d2;
-  border-radius: 10px;
-  padding: 12px;
-  font-size: 16px;
-  background: white;
-  color: var(--text);
+  margin-top: 2px;
 }
 @media (max-width: 820px) {
-  .weather-move-btn {
-    padding: 6px 10px;
-    font-size: 12px;
-  }
   .text-paste-row {
     gap: 6px;
-    margin: 5px 0 7px;
+    margin: 7px 0 9px;
   }
-  .text-paste-help {
+  .text-paste-btn {
+    padding: 8px 11px;
     font-size: 12px;
   }
-  .schedule-title-textarea {
-    min-height: 86px;
-    font-size: 15px;
+  .text-paste-help {
+    font-size: 11px;
+    line-height: 1.3;
   }
 }
