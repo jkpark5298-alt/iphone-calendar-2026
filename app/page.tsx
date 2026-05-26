@@ -142,6 +142,21 @@ function monthDayFromEntryDate(value: string) {
   return { month, day };
 }
 
+
+function getWeatherIcon(value: string) {
+  const text = String(value || "");
+
+  if (text.includes("눈")) return "❄️";
+  if (text.includes("비/눈") || text.includes("빗방울/눈")) return "🌨️";
+  if (text.includes("비") || text.includes("빗방울")) return "🌧️";
+  if (text.includes("소나기")) return "🌦️";
+  if (text.includes("흐림")) return "☁️";
+  if (text.includes("구름")) return "⛅";
+  if (text.includes("맑음")) return "☀️";
+
+  return "🌤️";
+}
+
 function normalizeInfoPhotoMemo(value: string | undefined) {
   const memo = value || "";
   if (!memo.trim()) return "#";
@@ -2253,7 +2268,7 @@ ${text}` : text;
         <div className="diary-top-row">
           <div className="weather-line diary-weather-line">
             <span>🏠 집</span>
-            <span>☀️ {weather}</span>
+            <span>{getWeatherIcon(weather)} {weather}</span>
             <span>🌡 {temp}</span>
             <span className="weather-time-inline">🕒 {weatherTime}</span>
             <button type="button" className="weather-refresh-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>

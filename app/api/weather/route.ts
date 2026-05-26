@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 
-const KMA_ENDPOINT =
-  "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst";
+const KMA_NCST_ENDPOINT = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst";
+const KMA_FCST_ENDPOINT = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst";
+
+// 집 기준 격자값. 필요하면 여기만 바꾸면 됩니다.
+const DEFAULT_NX = "56";
+const DEFAULT_NY = "130";
 
 type KmaItem = {
-  category: string;
-  obsrValue: string;
+  category?: string;
+  obsrValue?: string;
+  fcstValue?: string;
+  fcstTime?: string;
 };
 
 function getKstNow() {
@@ -18,18 +24,13 @@ function pad(n: number) {
 
 function getBaseDateTime() {
   const now = getKstNow();
-
   let hour = now.getUTCHours();
   const minute = now.getUTCMinutes();
 
-  // 기상청 초단기실황은 자료 반영 시간이 조금 늦을 수 있어
-  // 40분 이전이면 이전 시간 자료를 조회합니다.
-  if (minute < 40) {
-    hour -= 1;
-  }
+  // 초단기실황/초단기예보는 보통 매시 40분 이후 자료가 안정적입니다.
+  if (minute < 40) hour -= 1;
 
   const base = new Date(now);
-
   if (hour < 0) {
     base.setUTCDate(base.getUTCDate() - 1);
     hour = 23;
@@ -46,166 +47,132 @@ function getBaseDateTime() {
   };
 }
 
-function ptyToWeather(value?: string) {
-  switch (value) {
-    case "0":
-      return "강수 없음";
-    case "1":
-      return "비";
-    case "2":
-      return "비/눈";
-    case "3":
-      return "눈";
-    case "5":
-      return "빗방울";
-    case "6":
-      return "빗방울/눈날림";
-    case "7":
-      return "눈날림";
-    default:
-      return "확인 필요";
+function skyToText(value?: string) {
+  switch (String(value || "")) {
+    case "1": return "맑음";
+    case "3": return "구름 많음";
+    case "4": return "흐림";
+    default: return "";
   }
 }
 
-function buildKmaUrl() {
-  const serviceKey = process.env.KMA_SERVICE_KEY;
-
-  if (!serviceKey) {
-    throw new Error("KMA_SERVICE_KEY가 설정되지 않았습니다.");
+function ptyToText(value?: string) {
+  switch (String(value || "")) {
+    case "0": return "강수 없음";
+    case "1": return "비";
+    case "2": return "비/눈";
+    case "3": return "눈";
+    case "5": return "빗방울";
+    case "6": return "빗방울/눈날림";
+    case "7": return "눈날림";
+    default: return "";
   }
+}
 
-  const { baseDate, baseTime } = getBaseDateTime();
+function weatherIcon(weather: string) {
+  if (weather.includes("눈")) return "❄️";
+  if (weather.includes("비/눈") || weather.includes("빗방울/눈")) return "🌨️";
+  if (weather.includes("비") || weather.includes("빗방울")) return "🌧️";
+  if (weather.includes("소나기")) return "🌦️";
+  if (weather.includes("흐림")) return "☁️";
+  if (weather.includes("구름")) return "⛅";
+  if (weather.includes("맑음")) return "☀️";
+  return "🌤️";
+}
 
+async function fetchKmaItems(endpoint: string, serviceKey: string, baseDate: string, baseTime: string) {
   const params = new URLSearchParams({
+    serviceKey,
     pageNo: "1",
-    numOfRows: "100",
+    numOfRows: "1000",
     dataType: "JSON",
     base_date: baseDate,
     base_time: baseTime,
-    nx: "56",
-    ny: "130",
+    nx: DEFAULT_NX,
+    ny: DEFAULT_NY,
   });
 
-  /*
-    공공데이터포털 서비스키는 두 종류가 있습니다.
+  const response = await fetch(`${endpoint}?${params.toString()}`, {
+    next: { revalidate: 600 },
+  });
 
-    1. Encoding 인증키
-       - 보통 %2F, %2B 같은 문자가 포함됨
-       - 이미 인코딩된 상태이므로 다시 encodeURIComponent 처리하면 오류가 날 수 있음
+  if (!response.ok) {
+    throw new Error("기상청 응답 오류");
+  }
 
-    2. Decoding 인증키
-       - 일반 문자열 형태
-       - URL에 넣을 때 encodeURIComponent 처리 필요
+  const data = await response.json();
+  return data?.response?.body?.items?.item || [];
+}
 
-    그래서 % 문자가 포함되어 있으면 이미 인코딩된 키로 보고 그대로 사용합니다.
-  */
-  const safeServiceKey = serviceKey.includes("%")
-    ? serviceKey
-    : encodeURIComponent(serviceKey);
+function getNearestForecastValue(items: KmaItem[], category: string) {
+  const matched = items
+    .filter(item => item.category === category)
+    .sort((a, b) => String(a.fcstTime || "").localeCompare(String(b.fcstTime || "")));
 
-  return `${KMA_ENDPOINT}?serviceKey=${safeServiceKey}&${params.toString()}`;
+  return matched[0]?.fcstValue;
 }
 
 export async function GET() {
+  const serviceKey = process.env.KMA_SERVICE_KEY;
+
+  if (!serviceKey) {
+    return NextResponse.json(
+      { ok: false, message: "KMA_SERVICE_KEY 환경변수가 필요합니다." },
+      { status: 500 }
+    );
+  }
+
+  const { baseDate, baseTime, observedAt } = getBaseDateTime();
+
   try {
-    const { baseDate, baseTime, observedAt } = getBaseDateTime();
-    const url = buildKmaUrl();
+    const [ncstItems, fcstItems] = await Promise.all([
+      fetchKmaItems(KMA_NCST_ENDPOINT, serviceKey, baseDate, baseTime),
+      fetchKmaItems(KMA_FCST_ENDPOINT, serviceKey, baseDate, baseTime).catch(() => []),
+    ]);
 
-    const response = await fetch(url, {
-      next: { revalidate: 600 },
-    });
+    const temperature =
+      ncstItems.find((item: KmaItem) => item.category === "T1H")?.obsrValue ||
+      getNearestForecastValue(fcstItems, "T1H") ||
+      "-";
 
-    const rawText = await response.text();
+    const precipitationType =
+      ncstItems.find((item: KmaItem) => item.category === "PTY")?.obsrValue ||
+      getNearestForecastValue(fcstItems, "PTY") ||
+      "0";
 
-    if (!response.ok) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "기상청 응답 오류",
-          status: response.status,
-          detail: rawText.slice(0, 500),
-          baseDate,
-          baseTime,
-        },
-        { status: 502 }
-      );
-    }
+    const skyValue = getNearestForecastValue(fcstItems, "SKY");
 
-    let data: any;
+    const skyText = skyToText(skyValue);
+    const precipitationText = ptyToText(precipitationType) || "확인 필요";
 
-    try {
-      data = JSON.parse(rawText);
-    } catch {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "기상청 응답이 JSON 형식이 아닙니다.",
-          detail: rawText.slice(0, 500),
-          baseDate,
-          baseTime,
-        },
-        { status: 502 }
-      );
-    }
-
-    const header = data?.response?.header;
-    const resultCode = header?.resultCode;
-    const resultMsg = header?.resultMsg;
-
-    if (resultCode && resultCode !== "00") {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "기상청 API 오류",
-          resultCode,
-          resultMsg,
-          baseDate,
-          baseTime,
-        },
-        { status: 502 }
-      );
-    }
-
-    const items: KmaItem[] = data?.response?.body?.items?.item || [];
-
-    if (!items.length) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "기상청 데이터가 없습니다.",
-          baseDate,
-          baseTime,
-        },
-        { status: 502 }
-      );
-    }
-
-    const temperature = items.find((item) => item.category === "T1H")?.obsrValue;
-    const precipitationType = items.find((item) => item.category === "PTY")?.obsrValue;
-    const humidity = items.find((item) => item.category === "REH")?.obsrValue;
-    const windSpeed = items.find((item) => item.category === "WSD")?.obsrValue;
+    const weather =
+      precipitationText === "강수 없음"
+        ? skyText
+          ? `${skyText} · 강수 없음`
+          : "강수 없음"
+        : skyText
+          ? `${skyText} · ${precipitationText}`
+          : precipitationText;
 
     return NextResponse.json({
       ok: true,
       location: "집",
-      weather: ptyToWeather(precipitationType),
-      temperature: temperature ? `${temperature}℃` : "확인 필요",
-      humidity: humidity ? `${humidity}%` : undefined,
-      windSpeed: windSpeed ? `${windSpeed}m/s` : undefined,
+      weather,
+      icon: weatherIcon(weather),
+      sky: skyText,
+      precipitation: precipitationText,
+      temperature,
       observedAt,
       baseDate,
       baseTime,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
-
     return NextResponse.json(
       {
         ok: false,
-        message,
+        message: error instanceof Error ? error.message : "기상청 조회 오류",
       },
-      { status: 500 }
+      { status: 502 }
     );
   }
 }
