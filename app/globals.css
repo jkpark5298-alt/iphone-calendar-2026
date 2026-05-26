@@ -4090,3 +4090,210 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
+
+/* info one line compact layout */
+.info-head-one-line {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  margin-bottom: 10px !important;
+}
+
+/* 1행: 이전일 / 날짜+요일 / 다음일 */
+.info-date-nav-one-line {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.info-date-one-line {
+  min-width: 0 !important;
+  text-align: center !important;
+  color: #dce6de !important;
+  font-size: clamp(15px, 4.4vw, 22px) !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.055em !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+}
+
+/* 2행: 주요정보보관소 / 이미지 붙여넣기 / 월간 캘린더 */
+.info-title-one-line {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto auto !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.info-title-one-line .info-title {
+  margin: 0 !important;
+  min-width: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  font-size: clamp(18px, 4.7vw, 30px) !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.07em !important;
+}
+
+.info-title-one-line .info-image-paste-mini {
+  white-space: nowrap !important;
+  min-height: 30px !important;
+  padding: 5px 8px !important;
+  font-size: 11px !important;
+}
+
+.info-title-one-line .pill-btn {
+  white-space: nowrap !important;
+}
+
+/* 3행: 26 / 일기 / 사진 가져오기 / 웹·캡처 붙여넣기 */
+.info-action-one-line {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: auto auto minmax(0, 1fr) minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding-bottom: 8px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.65) !important;
+}
+
+.info-action-one-line .info-date-circle {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  font-size: 17px !important;
+  flex: 0 0 auto !important;
+}
+
+.info-action-one-line .pill-btn,
+.info-action-one-line .soft-btn,
+.info-title-one-line .pill-btn,
+.info-date-nav-one-line .pill-btn {
+  white-space: nowrap !important;
+  min-width: 0 !important;
+}
+
+.info-action-one-line .info-action-btn {
+  width: 100% !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+
+.info-text-help-only {
+  margin-top: 8px !important;
+  margin-bottom: 8px !important;
+}
+
+/* 사진 2열 고정 */
+.info-photo-grid-safe {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  align-items: start !important;
+}
+
+.info-photo-card-safe {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.info-original-photo-btn {
+  width: 100% !important;
+  aspect-ratio: 1 / 1.08 !important;
+  overflow: hidden !important;
+  border-radius: 14px !important;
+}
+
+.info-original-photo-btn img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+/* 아이폰 압축 */
+@media (max-width: 820px) {
+  .info-head-one-line {
+    gap: 7px !important;
+  }
+
+  .info-date-nav-one-line {
+    gap: 6px !important;
+  }
+
+  .info-date-nav-one-line .pill-btn {
+    font-size: 11px !important;
+    padding: 7px 8px !important;
+  }
+
+  .info-date-one-line {
+    font-size: clamp(14px, 4.1vw, 18px) !important;
+  }
+
+  .info-title-one-line {
+    gap: 5px !important;
+  }
+
+  .info-title-one-line .info-title {
+    font-size: clamp(17px, 4.4vw, 23px) !important;
+    letter-spacing: -0.075em !important;
+  }
+
+  .info-title-one-line .info-image-paste-mini {
+    min-height: 29px !important;
+    padding: 5px 7px !important;
+    font-size: 10.5px !important;
+  }
+
+  .info-title-one-line .pill-btn {
+    font-size: 10.5px !important;
+    padding: 6px 6px !important;
+  }
+
+  .info-action-one-line {
+    grid-template-columns: auto auto minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 5px !important;
+  }
+
+  .info-action-one-line .info-date-circle {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    font-size: 16px !important;
+  }
+
+  .info-action-one-line .pill-btn,
+  .info-action-one-line .soft-btn {
+    font-size: 10.5px !important;
+    padding: 7px 6px !important;
+  }
+
+  .info-photo-grid-safe {
+    gap: 9px !important;
+  }
+}
+
+/* 아주 좁은 화면 안전장치 */
+@media (max-width: 370px) {
+  .info-title-one-line {
+    grid-template-columns: 1fr auto !important;
+  }
+
+  .info-title-one-line .pill-btn {
+    grid-column: 1 / -1 !important;
+    width: fit-content !important;
+  }
+
+  .info-action-one-line {
+    grid-template-columns: auto auto 1fr !important;
+  }
+
+  .info-action-one-line .info-action-btn:last-child {
+    grid-column: 1 / -1 !important;
+  }
+}
