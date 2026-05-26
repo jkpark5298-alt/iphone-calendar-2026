@@ -2620,24 +2620,24 @@ export default function HomePage() {
               <div className="google-schedule-empty">저장된 일정이 없습니다.</div>
             )}
           </div>
-          <div className="button-row diary-photo-import-row">
-            <label className="soft-btn compact-photo-btn">
-              📷 사진찍기
-              <input className="hidden-input" type="file" accept="image/*" capture="environment" multiple onChange={addPhotos} />
-            </label>
-            <label className="soft-btn compact-photo-btn">
-              🖼 사진 가져오기
-              <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
-            </label>
-            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
-            <button type="button" className="soft-btn compact-photo-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린더 붙이기</button>
-            <button type="button" className="soft-btn compact-photo-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>삭제</button>
+          <div className="diary-photo-button-group">
+            <div className="button-row diary-photo-import-row diary-photo-row-primary">
+              <label className="soft-btn compact-photo-btn">
+                📷 사진찍기
+                <input className="hidden-input" type="file" accept="image/*" capture="environment" multiple onChange={addPhotos} />
+              </label>
+              <label className="soft-btn compact-photo-btn">
+                🖼 사진 가져오기
+                <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
+              </label>
+              <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
+            </div>
+            <div className="button-row diary-photo-import-row diary-photo-row-secondary">
+              <button type="button" className="soft-btn compact-photo-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린더 붙이기</button>
+              <button type="button" className="soft-btn compact-photo-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>삭제</button>
+              <button type="button" className="soft-btn compact-photo-btn" onClick={pasteCopiedTextToDiary}>복사한 글 붙이기</button>
+            </div>
           </div>
-        </div>
-
-        <div className="text-paste-row">
-          <button type="button" className="soft-btn text-paste-btn" onClick={pasteCopiedTextToDiary}>복사한 글 붙이기</button>
-          <span className="text-paste-help">문자·카톡·메모에서 복사한 글을 일기장 본문에 붙이고 바로 저장합니다.</span>
         </div>
         <textarea
           ref={diaryTextareaRef}

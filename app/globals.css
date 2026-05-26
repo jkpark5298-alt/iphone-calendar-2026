@@ -3892,3 +3892,201 @@ textarea {
     font-size: clamp(28px, 7.6vw, 38px);
   }
 }
+
+/* diary final requested layout */
+.diary-head-redesign {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  margin-bottom: 12px !important;
+}
+
+/* [← 이전일]                         [다음일 →] */
+.diary-date-nav-row {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+}
+
+.diary-date-nav-row .date-nav-btn {
+  min-width: 96px !important;
+  text-align: center !important;
+  flex: 0 0 auto !important;
+}
+
+/* 2026. 05. 26 (화) [캘린더] [정보 이동] 한 행 */
+.diary-title-nav-row {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.diary-title-nav-row h1 {
+  margin: 0 !important;
+  min-width: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  font-size: clamp(22px, 5.2vw, 34px) !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.06em !important;
+}
+
+.diary-title-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 5px !important;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+}
+
+.diary-title-actions .pill-btn {
+  white-space: nowrap !important;
+  flex: 0 0 auto !important;
+}
+
+/* 날씨 → 일정 → 사진버튼 → 본문 → 사진 → 음성 */
+.diary-top-row {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+.diary-photo-button-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+
+.diary-photo-import-row {
+  width: 100% !important;
+  display: grid !important;
+  gap: 8px !important;
+}
+
+.diary-photo-row-primary {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.diary-photo-row-secondary {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.diary-photo-import-row .compact-photo-btn {
+  width: 100% !important;
+  min-width: 0 !important;
+  justify-content: center !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+}
+
+.diary-main-textarea {
+  margin-top: 10px !important;
+}
+
+.diary-photo-section {
+  margin-top: 14px !important;
+  margin-bottom: 22px !important;
+  clear: both !important;
+}
+
+.voice-card,
+.voice-section,
+.voice-memo-section {
+  margin-top: 22px !important;
+  clear: both !important;
+}
+
+@media (max-width: 820px) {
+  .diary-head-redesign {
+    gap: 8px !important;
+  }
+
+  .diary-date-nav-row {
+    gap: 12px !important;
+  }
+
+  .diary-date-nav-row .date-nav-btn {
+    min-width: 88px !important;
+  }
+
+  .diary-date-nav-row .pill-btn {
+    font-size: 12px !important;
+    padding: 7px 10px !important;
+  }
+
+  .diary-title-nav-row {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 6px !important;
+  }
+
+  .diary-title-nav-row h1 {
+    font-size: clamp(20px, 5vw, 28px) !important;
+    letter-spacing: -0.07em !important;
+  }
+
+  .diary-title-actions {
+    gap: 4px !important;
+  }
+
+  .diary-title-actions .pill-btn {
+    font-size: 10.5px !important;
+    padding: 6px 6px !important;
+  }
+
+  .diary-photo-button-group {
+    gap: 7px !important;
+  }
+
+  .diary-photo-import-row {
+    gap: 7px !important;
+  }
+
+  .diary-photo-import-row .compact-photo-btn {
+    font-size: 11px !important;
+    padding: 7px 6px !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .diary-title-nav-row h1 {
+    font-size: clamp(19px, 4.9vw, 25px) !important;
+    letter-spacing: -0.075em !important;
+  }
+
+  .diary-title-actions .pill-btn {
+    font-size: 10px !important;
+    padding: 6px 5px !important;
+  }
+
+  .diary-date-nav-row .date-nav-btn {
+    min-width: 84px !important;
+  }
+
+  .diary-photo-import-row .compact-photo-btn {
+    font-size: 10.5px !important;
+    padding: 7px 5px !important;
+  }
+}
+
+/* 아주 좁은 화면에서는 제목 줄만 안전하게 2줄 허용 */
+@media (max-width: 360px) {
+  .diary-title-nav-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .diary-title-actions {
+    justify-content: flex-start !important;
+  }
+
+  .diary-photo-row-primary,
+  .diary-photo-row-secondary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
