@@ -219,10 +219,6 @@ function storageKey(type: string, month: number, day: number) {
   return `iphone-diary-2026-${type}-${pad(month)}-${pad(day)}`;
 }
 
-function latestWeatherStorageKey() {
-  return "iphone-calendar-2026-latest-weather";
-}
-
 function weatherStorageKey(month: number, day: number) {
   return `iphone-diary-2026-weather-${pad(month)}-${pad(day)}`;
 }
@@ -822,7 +818,7 @@ export default function HomePage() {
         const items = rawPhotos ? JSON.parse(rawPhotos) : [];
         setPhotos(prev => ({ ...prev, [photoKey]: items }));
 
-        const rawWeather = localStorage.getItem(latestWeatherStorageKey());
+        const rawWeather = localStorage.getItem(weatherStorageKey(currentMonth, currentDay));
         if (rawWeather) {
           const cachedWeather = JSON.parse(rawWeather);
           setWeather(cachedWeather.weather || "확인 필요");
@@ -972,7 +968,7 @@ export default function HomePage() {
       const weatherSnapshot = { weather: nextWeather, temperature: nextTemperature, observedAt: nextObservedAt, source: "기상청" };
 
       setWeatherSource("기상청");
-      localStorage.setItem(latestWeatherStorageKey(), JSON.stringify(weatherSnapshot));
+      localStorage.setItem(weatherStorageKey(currentMonth, currentDay), JSON.stringify(weatherSnapshot));
       saveWeatherToSupabase(currentMonth, currentDay, weatherSnapshot);
     } catch {
       setWeather("기상청 연결 필요");
