@@ -3652,3 +3652,160 @@ textarea {
     padding: 8px 10px;
   }
 }
+
+/* info and diary mobile redesign cleanup */
+.info-head-redesign {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.info-date-nav-row,
+.info-main-nav-row,
+.info-photo-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.info-date-nav-row {
+  margin-bottom: 2px;
+}
+
+.info-main-date {
+  margin: 0;
+  color: #dce6de;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.info-head-redesign .info-title-row {
+  margin: 0;
+}
+
+.info-head-redesign .info-title {
+  font-size: clamp(24px, 5.6vw, 34px);
+  line-height: 1.15;
+}
+
+.info-head-redesign .info-image-paste-mini {
+  white-space: nowrap;
+}
+
+.info-main-nav-row {
+  margin-top: 2px;
+}
+
+.info-photo-action-row {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.72);
+}
+
+.info-text-help-only {
+  margin-top: 12px !important;
+}
+
+.info-photo-grid-safe {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  align-items: start !important;
+}
+
+.info-photo-card-safe {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.info-original-photo-btn {
+  width: 100% !important;
+  aspect-ratio: 1 / 1.08;
+  display: block;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #0f1110;
+}
+
+.info-original-photo-btn img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block;
+}
+
+.info-photo-note-safe {
+  width: 100% !important;
+  min-height: 72px !important;
+  margin-top: 8px !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+
+.diary-actions,
+.diary-photo-import-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 820px) {
+  .info-head-redesign {
+    gap: 9px;
+  }
+
+  .info-date-nav-row,
+  .info-main-nav-row,
+  .info-photo-action-row {
+    gap: 7px;
+  }
+
+  .info-main-date {
+    font-size: 17px;
+  }
+
+  .info-head-redesign .pill-btn,
+  .info-head-redesign .soft-btn,
+  .diary-actions .pill-btn,
+  .diary-photo-import-row .soft-btn {
+    font-size: 13px;
+    padding: 8px 11px;
+  }
+
+  .info-head-redesign .info-date-circle {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    font-size: 18px;
+  }
+
+  .info-photo-grid-safe {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .info-original-photo-btn {
+    border-radius: 14px;
+    aspect-ratio: 1 / 1.12;
+  }
+
+  .info-photo-note-safe {
+    font-size: 13px !important;
+    min-height: 64px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .info-head-redesign .pill-btn,
+  .info-head-redesign .soft-btn,
+  .diary-actions .pill-btn,
+  .diary-photo-import-row .soft-btn {
+    font-size: 12px;
+    padding: 7px 9px;
+  }
+
+  .info-photo-grid-safe {
+    gap: 9px !important;
+  }
+}

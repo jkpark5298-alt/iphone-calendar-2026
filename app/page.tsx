@@ -2854,7 +2854,14 @@ function MarkDateView() {
     return (
       <section>
         <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }} onPaste={handleInfoPhotoPaste} tabIndex={0}>
-          <div className="info-head">
+          <div className="info-head info-head-redesign">
+            <div className="info-date-nav-row">
+              <button type="button" className="pill-btn date-nav-btn" onClick={() => moveInfoDate(-1)}>← 이전일</button>
+              <button type="button" className="pill-btn date-nav-btn" onClick={() => moveInfoDate(1)}>다음일 →</button>
+            </div>
+
+            <div className="info-sub-date info-main-date">2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</div>
+
             <div className="info-title-row">
               <h2 className="info-title">📂 주요 정보 보관소</h2>
               <div
@@ -2868,13 +2875,14 @@ function MarkDateView() {
                 ➜ 이미지 붙여넣기
               </div>
             </div>
-            <div className="info-sub-date">2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</div>
-            <div className="info-nav-row">
-              <button type="button" className="pill-btn date-nav-btn" onClick={() => moveInfoDate(-1)}>← 이전일</button>
-              <button type="button" className="pill-btn date-nav-btn" onClick={() => moveInfoDate(1)}>다음일 →</button>
+
+            <div className="info-nav-row info-main-nav-row">
               <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 월간 캘린더</button>
               <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
               <button type="button" className="today-circle info-date-circle" onClick={() => openDatePicker("info")} aria-label="정보보관소 날짜 선택">{currentDay}</button>
+            </div>
+
+            <div className="info-nav-row info-photo-action-row">
               <label className="soft-btn info-action-btn">
                 🖼 사진 가져오기
                 <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
