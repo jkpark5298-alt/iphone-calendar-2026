@@ -94,6 +94,51 @@ function key(month: number, day: number) {
   return `${month}-${day}`;
 }
 
+
+function parseScheduleKeyDate(scheduleKey: string) {
+  const [monthText, dayText] = scheduleKey.split("-");
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (!Number.isFinite(month) || !Number.isFinite(day)) return null;
+  return new Date(2026, month - 1, day).getTime();
+}
+
+function parseScheduleEndDate(value: string | undefined, fallbackTime: number) {
+  if (!value || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return fallbackTime;
+
+  const [yearText, monthText, dayText] = value.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (year !== 2026 || !Number.isFinite(month) || !Number.isFinite(day)) return fallbackTime;
+  return new Date(year, month - 1, day).getTime();
+}
+
+function scheduleCoversCalendarDay(scheduleKey: string, item: ScheduleItem, month: number, day: number) {
+  const startTime = parseScheduleKeyDate(scheduleKey);
+  if (startTime === null) return false;
+
+  const currentTime = new Date(2026, month - 1, day).getTime();
+  const endTime = parseScheduleEndDate(item.endDate, startTime);
+
+  const first = Math.min(startTime, endTime);
+  const last = Math.max(startTime, endTime);
+
+  return currentTime >= first && currentTime <= last;
+}
+
+function getCalendarDaySchedules(allSchedules: Record<string, ScheduleItem[]>, month: number, day: number) {
+  return Object.entries(allSchedules)
+    .flatMap(([scheduleKey, items]) =>
+      items
+        .filter(item => scheduleCoversCalendarDay(scheduleKey, item, month, day))
+        .map(item => ({ ...item, calendarSourceKey: scheduleKey }))
+    )
+    .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+}
+
 function tag(month: number, day: number) {
   return `#${pad(month)}/${pad(day)}#`;
 }
@@ -2121,7 +2166,7 @@ export default function HomePage() {
       const manuallyRed = (redDates[currentMonth] || []).includes(day);
       const redMarked = manuallyRed;
       const isToday = todayDefault.month === currentMonth && todayDefault.day === day;
-      const daySchedules = schedules[k] || [];
+      const daySchedules = getCalendarDaySchedules(schedules, currentMonth, day);
       const dayMarks = calendarMarks[k] || [];
       const isSelected = currentDay === day;
       cells.push(
@@ -2166,7 +2211,7 @@ export default function HomePage() {
           {daySchedules.length > 0 && (
             <div className="schedule-chip-list">
               {daySchedules.slice(0, 3).map(item => (
-                <div className={`schedule-chip schedule-${item.color}`} key={item.id}>
+                <div className={`schedule-chip schedule-${item.color}`} key={`${item.id}-${day}`}>
                   {item.startTime && <span>{item.startTime}</span>} {item.title}
                 </div>
               ))}
