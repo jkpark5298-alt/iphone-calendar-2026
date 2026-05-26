@@ -130,6 +130,21 @@ function weatherStorageKey(month: number, day: number) {
   return `iphone-diary-2026-weather-${pad(month)}-${pad(day)}`;
 }
 
+
+function getWeatherIcon(value: string) {
+  const text = String(value || "");
+
+  if (text.includes("눈")) return "❄️";
+  if (text.includes("비/눈") || text.includes("빗방울/눈")) return "🌨️";
+  if (text.includes("비") || text.includes("빗방울")) return "🌧️";
+  if (text.includes("소나기")) return "🌦️";
+  if (text.includes("흐림")) return "☁️";
+  if (text.includes("구름")) return "⛅";
+  if (text.includes("맑음")) return "☀️";
+
+  return "🌤️";
+}
+
 function entryDate(month: number, day: number) {
   return `2026-${pad(month)}-${pad(day)}`;
 }
@@ -2216,7 +2231,7 @@ export default function HomePage() {
         <div className="diary-top-row">
           <div className="weather-line diary-weather-line">
             <span>🏠 집</span>
-            <span>☀️ {weather}</span>
+            <span>{getWeatherIcon(weather)} {weather}</span>
             <span>🌡 {temp}</span>
             <span className="weather-time-inline">🕒 {weatherTime}</span>
             <button type="button" className="weather-refresh-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
