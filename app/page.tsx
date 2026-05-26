@@ -2170,7 +2170,7 @@ ${text}` : text;
           <div className="head-actions calendar-top-actions">
             <button type="button" className="today-circle" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
-            <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">C/A</button>
+            <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
             <button type="button" className="mini-btn info calendar-info-top-btn" onClick={() => openInfo(currentMonth, currentDay)} aria-label="선택 날짜 정보보관소로 이동">I</button>
             <button type="button" className="pill-btn compact-pill" onClick={() => openDatePicker("diary")}>일기장</button>
@@ -2273,14 +2273,14 @@ ${text}` : text;
               🖼 사진 가져오기
               <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
             </label>
-            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 붙여넣기</button>
+            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 사진 붙여넣기</button>
             <button type="button" className="soft-btn compact-photo-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린더 붙이기</button>
             <button type="button" className="soft-btn compact-photo-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>삭제</button>
           </div>
         </div>
 
         <div className="text-paste-row">
-          <button type="button" className="soft-btn text-paste-btn" onClick={pastePlainTextToDiary}>본문 붙여넣기</button>
+          <button type="button" className="soft-btn text-paste-btn" onClick={pastePlainTextToDiary}>복사한 글 붙이기</button>
           <span className="text-paste-help">문자/카톡 내용은 입력칸에 바로 붙여넣거나 이 버튼을 사용하세요.</span>
         </div>
         <textarea
@@ -2537,11 +2537,11 @@ ${text}` : text;
                 🖼 사진 가져오기
                 <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
               </label>
-              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 붙여넣기</button>
+              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 사진 붙여넣기</button>
             </div>
           </div>
           <div className="text-paste-row info-text-paste-row">
-            <button type="button" className="soft-btn text-paste-btn" onClick={pastePlainTextToInfo}>본문 붙여넣기</button>
+            <button type="button" className="soft-btn text-paste-btn" onClick={pastePlainTextToInfo}>복사한 글 붙이기</button>
             <span className="text-paste-help">문자/카톡/웹페이지 내용은 입력칸에 바로 붙여넣거나 이 버튼을 사용하세요.</span>
           </div>
           <textarea
