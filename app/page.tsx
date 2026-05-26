@@ -230,6 +230,7 @@ export default function HomePage() {
   const [scheduleEndDate, setScheduleEndDate] = useState("");
   const [scheduleRepeat, setScheduleRepeat] = useState("없음");
   const [scheduleColor, setScheduleColor] = useState<ScheduleColor>("yellow");
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
   const [voiceStatus, setVoiceStatus] = useState("녹음 파일 없음");
   const [lastAudioFile, setLastAudioFile] = useState<File | null>(null);
@@ -908,6 +909,7 @@ export default function HomePage() {
     setScheduleEndDate(`2026-${pad(month)}-${pad(day)}`);
     setScheduleRepeat("없음");
     setScheduleColor("yellow");
+    setEditingScheduleId(null);
     setView("schedule");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1653,20 +1655,48 @@ export default function HomePage() {
     }
 
     const k = key(currentMonth, currentDay);
-    const newSchedule: ScheduleItem = {
-      id: `${Date.now()}`,
+    const scheduleData: ScheduleItem = {
+      id: editingScheduleId || `${Date.now()}`,
       title: trimmedTitle,
       startTime: scheduleStartTime,
       endDate: scheduleEndDate,
       repeat: scheduleRepeat,
       color: scheduleColor,
     };
-    const nextSchedules = { ...schedules, [k]: [...(schedules[k] || []), newSchedule] };
+
+    const currentItems = schedules[k] || [];
+    const nextForDay = editingScheduleId
+      ? currentItems.map(item => (item.id === editingScheduleId ? scheduleData : item))
+      : [...currentItems, scheduleData];
+
+    const nextSchedules = { ...schedules, [k]: nextForDay };
     saveSchedules(nextSchedules);
+
     setScheduleTitle("");
     setScheduleStartTime("");
     setScheduleRepeat("없음");
-    alert("일정이 저장되었습니다.");
+    setScheduleColor("yellow");
+    setEditingScheduleId(null);
+    alert(editingScheduleId ? "일정이 수정되었습니다." : "일정이 저장되었습니다.");
+  }
+
+  function editSchedule(item: ScheduleItem) {
+    setEditingScheduleId(item.id);
+    setScheduleTitle(item.title);
+    setScheduleStartTime(item.startTime || "");
+    setScheduleEndDate(item.endDate || `2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleRepeat(item.repeat || "없음");
+    setScheduleColor(item.color || "yellow");
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }
+
+  function cancelScheduleEdit() {
+    setEditingScheduleId(null);
+    setScheduleTitle("");
+    setScheduleStartTime("");
+    setScheduleEndDate(`2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleRepeat("없음");
+    setScheduleColor("yellow");
   }
 
   function deleteSchedule(scheduleId: string) {
@@ -1674,6 +1704,7 @@ export default function HomePage() {
     const nextForDay = (schedules[k] || []).filter(item => item.id !== scheduleId);
     const nextSchedules = { ...schedules, [k]: nextForDay };
     saveSchedules(nextSchedules);
+    if (editingScheduleId === scheduleId) cancelScheduleEdit();
   }
 
   function savePhotos(month: number, day: number, nextPhotos: PhotoItem[], nextCalendarPhotos: Record<string, string>, nextCalendarPhotoIndexes = calendarPhotoIndexes) {
@@ -2391,7 +2422,14 @@ export default function HomePage() {
             </div>
           </div>
 
-          <button type="button" className="save-schedule-btn" onClick={addSchedule}>일정 저장</button>
+          <button type="button" className="save-schedule-btn" onClick={addSchedule}>
+            {editingScheduleId ? "일정 수정 저장" : "일정 저장"}
+          </button>
+          {editingScheduleId && (
+            <button type="button" className="cancel-schedule-edit-btn" onClick={cancelScheduleEdit}>
+              수정 취소
+            </button>
+          )}
 
           <div className="saved-schedules">
             <h3>저장된 일정</h3>
@@ -2402,7 +2440,10 @@ export default function HomePage() {
                   <strong>{item.title}</strong>
                   <span>{item.startTime || "시간 없음"} · 종료일 {item.endDate || "미지정"} · 반복 {item.repeat}</span>
                 </div>
-                <button type="button" onClick={() => deleteSchedule(item.id)}>삭제</button>
+                <div className="saved-schedule-actions">
+                  <button type="button" onClick={() => editSchedule(item)}>수정</button>
+                  <button type="button" onClick={() => deleteSchedule(item.id)}>삭제</button>
+                </div>
               </div>
             ))}
           </div>

@@ -2831,3 +2831,51 @@ textarea {
     gap: 8px;
   }
 }
+
+/* schedule edit button only 2026-05-26 */
+.cancel-schedule-edit-btn {
+  width: 100%;
+  margin-top: 8px;
+  border: 0;
+  border-radius: 12px;
+  background: #f0f2ef;
+  color: var(--deep);
+  padding: 13px;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.saved-schedule-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 7px !important;
+  flex: 0 0 auto !important;
+}
+
+.saved-schedule-actions button {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-weight: 900;
+  cursor: pointer;
+  background: rgba(255,255,255,0.75);
+  color: #53675e;
+}
+
+.saved-schedule-actions button:last-child {
+  color: #9f3d3d;
+}
+
+@media (max-width: 820px) {
+  .saved-schedule {
+    align-items: flex-start;
+  }
+
+  .saved-schedule-actions {
+    flex-direction: column !important;
+    gap: 6px !important;
+  }
+}
