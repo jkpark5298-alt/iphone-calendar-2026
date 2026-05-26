@@ -25,6 +25,7 @@ type ScheduleItem = {
   startDate?: string;
   startTime: string;
   endDate: string;
+  endTime?: string;
   repeat: string;
   color: ScheduleColor;
 };
@@ -320,6 +321,7 @@ export default function HomePage() {
   const [scheduleStartDate, setScheduleStartDate] = useState(`2026-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [scheduleStartTime, setScheduleStartTime] = useState("");
   const [scheduleEndDate, setScheduleEndDate] = useState("");
+  const [scheduleEndTime, setScheduleEndTime] = useState("24:00");
   const [scheduleRepeat, setScheduleRepeat] = useState("없음");
   const [scheduleColor, setScheduleColor] = useState<ScheduleColor>("yellow");
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
@@ -998,8 +1000,9 @@ export default function HomePage() {
     setCurrentDay(day);
     setScheduleTitle("");
     setScheduleStartDate(`2026-${pad(month)}-${pad(day)}`);
-    setScheduleStartTime("");
+    setScheduleStartTime("08:00");
     setScheduleEndDate(`2026-${pad(month)}-${pad(day)}`);
+    setScheduleEndTime("24:00");
     setScheduleRepeat("없음");
     setScheduleColor("yellow");
     setEditingScheduleId(null);
@@ -1755,8 +1758,9 @@ export default function HomePage() {
       id: editingScheduleId || `${Date.now()}`,
       title: trimmedTitle,
       startDate: selectedStartDate,
-      startTime: scheduleStartTime,
+      startTime: scheduleStartTime || "08:00",
       endDate: scheduleEndDate || selectedStartDate,
+      endTime: scheduleEndTime || "24:00",
       repeat: scheduleRepeat,
       color: scheduleColor,
     };
@@ -1771,7 +1775,8 @@ export default function HomePage() {
 
     setScheduleTitle("");
     setScheduleStartDate(`2026-${pad(currentMonth)}-${pad(currentDay)}`);
-    setScheduleStartTime("");
+    setScheduleStartTime("08:00");
+    setScheduleEndTime("24:00");
     setScheduleRepeat("없음");
     setScheduleColor("yellow");
     setEditingScheduleId(null);
@@ -1784,6 +1789,7 @@ export default function HomePage() {
     setScheduleStartDate(item.startDate || `2026-${pad(currentMonth)}-${pad(currentDay)}`);
     setScheduleStartTime(item.startTime || "");
     setScheduleEndDate(item.endDate || `2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleEndTime(item.endTime || "24:00");
     setScheduleRepeat(item.repeat || "없음");
     setScheduleColor(item.color || "yellow");
     requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
@@ -2394,7 +2400,7 @@ export default function HomePage() {
               <div className="google-schedule-list">
                 {daySchedules.map(item => (
                   <div className="google-schedule-item app-schedule-item" key={item.id}>
-                    <span className="google-schedule-time">{item.startTime || "시간 없음"}</span>
+                    <span className="google-schedule-time">{item.startTime || "08:00"}~{item.endTime || "24:00"}</span>
                     <span className="google-schedule-title">입력 · {item.title}</span>
                   </div>
                 ))}
@@ -2516,6 +2522,16 @@ export default function HomePage() {
               <input type="date" value={scheduleEndDate} onChange={e => setScheduleEndDate(e.target.value)} />
             </label>
             <label>
+              <span>종료시간</span>
+              <input
+                type="text"
+                value={scheduleEndTime}
+                onChange={e => setScheduleEndTime(e.target.value)}
+                placeholder="24:00"
+                inputMode="numeric"
+              />
+            </label>
+            <label>
               <span>반복</span>
               <select value={scheduleRepeat} onChange={e => setScheduleRepeat(e.target.value)}>
                 <option>없음</option>
@@ -2559,7 +2575,7 @@ export default function HomePage() {
               <div className={`saved-schedule schedule-${item.color}`} key={item.id}>
                 <div>
                   <strong>{item.title}</strong>
-                  <span>시작일 {item.startDate || "미지정"} · {item.startTime || "시간 없음"} · 종료일 {item.endDate || "미지정"} · 반복 {item.repeat}</span>
+                  <span>시작일 {item.startDate || "미지정"} · {item.startTime || "08:00"} ~ {item.endTime || "24:00"} · 종료일 {item.endDate || "미지정"} · 반복 {item.repeat}</span>
                 </div>
                 <div className="saved-schedule-actions">
                   <button type="button" onClick={() => editSchedule(item)}>수정</button>
