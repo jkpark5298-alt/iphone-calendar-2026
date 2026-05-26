@@ -1560,7 +1560,7 @@ export default function HomePage() {
     saveInfoPhotoMemoToSupabase(targetItem, "");
   }
 
-  async function handleInfoPhotoMenuAction(action: "delete" | "clearMemo" | "editMemo" | "prev" | "next") {
+  async function handleInfoPhotoMenuAction(action: "view" | "delete" | "clearMemo" | "editMemo" | "prev" | "next") {
     if (!selectedInfoPhotoMenu) return;
 
     const { photoKey, index } = selectedInfoPhotoMenu;
@@ -1568,6 +1568,12 @@ export default function HomePage() {
     const targetItem = items[index];
 
     if (!targetItem) {
+      setSelectedInfoPhotoMenu(null);
+      return;
+    }
+
+    if (action === "view") {
+      setOriginalImageUrl(targetItem.url);
       setSelectedInfoPhotoMenu(null);
       return;
     }
@@ -2918,6 +2924,14 @@ function MarkDateView() {
             <h3>사진 작업 선택</h3>
             <p>{selectedInfoPhotoMenu.index + 1}번 사진</p>
             <div className="info-photo-menu-actions">
+              <button
+                type="button"
+                className="soft-btn"
+                onClick={() => void handleInfoPhotoMenuAction("view")}
+              >
+                전체화면 보기
+              </button>
+              
               <button
                 type="button"
                 className="soft-btn delete-btn"
