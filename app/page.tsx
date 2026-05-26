@@ -1469,6 +1469,35 @@ export default function HomePage() {
     saveInfoPhotos(month, day, nextPhotosForDay);
   }
 
+
+  function infoPhotoMemoHiddenStorageKey(k: string, index: number, item: PhotoItem) {
+    const identity = item.storagePath || item.url || item.name || String(index);
+    return `iphone-calendar-2026-info-photo-memo-hidden-${k}-${identity}`;
+  }
+
+  function getInfoPhotoMemoHidden(k: string, index: number, item: PhotoItem) {
+    if (item.memoHidden === true) return true;
+
+    try {
+      return localStorage.getItem(infoPhotoMemoHiddenStorageKey(k, index, item)) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function setInfoPhotoMemoHidden(k: string, index: number, item: PhotoItem, hidden: boolean) {
+    try {
+      const storageKey = infoPhotoMemoHiddenStorageKey(k, index, item);
+      if (hidden) {
+        localStorage.setItem(storageKey, "1");
+      } else {
+        localStorage.removeItem(storageKey);
+      }
+    } catch {
+      // localStorage 사용 불가 환경에서는 화면 상태만 반영
+    }
+  }
+
   function saveInfoPhotoMemoToSupabase(item: PhotoItem, memo: string) {
     if (!isSupabaseConfigured || !supabase) return;
 
@@ -1500,6 +1529,9 @@ export default function HomePage() {
 
     const normalizedMemo = normalizeInfoPhotoMemo(memo);
     const currentItem = items[index];
+
+    setInfoPhotoMemoHidden(k, index, currentItem, false);
+
     const nextPhotosForDay = items.map((item, itemIndex) =>
       itemIndex === index ? { ...item, memo: normalizedMemo, memoHidden: false } : item
     );
@@ -1515,6 +1547,8 @@ export default function HomePage() {
     const items = infoPhotos[k] || [];
     const targetItem = items[index];
     if (!targetItem) return;
+
+    setInfoPhotoMemoHidden(k, index, targetItem, true);
 
     const nextPhotosForDay = items.map((item, itemIndex) =>
       itemIndex === index ? { ...item, memo: "", extraTag: "", memoHidden: true } : item
@@ -2833,7 +2867,7 @@ function MarkDateView() {
                 >
                   <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
                 </button>
-                {!photo.memoHidden && (
+                {!getInfoPhotoMemoHidden(k, index, photo) && (
                   <textarea
                     className="info-photo-note-safe"
                     value={normalizeInfoPhotoMemo(photo.memo)}
