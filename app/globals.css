@@ -3634,3 +3634,21 @@ textarea {
 .info-photo-note-safe:empty {
   display: none;
 }
+
+/* diary info date navigation */
+.date-nav-btn {
+  background: #eef6f0;
+  color: var(--deep);
+  border-color: #d6e3d9;
+}
+
+.date-nav-btn:active {
+  transform: scale(0.98);
+}
+
+@media (max-width: 820px) {
+  .date-nav-btn {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+}

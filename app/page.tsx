@@ -997,6 +997,35 @@ export default function HomePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function getAdjacentDate(month: number, day: number, direction: -1 | 1) {
+    let nextMonth = month;
+    let nextDay = day + direction;
+
+    if (nextDay < 1) {
+      if (nextMonth <= 5) return { month: 5, day: 1 };
+      nextMonth -= 1;
+      nextDay = monthDays[nextMonth];
+    }
+
+    if (nextDay > monthDays[nextMonth]) {
+      if (nextMonth >= 12) return { month: 12, day: 31 };
+      nextMonth += 1;
+      nextDay = 1;
+    }
+
+    return { month: nextMonth, day: nextDay };
+  }
+
+  function moveDiaryDate(direction: -1 | 1) {
+    const nextDate = getAdjacentDate(currentMonth, currentDay, direction);
+    openDiary(nextDate.month, nextDate.day);
+  }
+
+  function moveInfoDate(direction: -1 | 1) {
+    const nextDate = getAdjacentDate(currentMonth, currentDay, direction);
+    openInfo(nextDate.month, nextDate.day);
+  }
+
   function openSchedule(month: number, day: number) {
     setCurrentMonth(month);
     setCurrentDay(day);
@@ -2506,6 +2535,8 @@ export default function HomePage() {
         <div className="diary-head">
           <h1>2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</h1>
           <div className="head-actions diary-actions">
+            <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(-1)}>← 이전일</button>
+            <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(1)}>다음일 →</button>
             <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
             <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
           </div>
@@ -2839,6 +2870,8 @@ function MarkDateView() {
             </div>
             <div className="info-sub-date">2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</div>
             <div className="info-nav-row">
+              <button type="button" className="pill-btn date-nav-btn" onClick={() => moveInfoDate(-1)}>← 이전일</button>
+              <button type="button" className="pill-btn date-nav-btn" onClick={() => moveInfoDate(1)}>다음일 →</button>
               <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 월간 캘린더</button>
               <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
               <button type="button" className="today-circle info-date-circle" onClick={() => openDatePicker("info")} aria-label="정보보관소 날짜 선택">{currentDay}</button>
