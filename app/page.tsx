@@ -1525,7 +1525,7 @@ export default function HomePage() {
     saveInfoPhotoMemoToSupabase(targetItem, "");
   }
 
-  async function handleInfoPhotoMenuAction(action: "delete" | "clearMemo" | "prev" | "next") {
+  async function handleInfoPhotoMenuAction(action: "delete" | "clearMemo" | "editMemo" | "prev" | "next") {
     if (!selectedInfoPhotoMenu) return;
 
     const { photoKey, index } = selectedInfoPhotoMenu;
@@ -1547,6 +1547,14 @@ export default function HomePage() {
     if (action === "clearMemo") {
       if (!window.confirm(`${index + 1}번 사진의 메모를 삭제할까요? 사진은 유지됩니다.`)) return;
       clearInfoPhotoMemo(photoKey, index);
+      setSelectedInfoPhotoMenu(null);
+      return;
+    }
+
+    if (action === "editMemo") {
+      const nextMemo = window.prompt("사진 메모를 입력하세요.", normalizeInfoPhotoMemo(targetItem.memo));
+      if (nextMemo === null) return;
+      updateInfoPhotoMemo(photoKey, index, nextMemo);
       setSelectedInfoPhotoMenu(null);
       return;
     }
@@ -2824,15 +2832,17 @@ function MarkDateView() {
                 >
                   <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
                 </button>
-                <textarea
-                  className="info-photo-note-safe"
-                  value={normalizeInfoPhotoMemo(photo.memo)}
-                  onFocus={e => expandInfoPhotoNote(e.currentTarget)}
-                  onInput={e => expandInfoPhotoNote(e.currentTarget)}
-                  onBlur={e => collapseInfoPhotoNote(e.currentTarget)}
-                  onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
-                  placeholder="# 사진 아래에 내용을 입력하세요."
-                />
+                {normalizeInfoPhotoMemo(photo.memo) && (
+                  <textarea
+                    className="info-photo-note-safe"
+                    value={normalizeInfoPhotoMemo(photo.memo)}
+                    onFocus={e => expandInfoPhotoNote(e.currentTarget)}
+                    onInput={e => expandInfoPhotoNote(e.currentTarget)}
+                    onBlur={e => collapseInfoPhotoNote(e.currentTarget)}
+                    onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
+                    placeholder="# 사진 아래에 내용을 입력하세요."
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -2886,6 +2896,13 @@ function MarkDateView() {
                 onClick={() => void handleInfoPhotoMenuAction("clearMemo")}
               >
                 메모 삭제
+              </button>
+              <button
+                type="button"
+                className="soft-btn"
+                onClick={() => void handleInfoPhotoMenuAction("editMemo")}
+              >
+                메모 입력/수정
               </button>
               <button
                 type="button"

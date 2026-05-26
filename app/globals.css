@@ -3629,3 +3629,8 @@ textarea {
     grid-column: auto;
   }
 }
+
+/* Info photo memo hidden when empty */
+.info-photo-note-safe:empty {
+  display: none;
+}
