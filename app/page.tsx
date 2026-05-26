@@ -223,6 +223,26 @@ function weatherStorageKey(month: number, day: number) {
   return `iphone-diary-2026-weather-${pad(month)}-${pad(day)}`;
 }
 
+function isWeatherForSelectedDate(weatherData: any, month: number, day: number) {
+  const observedAt = String(weatherData?.observedAt || "");
+  if (!observedAt) return false;
+
+  const normalized = observedAt.replace(/\s/g, "");
+  const monthPattern = String(month);
+  const dayPattern = String(day);
+
+  return (
+    normalized.includes(`2026.${monthPattern}.${dayPattern}.`) ||
+    normalized.includes(`2026.${pad(month)}.${pad(day)}.`) ||
+    normalized.includes(`2026-${pad(month)}-${pad(day)}`)
+  );
+}
+
+function isSelectedDiaryDateToday(month: number, day: number) {
+  const now = new Date();
+  return now.getFullYear() === 2026 && now.getMonth() + 1 === month && now.getDate() === day;
+}
+
 
 function getWeatherIcon(value: string) {
   const text = String(value || "");
@@ -821,10 +841,18 @@ export default function HomePage() {
         const rawWeather = localStorage.getItem(weatherStorageKey(currentMonth, currentDay));
         if (rawWeather) {
           const cachedWeather = JSON.parse(rawWeather);
-          setWeather(cachedWeather.weather || "확인 필요");
-          setTemp(cachedWeather.temperature || "-");
-          setWeatherTime(cachedWeather.observedAt || "-");
-          setWeatherSource(cachedWeather.source || "기상청");
+          if (isWeatherForSelectedDate(cachedWeather, currentMonth, currentDay)) {
+            setWeather(cachedWeather.weather || "확인 필요");
+            setTemp(cachedWeather.temperature || "-");
+            setWeatherTime(cachedWeather.observedAt || "-");
+            setWeatherSource(cachedWeather.source || "기상청");
+          } else {
+            localStorage.removeItem(weatherStorageKey(currentMonth, currentDay));
+            setWeather("해당일 날씨 조회 필요");
+            setTemp("-");
+            setWeatherTime("-");
+            setWeatherSource("기상청");
+          }
         }
       } catch {
         setDiaryText("");
@@ -846,11 +874,18 @@ export default function HomePage() {
 
       const remoteWeather = remoteData?.weather;
       if (remoteWeather && typeof remoteWeather === "object") {
-        setWeather(remoteWeather.weather || "확인 필요");
-        setTemp(remoteWeather.temperature || "-");
-        setWeatherTime(remoteWeather.observedAt || "-");
-        setWeatherSource(remoteWeather.source || "기상청");
-        localStorage.setItem(weatherStorageKey(currentMonth, currentDay), JSON.stringify(remoteWeather));
+        if (isWeatherForSelectedDate(remoteWeather, currentMonth, currentDay)) {
+          setWeather(remoteWeather.weather || "확인 필요");
+          setTemp(remoteWeather.temperature || "-");
+          setWeatherTime(remoteWeather.observedAt || "-");
+          setWeatherSource(remoteWeather.source || "기상청");
+          localStorage.setItem(weatherStorageKey(currentMonth, currentDay), JSON.stringify(remoteWeather));
+        } else {
+          setWeather("해당일 날씨 조회 필요");
+          setTemp("-");
+          setWeatherTime("-");
+          setWeatherSource("기상청");
+        }
       }
     });
 
@@ -942,6 +977,11 @@ export default function HomePage() {
   }, [view, infoText, currentMonth, currentDay]);
 
   async function fetchWeatherFromKma() {
+    if (!isSelectedDiaryDateToday(currentMonth, currentDay)) {
+      alert("지난 날짜에는 현재 기상청 날씨를 저장하지 않습니다. 해당 날짜에 저장된 날씨만 표시합니다.");
+      return;
+    }
+
     setWeather("조회 중");
     setTemp("-");
     setWeatherSource("기상청 조회 중");
