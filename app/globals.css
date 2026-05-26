@@ -3561,3 +3561,71 @@ textarea {
     font-size: 12px;
   }
 }
+
+/* Info photo click menu */
+.info-photo-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.info-photo-menu-panel {
+  width: min(420px, 92vw);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 20px;
+  background: #101713;
+  color: #f6f4ed;
+  padding: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+}
+
+.info-photo-menu-panel h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.info-photo-menu-panel p {
+  margin: 0 0 14px;
+  color: #b8c7bd;
+  font-weight: 800;
+}
+
+.info-photo-menu-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.info-photo-menu-actions .pill-btn {
+  grid-column: 1 / -1;
+}
+
+.info-photo-menu-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.info-photo-card-safe .original-photo-btn,
+.safe-info-photo-card .original-photo-btn {
+  cursor: pointer;
+}
+
+.info-photo-card-safe .original-photo-btn:active,
+.safe-info-photo-card .original-photo-btn:active {
+  transform: scale(0.995);
+}
+
+@media (max-width: 520px) {
+  .info-photo-menu-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .info-photo-menu-actions .pill-btn {
+    grid-column: auto;
+  }
+}

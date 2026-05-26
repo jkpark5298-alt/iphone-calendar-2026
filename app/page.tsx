@@ -334,6 +334,7 @@ export default function HomePage() {
   const [weatherSource, setWeatherSource] = useState("기상청 연결 대기");
   const [originalImageUrl, setOriginalImageUrl] = useState("");
   const [originalImageTarget, setOriginalImageTarget] = useState<OriginalImageTarget>(null);
+  const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
   const [datePickerValue, setDatePickerValue] = useState(`2026-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -1506,6 +1507,64 @@ export default function HomePage() {
     const [month, day] = k.split("-").map(Number);
     saveInfoPhotos(month, day, nextPhotosForDay);
     saveInfoPhotoMemoToSupabase(currentItem, normalizedMemo);
+  }
+
+
+  function clearInfoPhotoMemo(k: string, index: number) {
+    const items = infoPhotos[k] || [];
+    const targetItem = items[index];
+    if (!targetItem) return;
+
+    const nextPhotosForDay = items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, memo: "", extraTag: "" } : item
+    );
+    const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
+    setInfoPhotos(nextInfoPhotos);
+    const [month, day] = k.split("-").map(Number);
+    saveInfoPhotos(month, day, nextPhotosForDay);
+    saveInfoPhotoMemoToSupabase(targetItem, "");
+  }
+
+  async function handleInfoPhotoMenuAction(action: "delete" | "clearMemo" | "prev" | "next") {
+    if (!selectedInfoPhotoMenu) return;
+
+    const { photoKey, index } = selectedInfoPhotoMenu;
+    const items = infoPhotos[photoKey] || [];
+    const targetItem = items[index];
+
+    if (!targetItem) {
+      setSelectedInfoPhotoMenu(null);
+      return;
+    }
+
+    if (action === "delete") {
+      if (!window.confirm(`${index + 1}번 사진을 삭제할까요?`)) return;
+      await deleteInfoPhoto(photoKey, index);
+      setSelectedInfoPhotoMenu(null);
+      return;
+    }
+
+    if (action === "clearMemo") {
+      if (!window.confirm(`${index + 1}번 사진의 메모를 삭제할까요? 사진은 유지됩니다.`)) return;
+      clearInfoPhotoMemo(photoKey, index);
+      setSelectedInfoPhotoMenu(null);
+      return;
+    }
+
+    if (action === "prev") {
+      moveInfoPhoto(photoKey, index, -1);
+      setSelectedInfoPhotoMenu(null);
+      return;
+    }
+
+    if (action === "next") {
+      moveInfoPhoto(photoKey, index, 1);
+      setSelectedInfoPhotoMenu(null);
+    }
+  }
+
+  function openInfoPhotoMenu(photoKey: string, index: number) {
+    setSelectedInfoPhotoMenu({ photoKey, index });
   }
 
 
@@ -2760,8 +2819,8 @@ function MarkDateView() {
                 <button
                   type="button"
                   className="original-photo-btn info-original-photo-btn"
-                  onClick={() => setOriginalImageUrl(photo.url)}
-                  aria-label="정보보관소 사진 원본 크게 보기"
+                  onClick={() => openInfoPhotoMenu(k, index)}
+                  aria-label="정보보관소 사진 작업 선택"
                 >
                   <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
                 </button>
@@ -2774,11 +2833,6 @@ function MarkDateView() {
                   onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
                   placeholder="# 사진 아래에 내용을 입력하세요."
                 />
-                <div className="photo-actions safe-photo-actions">
-                  <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, -1)} disabled={index === 0}>← 이전</button>
-                  <button type="button" className="soft-btn" onClick={() => moveInfoPhoto(k, index, 1)} disabled={index === dayInfoPhotos.length - 1}>다음 →</button>
-                  <button type="button" className="soft-btn delete-btn" onClick={() => deleteInfoPhoto(k, index)}>삭제</button>
-                </div>
               </div>
             ))}
           </div>
@@ -2809,6 +2863,47 @@ function MarkDateView() {
             <div className="date-picker-actions">
               <button type="button" className="soft-btn" onClick={() => setDatePickerMode(null)}>취소</button>
               <button type="button" className="pill-btn" onClick={applyDatePicker}>이동</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {selectedInfoPhotoMenu && (
+        <div className="info-photo-menu-overlay" role="dialog" aria-modal="true" onClick={() => setSelectedInfoPhotoMenu(null)}>
+          <div className="info-photo-menu-panel" onClick={event => event.stopPropagation()}>
+            <h3>사진 작업 선택</h3>
+            <p>{selectedInfoPhotoMenu.index + 1}번 사진</p>
+            <div className="info-photo-menu-actions">
+              <button
+                type="button"
+                className="soft-btn delete-btn"
+                onClick={() => void handleInfoPhotoMenuAction("delete")}
+              >
+                사진 삭제
+              </button>
+              <button
+                type="button"
+                className="soft-btn"
+                onClick={() => void handleInfoPhotoMenuAction("clearMemo")}
+              >
+                메모 삭제
+              </button>
+              <button
+                type="button"
+                className="soft-btn"
+                onClick={() => void handleInfoPhotoMenuAction("prev")}
+                disabled={selectedInfoPhotoMenu.index === 0}
+              >
+                ← 이전
+              </button>
+              <button
+                type="button"
+                className="soft-btn"
+                onClick={() => void handleInfoPhotoMenuAction("next")}
+                disabled={selectedInfoPhotoMenu.index >= ((infoPhotos[selectedInfoPhotoMenu.photoKey] || []).length - 1)}
+              >
+                다음 →
+              </button>
+              <button type="button" className="pill-btn" onClick={() => setSelectedInfoPhotoMenu(null)}>취소</button>
             </div>
           </div>
         </div>
