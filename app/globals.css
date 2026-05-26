@@ -3314,3 +3314,104 @@ textarea {
     height: 38vw !important;
   }
 }
+
+/* diary photo fixed frame contain final */
+.diary-photo-gallery {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin-top: 12px !important;
+  align-items: start !important;
+}
+
+.diary-photo-gallery.count-1 {
+  grid-template-columns: 1fr !important;
+}
+
+.diary-photo-gallery.count-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.diary-photo-gallery.count-3,
+.diary-photo-gallery.count-4,
+.diary-photo-gallery:not(.count-1):not(.count-2) {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.diary-photo-gallery.count-3 .diary-gallery-photo:first-child {
+  grid-column: auto !important;
+}
+
+.diary-gallery-photo {
+  width: 100% !important;
+  height: 210px !important;
+  min-height: 0 !important;
+  border: 1px solid rgba(255,255,255,0.38) !important;
+  border-radius: 8px !important;
+  background: #0f1110 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  box-shadow: none !important;
+}
+
+.diary-photo-gallery.count-1 .diary-gallery-photo {
+  height: 440px !important;
+}
+
+.diary-photo-gallery.count-2 .diary-gallery-photo {
+  height: 300px !important;
+}
+
+.diary-photo-open-btn {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #0f1110 !important;
+}
+
+.diary-gallery-photo img,
+.diary-photo-open-btn img {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  object-fit: contain !important;
+  display: block !important;
+  background: #0f1110 !important;
+  border-radius: 0 !important;
+}
+
+@media (max-width: 820px) {
+  .diary-photo-gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+  }
+
+  .diary-photo-gallery.count-1 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .diary-photo-gallery.count-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .diary-gallery-photo {
+    height: 32vw !important;
+    border-radius: 7px !important;
+  }
+
+  .diary-photo-gallery.count-1 .diary-gallery-photo {
+    height: 66vw !important;
+  }
+
+  .diary-photo-gallery.count-2 .diary-gallery-photo {
+    height: 42vw !important;
+  }
+}
