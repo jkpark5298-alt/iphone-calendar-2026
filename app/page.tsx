@@ -2445,7 +2445,7 @@ export default function HomePage() {
               🖼 사진 가져오기
               <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
             </label>
-            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 사진 붙여넣기</button>
+            <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
             <button type="button" className="soft-btn compact-photo-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린더 붙이기</button>
             <button type="button" className="soft-btn compact-photo-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>삭제</button>
           </div>
@@ -2716,7 +2716,19 @@ function MarkDateView() {
       <section>
         <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }} onPaste={handleInfoPhotoPaste} tabIndex={0}>
           <div className="info-head">
-            <h2 className="info-title">📂 주요 정보 보관소</h2>
+            <div className="info-title-row">
+              <h2 className="info-title">📂 주요 정보 보관소</h2>
+              <div
+                className="info-image-paste-mini"
+                contentEditable
+                suppressContentEditableWarning
+                role="textbox"
+                aria-label="복사한 이미지 붙여넣기"
+                onPaste={handleInfoPasteZone}
+              >
+                ➜ 이미지 붙여넣기
+              </div>
+            </div>
             <div className="info-sub-date">2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</div>
             <div className="info-nav-row">
               <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 월간 캘린더</button>
@@ -2726,30 +2738,10 @@ function MarkDateView() {
                 🖼 사진 가져오기
                 <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
               </label>
-              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 사진 붙여넣기</button>
+              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
             </div>
-            <div
-              className="info-image-paste-zone"
-              contentEditable
-              suppressContentEditableWarning
-              role="textbox"
-              aria-label="복사한 이미지 붙여넣기 영역"
-              onPaste={handleInfoPasteZone}
-              onFocus={event => {
-                if (event.currentTarget.textContent?.trim()) return;
-                event.currentTarget.textContent = "";
-              }}
-            >
-              Safari에서 이미지 복사 → 이 영역을 길게 눌러 붙여넣기
-            </div>
-            <p className="info-image-paste-help">
-              저장하지 않은 웹 이미지는 이 영역에 붙여넣고, 사진앱/파일앱 사진은 사진 가져오기를 사용하세요.
-            </p>
           </div>
-          <div className="text-paste-row info-text-paste-row">
-            <button type="button" className="soft-btn text-paste-btn" onClick={pasteCopiedTextToInfo}>복사한 글 붙이기</button>
-            <span className="text-paste-help">문자·카톡·웹페이지에서 복사한 글을 정보보관소 본문에 붙이고 바로 저장합니다.</span>
-          </div>
+          <p className="info-text-help-only">문자·카톡·웹페이지 글은 본문을 길게 눌러 붙여넣으세요.</p>
           <textarea
             ref={infoTextareaRef}
             className="info-main-textarea"
