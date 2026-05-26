@@ -2572,13 +2572,18 @@ export default function HomePage() {
     const diaryPhotoCountClass = `count-${Math.min(Math.max(dayPhotos.length, 1), 4)}`;
     return (
       <section>
-        <div className="diary-head">
-          <h1>2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</h1>
-          <div className="head-actions diary-actions">
+        <div className="diary-head diary-head-redesign">
+          <div className="diary-date-nav-row">
             <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(-1)}>← 이전일</button>
             <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(1)}>다음일 →</button>
-            <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
-            <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
+          </div>
+
+          <div className="diary-title-nav-row">
+            <h1>2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</h1>
+            <div className="head-actions diary-actions diary-title-actions">
+              <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
+              <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
+            </div>
           </div>
         </div>
 
