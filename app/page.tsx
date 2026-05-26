@@ -22,8 +22,10 @@ type OriginalImageTarget = { type: "diary"; photoKey: string; index: number } | 
 type ScheduleItem = {
   id: string;
   title: string;
+  startDate: string;
   startTime: string;
   endDate: string;
+  endTime: string;
   repeat: string;
   color: ScheduleColor;
 };
@@ -225,7 +227,9 @@ export default function HomePage() {
   const [markType, setMarkType] = useState<CalendarMarkType>("C");
   const [markPlus, setMarkPlus] = useState(false);
   const [scheduleTitle, setScheduleTitle] = useState("");
+  const [scheduleStartDate, setScheduleStartDate] = useState(`2026-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [scheduleStartTime, setScheduleStartTime] = useState("");
+  const [scheduleEndTime, setScheduleEndTime] = useState("24:00");
   const [scheduleEndDate, setScheduleEndDate] = useState("");
   const [scheduleRepeat, setScheduleRepeat] = useState("없음");
   const [scheduleColor, setScheduleColor] = useState<ScheduleColor>("yellow");
@@ -924,10 +928,13 @@ ${text}` : text;
     setCurrentMonth(month);
     setCurrentDay(day);
     setScheduleTitle("");
-    setScheduleStartTime("");
+    setScheduleStartDate(`2026-${pad(month)}-${pad(day)}`);
+    setScheduleStartTime("08:00");
     setScheduleEndDate(`2026-${pad(month)}-${pad(day)}`);
+    setScheduleEndTime("24:00");
     setScheduleRepeat("없음");
     setScheduleColor("yellow");
+    setEditingScheduleId(null);
     setView("schedule");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1670,38 +1677,80 @@ ${text}` : text;
       return;
     }
 
-    const k = key(currentMonth, currentDay);
-    const newSchedule: ScheduleItem = {
-      id: `${Date.now()}`,
+    const selectedDate = `2026-${pad(currentMonth)}-${pad(currentDay)}`;
+    const nextStartDate = scheduleStartDate || selectedDate;
+    const nextEndDate = scheduleEndDate || nextStartDate;
+    const nextStartTime = scheduleStartTime || "08:00";
+    const nextEndTime = scheduleEndTime || "24:00";
+    const nextKey = key(Number(nextStartDate.slice(5, 7)), Number(nextStartDate.slice(8, 10)));
+    const currentKey = key(currentMonth, currentDay);
+
+    const scheduleData: ScheduleItem = {
+      id: editingScheduleId || `${Date.now()}`,
       title: trimmedTitle,
-      startTime: scheduleStartTime,
-      endDate: scheduleEndDate,
+      startDate: nextStartDate,
+      startTime: nextStartTime,
+      endDate: nextEndDate,
+      endTime: nextEndTime,
       repeat: scheduleRepeat,
       color: scheduleColor,
     };
-    const nextSchedules = { ...schedules, [k]: [...(schedules[k] || []), newSchedule] };
+
+    let nextSchedules: Record<string, ScheduleItem[]> = { ...schedules };
+
+    if (editingScheduleId) {
+      // 기존 위치가 어디든 먼저 제거한 뒤, 시작일 기준 위치에 수정본만 다시 넣습니다.
+      Object.keys(nextSchedules).forEach(scheduleKey => {
+        nextSchedules[scheduleKey] = (nextSchedules[scheduleKey] || []).filter(item => item.id !== editingScheduleId);
+      });
+      nextSchedules[nextKey] = [...(nextSchedules[nextKey] || []), scheduleData];
+    } else {
+      nextSchedules[nextKey] = [...(nextSchedules[nextKey] || []), scheduleData];
+    }
+
+    Object.keys(nextSchedules).forEach(scheduleKey => {
+      if ((nextSchedules[scheduleKey] || []).length === 0) delete nextSchedules[scheduleKey];
+    });
+
     saveSchedules(nextSchedules);
+
+    const viewMonth = Number(nextStartDate.slice(5, 7));
+    const viewDay = Number(nextStartDate.slice(8, 10));
+    setCurrentMonth(viewMonth);
+    setCurrentDay(viewDay);
+
     setScheduleTitle("");
-    setScheduleStartTime("");
+    setScheduleStartDate(nextStartDate);
+    setScheduleStartTime("08:00");
+    setScheduleEndDate(nextStartDate);
+    setScheduleEndTime("24:00");
     setScheduleRepeat("없음");
-    alert("일정이 저장되었습니다.");
+    setScheduleColor("yellow");
+    setEditingScheduleId(null);
+    alert(editingScheduleId ? "일정이 수정되었습니다." : "일정이 저장되었습니다.");
   }
 
   function editSchedule(item: ScheduleItem) {
+    const selectedDate = `2026-${pad(currentMonth)}-${pad(currentDay)}`;
     setEditingScheduleId(item.id);
     setScheduleTitle(item.title);
-    setScheduleStartTime(item.startTime || "");
-    setScheduleEndDate(item.endDate || `2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleStartDate(item.startDate || selectedDate);
+    setScheduleStartTime(item.startTime || "08:00");
+    setScheduleEndDate(item.endDate || item.startDate || selectedDate);
+    setScheduleEndTime(item.endTime || "24:00");
     setScheduleRepeat(item.repeat || "없음");
     setScheduleColor(item.color || "yellow");
     requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   }
 
   function cancelScheduleEdit() {
+    const selectedDate = `2026-${pad(currentMonth)}-${pad(currentDay)}`;
     setEditingScheduleId(null);
     setScheduleTitle("");
-    setScheduleStartTime("");
-    setScheduleEndDate(`2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleStartDate(selectedDate);
+    setScheduleStartTime("08:00");
+    setScheduleEndDate(selectedDate);
+    setScheduleEndTime("24:00");
     setScheduleRepeat("없음");
     setScheduleColor("yellow");
   }
@@ -1711,6 +1760,7 @@ ${text}` : text;
     const nextForDay = (schedules[k] || []).filter(item => item.id !== scheduleId);
     const nextSchedules = { ...schedules, [k]: nextForDay };
     saveSchedules(nextSchedules);
+    if (editingScheduleId === scheduleId) cancelScheduleEdit();
   }
 
   function savePhotos(month: number, day: number, nextPhotos: PhotoItem[], nextCalendarPhotos: Record<string, string>, nextCalendarPhotoIndexes = calendarPhotoIndexes) {
@@ -2284,7 +2334,7 @@ ${text}` : text;
               <div className="google-schedule-list">
                 {daySchedules.map(item => (
                   <div className="google-schedule-item app-schedule-item" key={item.id}>
-                    <span className="google-schedule-time">{item.startTime || "시간 없음"}</span>
+                    <span className="google-schedule-time">{item.startTime || "08:00"}~{item.endTime || "24:00"}</span>
                     <span className="google-schedule-title">캘린더 · {item.title}</span>
                   </div>
                 ))}
@@ -2389,23 +2439,36 @@ ${text}` : text;
           </div>
 
           <div className="schedule-form">
-            <label className="schedule-title-field">
+            <label>
               <span>제목</span>
               <textarea
                 className="schedule-title-textarea"
                 value={scheduleTitle}
-                onPaste={handleScheduleTitlePaste}
                 onChange={e => setScheduleTitle(e.target.value)}
-                placeholder="문자/카톡 내용을 붙여넣을 수 있습니다."
+                placeholder="문자/카톡 내용을 붙여넣어 일정 제목을 입력하세요."
               />
+            </label>
+            <label>
+              <span>시작일</span>
+              <input type="date" value={scheduleStartDate} onChange={e => setScheduleStartDate(e.target.value)} />
+            </label>
+            <label>
+              <span>종료일</span>
+              <input type="date" value={scheduleEndDate} onChange={e => setScheduleEndDate(e.target.value)} />
             </label>
             <label>
               <span>시작시간</span>
               <input type="time" value={scheduleStartTime} onChange={e => setScheduleStartTime(e.target.value)} />
             </label>
             <label>
-              <span>종료일</span>
-              <input type="date" value={scheduleEndDate} onChange={e => setScheduleEndDate(e.target.value)} />
+              <span>종료시간</span>
+              <input
+                type="text"
+                value={scheduleEndTime}
+                onChange={e => setScheduleEndTime(e.target.value)}
+                placeholder="24:00"
+                inputMode="numeric"
+              />
             </label>
             <label>
               <span>반복</span>
@@ -2418,7 +2481,6 @@ ${text}` : text;
               </select>
             </label>
           </div>
-
           <div className="color-picker">
             <span>색깔 선택</span>
             <div className="color-options">
@@ -2451,9 +2513,11 @@ ${text}` : text;
               <div className={`saved-schedule schedule-${item.color}`} key={item.id}>
                 <div>
                   <strong>{item.title}</strong>
-                  <span>{item.startTime || "시간 없음"} · 종료일 {item.endDate || "미지정"} · 반복 {item.repeat}</span>
+                  <span>{item.startDate || entryDate(currentMonth, currentDay)} · {item.startTime || "08:00"} ~ {item.endDate || item.startDate || entryDate(currentMonth, currentDay)} · {item.endTime || "24:00"} · 반복 {item.repeat}</span>
                 </div>
                 <div className="saved-schedule-actions">
+                  <button type="button" onClick={() => editSchedule(item)}>수정</button>
+                  <div className="saved-schedule-actions">
                   <button type="button" onClick={() => editSchedule(item)}>수정</button>
                   <button type="button" onClick={() => deleteSchedule(item.id)}>삭제</button>
                 </div>
