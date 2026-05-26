@@ -141,6 +141,50 @@ function getCalendarDaySchedules(allSchedules: Record<string, ScheduleItem[]>, m
     .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
 }
 
+
+function dateValueFromYmd(value?: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+
+  const [yearText, monthText, dayText] = value.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (year !== 2026 || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  return new Date(year, month - 1, day).getTime();
+}
+
+function dateValueFromScheduleKey(scheduleKey: string) {
+  const [monthText, dayText] = scheduleKey.split("-");
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (!Number.isFinite(month) || !Number.isFinite(day)) return null;
+  return new Date(2026, month - 1, day).getTime();
+}
+
+function getVisibleSchedulesForDay(allSchedules: Record<string, ScheduleItem[]>, month: number, day: number) {
+  const targetTime = new Date(2026, month - 1, day).getTime();
+
+  return Object.entries(allSchedules)
+    .flatMap(([scheduleKey, items]) => {
+      const fallbackStart = dateValueFromScheduleKey(scheduleKey);
+      if (fallbackStart === null) return [];
+
+      return items
+        .filter(item => {
+          const startTime = dateValueFromYmd(item.startDate) ?? fallbackStart;
+          const endTime = dateValueFromYmd(item.endDate) ?? startTime;
+          const first = Math.min(startTime, endTime);
+          const last = Math.max(startTime, endTime);
+
+          return targetTime >= first && targetTime <= last;
+        })
+        .map(item => ({ ...item, calendarSourceKey: scheduleKey }));
+    })
+    .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+}
+
 function tag(month: number, day: number) {
   return `#${pad(month)}/${pad(day)}#`;
 }
@@ -2176,7 +2220,7 @@ export default function HomePage() {
       const manuallyRed = (redDates[currentMonth] || []).includes(day);
       const redMarked = manuallyRed;
       const isToday = todayDefault.month === currentMonth && todayDefault.day === day;
-      const daySchedules = getCalendarDaySchedules(schedules, currentMonth, day);
+      const daySchedules = getVisibleSchedulesForDay(schedules, currentMonth, day);
       const dayMarks = calendarMarks[k] || [];
       const isSelected = currentDay === day;
       cells.push(
