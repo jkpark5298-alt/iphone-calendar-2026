@@ -3415,3 +3415,67 @@ textarea {
     height: 42vw !important;
   }
 }
+
+/* Info image paste zone for iPhone Safari */
+.info-image-paste-zone {
+  width: 100%;
+  min-height: 58px;
+  margin-top: 10px;
+  border: 1.5px dashed #b8c7bd;
+  border-radius: 14px;
+  background: #f7faf8;
+  color: #53675e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.45;
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.info-image-paste-zone:focus {
+  border-color: var(--deep);
+  background: #eef6f0;
+  box-shadow: 0 0 0 3px rgba(83, 103, 94, 0.12);
+}
+
+.info-image-paste-help {
+  margin: 7px 0 0;
+  color: #6f7f76;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .info-image-paste-zone {
+    background: #141917;
+    color: #d8e2da;
+    border-color: #3f5148;
+  }
+
+  .info-image-paste-zone:focus {
+    background: #17201b;
+  }
+
+  .info-image-paste-help {
+    color: #b8c7bd;
+  }
+}
+
+@media (max-width: 820px) {
+  .info-image-paste-zone {
+    min-height: 54px;
+    padding: 10px;
+    font-size: 13px;
+  }
+
+  .info-image-paste-help {
+    font-size: 11px;
+  }
+}

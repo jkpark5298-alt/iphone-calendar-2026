@@ -1391,6 +1391,27 @@ export default function HomePage() {
     await saveInfoPhotoFiles(pastedFiles);
   }
 
+  async function handleInfoPasteZone(event: ClipboardEvent<HTMLDivElement>) {
+    const pastedFiles = (Array.from(event.clipboardData.items) as DataTransferItem[])
+      .filter(item => item.type.startsWith("image/"))
+      .map(item => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+
+    if (!pastedFiles.length) {
+      alert("복사한 이미지가 감지되지 않았습니다. Safari에서 이미지를 길게 눌러 ‘이미지 복사’ 후, 이 영역을 길게 눌러 ‘붙여넣기’를 선택해 주세요.");
+      return;
+    }
+
+    event.preventDefault();
+    await saveInfoPhotoFiles(pastedFiles);
+
+    const target = event.currentTarget;
+    requestAnimationFrame(() => {
+      target.textContent = "";
+      target.blur();
+    });
+  }
+
   async function pasteInfoPhotoFromClipboard() {
     try {
       const clipboard = navigator.clipboard as Clipboard & { read?: () => Promise<ClipboardItem[]> };
@@ -1410,7 +1431,7 @@ export default function HomePage() {
       }
 
       if (!files.length) {
-        alert("클립보드에 붙여넣을 이미지가 없습니다.");
+        alert("클립보드에 이미지 데이터가 없습니다. Safari에서 이미지를 복사한 경우, 아래 붙여넣기 영역을 길게 눌러 붙여넣기를 선택해 주세요.");
         return;
       }
 
@@ -2036,7 +2057,7 @@ export default function HomePage() {
       }
 
       if (!files.length) {
-        alert("클립보드에 붙여넣을 이미지가 없습니다.");
+        alert("클립보드에 이미지 데이터가 없습니다. Safari에서 이미지를 복사한 경우, 아래 붙여넣기 영역을 길게 눌러 붙여넣기를 선택해 주세요.");
         return;
       }
 
@@ -2707,6 +2728,23 @@ function MarkDateView() {
               </label>
               <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 사진 붙여넣기</button>
             </div>
+            <div
+              className="info-image-paste-zone"
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              aria-label="복사한 이미지 붙여넣기 영역"
+              onPaste={handleInfoPasteZone}
+              onFocus={event => {
+                if (event.currentTarget.textContent?.trim()) return;
+                event.currentTarget.textContent = "";
+              }}
+            >
+              Safari에서 이미지 복사 → 이 영역을 길게 눌러 붙여넣기
+            </div>
+            <p className="info-image-paste-help">
+              저장하지 않은 웹 이미지는 이 영역에 붙여넣고, 사진앱/파일앱 사진은 사진 가져오기를 사용하세요.
+            </p>
           </div>
           <div className="text-paste-row info-text-paste-row">
             <button type="button" className="soft-btn text-paste-btn" onClick={pasteCopiedTextToInfo}>복사한 글 붙이기</button>
