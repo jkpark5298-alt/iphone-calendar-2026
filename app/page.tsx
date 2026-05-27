@@ -2517,14 +2517,14 @@ export default function HomePage() {
             <span className="main-title">2026년 아이폰 캘린더</span>
             <button type="button" className="month-badge month-diary-link" onClick={() => openDiary(currentMonth, currentDay)} aria-label="선택 날짜 일기장으로 이동">{currentMonth}월</button>
           </h1>
-          <div className="head-actions calendar-top-actions">
-            <button type="button" className="today-circle" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
+          <div className="head-actions calendar-top-actions calendar-top-actions-redesign">
+            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("diary")}>일기장</button>
+            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("info")}>정보보관소</button>
+            <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
+            <button type="button" className="mini-btn info calendar-info-top-btn calendar-info-shortcut" onClick={() => openInfo(currentMonth, currentDay)} aria-label="선택 날짜 정보보관소로 이동">I</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
-            <button type="button" className="mini-btn info calendar-info-top-btn" onClick={() => openInfo(currentMonth, currentDay)} aria-label="선택 날짜 정보보관소로 이동">I</button>
-            <button type="button" className="pill-btn compact-pill" onClick={() => openDatePicker("diary")}>일기장</button>
-            <button type="button" className="pill-btn compact-pill" onClick={() => openDatePicker("info")}>정보보관소</button>
           </div>
         </div>
 
@@ -2572,18 +2572,17 @@ export default function HomePage() {
     const diaryPhotoCountClass = `count-${Math.min(Math.max(dayPhotos.length, 1), 4)}`;
     return (
       <section>
-        <div className="diary-head diary-head-redesign">
-          <div className="diary-date-nav-row">
+        <div className="diary-head diary-head-redesign diary-head-final">
+          <div className="diary-date-nav-row diary-date-nav-final">
             <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(-1)}>← 이전일</button>
+            <h1>2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</h1>
             <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(1)}>다음일 →</button>
           </div>
 
-          <div className="diary-title-nav-row">
-            <h1>2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</h1>
-            <div className="head-actions diary-actions diary-title-actions">
-              <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
-              <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
-            </div>
+          <div className="diary-title-nav-row diary-action-nav-final">
+            <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
+            <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
+            <button type="button" className="weather-refresh-btn diary-weather-action-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
           </div>
         </div>
 
@@ -2593,7 +2592,6 @@ export default function HomePage() {
             <span>{getWeatherIcon(weather)} {weather}</span>
             <span>🌡 {temp}</span>
             <span className="weather-time-inline">🕒 {weatherTime}</span>
-            <button type="button" className="weather-refresh-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
           </div>
           <div className="google-schedule-box diary-schedule-box">
             <div className="google-schedule-head">
