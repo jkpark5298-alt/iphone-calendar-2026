@@ -376,7 +376,7 @@ export default function HomePage() {
   const [searchStatus, setSearchStatus] = useState("검색어를 입력하세요.");
   const [googleSchedules, setGoogleSchedules] = useState<GoogleScheduleItem[]>([]);
   const [googleScheduleStatus, setGoogleScheduleStatus] = useState("구글 일정 대기");
-  const [undoState, setUndoState] = useState<UndoState | null>(null);
+  const [undoHistory, setUndoHistory] = useState<UndoState[]>([]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -1265,7 +1265,7 @@ export default function HomePage() {
     if (
       editStart?.key === currentKey &&
       (editStart.diaryText !== nextDiaryText || editStart.voiceText !== nextVoiceText) &&
-      undoState?.target !== "diaryText"
+      undoHistory[0]?.target !== "diaryText"
     ) {
       registerUndo({
         label: "일기장 본문 수정",
@@ -1292,7 +1292,7 @@ export default function HomePage() {
     if (
       editStart?.key === currentKey &&
       editStart.infoText !== nextInfoText &&
-      undoState?.target !== "infoText"
+      undoHistory[0]?.target !== "infoText"
     ) {
       registerUndo({
         label: "정보보관소 본문 수정",
@@ -2034,7 +2034,7 @@ export default function HomePage() {
   }
 
   function registerUndo(nextUndo: UndoState) {
-    setUndoState(nextUndo);
+    setUndoHistory(previousHistory => [nextUndo, ...previousHistory].slice(0, 2));
   }
 
   function beginDiaryTextUndoSession() {
@@ -2050,7 +2050,12 @@ export default function HomePage() {
   }
 
   function applyUndo() {
+    const undoState = undoHistory[0];
     if (!undoState) return;
+
+    const finishUndo = () => {
+      setUndoHistory(previousHistory => previousHistory.slice(1));
+    };
 
     try {
       if (undoState.target === "infoPhotos" && undoState.photoKey) {
@@ -2068,7 +2073,7 @@ export default function HomePage() {
           });
         }
 
-        setUndoState(null);
+        finishUndo();
         alert("정보보관소 사진 작업을 되돌렸습니다.");
         return;
       }
@@ -2088,7 +2093,7 @@ export default function HomePage() {
         setCalendarPhotoIndexes(restoredCalendarPhotoIndexes);
         savePhotos(undoState.month, undoState.day, restoredItems, restoredCalendarPhotos, restoredCalendarPhotoIndexes);
 
-        setUndoState(null);
+        finishUndo();
         alert("일기장 사진 작업을 되돌렸습니다.");
         return;
       }
@@ -2099,7 +2104,7 @@ export default function HomePage() {
         setCurrentDay(undoState.day);
         saveDiary(restored.diaryText || "", restored.voiceText || "");
         diaryEditStartRef.current = null;
-        setUndoState(null);
+        finishUndo();
         requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
         alert("일기장 본문을 되돌렸습니다.");
         return;
@@ -2111,7 +2116,7 @@ export default function HomePage() {
         setCurrentDay(undoState.day);
         saveInfo(restored.infoText || "");
         infoEditStartRef.current = null;
-        setUndoState(null);
+        finishUndo();
         requestAnimationFrame(() => resizeTextareaToContent(infoTextareaRef.current));
         alert("정보보관소 본문을 되돌렸습니다.");
         return;
@@ -2120,7 +2125,7 @@ export default function HomePage() {
       if (undoState.target === "schedules") {
         const restoredSchedules = JSON.parse(undoState.previousData) as Record<string, ScheduleItem[]>;
         saveSchedules(restoredSchedules);
-        setUndoState(null);
+        finishUndo();
         alert("캘린더 일정 작업을 되돌렸습니다.");
       }
     } catch (error) {
@@ -2744,7 +2749,7 @@ export default function HomePage() {
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
-            <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoState}>↩ 되돌리기</button>
+            <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
           </div>
         </div>
 
@@ -2803,7 +2808,7 @@ export default function HomePage() {
             <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
             <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
             <button type="button" className="weather-refresh-btn diary-weather-action-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
-            <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoState}>↩ 되돌리기</button>
+            <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
           </div>
         </div>
 
@@ -3149,7 +3154,7 @@ function MarkDateView() {
                 <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
               </label>
               <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
-              <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoState}>↩ 되돌리기</button>
+              <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
             </div>
           </div>
           <p className="info-text-help-only">문자·카톡·웹페이지 글은 본문을 길게 눌러 붙여넣으세요.</p>
