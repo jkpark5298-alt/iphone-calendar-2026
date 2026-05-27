@@ -1568,12 +1568,25 @@ export default function HomePage() {
     if (!items[index]) return;
 
     const deletingItem = items[index];
+
+    registerUndo({
+      label: "정보보관소 사진 삭제",
+      target: "infoPhotos",
+      photoKey: k,
+      previousData: JSON.stringify(items),
+    });
+
     const nextPhotosForDay = items.filter((_, itemIndex) => itemIndex !== index);
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
     const [month, day] = k.split("-").map(Number);
     saveInfoPhotos(month, day, nextPhotosForDay);
-    await deleteSupabasePhoto("info-photos", "info_photos", deletingItem.storagePath);
+
+    // 되돌리기 지원을 위해 Supabase Storage 파일은 즉시 삭제하지 않습니다.
+    // 실제 파일 정리는 추후 별도 "완전 삭제/정리" 기능에서 처리합니다.
+    if (deletingItem.storagePath) {
+      console.info("Info photo removed locally only for undo support:", deletingItem.storagePath);
+    }
   }
 
   function updateInfoPhotoExtraTag(k: string, index: number, extraTag: string) {
@@ -2324,6 +2337,19 @@ export default function HomePage() {
 
     const deletingItem = items[index];
     const deletedUrl = deletingItem.url;
+    const [month, day] = k.split("-").map(Number);
+
+    registerUndo({
+      label: "일기장 사진 삭제",
+      target: "diaryPhotos",
+      photoKey: k,
+      month,
+      day,
+      previousData: JSON.stringify(items),
+      previousCalendarPhotos: JSON.stringify(calendarPhotos),
+      previousCalendarPhotoIndexes: JSON.stringify(calendarPhotoIndexes),
+    });
+
     const nextPhotosForDay = items.filter((_, itemIndex) => itemIndex !== index);
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     const nextCalendarPhotos = { ...calendarPhotos };
@@ -2346,9 +2372,13 @@ export default function HomePage() {
     setPhotos(nextPhotos);
     setCalendarPhotos(nextCalendarPhotos);
     setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
-    const [month, day] = k.split("-").map(Number);
     savePhotos(month, day, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes);
-    await deleteSupabasePhoto("diary-photos", "diary_photos", deletingItem.storagePath);
+
+    // 되돌리기 지원을 위해 Supabase Storage 파일은 즉시 삭제하지 않습니다.
+    // 실제 파일 정리는 추후 별도 "완전 삭제/정리" 기능에서 처리합니다.
+    if (deletingItem.storagePath) {
+      console.info("Diary photo removed locally only for undo support:", deletingItem.storagePath);
+    }
   }
 
   function openDiaryOriginalPhoto(photoKey: string, index: number) {
