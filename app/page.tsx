@@ -319,6 +319,19 @@ function getSafeToday() {
   return { month: 5, day: 24 };
 }
 
+
+type UndoState = {
+  label: string;
+  target: "infoPhotos" | "diaryPhotos" | "schedules";
+  photoKey?: string;
+  month?: number;
+  day?: number;
+  previousData: string;
+  previousCalendarPhotos?: string;
+  previousCalendarPhotoIndexes?: string;
+  previousInfoMemoHidden?: string;
+};
+
 export default function HomePage() {
   const todayDefault = useMemo(() => getSafeToday(), []);
   const [view, setView] = useState<View>("calendar");
@@ -363,6 +376,7 @@ export default function HomePage() {
   const [searchStatus, setSearchStatus] = useState("검색어를 입력하세요.");
   const [googleSchedules, setGoogleSchedules] = useState<GoogleScheduleItem[]>([]);
   const [googleScheduleStatus, setGoogleScheduleStatus] = useState("구글 일정 대기");
+  const [undoState, setUndoState] = useState<UndoState | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -1616,6 +1630,16 @@ export default function HomePage() {
     const targetItem = items[index];
     if (!targetItem) return;
 
+    registerUndo({
+      label: "정보보관소 메모 삭제",
+      target: "infoPhotos",
+      photoKey: k,
+      previousData: JSON.stringify(items),
+      previousInfoMemoHidden: JSON.stringify({
+        [infoPhotoMemoHiddenStorageKey(k, index, targetItem)]: localStorage.getItem(infoPhotoMemoHiddenStorageKey(k, index, targetItem)),
+      }),
+    });
+
     setInfoPhotoMemoHidden(k, index, targetItem, true);
 
     const nextPhotosForDay = items.map((item, itemIndex) =>
@@ -1798,6 +1822,18 @@ export default function HomePage() {
     const targetIndex = index + direction;
     if (!items[index] || targetIndex < 0 || targetIndex >= items.length) return;
 
+    const [month, day] = k.split("-").map(Number);
+    registerUndo({
+      label: "일기장 사진 순서 변경",
+      target: "diaryPhotos",
+      photoKey: k,
+      month,
+      day,
+      previousData: JSON.stringify(items),
+      previousCalendarPhotos: JSON.stringify(calendarPhotos),
+      previousCalendarPhotoIndexes: JSON.stringify(calendarPhotoIndexes),
+    });
+
     const nextPhotosForDay = [...items];
     [nextPhotosForDay[index], nextPhotosForDay[targetIndex]] = [nextPhotosForDay[targetIndex], nextPhotosForDay[index]];
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
@@ -1810,6 +1846,13 @@ export default function HomePage() {
     const items = infoPhotos[k] || [];
     const targetIndex = index + direction;
     if (!items[index] || targetIndex < 0 || targetIndex >= items.length) return;
+
+    registerUndo({
+      label: "정보보관소 사진 순서 변경",
+      target: "infoPhotos",
+      photoKey: k,
+      previousData: JSON.stringify(items),
+    });
 
     const nextPhotosForDay = [...items];
     [nextPhotosForDay[index], nextPhotosForDay[targetIndex]] = [nextPhotosForDay[targetIndex], nextPhotosForDay[index]];
@@ -1940,6 +1983,66 @@ export default function HomePage() {
     localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
   }
 
+  function registerUndo(nextUndo: UndoState) {
+    setUndoState(nextUndo);
+  }
+
+  function applyUndo() {
+    if (!undoState) return;
+
+    try {
+      if (undoState.target === "infoPhotos" && undoState.photoKey) {
+        const restoredItems = JSON.parse(undoState.previousData) as PhotoItem[];
+        const nextInfoPhotos = { ...infoPhotos, [undoState.photoKey]: restoredItems };
+        setInfoPhotos(nextInfoPhotos);
+        const [month, day] = undoState.photoKey.split("-").map(Number);
+        saveInfoPhotos(month, day, restoredItems);
+
+        if (undoState.previousInfoMemoHidden) {
+          const hiddenMap = JSON.parse(undoState.previousInfoMemoHidden) as Record<string, string | null>;
+          Object.entries(hiddenMap).forEach(([storageKey, value]) => {
+            if (value === null) localStorage.removeItem(storageKey);
+            else localStorage.setItem(storageKey, value);
+          });
+        }
+
+        setUndoState(null);
+        alert("정보보관소 사진 작업을 되돌렸습니다.");
+        return;
+      }
+
+      if (undoState.target === "diaryPhotos" && undoState.photoKey && undoState.month && undoState.day) {
+        const restoredItems = JSON.parse(undoState.previousData) as PhotoItem[];
+        const restoredCalendarPhotos = undoState.previousCalendarPhotos
+          ? JSON.parse(undoState.previousCalendarPhotos) as Record<string, string>
+          : calendarPhotos;
+        const restoredCalendarPhotoIndexes = undoState.previousCalendarPhotoIndexes
+          ? JSON.parse(undoState.previousCalendarPhotoIndexes) as Record<string, number>
+          : calendarPhotoIndexes;
+
+        const nextPhotos = { ...photos, [undoState.photoKey]: restoredItems };
+        setPhotos(nextPhotos);
+        setCalendarPhotos(restoredCalendarPhotos);
+        setCalendarPhotoIndexes(restoredCalendarPhotoIndexes);
+        savePhotos(undoState.month, undoState.day, restoredItems, restoredCalendarPhotos, restoredCalendarPhotoIndexes);
+
+        setUndoState(null);
+        alert("일기장 사진 작업을 되돌렸습니다.");
+        return;
+      }
+
+      if (undoState.target === "schedules") {
+        const restoredSchedules = JSON.parse(undoState.previousData) as Record<string, ScheduleItem[]>;
+        saveSchedules(restoredSchedules);
+        setUndoState(null);
+        alert("캘린더 일정 작업을 되돌렸습니다.");
+      }
+    } catch (error) {
+      console.warn("Undo restore error:", error);
+      alert("되돌리기에 실패했습니다.");
+    }
+  }
+
   function addSchedule() {
     const trimmedTitle = scheduleTitle.trim();
     if (!trimmedTitle) {
@@ -1968,6 +2071,13 @@ export default function HomePage() {
       : [...currentItems, scheduleData];
 
     const nextSchedules = { ...schedules, [k]: nextForDay };
+
+    registerUndo({
+      label: editingScheduleId ? "일정 수정" : "일정 추가",
+      target: "schedules",
+      previousData: JSON.stringify(schedules),
+    });
+
     saveSchedules(nextSchedules);
 
     setScheduleTitle("");
@@ -2014,6 +2124,13 @@ export default function HomePage() {
     const k = key(currentMonth, currentDay);
     const nextForDay = (schedules[k] || []).filter(item => item.id !== scheduleId);
     const nextSchedules = { ...schedules, [k]: nextForDay };
+
+    registerUndo({
+      label: "일정 삭제",
+      target: "schedules",
+      previousData: JSON.stringify(schedules),
+    });
+
     saveSchedules(nextSchedules);
     if (editingScheduleId === scheduleId) cancelScheduleEdit();
   }
@@ -2524,6 +2641,7 @@ export default function HomePage() {
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
+            <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoState}>↩ 되돌리기</button>
           </div>
         </div>
 
@@ -2582,6 +2700,7 @@ export default function HomePage() {
             <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
             <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
             <button type="button" className="weather-refresh-btn diary-weather-action-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
+            <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoState}>↩ 되돌리기</button>
           </div>
         </div>
 
@@ -2926,6 +3045,7 @@ function MarkDateView() {
                 <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
               </label>
               <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
+              <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoState}>↩ 되돌리기</button>
             </div>
           </div>
           <p className="info-text-help-only">문자·카톡·웹페이지 글은 본문을 길게 눌러 붙여넣으세요.</p>
