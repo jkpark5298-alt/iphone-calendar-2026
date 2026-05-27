@@ -322,7 +322,7 @@ function getSafeToday() {
 
 type UndoState = {
   label: string;
-  target: "infoPhotos" | "diaryPhotos" | "schedules";
+  target: "infoPhotos" | "diaryPhotos" | "schedules" | "diaryText" | "infoText";
   photoKey?: string;
   month?: number;
   day?: number;
@@ -382,6 +382,8 @@ export default function HomePage() {
   const audioChunksRef = useRef<BlobPart[]>([]);
   const diaryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const infoTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const diaryEditStartRef = useRef<{ key: string; diaryText: string; voiceText: string } | null>(null);
+  const infoEditStartRef = useRef<{ key: string; infoText: string } | null>(null);
 
   function resizeTextareaToContent(element: HTMLTextAreaElement | null) {
     if (!element) return;
@@ -420,6 +422,7 @@ export default function HomePage() {
         alert("클립보드에 붙일 글이 없습니다.");
         return;
       }
+      beginDiaryTextUndoSession();
       const nextText = diaryText ? `${diaryText}\n${text}` : text;
       saveDiary(nextText, voiceText);
       requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
@@ -435,6 +438,7 @@ export default function HomePage() {
         alert("클립보드에 붙일 글이 없습니다.");
         return;
       }
+      beginInfoTextUndoSession();
       const nextText = infoText ? `${infoText}\n${text}` : text;
       saveInfo(nextText);
       requestAnimationFrame(() => resizeTextareaToContent(infoTextareaRef.current));
@@ -1255,6 +1259,23 @@ export default function HomePage() {
   }
 
   function saveDiary(nextDiaryText: string, nextVoiceText: string) {
+    const currentKey = key(currentMonth, currentDay);
+    const editStart = diaryEditStartRef.current;
+
+    if (
+      editStart?.key === currentKey &&
+      (editStart.diaryText !== nextDiaryText || editStart.voiceText !== nextVoiceText) &&
+      undoState?.target !== "diaryText"
+    ) {
+      registerUndo({
+        label: "일기장 본문 수정",
+        target: "diaryText",
+        month: currentMonth,
+        day: currentDay,
+        previousData: JSON.stringify({ diaryText: editStart.diaryText, voiceText: editStart.voiceText }),
+      });
+    }
+
     setDiaryText(nextDiaryText);
     setVoiceText(nextVoiceText);
     localStorage.setItem(
@@ -1265,6 +1286,23 @@ export default function HomePage() {
   }
 
   function saveInfo(nextInfoText: string) {
+    const currentKey = key(currentMonth, currentDay);
+    const editStart = infoEditStartRef.current;
+
+    if (
+      editStart?.key === currentKey &&
+      editStart.infoText !== nextInfoText &&
+      undoState?.target !== "infoText"
+    ) {
+      registerUndo({
+        label: "정보보관소 본문 수정",
+        target: "infoText",
+        month: currentMonth,
+        day: currentDay,
+        previousData: JSON.stringify({ infoText: editStart.infoText }),
+      });
+    }
+
     setInfoText(nextInfoText);
     localStorage.setItem(storageKey("info", currentMonth, currentDay), JSON.stringify({ infoText: nextInfoText }));
     saveInfoEntryToSupabase(currentMonth, currentDay, nextInfoText);
@@ -1986,6 +2024,18 @@ export default function HomePage() {
     setUndoState(nextUndo);
   }
 
+  function beginDiaryTextUndoSession() {
+    const currentKey = key(currentMonth, currentDay);
+    if (diaryEditStartRef.current?.key === currentKey) return;
+    diaryEditStartRef.current = { key: currentKey, diaryText, voiceText };
+  }
+
+  function beginInfoTextUndoSession() {
+    const currentKey = key(currentMonth, currentDay);
+    if (infoEditStartRef.current?.key === currentKey) return;
+    infoEditStartRef.current = { key: currentKey, infoText };
+  }
+
   function applyUndo() {
     if (!undoState) return;
 
@@ -2027,6 +2077,30 @@ export default function HomePage() {
 
         setUndoState(null);
         alert("일기장 사진 작업을 되돌렸습니다.");
+        return;
+      }
+
+      if (undoState.target === "diaryText" && undoState.month && undoState.day) {
+        const restored = JSON.parse(undoState.previousData) as { diaryText: string; voiceText: string };
+        setCurrentMonth(undoState.month);
+        setCurrentDay(undoState.day);
+        saveDiary(restored.diaryText || "", restored.voiceText || "");
+        diaryEditStartRef.current = null;
+        setUndoState(null);
+        requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
+        alert("일기장 본문을 되돌렸습니다.");
+        return;
+      }
+
+      if (undoState.target === "infoText" && undoState.month && undoState.day) {
+        const restored = JSON.parse(undoState.previousData) as { infoText: string };
+        setCurrentMonth(undoState.month);
+        setCurrentDay(undoState.day);
+        saveInfo(restored.infoText || "");
+        infoEditStartRef.current = null;
+        setUndoState(null);
+        requestAnimationFrame(() => resizeTextareaToContent(infoTextareaRef.current));
+        alert("정보보관소 본문을 되돌렸습니다.");
         return;
       }
 
@@ -2758,6 +2832,7 @@ export default function HomePage() {
           ref={diaryTextareaRef}
           className="diary-textarea diary-main-textarea diary-full-textarea"
           value={diaryText}
+          onFocus={beginDiaryTextUndoSession}
           onInput={e => resizeTextareaToContent(e.currentTarget)}
           onPaste={handleDiaryTextPaste}
           onChange={e => saveDiary(e.target.value, voiceText)}
@@ -2803,7 +2878,7 @@ export default function HomePage() {
             </div>
           </div>
           {audioUrl && <audio src={audioUrl} controls style={{ width: "100%", marginTop: 12 }} />}
-          <textarea value={voiceText} onChange={e => saveDiary(diaryText, e.target.value)} style={{ minHeight: 140, marginTop: 12 }} placeholder="음성 받아쓰기 또는 녹음 내용을 정리해 보세요." />
+          <textarea value={voiceText} onFocus={beginDiaryTextUndoSession} onChange={e => saveDiary(diaryText, e.target.value)} style={{ minHeight: 140, marginTop: 12 }} placeholder="음성 받아쓰기 또는 녹음 내용을 정리해 보세요." />
         </div>
       </section>
     );
@@ -3052,6 +3127,7 @@ function MarkDateView() {
             ref={infoTextareaRef}
             className="info-main-textarea"
             value={infoText}
+            onFocus={beginInfoTextUndoSession}
             onInput={e => resizeTextareaToContent(e.currentTarget)}
             onPaste={handleInfoTextPaste}
             onChange={e => saveInfo(e.target.value)}
