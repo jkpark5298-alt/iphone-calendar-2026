@@ -501,6 +501,52 @@ export default function HomePage() {
     };
   }
 
+  function deletedPhotoStorageKey(photoType: "diary" | "info") {
+    return `iphone-calendar-2026-deleted-${photoType}-photos`;
+  }
+
+  function photoDeleteIdentity(item: PhotoItem | { storagePath?: string; url?: string; name?: string }) {
+    return item.storagePath || item.url || item.name || "";
+  }
+
+  function getDeletedPhotoIdentities(photoType: "diary" | "info") {
+    try {
+      const raw = localStorage.getItem(deletedPhotoStorageKey(photoType));
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveDeletedPhotoIdentities(photoType: "diary" | "info", identities: string[]) {
+    const uniqueIdentities = Array.from(new Set(identities.filter(Boolean)));
+    try {
+      localStorage.setItem(deletedPhotoStorageKey(photoType), JSON.stringify(uniqueIdentities));
+    } catch {
+      // 삭제 표시 저장 실패 시 화면 상태만 유지합니다.
+    }
+  }
+
+  function markPhotoAsDeleted(photoType: "diary" | "info", item: PhotoItem) {
+    const identity = photoDeleteIdentity(item);
+    if (!identity) return;
+    saveDeletedPhotoIdentities(photoType, [...getDeletedPhotoIdentities(photoType), identity]);
+  }
+
+  function clearDeletedPhotoMarkers(photoType: "diary" | "info", items: PhotoItem[]) {
+    const identitiesToRestore = new Set(items.map(photoDeleteIdentity).filter(Boolean));
+    if (!identitiesToRestore.size) return;
+    const remaining = getDeletedPhotoIdentities(photoType).filter(identity => !identitiesToRestore.has(identity));
+    saveDeletedPhotoIdentities(photoType, remaining);
+  }
+
+  function isPhotoMarkedDeleted(photoType: "diary" | "info", item: PhotoItem | { storagePath?: string; url?: string; name?: string }) {
+    const identity = photoDeleteIdentity(item);
+    if (!identity) return false;
+    return getDeletedPhotoIdentities(photoType).includes(identity);
+  }
+
   async function loadDiaryPhotosFromSupabase(month: number, day: number) {
     if (!isSupabaseConfigured || !supabase) return null;
 
@@ -516,7 +562,9 @@ export default function HomePage() {
       return null;
     }
 
-    return (data || []).map(row => photoItemFromSupabaseRow(row, month, day));
+    return (data || [])
+      .map(row => photoItemFromSupabaseRow(row, month, day))
+      .filter(item => !isPhotoMarkedDeleted("diary", item));
   }
 
   async function loadInfoPhotosFromSupabase(month: number, day: number) {
@@ -534,7 +582,9 @@ export default function HomePage() {
       return null;
     }
 
-    return (data || []).map(row => photoItemFromSupabaseRow(row, month, day));
+    return (data || [])
+      .map(row => photoItemFromSupabaseRow(row, month, day))
+      .filter(item => !isPhotoMarkedDeleted("info", item));
   }
 
   async function loadCalendarPhotosFromSupabase() {
@@ -542,7 +592,7 @@ export default function HomePage() {
 
     const { data, error } = await supabase
       .from("diary_photos")
-      .select("entry_date, public_url, sort_order")
+      .select("entry_date, public_url, storage_path, sort_order")
       .eq("is_calendar_photo", true);
 
     if (error) {
@@ -556,6 +606,7 @@ export default function HomePage() {
     (data || []).forEach(row => {
       const parts = String(row.entry_date || "").split("-");
       if (parts.length !== 3) return;
+      if (isPhotoMarkedDeleted("diary", { storagePath: row.storage_path || "", url: row.public_url || "" })) return;
       const month = Number(parts[1]);
       const day = Number(parts[2]);
       const photoKey = key(month, day);
@@ -1584,6 +1635,8 @@ export default function HomePage() {
       previousData: JSON.stringify(items),
     });
 
+    markPhotoAsDeleted("info", deletingItem);
+
     const nextPhotosForDay = items.filter((_, itemIndex) => itemIndex !== index);
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
@@ -2068,6 +2121,7 @@ export default function HomePage() {
     try {
       if (undoState.target === "infoPhotos" && undoState.photoKey) {
         const restoredItems = JSON.parse(undoState.previousData) as PhotoItem[];
+        clearDeletedPhotoMarkers("info", restoredItems);
         const nextInfoPhotos = { ...infoPhotos, [undoState.photoKey]: restoredItems };
         setInfoPhotos(nextInfoPhotos);
         const [month, day] = undoState.photoKey.split("-").map(Number);
@@ -2095,6 +2149,7 @@ export default function HomePage() {
           ? JSON.parse(undoState.previousCalendarPhotoIndexes) as Record<string, number>
           : calendarPhotoIndexes;
 
+        clearDeletedPhotoMarkers("diary", restoredItems);
         const nextPhotos = { ...photos, [undoState.photoKey]: restoredItems };
         setPhotos(nextPhotos);
         setCalendarPhotos(restoredCalendarPhotos);
@@ -2397,6 +2452,8 @@ export default function HomePage() {
     } else if (typeof selectedIndex === "number" && selectedIndex > index) {
       nextCalendarPhotoIndexes[k] = selectedIndex - 1;
     }
+
+    markPhotoAsDeleted("diary", deletingItem);
 
     setPhotos(nextPhotos);
     setCalendarPhotos(nextCalendarPhotos);
