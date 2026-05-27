@@ -1745,8 +1745,7 @@ export default function HomePage() {
     );
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
-    const [month, day] = k.split("-").map(Number);
-    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
   }
 
   function updateDiaryPhotoMemo(k: string, index: number, memo: string) {
@@ -1759,7 +1758,7 @@ export default function HomePage() {
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
     const [month, day] = k.split("-").map(Number);
-    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
   }
 
   function updateDiaryPhotoSize(k: string, index: number, size: string) {
@@ -1772,7 +1771,7 @@ export default function HomePage() {
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
     const [month, day] = k.split("-").map(Number);
-    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
   }
 
 
@@ -1786,7 +1785,7 @@ export default function HomePage() {
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
     const [month, day] = k.split("-").map(Number);
-    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
   }
 
 
@@ -1800,7 +1799,7 @@ export default function HomePage() {
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
     const [month, day] = k.split("-").map(Number);
-    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
   }
 
   function updateInfoPhotoCardFrame(k: string, index: number, size: string, memoHeight: string) {
@@ -1823,6 +1822,7 @@ export default function HomePage() {
     if (!items[index] || targetIndex < 0 || targetIndex >= items.length) return;
 
     const [month, day] = k.split("-").map(Number);
+
     registerUndo({
       label: "일기장 사진 순서 변경",
       target: "diaryPhotos",
@@ -1838,8 +1838,7 @@ export default function HomePage() {
     [nextPhotosForDay[index], nextPhotosForDay[targetIndex]] = [nextPhotosForDay[targetIndex], nextPhotosForDay[index]];
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
-    const [month, day] = k.split("-").map(Number);
-    savePhotos(month, day, nextPhotosForDay, calendarPhotos);
+    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
   }
 
   function moveInfoPhoto(k: string, index: number, direction: -1 | 1) {
