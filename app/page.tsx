@@ -2246,18 +2246,8 @@ export default function HomePage() {
 
     const k = key(currentMonth, currentDay);
     const previousItems = photos[k] || [];
-
-    registerUndo({
-      label: "일기장 사진 추가",
-      target: "diaryPhotos",
-      photoKey: k,
-      month: currentMonth,
-      day: currentDay,
-      previousData: JSON.stringify(previousItems),
-      previousCalendarPhotos: JSON.stringify(calendarPhotos),
-      previousCalendarPhotoIndexes: JSON.stringify(calendarPhotoIndexes),
-    });
-
+    const previousCalendarPhotos = { ...calendarPhotos };
+    const previousCalendarPhotoIndexes = { ...calendarPhotoIndexes };
     const newItems: PhotoItem[] = [];
 
     for (const [offset, file] of files.entries()) {
@@ -2281,10 +2271,24 @@ export default function HomePage() {
       }
     }
 
+    if (!newItems.length) return;
+
+    registerUndo({
+      label: "일기장 사진 추가",
+      target: "diaryPhotos",
+      photoKey: k,
+      month: currentMonth,
+      day: currentDay,
+      previousData: JSON.stringify(previousItems),
+      previousCalendarPhotos: JSON.stringify(previousCalendarPhotos),
+      previousCalendarPhotoIndexes: JSON.stringify(previousCalendarPhotoIndexes),
+    });
+
     const nextPhotosForDay = [...previousItems, ...newItems];
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     const nextCalendarPhotos = { ...calendarPhotos };
     const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes };
+
     if (!nextCalendarPhotos[k]) {
       nextCalendarPhotos[k] = await makeCalendarThumbDataUrl(newItems[0].url);
       nextCalendarPhotoIndexes[k] = previousItems.length;
