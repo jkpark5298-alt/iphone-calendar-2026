@@ -978,7 +978,6 @@ export default function HomePage() {
 
   async function fetchWeatherFromKma() {
     if (!isSelectedDiaryDateToday(currentMonth, currentDay)) {
-      alert("지난 날짜에는 현재 기상청 날씨를 저장하지 않습니다. 해당 날짜에 저장된 날씨만 표시합니다.");
       return;
     }
 
