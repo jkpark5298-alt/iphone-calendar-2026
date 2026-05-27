@@ -1466,6 +1466,14 @@ export default function HomePage() {
 
     const k = key(currentMonth, currentDay);
     const previousItems = infoPhotos[k] || [];
+
+    registerUndo({
+      label: "정보보관소 사진 추가",
+      target: "infoPhotos",
+      photoKey: k,
+      previousData: JSON.stringify(previousItems),
+    });
+
     const newItems: PhotoItem[] = [];
 
     for (const [offset, file] of files.entries()) {
@@ -2238,6 +2246,18 @@ export default function HomePage() {
 
     const k = key(currentMonth, currentDay);
     const previousItems = photos[k] || [];
+
+    registerUndo({
+      label: "일기장 사진 추가",
+      target: "diaryPhotos",
+      photoKey: k,
+      month: currentMonth,
+      day: currentDay,
+      previousData: JSON.stringify(previousItems),
+      previousCalendarPhotos: JSON.stringify(calendarPhotos),
+      previousCalendarPhotoIndexes: JSON.stringify(calendarPhotoIndexes),
+    });
+
     const newItems: PhotoItem[] = [];
 
     for (const [offset, file] of files.entries()) {
