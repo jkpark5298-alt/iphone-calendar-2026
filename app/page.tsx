@@ -659,6 +659,86 @@ export default function HomePage() {
     localStorage.setItem("iphone-calendar-2026-marks", JSON.stringify(nextMarks));
   }
 
+  async function loadCalendarSchedulesFromSupabase() {
+    if (!isSupabaseConfigured || !supabase) return null;
+
+    const { data, error } = await supabase
+      .from("calendar_schedules")
+      .select("schedule_id, schedule_key, month, day, title, start_date, start_time, end_date, end_time, repeat, color")
+      .order("month", { ascending: true })
+      .order("day", { ascending: true })
+      .order("start_time", { ascending: true });
+
+    if (error) {
+      console.warn("Supabase schedule load error:", error.message);
+      return null;
+    }
+
+    const nextSchedules: Record<string, ScheduleItem[]> = {};
+    (data || []).forEach((row: any) => {
+      const month = Number(row.month);
+      const day = Number(row.day);
+      if (!monthDays[month] || day < 1 || day > monthDays[month]) return;
+
+      const scheduleKey = row.schedule_key || key(month, day);
+      const color = String(row.color || "yellow") as ScheduleColor;
+      const item: ScheduleItem = {
+        id: String(row.schedule_id || row.id || `${scheduleKey}-${Date.now()}`),
+        title: String(row.title || ""),
+        startDate: row.start_date || `2026-${pad(month)}-${pad(day)}`,
+        startTime: row.start_time || "08:00",
+        endDate: row.end_date || `2026-${pad(month)}-${pad(day)}`,
+        endTime: row.end_time || "24:00",
+        repeat: row.repeat || "없음",
+        color: ["yellow", "blue", "red", "green", "lightGreen", "orange", "navy", "purple"].includes(color) ? color : "yellow",
+      };
+      nextSchedules[scheduleKey] = [...(nextSchedules[scheduleKey] || []), item];
+    });
+
+    return nextSchedules;
+  }
+
+  async function saveSchedulesToSupabase(nextSchedules: Record<string, ScheduleItem[]>) {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const rows = Object.entries(nextSchedules).flatMap(([scheduleKey, items]) => {
+      const [monthText, dayText] = scheduleKey.split("-");
+      const month = Number(monthText);
+      const day = Number(dayText);
+
+      return items.map(item => ({
+        schedule_id: item.id,
+        schedule_key: scheduleKey,
+        month,
+        day,
+        title: item.title,
+        start_date: item.startDate || `2026-${pad(month)}-${pad(day)}`,
+        start_time: item.startTime || "08:00",
+        end_date: item.endDate || item.startDate || `2026-${pad(month)}-${pad(day)}`,
+        end_time: item.endTime || "24:00",
+        repeat: item.repeat || "없음",
+        color: item.color || "yellow",
+        updated_at: new Date().toISOString(),
+      }));
+    });
+
+    const { error: deleteError } = await supabase
+      .from("calendar_schedules")
+      .delete()
+      .gte("month", 5)
+      .lte("month", 12);
+
+    if (deleteError) {
+      console.warn("Supabase schedule clear error:", deleteError.message);
+      return;
+    }
+
+    if (!rows.length) return;
+
+    const { error: insertError } = await supabase.from("calendar_schedules").insert(rows);
+    if (insertError) console.warn("Supabase schedule save error:", insertError.message);
+  }
+
   function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string) {
     if (!isSupabaseConfigured || !supabase) return;
 
@@ -865,13 +945,18 @@ export default function HomePage() {
 
 
   useEffect(() => {
+    let localSchedules: Record<string, ScheduleItem[]> = {};
+
     try {
       const rawCalendar = localStorage.getItem("iphone-diary-2026-calendar-photos");
       if (rawCalendar) setCalendarPhotos(JSON.parse(rawCalendar));
       const rawCalendarIndexes = localStorage.getItem("iphone-diary-2026-calendar-photo-indexes");
       if (rawCalendarIndexes) setCalendarPhotoIndexes(JSON.parse(rawCalendarIndexes));
       const rawSchedules = localStorage.getItem("iphone-calendar-2026-schedules");
-      if (rawSchedules) setSchedules(JSON.parse(rawSchedules));
+      if (rawSchedules) {
+        localSchedules = JSON.parse(rawSchedules);
+        setSchedules(localSchedules);
+      }
       const rawRedDates = localStorage.getItem("iphone-calendar-2026-red-dates");
       if (rawRedDates) setRedDates(JSON.parse(rawRedDates));
       const rawMarks = localStorage.getItem("iphone-calendar-2026-marks");
@@ -882,6 +967,19 @@ export default function HomePage() {
 
     void loadCalendarPhotosFromSupabase();
     void loadCalendarMarksFromSupabase();
+    void loadCalendarSchedulesFromSupabase().then(remoteSchedules => {
+      if (!remoteSchedules) return;
+
+      if (Object.keys(remoteSchedules).length > 0) {
+        setSchedules(remoteSchedules);
+        localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(remoteSchedules));
+        return;
+      }
+
+      if (Object.keys(localSchedules).length > 0) {
+        void saveSchedulesToSupabase(localSchedules);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -2092,6 +2190,7 @@ export default function HomePage() {
   function saveSchedules(nextSchedules: Record<string, ScheduleItem[]>) {
     setSchedules(nextSchedules);
     localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
+    void saveSchedulesToSupabase(nextSchedules);
   }
 
   function registerUndo(nextUndo: UndoState) {
