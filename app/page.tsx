@@ -853,10 +853,36 @@ export default function HomePage() {
     if (insertError) console.warn("Supabase info text card save error:", insertError.message);
   }
 
-  function addInfoTextCardFromBody() {
-    const content = infoText.trim();
+  async function getInfoTextCardContent() {
+    const selectedText = (() => {
+      const textarea = infoTextareaRef.current;
+      if (!textarea) return "";
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      if (start === end) return "";
+      return textarea.value.slice(start, end).trim();
+    })();
+
+    if (selectedText) return selectedText;
+
+    try {
+      const clipboardText = await navigator.clipboard.readText();
+      if (clipboardText.trim()) return clipboardText.trim();
+    } catch {
+      // 클립보드 권한이 막힌 경우 아래 직접 입력으로 진행
+    }
+
+    const manualText = window.prompt("글 카드로 저장할 내용을 붙여넣으세요.");
+    if (manualText?.trim()) return manualText.trim();
+
+    return "";
+  }
+
+  async function addInfoTextCardFromBody() {
+    const content = await getInfoTextCardContent();
+
     if (!content) {
-      alert("텍스트 카드로 저장할 본문 내용이 없습니다.");
+      alert("글 카드로 저장할 내용이 없습니다. 글을 복사한 뒤 다시 눌러 주세요.");
       return;
     }
 
@@ -3476,7 +3502,7 @@ function MarkDateView() {
                 <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
               </label>
               <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
-              <button type="button" className="soft-btn info-action-btn text-card-save-btn" onClick={addInfoTextCardFromBody}>글 카드 저장</button>
+              <button type="button" className="soft-btn info-action-btn text-card-save-btn" onClick={addInfoTextCardFromBody}>복사글 카드 저장</button>
               <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
             </div>
           </div>
