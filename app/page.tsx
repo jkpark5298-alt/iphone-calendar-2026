@@ -30,6 +30,11 @@ type ScheduleItem = {
   repeat: string;
   color: ScheduleColor;
 };
+type InfoTextCard = {
+  id: string;
+  content: string;
+  createdAt: string;
+};
 type CalendarMarkType = "C" | "A" | "심야" | "노조";
 type CalendarMarkItem = {
   id: string;
@@ -338,7 +343,7 @@ function getSafeToday() {
 
 type UndoState = {
   label: string;
-  target: "infoPhotos" | "diaryPhotos" | "schedules" | "diaryText" | "infoText";
+  target: "infoPhotos" | "diaryPhotos" | "schedules" | "diaryText" | "infoText" | "infoTextCards";
   photoKey?: string;
   month?: number;
   day?: number;
@@ -356,6 +361,7 @@ export default function HomePage() {
   const [diaryText, setDiaryText] = useState("");
   const [voiceText, setVoiceText] = useState("");
   const [infoText, setInfoText] = useState("");
+  const [infoTextCards, setInfoTextCards] = useState<Record<string, InfoTextCard[]>>({});
   const [photos, setPhotos] = useState<Record<string, PhotoItem[]>>({});
   const [infoPhotos, setInfoPhotos] = useState<Record<string, PhotoItem[]>>({});
   const [calendarPhotos, setCalendarPhotos] = useState<Record<string, string>>({});
@@ -792,6 +798,104 @@ export default function HomePage() {
       });
   }
 
+  function saveInfoTextCards(month: number, day: number, nextCards: InfoTextCard[]) {
+    const cardKey = key(month, day);
+    setInfoTextCards(previousCards => ({ ...previousCards, [cardKey]: nextCards }));
+    localStorage.setItem(storageKey("infoTextCards", month, day), JSON.stringify(nextCards));
+    void saveInfoTextCardsToSupabase(month, day, nextCards);
+  }
+
+  async function loadInfoTextCardsFromSupabase(month: number, day: number) {
+    if (!isSupabaseConfigured || !supabase) return null;
+
+    const { data, error } = await supabase
+      .from("info_text_cards")
+      .select("card_id, content, created_at, sort_order")
+      .eq("entry_date", entryDate(month, day))
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.warn("Supabase info text card load error:", error.message);
+      return null;
+    }
+
+    return (data || []).map((row: any) => ({
+      id: String(row.card_id || row.id || `${Date.now()}`),
+      content: String(row.content || ""),
+      createdAt: row.created_at || new Date().toISOString(),
+    })) as InfoTextCard[];
+  }
+
+  async function saveInfoTextCardsToSupabase(month: number, day: number, nextCards: InfoTextCard[]) {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const targetDate = entryDate(month, day);
+    const { error: deleteError } = await supabase.from("info_text_cards").delete().eq("entry_date", targetDate);
+    if (deleteError) {
+      console.warn("Supabase info text card clear error:", deleteError.message);
+      return;
+    }
+
+    if (!nextCards.length) return;
+
+    const rows = nextCards.map((card, index) => ({
+      entry_date: targetDate,
+      month,
+      day,
+      card_id: card.id,
+      content: card.content,
+      sort_order: index,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error: insertError } = await supabase.from("info_text_cards").insert(rows);
+    if (insertError) console.warn("Supabase info text card save error:", insertError.message);
+  }
+
+  function addInfoTextCardFromBody() {
+    const content = infoText.trim();
+    if (!content) {
+      alert("텍스트 카드로 저장할 본문 내용이 없습니다.");
+      return;
+    }
+
+    const cardKey = key(currentMonth, currentDay);
+    const previousCards = infoTextCards[cardKey] || [];
+    registerUndo({
+      label: "정보보관소 글 카드 추가",
+      target: "infoTextCards",
+      month: currentMonth,
+      day: currentDay,
+      previousData: JSON.stringify(previousCards),
+    });
+
+    const nextCard: InfoTextCard = {
+      id: `${Date.now()}`,
+      content,
+      createdAt: new Date().toISOString(),
+    };
+    saveInfoTextCards(currentMonth, currentDay, [...previousCards, nextCard]);
+  }
+
+  function deleteInfoTextCard(cardIndex: number) {
+    const cardKey = key(currentMonth, currentDay);
+    const previousCards = infoTextCards[cardKey] || [];
+    if (!previousCards[cardIndex]) return;
+    if (!window.confirm("이 글 카드를 삭제할까요?")) return;
+
+    registerUndo({
+      label: "정보보관소 글 카드 삭제",
+      target: "infoTextCards",
+      month: currentMonth,
+      day: currentDay,
+      previousData: JSON.stringify(previousCards),
+    });
+
+    const nextCards = previousCards.filter((_, index) => index !== cardIndex);
+    saveInfoTextCards(currentMonth, currentDay, nextCards);
+  }
+
   function saveWeatherToSupabase(month: number, day: number, weatherData: Record<string, string>) {
     if (!isSupabaseConfigured || !supabase) return;
 
@@ -1124,6 +1228,10 @@ export default function HomePage() {
         const rawInfoPhotos = localStorage.getItem(storageKey("infoPhotos", currentMonth, currentDay));
         const items = rawInfoPhotos ? JSON.parse(rawInfoPhotos) : [];
         setInfoPhotos(prev => ({ ...prev, [photoKey]: items }));
+
+        const rawInfoTextCards = localStorage.getItem(storageKey("infoTextCards", currentMonth, currentDay));
+        const cards = rawInfoTextCards ? JSON.parse(rawInfoTextCards) : [];
+        setInfoTextCards(prev => ({ ...prev, [photoKey]: cards }));
       } catch {
         setInfoText("");
       }
@@ -1142,6 +1250,13 @@ export default function HomePage() {
 
       setInfoPhotos(prev => ({ ...prev, [photoKey]: remoteItems }));
       setLocalStorageSafely(storageKey("infoPhotos", currentMonth, currentDay), JSON.stringify(remoteItems));
+    });
+
+    loadInfoTextCardsFromSupabase(currentMonth, currentDay).then(remoteCards => {
+      if (!isActive || !remoteCards) return;
+
+      setInfoTextCards(prev => ({ ...prev, [photoKey]: remoteCards }));
+      localStorage.setItem(storageKey("infoTextCards", currentMonth, currentDay), JSON.stringify(remoteCards));
     });
 
     return () => {
@@ -2300,6 +2415,16 @@ export default function HomePage() {
         return;
       }
 
+      if (undoState.target === "infoTextCards" && undoState.month && undoState.day) {
+        const restoredCards = JSON.parse(undoState.previousData) as InfoTextCard[];
+        setCurrentMonth(undoState.month);
+        setCurrentDay(undoState.day);
+        saveInfoTextCards(undoState.month, undoState.day, restoredCards);
+        finishUndo();
+        alert("정보보관소 글 카드를 되돌렸습니다.");
+        return;
+      }
+
       if (undoState.target === "schedules") {
         const restoredSchedules = JSON.parse(undoState.previousData) as Record<string, ScheduleItem[]>;
         saveSchedules(restoredSchedules);
@@ -3315,6 +3440,7 @@ function MarkDateView() {
   function InfoView() {
     const k = key(currentMonth, currentDay);
     const dayInfoPhotos = infoPhotos[k] || [];
+    const dayInfoTextCards = infoTextCards[k] || [];
     const infoPhotoCountClass = `count-${Math.min(Math.max(dayInfoPhotos.length, 1), 3)}`;
 
     return (
@@ -3350,6 +3476,7 @@ function MarkDateView() {
                 <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
               </label>
               <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
+              <button type="button" className="soft-btn info-action-btn text-card-save-btn" onClick={addInfoTextCardFromBody}>글 카드 저장</button>
               <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
             </div>
           </div>
@@ -3365,6 +3492,21 @@ function MarkDateView() {
             placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요."
           />
           <HyperlinkPreview text={infoText} />
+
+          {dayInfoTextCards.length > 0 && (
+            <div className="info-text-card-section">
+              <div className="info-text-card-title">📝 글 카드 보관함</div>
+              <div className="info-text-card-grid">
+                {dayInfoTextCards.map((card, index) => (
+                  <div className="info-text-card" key={card.id}>
+                    <div className="info-text-card-content">{card.content}</div>
+                    <PhotoMemoLinkPreview text={card.content} />
+                    <button type="button" className="info-text-card-delete" onClick={() => deleteInfoTextCard(index)}>삭제</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 이곳에 정리됩니다.</div>}
           <div className={`info-photo-grid-safe ${infoPhotoCountClass}`}>
