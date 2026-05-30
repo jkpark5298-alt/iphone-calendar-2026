@@ -4597,3 +4597,43 @@ textarea {
     padding: 7px 5px;
   }
 }
+
+/* info photo memo auto link */
+.info-photo-link-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid #e4e4df;
+  background: #f8fbf8;
+}
+
+.info-photo-link-item {
+  display: block;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: #eef6f0;
+  color: var(--deep);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.info-photo-link-item:active,
+.info-photo-link-item:hover {
+  text-decoration: underline;
+}
+
+@media (prefers-color-scheme: dark) {
+  .info-photo-link-preview {
+    border-top-color: #29352e;
+    background: #141917;
+  }
+
+  .info-photo-link-item {
+    background: #17231c;
+    color: #d8e2da;
+  }
+}

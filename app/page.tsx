@@ -306,6 +306,22 @@ function HyperlinkPreview({ text }: { text: string }) {
   );
 }
 
+function PhotoMemoLinkPreview({ text }: { text: string }) {
+  const urls = extractUrls(text);
+
+  if (!urls.length) return null;
+
+  return (
+    <div className="info-photo-link-preview">
+      {urls.map(url => (
+        <a key={url} href={normalizeUrlForHref(url)} target="_blank" rel="noreferrer" className="info-photo-link-item">
+          🔗 {url}
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function getSafeToday() {
   const today = new Date();
   const year = today.getFullYear();
@@ -3363,15 +3379,18 @@ function MarkDateView() {
                   <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
                 </button>
                 {!getInfoPhotoMemoHidden(k, index, photo) && (
-                  <textarea
-                    className="info-photo-note-safe"
-                    value={normalizeInfoPhotoMemo(photo.memo)}
-                    onFocus={e => expandInfoPhotoNote(e.currentTarget)}
-                    onInput={e => expandInfoPhotoNote(e.currentTarget)}
-                    onBlur={e => collapseInfoPhotoNote(e.currentTarget)}
-                    onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
-                    placeholder="# 사진 아래에 내용을 입력하세요."
-                  />
+                  <>
+                    <textarea
+                      className="info-photo-note-safe"
+                      value={normalizeInfoPhotoMemo(photo.memo)}
+                      onFocus={e => expandInfoPhotoNote(e.currentTarget)}
+                      onInput={e => expandInfoPhotoNote(e.currentTarget)}
+                      onBlur={e => collapseInfoPhotoNote(e.currentTarget)}
+                      onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
+                      placeholder="# 사진 아래에 내용을 입력하세요."
+                    />
+                    <PhotoMemoLinkPreview text={normalizeInfoPhotoMemo(photo.memo)} />
+                  </>
                 )}
               </div>
             ))}
