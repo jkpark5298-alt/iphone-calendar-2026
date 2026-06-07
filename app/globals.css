@@ -4907,7 +4907,9 @@ body {
     min-height: min(44vh, calc(var(--ios-vvh) - 88px)) !important;
     max-height: min(44vh, calc(var(--ios-vvh) - 88px)) !important;
   }
-}\n\n/* info text card edit/delete actions */
+}
+
+/* info text card edit/delete actions */
 .info-text-card-actions {
   position: absolute;
   right: 10px;
@@ -4947,4 +4949,4 @@ body {
     background: #3b1d1d;
     color: #ffd0d0;
   }
-}\n
+}
