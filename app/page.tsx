@@ -413,20 +413,37 @@ export default function HomePage() {
     element.style.height = `${Math.max(element.scrollHeight, 180)}px`;
   }
 
+  function updateVisualViewportHeight() {
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    document.documentElement.style.setProperty("--ios-vvh", `${viewportHeight}px`);
+  }
+
   function keepTextareaAboveKeyboard(element: HTMLTextAreaElement | null) {
     if (!element) return;
 
-    requestAnimationFrame(() => {
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
+    updateVisualViewportHeight();
+    document.body.classList.add("ios-keyboard-editing");
 
-    window.setTimeout(() => {
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 350);
+    const updateAndReveal = () => {
+      updateVisualViewportHeight();
+      element.scrollTop = Math.max(element.scrollTop, 0);
+      window.scrollTo({ top: Math.max(window.scrollY - 80, 0), behavior: "smooth" });
+    };
 
+    requestAnimationFrame(updateAndReveal);
+    window.setTimeout(updateAndReveal, 120);
+    window.setTimeout(updateAndReveal, 350);
+    window.setTimeout(updateAndReveal, 700);
+  }
+
+  function stopTextareaKeyboardMode() {
     window.setTimeout(() => {
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 700);
+      const active = document.activeElement;
+      if (active?.tagName !== "TEXTAREA" && active?.tagName !== "INPUT") {
+        document.body.classList.remove("ios-keyboard-editing");
+        document.documentElement.style.removeProperty("--ios-vvh");
+      }
+    }, 180);
   }
 
   function focusDiaryTextarea(element: HTMLTextAreaElement) {
@@ -1317,6 +1334,24 @@ export default function HomePage() {
       isActive = false;
     };
   }, [view, currentMonth, currentDay]);
+
+  useEffect(() => {
+    const handleViewportChange = () => {
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty("--ios-vvh", `${viewportHeight}px`);
+    };
+
+    handleViewportChange();
+    window.visualViewport?.addEventListener("resize", handleViewportChange);
+    window.visualViewport?.addEventListener("scroll", handleViewportChange);
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", handleViewportChange);
+      window.visualViewport?.removeEventListener("scroll", handleViewportChange);
+      document.body.classList.remove("ios-keyboard-editing");
+      document.documentElement.style.removeProperty("--ios-vvh");
+    };
+  }, []);
 
   useEffect(() => {
     if (view !== "diary") return;
@@ -3244,6 +3279,7 @@ export default function HomePage() {
           value={diaryText}
           onFocus={e => focusDiaryTextarea(e.currentTarget)}
           onInput={e => { resizeTextareaToContent(e.currentTarget); keepTextareaAboveKeyboard(e.currentTarget); }}
+          onBlur={stopTextareaKeyboardMode}
           onPaste={handleDiaryTextPaste}
           onChange={e => saveDiary(e.target.value, voiceText)}
           placeholder="오늘의 기록을 남겨보세요...."
@@ -3541,6 +3577,7 @@ function MarkDateView() {
             value={infoText}
             onFocus={e => focusInfoTextarea(e.currentTarget)}
             onInput={e => { resizeTextareaToContent(e.currentTarget); keepTextareaAboveKeyboard(e.currentTarget); }}
+            onBlur={stopTextareaKeyboardMode}
             onPaste={handleInfoTextPaste}
             onChange={e => saveInfo(e.target.value)}
             placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요."
