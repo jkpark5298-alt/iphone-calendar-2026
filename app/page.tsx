@@ -413,6 +413,34 @@ export default function HomePage() {
     element.style.height = `${Math.max(element.scrollHeight, 180)}px`;
   }
 
+  function keepTextareaAboveKeyboard(element: HTMLTextAreaElement | null) {
+    if (!element) return;
+
+    requestAnimationFrame(() => {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+
+    window.setTimeout(() => {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 350);
+
+    window.setTimeout(() => {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 700);
+  }
+
+  function focusDiaryTextarea(element: HTMLTextAreaElement) {
+    beginDiaryTextUndoSession();
+    resizeTextareaToContent(element);
+    keepTextareaAboveKeyboard(element);
+  }
+
+  function focusInfoTextarea(element: HTMLTextAreaElement) {
+    beginInfoTextUndoSession();
+    resizeTextareaToContent(element);
+    keepTextareaAboveKeyboard(element);
+  }
+
   function expandInfoPhotoNote(element: HTMLTextAreaElement | null) {
     if (!element) return;
     element.style.height = "auto";
@@ -3214,8 +3242,8 @@ export default function HomePage() {
           ref={diaryTextareaRef}
           className="diary-textarea diary-main-textarea diary-full-textarea"
           value={diaryText}
-          onFocus={beginDiaryTextUndoSession}
-          onInput={e => resizeTextareaToContent(e.currentTarget)}
+          onFocus={e => focusDiaryTextarea(e.currentTarget)}
+          onInput={e => { resizeTextareaToContent(e.currentTarget); keepTextareaAboveKeyboard(e.currentTarget); }}
           onPaste={handleDiaryTextPaste}
           onChange={e => saveDiary(e.target.value, voiceText)}
           placeholder="오늘의 기록을 남겨보세요...."
@@ -3260,7 +3288,7 @@ export default function HomePage() {
             </div>
           </div>
           {audioUrl && <audio src={audioUrl} controls style={{ width: "100%", marginTop: 12 }} />}
-          <textarea value={voiceText} onFocus={beginDiaryTextUndoSession} onChange={e => saveDiary(diaryText, e.target.value)} style={{ minHeight: 140, marginTop: 12 }} placeholder="음성 받아쓰기 또는 녹음 내용을 정리해 보세요." />
+          <textarea value={voiceText} onFocus={e => focusDiaryTextarea(e.currentTarget)} onChange={e => saveDiary(diaryText, e.target.value)} style={{ minHeight: 140, marginTop: 12 }} placeholder="음성 받아쓰기 또는 녹음 내용을 정리해 보세요." />
         </div>
       </section>
     );
@@ -3511,8 +3539,8 @@ function MarkDateView() {
             ref={infoTextareaRef}
             className="info-main-textarea"
             value={infoText}
-            onFocus={beginInfoTextUndoSession}
-            onInput={e => resizeTextareaToContent(e.currentTarget)}
+            onFocus={e => focusInfoTextarea(e.currentTarget)}
+            onInput={e => { resizeTextareaToContent(e.currentTarget); keepTextareaAboveKeyboard(e.currentTarget); }}
             onPaste={handleInfoTextPaste}
             onChange={e => saveInfo(e.target.value)}
             placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요."
