@@ -362,6 +362,7 @@ export default function HomePage() {
   const [voiceText, setVoiceText] = useState("");
   const [infoText, setInfoText] = useState("");
   const [infoTextCards, setInfoTextCards] = useState<Record<string, InfoTextCard[]>>({});
+  const [editingInfoTextCard, setEditingInfoTextCard] = useState<{ index: number; content: string } | null>(null);
   const [photos, setPhotos] = useState<Record<string, PhotoItem[]>>({});
   const [infoPhotos, setInfoPhotos] = useState<Record<string, PhotoItem[]>>({});
   const [calendarPhotos, setCalendarPhotos] = useState<Record<string, string>>({});
@@ -917,7 +918,7 @@ export default function HomePage() {
       // 아이폰/Safari에서 클립보드 권한이 막힌 경우 직접 입력으로 진행
     }
 
-    const manualText = window.prompt("글 카드로 저장할 내용을 붙여넣으세요.");
+    const manualText = window.prompt("글 카드에 추가할 내용을 붙여넣으세요.");
     if (manualText?.trim()) return manualText.trim();
 
     return "";
@@ -927,7 +928,7 @@ export default function HomePage() {
     const content = await getInfoTextCardContent();
 
     if (!content) {
-      alert("글 카드로 저장할 내용이 없습니다. 글을 복사한 뒤 다시 눌러 주세요.");
+      alert("글 카드에 저장할 내용이 없습니다. 글을 복사한 뒤 다시 눌러 주세요.");
       return;
     }
 
@@ -942,15 +943,27 @@ export default function HomePage() {
       previousData: JSON.stringify(previousCards),
     });
 
-    const nextCard: InfoTextCard = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      content,
-      createdAt: new Date().toISOString(),
-    };
+    if (previousCards.length === 0) {
+      const nextCard: InfoTextCard = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        content,
+        createdAt: new Date().toISOString(),
+      };
 
-    const nextCards = [...previousCards, nextCard];
+      saveInfoTextCards(currentMonth, currentDay, [nextCard]);
+      alert("복사글 카드를 저장했습니다.");
+      return;
+    }
+
+    const lastIndex = previousCards.length - 1;
+    const nextCards = previousCards.map((card, index) =>
+      index === lastIndex
+        ? { ...card, content: `${card.content.trim()}\n\n${content}`.trim() }
+        : card
+    );
+
     saveInfoTextCards(currentMonth, currentDay, nextCards);
-    alert("복사글 카드를 추가 저장했습니다.");
+    alert("기존 글 카드에 복사글을 추가했습니다.");
   }
 
   function editInfoTextCard(cardIndex: number) {
@@ -960,10 +973,25 @@ export default function HomePage() {
 
     if (!targetCard) return;
 
-    const nextContent = window.prompt("글 카드 내용을 수정하세요.", targetCard.content);
-    if (nextContent === null) return;
+    setEditingInfoTextCard({
+      index: cardIndex,
+      content: targetCard.content,
+    });
+  }
 
-    const trimmedContent = nextContent.trim();
+  function saveEditingInfoTextCard() {
+    if (!editingInfoTextCard) return;
+
+    const cardKey = key(currentMonth, currentDay);
+    const previousCards = infoTextCards[cardKey] || [];
+    const targetCard = previousCards[editingInfoTextCard.index];
+
+    if (!targetCard) {
+      setEditingInfoTextCard(null);
+      return;
+    }
+
+    const trimmedContent = editingInfoTextCard.content.trim();
     if (!trimmedContent) {
       alert("글 카드 내용은 비워둘 수 없습니다.");
       return;
@@ -978,12 +1006,13 @@ export default function HomePage() {
     });
 
     const nextCards = previousCards.map((card, index) =>
-      index === cardIndex
+      index === editingInfoTextCard.index
         ? { ...card, content: trimmedContent }
         : card
     );
 
     saveInfoTextCards(currentMonth, currentDay, nextCards);
+    setEditingInfoTextCard(null);
   }
 
   function deleteInfoTextCard(cardIndex: number) {
@@ -3695,6 +3724,23 @@ function MarkDateView() {
             <div className="date-picker-actions">
               <button type="button" className="soft-btn" onClick={() => setDatePickerMode(null)}>취소</button>
               <button type="button" className="pill-btn" onClick={applyDatePicker}>이동</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {editingInfoTextCard && (
+        <div className="info-text-card-edit-overlay" role="dialog" aria-modal="true" onClick={() => setEditingInfoTextCard(null)}>
+          <div className="info-text-card-edit-panel" onClick={event => event.stopPropagation()}>
+            <h3>글 카드 수정</h3>
+            <textarea
+              className="info-text-card-edit-textarea"
+              value={editingInfoTextCard.content}
+              onChange={event => setEditingInfoTextCard({ ...editingInfoTextCard, content: event.target.value })}
+              placeholder="글 카드 내용을 수정하세요."
+            />
+            <div className="info-text-card-edit-actions">
+              <button type="button" className="soft-btn" onClick={() => setEditingInfoTextCard(null)}>취소</button>
+              <button type="button" className="pill-btn" onClick={saveEditingInfoTextCard}>수정 저장</button>
             </div>
           </div>
         </div>
