@@ -4907,4 +4907,44 @@ body {
     min-height: min(44vh, calc(var(--ios-vvh) - 88px)) !important;
     max-height: min(44vh, calc(var(--ios-vvh) - 88px)) !important;
   }
+}\n\n/* info text card edit/delete actions */
+.info-text-card-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
+
+.info-text-card-edit,
+.info-text-card-delete {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.info-text-card-edit {
+  background: #eaf3ff;
+  color: #174c80;
+}
+
+.info-text-card-delete {
+  background: #ffe7e7;
+  color: #8a1f1f;
+}
+
+@media (prefers-color-scheme: dark) {
+  .info-text-card-edit {
+    background: #172a3d;
+    color: #cde5ff;
+  }
+
+  .info-text-card-delete {
+    background: #3b1d1d;
+    color: #ffd0d0;
+  }
+}\n

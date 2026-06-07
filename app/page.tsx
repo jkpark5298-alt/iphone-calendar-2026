@@ -914,7 +914,7 @@ export default function HomePage() {
       const clipboardText = await navigator.clipboard.readText();
       if (clipboardText.trim()) return clipboardText.trim();
     } catch {
-      // 클립보드 권한이 막힌 경우 아래 직접 입력으로 진행
+      // 아이폰/Safari에서 클립보드 권한이 막힌 경우 직접 입력으로 진행
     }
 
     const manualText = window.prompt("글 카드로 저장할 내용을 붙여넣으세요.");
@@ -933,6 +933,7 @@ export default function HomePage() {
 
     const cardKey = key(currentMonth, currentDay);
     const previousCards = infoTextCards[cardKey] || [];
+
     registerUndo({
       label: "정보보관소 글 카드 추가",
       target: "infoTextCards",
@@ -942,11 +943,47 @@ export default function HomePage() {
     });
 
     const nextCard: InfoTextCard = {
-      id: `${Date.now()}`,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       content,
       createdAt: new Date().toISOString(),
     };
-    saveInfoTextCards(currentMonth, currentDay, [...previousCards, nextCard]);
+
+    const nextCards = [...previousCards, nextCard];
+    saveInfoTextCards(currentMonth, currentDay, nextCards);
+    alert("복사글 카드를 추가 저장했습니다.");
+  }
+
+  function editInfoTextCard(cardIndex: number) {
+    const cardKey = key(currentMonth, currentDay);
+    const previousCards = infoTextCards[cardKey] || [];
+    const targetCard = previousCards[cardIndex];
+
+    if (!targetCard) return;
+
+    const nextContent = window.prompt("글 카드 내용을 수정하세요.", targetCard.content);
+    if (nextContent === null) return;
+
+    const trimmedContent = nextContent.trim();
+    if (!trimmedContent) {
+      alert("글 카드 내용은 비워둘 수 없습니다.");
+      return;
+    }
+
+    registerUndo({
+      label: "정보보관소 글 카드 수정",
+      target: "infoTextCards",
+      month: currentMonth,
+      day: currentDay,
+      previousData: JSON.stringify(previousCards),
+    });
+
+    const nextCards = previousCards.map((card, index) =>
+      index === cardIndex
+        ? { ...card, content: trimmedContent }
+        : card
+    );
+
+    saveInfoTextCards(currentMonth, currentDay, nextCards);
   }
 
   function deleteInfoTextCard(cardIndex: number) {
@@ -3592,7 +3629,10 @@ function MarkDateView() {
                   <div className="info-text-card" key={card.id}>
                     <div className="info-text-card-content">{card.content}</div>
                     <PhotoMemoLinkPreview text={card.content} />
-                    <button type="button" className="info-text-card-delete" onClick={() => deleteInfoTextCard(index)}>삭제</button>
+                    <div className="info-text-card-actions">
+                      <button type="button" className="info-text-card-edit" onClick={() => editInfoTextCard(index)}>수정</button>
+                      <button type="button" className="info-text-card-delete" onClick={() => deleteInfoTextCard(index)}>삭제</button>
+                    </div>
                   </div>
                 ))}
               </div>
