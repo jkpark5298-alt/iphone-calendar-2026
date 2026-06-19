@@ -4882,11 +4882,17 @@ ${photo.memoText}`;
                       </div>
 
                       {activeCard.imageUrl && (
-                        <div className="info-detail-image-box" onClick={() => {
-                          setOriginalImageUrl(activeCard.imageUrl || "");
-                          setOriginalImageTarget({ type: "insta", id: activeCard.id });
-                        }}>
-                          <img src={activeCard.imageUrl} alt="인스타 주요 정보 첨부 이미지" />
+                        <div className="info-detail-image-box">
+                          <img 
+                            src={activeCard.imageUrl} 
+                            alt="인스타 주요 정보 첨부 이미지" 
+                            style={{ cursor: "pointer" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOriginalImageUrl(activeCard.imageUrl || "");
+                              setOriginalImageTarget({ type: "insta", id: activeCard.id });
+                            }}
+                          />
                         </div>
                       )}
 
@@ -5047,11 +5053,17 @@ ${photo.memoText}`;
                       </div>
 
                       {activePhoto.url && (
-                        <div className="info-detail-image-box" onClick={() => {
-                          setOriginalImageUrl(activePhoto.url || "");
-                          setOriginalImageTarget({ type: "photobook", id: activePhoto.id || "" });
-                        }}>
-                          <img src={activePhoto.url} alt={`포토북 - ${activePhoto.keyword}`} />
+                        <div className="info-detail-image-box">
+                          <img 
+                            src={activePhoto.url} 
+                            alt={`포토북 - ${activePhoto.keyword}`} 
+                            style={{ cursor: "pointer" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOriginalImageUrl(activePhoto.url || "");
+                              setOriginalImageTarget({ type: "photobook", id: activePhoto.id || "" });
+                            }}
+                          />
                         </div>
                       )}
 
