@@ -3649,7 +3649,6 @@ function MarkDateView() {
       memoWidth: "360",
       memoHeight: "110",
       storagePath: row.storage_path,
-      id: row.id,
     }));
   }
 
