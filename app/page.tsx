@@ -3639,6 +3639,7 @@ function MarkDateView() {
       return [];
     }
     return (data || []).map(row => ({
+      id: String(row.id || ""),
       url: row.public_url || "",
       name: row.storage_path?.split("/").pop() || "photo.jpg",
       tag: row.entry_date, // entry_date
@@ -3834,11 +3835,26 @@ function MarkDateView() {
     };
   }
 
-  // Parse Photo Book memo and keyword from serialized caption
   function parsePhotoBookMemo(memo: string): { keyword: string; category2: string; memo: string } {
-    if (memo && memo.startsWith("{")) {
+    let cleanMemo = memo || "";
+
+    // 1. Check if memo contains serialized JSON within hashtag format (e.g. #{"type":"photobook",...}#...)
+    const jsonMatch = cleanMemo.match(/\{"type":"photobook"[^}]*\}/);
+    if (jsonMatch) {
       try {
-        const parsed = JSON.parse(memo);
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          keyword: parsed.keyword || "일반",
+          category2: parsed.category2 || "기타",
+          memo: parsed.memo || cleanMemo.replace(jsonMatch[0], "").replace(/^[#\s]+|[#\s]+$/g, "")
+        };
+      } catch (e) {}
+    }
+
+    // 2. Check standard JSON structure
+    if (cleanMemo.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(cleanMemo);
         if (parsed.type === "photobook" || parsed.keyword || parsed.category2) {
           return {
             keyword: parsed.keyword || "일반",

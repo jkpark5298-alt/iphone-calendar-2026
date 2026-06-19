@@ -5932,6 +5932,10 @@ body {
   font-size: 12px;
   font-weight: bold;
   color: #ffd04b;
+  white-space: normal;
+  word-break: break-all;
+  display: inline-block;
+  max-width: 100%;
 }
 
 .info-detail-body {
@@ -6160,19 +6164,101 @@ body {
 
 /* 2컬럼 반응형 모바일 */
 @media (max-width: 900px) {
+  .info-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 10px !important;
+    min-height: auto !important;
+  }
+
   .info-layout-2col {
-    grid-template-columns: 1fr;
-    gap: 15px;
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
+
+  .info-main-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 12px !important;
+    min-height: auto !important;
+  }
+
   .info-right-sidebar {
-    height: 350px;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    height: auto !important;
+    min-height: 400px !important;
+    padding: 10px !important;
   }
-  /* 모바일에서는 호버 줌의 위치를 썸네일 위나 아래 등 적절히 처리하거나 비활성화 */
+
+  /* 모바일 터치 환경에서는 오동작할 수 있는 호버 줌을 완전히 비활성화 */
   .info-sidebar-hover-zoom {
-    right: auto;
-    left: 60px; /* 모바일 폭에 맞게 조정 */
-    width: 150px;
-    height: 150px;
+    display: none !important;
+  }
+
+  /* 카테고리 알약 버튼 모바일 최적화 */
+  .category-pill {
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+  }
+
+  /* 헤더 정렬 모바일 최적화 */
+  .info-head-one-line {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .info-title-one-line {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .info-action-one-line {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    margin-top: 5px !important;
+  }
+
+  /* 인스타/포토북 탭 버튼 최적화 */
+  .info-subview-tabs {
+    flex-direction: row !important;
+    width: 100% !important;
+  }
+
+  .info-subview-tab {
+    font-size: 13px !important;
+    padding: 8px !important;
+  }
+
+  /* 이미지 및 폼 필드 크기 제한 */
+  .info-detail-image-box {
+    max-width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+  }
+
+  .info-detail-image-box img {
+    max-width: 100% !important;
+    height: auto !important;
+    object-fit: contain !important;
+  }
+
+  .insta-paste-zone {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .insta-paste-zone img {
+    max-width: 100% !important;
+    height: auto !important;
   }
 }
 
