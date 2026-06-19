@@ -416,6 +416,7 @@ export default function HomePage() {
   const [instaInputImageStoragePath, setInstaInputImageStoragePath] = useState("");
   const [instaInputImageUrls, setInstaInputImageUrls] = useState<string[]>([]);
   const [instaInputImageStoragePaths, setInstaInputImageStoragePaths] = useState<string[]>([]);
+  const [instaInputTitle, setInstaInputTitle] = useState("");
   const [instaInputCategory, setInstaInputCategory] = useState("기타");
   const [instaInputKeyword, setInstaInputKeyword] = useState("");
   const [instaInputExtractedText, setInstaInputExtractedText] = useState("");
@@ -3804,6 +3805,7 @@ function MarkDateView() {
   // Parse Instagram Card content from serialized JSON
   type InstaInfoCard = {
     id: string;
+    title?: string;
     category: string;
     keyword: string;
     entryDate: string;
@@ -3826,6 +3828,7 @@ function MarkDateView() {
           const legacyPath = parsed.imageStoragePath || "";
           return {
             id,
+            title: parsed.title || "",
             category: parsed.category || "기타",
             keyword: parsed.keyword || "일반",
             entryDate: parsed.entryDate || entryDate,
@@ -3984,6 +3987,7 @@ function MarkDateView() {
         const parsed = JSON.parse(data.result);
         if (parsed.category) setInstaInputCategory(parsed.category);
         if (parsed.keyword) setInstaInputKeyword(parsed.keyword);
+        if (parsed.title) setInstaInputTitle(parsed.title);
       } catch (e) {
         console.warn("Failed to parse classification JSON:", data.result, e);
       }
@@ -4175,6 +4179,7 @@ function MarkDateView() {
     let nextCards: InfoTextCard[] = [];
     const content = JSON.stringify({
       type: "insta_info",
+      title: instaInputTitle.trim(),
       category: instaInputCategory || "기타",
       keyword: instaInputKeyword.trim() || "일반",
       entryDate: dateStr,
@@ -4212,6 +4217,7 @@ function MarkDateView() {
     await refreshAllInfoData();
 
     // Reset Form
+    setInstaInputTitle("");
     setInstaInputText("");
     setInstaInputImageUrl("");
     setInstaInputImageStoragePath("");
@@ -4813,6 +4819,7 @@ ${photo.memoText}`;
       if (!instaSearchKey.trim()) return true;
       const query = instaSearchKey.toLowerCase();
       return (
+        (card.title && card.title.toLowerCase().includes(query)) ||
         card.category.toLowerCase().includes(query) ||
         card.keyword.toLowerCase().includes(query) ||
         card.entryDate.toLowerCase().includes(query) ||
@@ -5113,6 +5120,27 @@ ${photo.memoText}`;
                       )}
 
                       <div className="input-group" style={{ marginTop: "15px" }}>
+                        <label className="field-label">제목:</label>
+                        <input
+                          type="text"
+                          className="info-title-input"
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(255,255,255,0.15)",
+                            background: "rgba(0,0,0,0.2)",
+                            color: "#fff",
+                            boxSizing: "border-box",
+                            fontSize: "14px"
+                          }}
+                          placeholder="제목을 입력하세요 (AI 자동 추출 또는 직접 입력 가능)"
+                          value={instaInputTitle}
+                          onChange={e => setInstaInputTitle(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="input-group" style={{ marginTop: "15px" }}>
                         <label className="field-label">정보 상세 내용 및 수집 본문:</label>
                         <textarea
                           className="insta-textarea"
@@ -5188,6 +5216,12 @@ ${photo.memoText}`;
                           />
                         </div>
                       </div>
+
+                      {activeCard.title && (
+                        <h2 style={{ fontSize: "20px", fontWeight: "bold", margin: "15px 0", color: "#7ab8ff" }}>
+                          {activeCard.title}
+                        </h2>
+                      )}
 
                       {((activeCard.imageUrls && activeCard.imageUrls.length > 0) || activeCard.imageUrl) && (
                         <div className="info-detail-image-box" style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "center", marginBottom: "15px" }}>
@@ -5499,6 +5533,27 @@ ${photo.memoText}`;
                       )}
 
                       <div className="input-group" style={{ marginTop: "15px" }}>
+                        <label className="field-label">제목:</label>
+                        <input
+                          type="text"
+                          className="info-title-input"
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(255,255,255,0.15)",
+                            background: "rgba(0,0,0,0.2)",
+                            color: "#fff",
+                            boxSizing: "border-box",
+                            fontSize: "14px"
+                          }}
+                          placeholder="제목을 입력하세요 (AI 자동 추출 또는 직접 입력 가능)"
+                          value={instaInputTitle}
+                          onChange={e => setInstaInputTitle(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="input-group" style={{ marginTop: "15px" }}>
                         <label className="field-label">정보 상세 내용 및 수집 본문:</label>
                         <textarea
                           className="insta-textarea"
@@ -5680,7 +5735,7 @@ ${photo.memoText}`;
                 /* Instagram Sidebar List */
                 <>
                   <div className="info-sidebar-title">
-                    <span>📸 인스타 정보 인덱스</span>
+                    <span>📸 인스타 정보 인덱스 ({allInstaCards.length})</span>
                     <button
                       type="button"
                       className="pill-btn compact-pill"
@@ -5688,6 +5743,7 @@ ${photo.memoText}`;
                       onClick={() => {
                         setActiveItem(null);
                         setEditingInstaCardId(null);
+                        setInstaInputTitle("");
                         setInstaInputText("");
                         setInstaInputImageUrl("");
                         setInstaInputImageStoragePath("");
@@ -5731,8 +5787,8 @@ ${photo.memoText}`;
                   <div className="info-sidebar-list">
                     {filteredInstaCards.map(card => {
                       const isActive = activeItem?.type === "insta" && activeItem?.id === card.id;
-                      const displayTitle = `${card.category}-${card.keyword}`;
-                      const displaySubtitle = `작성일자: ${card.entryDate}`;
+                      const displayTitle = card.title ? card.title : `${card.category}-${card.keyword}`;
+                      const displaySubtitle = card.title ? `${card.category}-${card.keyword} | ${card.entryDate}` : `작성일자: ${card.entryDate}`;
                       return (
                         <div
                           key={card.id}
@@ -5790,7 +5846,7 @@ ${photo.memoText}`;
                 /* Photo Book Sidebar List */
                 <>
                   <div className="info-sidebar-title">
-                    <span>📖 포토북 인덱스</span>
+                    <span>📖 포토북 인덱스 ({allPhotoBookItems.length})</span>
                     <button
                       type="button"
                       className="pill-btn compact-pill"
@@ -6228,6 +6284,7 @@ ${photo.memoText}`;
                     if (!infoBookSearchQuery.trim()) return true;
                     const query = infoBookSearchQuery.toLowerCase();
                     return (
+                      (card.title && card.title.toLowerCase().includes(query)) ||
                       card.category.toLowerCase().includes(query) ||
                       card.keyword.toLowerCase().includes(query) ||
                       card.entryDate.toLowerCase().includes(query) ||
@@ -6249,6 +6306,7 @@ ${photo.memoText}`;
                         if (!infoBookSearchQuery.trim()) return true;
                         const query = infoBookSearchQuery.toLowerCase();
                         return (
+                          (card.title && card.title.toLowerCase().includes(query)) ||
                           card.category.toLowerCase().includes(query) ||
                           card.keyword.toLowerCase().includes(query) ||
                           card.entryDate.toLowerCase().includes(query) ||
@@ -6284,6 +6342,12 @@ ${photo.memoText}`;
                             }} className="infobook-card-badge">{card.category}-{card.keyword}</span>
                             <span style={{ fontSize: "11px", color: "#aaa" }}>{card.entryDate}</span>
                           </div>
+
+                          {card.title && (
+                            <h3 style={{ margin: "4px 0", fontSize: "14px", fontWeight: "bold", color: "#7ab8ff" }} className="infobook-card-title">
+                              {card.title}
+                            </h3>
+                          )}
 
                           {/* Images */}
                           {((card.imageUrls && card.imageUrls.length > 0) || card.imageUrl) && (

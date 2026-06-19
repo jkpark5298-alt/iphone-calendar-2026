@@ -6463,6 +6463,9 @@ body {
     color: #0066cc !important;
     border: 1px solid #cce6ff !important;
   }
+  .infobook-card-title {
+    color: #000 !important;
+  }
   .infobook-card-memo {
     color: #333 !important;
   }
