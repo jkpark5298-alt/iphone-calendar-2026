@@ -6187,22 +6187,28 @@ body {
     gap: 15px !important;
     width: 100% !important;
     max-width: 100% !important;
+    overflow: hidden !important;
   }
 
   .info-main-content {
+    order: 2 !important;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
     padding: 12px !important;
     min-height: auto !important;
+    overflow: hidden !important;
   }
 
   .info-right-sidebar {
+    order: 1 !important;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
     height: auto !important;
-    min-height: 400px !important;
+    min-height: 200px !important;
+    max-height: 320px !important;
+    overflow-y: auto !important;
     padding: 10px !important;
   }
 
