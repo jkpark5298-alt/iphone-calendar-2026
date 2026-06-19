@@ -6191,7 +6191,7 @@ body {
   }
 
   .info-main-content {
-    order: 2 !important;
+    order: 1 !important;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
@@ -6201,7 +6201,7 @@ body {
   }
 
   .info-right-sidebar {
-    order: 1 !important;
+    order: 2 !important;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
