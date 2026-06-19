@@ -6228,13 +6228,15 @@ body {
 
   /* 인스타/포토북 탭 버튼 최적화 */
   .info-subview-tabs {
-    flex-direction: row !important;
+    flex-direction: column !important;
     width: 100% !important;
+    gap: 8px !important;
   }
 
   .info-subview-tab {
     font-size: 13px !important;
-    padding: 8px !important;
+    padding: 10px !important;
+    text-align: center !important;
   }
 
   /* 이미지 및 폼 필드 크기 제한 */
