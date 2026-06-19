@@ -19,7 +19,11 @@ type PhotoItem = {
   isCalendarPhoto?: boolean;
 };
 type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple";
-type OriginalImageTarget = { type: "diary"; photoKey: string; index: number } | null;
+type OriginalImageTarget = 
+  | { type: "diary"; photoKey: string; index: number } 
+  | { type: "insta"; id: string }
+  | { type: "photobook"; id: string }
+  | null;
 type ScheduleItem = {
   id: string;
   title: string;
@@ -2887,7 +2891,7 @@ export default function HomePage() {
   }
 
   async function deleteOriginalDiaryPhoto() {
-    if (!originalImageTarget) return;
+    if (!originalImageTarget || originalImageTarget.type !== "diary") return;
     const itemNumber = originalImageTarget.index + 1;
     if (!window.confirm(`${itemNumber}번째 사진을 삭제할까요?`)) return;
     await deletePhoto(originalImageTarget.photoKey, originalImageTarget.index);
@@ -4878,7 +4882,10 @@ ${photo.memoText}`;
                       </div>
 
                       {activeCard.imageUrl && (
-                        <div className="info-detail-image-box" onClick={() => window.open(activeCard!.imageUrl, "_blank")}>
+                        <div className="info-detail-image-box" onClick={() => {
+                          setOriginalImageUrl(activeCard.imageUrl || "");
+                          setOriginalImageTarget({ type: "insta", id: activeCard.id });
+                        }}>
                           <img src={activeCard.imageUrl} alt="인스타 주요 정보 첨부 이미지" />
                         </div>
                       )}
@@ -5040,7 +5047,10 @@ ${photo.memoText}`;
                       </div>
 
                       {activePhoto.url && (
-                        <div className="info-detail-image-box" onClick={() => window.open(activePhoto!.url, "_blank")}>
+                        <div className="info-detail-image-box" onClick={() => {
+                          setOriginalImageUrl(activePhoto.url || "");
+                          setOriginalImageTarget({ type: "photobook", id: activePhoto.id || "" });
+                        }}>
                           <img src={activePhoto.url} alt={`포토북 - ${activePhoto.keyword}`} />
                         </div>
                       )}

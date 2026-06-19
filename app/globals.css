@@ -5961,6 +5961,7 @@ body {
   justify-content: center;
   align-items: center;
   background: rgba(0, 0, 0, 0.15);
+  cursor: pointer;
 }
 
 .info-detail-image-box img {
@@ -6267,6 +6268,7 @@ body {
     overflow: hidden !important;
     margin-bottom: 15px !important;
     background: rgba(0, 0, 0, 0.15) !important;
+    cursor: pointer !important;
   }
 
   .info-detail-image-box img {
