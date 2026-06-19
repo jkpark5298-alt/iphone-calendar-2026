@@ -6238,16 +6238,30 @@ body {
   }
 
   /* 이미지 및 폼 필드 크기 제한 */
-  .info-detail-image-box {
+  .info-detail-view {
+    width: 100% !important;
     max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .info-detail-image-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
     display: flex !important;
     justify-content: center !important;
+    overflow: hidden !important;
+    margin-bottom: 15px !important;
   }
 
   .info-detail-image-box img {
+    width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
     object-fit: contain !important;
+    display: block !important;
+    margin: 0 auto !important;
   }
 
   .insta-paste-zone {
