@@ -3867,7 +3867,6 @@ function MarkDateView() {
     // Fallback for legacy info photos
     let keyword = "일반";
     let category2 = "기타";
-    let cleanMemo = memo || "";
     if (cleanMemo.startsWith("#")) {
       const parts = cleanMemo.split("#").filter(Boolean);
       if (parts.length >= 2) {
