@@ -6408,6 +6408,70 @@ body {
   .album-card-memo {
     color: #333 !important;
   }
+
+  /* 인스타 정보북 모달과 그 자식 요소 표시 */
+  .info-book-modal-overlay,
+  .info-book-modal-overlay * {
+    visibility: visible !important;
+  }
+  .info-book-modal-overlay {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    z-index: auto !important;
+  }
+  .printable-infobook-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    background: #fff !important;
+    color: #000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+  .infobook-modal-body {
+    background: #fff !important;
+    padding: 0 !important;
+    overflow-y: visible !important;
+  }
+  .infobook-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 20px !important;
+    background: #fff !important;
+  }
+  .infobook-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    background: #fff !important;
+    border: 1.5px solid #ddd !important;
+    color: #000 !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+    box-shadow: none !important;
+  }
+  .infobook-card-badge {
+    background: #e6f3ff !important;
+    color: #0066cc !important;
+    border: 1px solid #cce6ff !important;
+  }
+  .infobook-card-memo {
+    color: #333 !important;
+  }
+  .infobook-card-factcheck {
+    background: #f7f7f7 !important;
+    border: 1px dashed #ccc !important;
+    color: #444 !important;
+  }
+
   /* 화면 UI 컨트롤러 숨기기 */
   .no-print {
     display: none !important;
