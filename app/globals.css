@@ -6332,4 +6332,86 @@ body {
   }
 }
 
+/* ==========================================
+   포토앨범 프린트 및 인쇄 최적화 (PDF 저장)
+   ========================================== */
+@media print {
+  /* 기본적으로 모든 앱 레이아웃 요소를 숨깁니다 */
+  body * {
+    visibility: hidden !important;
+  }
+  /* 포토앨범 모달과 그 자식 요소만 표시합니다 */
+  .photo-album-modal-overlay,
+  .photo-album-modal-overlay * {
+    visibility: visible !important;
+  }
+  .photo-album-modal-overlay {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    z-index: auto !important;
+  }
+  .printable-album-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    background: #fff !important;
+    color: #000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+  .album-modal-body {
+    background: #fff !important;
+    padding: 0 !important;
+    overflow-y: visible !important;
+  }
+  /* 인쇄 전용 헤더 타이틀 표시 */
+  .print-only-header {
+    display: block !important;
+    color: #000 !important;
+  }
+  /* 앨범 내의 검색 결과가 2/3컬럼 정렬을 유지하도록 설정 */
+  .album-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 20px !important;
+    background: #fff !important;
+  }
+  /* 각 포토앨범 카드가 페이지 도중에 잘리지 않도록 설정 */
+  .album-photo-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    background: #fff !important;
+    border: 1.5px solid #ddd !important;
+    color: #000 !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+    box-shadow: none !important;
+  }
+  .album-card-img-box {
+    background: #f7f7f7 !important;
+    border: 1px solid #eee !important;
+  }
+  .album-card-badge {
+    background: #e6f4f1 !important;
+    color: #3f8e77 !important;
+    border: 1px solid #c9ece3 !important;
+  }
+  .album-card-memo {
+    color: #333 !important;
+  }
+  /* 화면 UI 컨트롤러 숨기기 */
+  .no-print {
+    display: none !important;
+  }
+}
+
 

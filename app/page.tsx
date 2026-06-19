@@ -437,6 +437,9 @@ export default function HomePage() {
   const [photoSearchKey, setPhotoSearchKey] = useState("");
   const [instaInputDate, setInstaInputDate] = useState("");
   const [photoBookInputDate, setPhotoBookInputDate] = useState("");
+  const [selectedPhotoBookIds, setSelectedPhotoBookIds] = useState<string[]>([]);
+  const [isPhotoAlbumModalOpen, setIsPhotoAlbumModalOpen] = useState(false);
+  const [albumSearchQuery, setAlbumSearchQuery] = useState("");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -4653,6 +4656,49 @@ ${photo.memoText}`;
     });
   }
 
+  // PhotoBook batch sharing helper
+  async function shareSelectedPhotoBookItems() {
+    const selectedPhotos = allPhotoBookItems.filter(p => p.id && selectedPhotoBookIds.includes(p.id)).map(photo => {
+      const parsed = parsePhotoBookMemo(photo.memo || "");
+      return {
+        ...photo,
+        keyword: parsed.keyword,
+        category2: parsed.category2,
+        memoText: parsed.memo
+      };
+    });
+    if (selectedPhotos.length === 0) {
+      alert("선택된 포토북 항목이 없습니다.");
+      return;
+    }
+
+    let text = `[에어제타 포토북 공유]\n총 ${selectedPhotos.length}개의 사진 기록:\n\n`;
+    selectedPhotos.forEach((p, idx) => {
+      text += `${idx + 1}. #${p.keyword} #${p.category2} (작성일자: ${p.tag})\n`;
+      if (p.memoText) text += `메모: ${p.memoText}\n`;
+      if (p.url) text += `이미지: ${p.url}\n`;
+      text += `\n`;
+    });
+
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: "에어제타 포토북 앨범",
+          text: text,
+        });
+      } catch (e) {
+        console.error("Web Share failed:", e);
+      }
+    } else {
+      navigator.clipboard.writeText(text).then(() => {
+        alert("선택한 포토북 정보가 클립보드에 복사되었습니다. 다른 기기나 PC로 공유해 보세요!");
+      }).catch(err => {
+        console.error("공유 텍스트 복사 실패:", err);
+        alert("공유에 실패했습니다.");
+      });
+    }
+  }
+
   // PC share helper: Download Card as TXT
   function downloadCardAsTxt(card: InstaInfoCard) {
     const text = `[인스타 주요 정보 리포트]
@@ -4734,6 +4780,16 @@ ${photo.memoText}`;
       );
     });
 
+    const selectedPhotoBookItems = allPhotoBookItems.map(photo => {
+      const parsed = parsePhotoBookMemo(photo.memo || "");
+      return {
+        ...photo,
+        keyword: parsed.keyword,
+        category2: parsed.category2,
+        memoText: parsed.memo
+      };
+    }).filter(photo => selectedPhotoBookIds.includes(photo.id || ""));
+
     // Find active item details
     let activeCard: InstaInfoCard | undefined;
     let activePhoto: any | undefined;
@@ -4810,6 +4866,51 @@ ${photo.memoText}`;
                   📖 포토북 (Photo Book)
                 </button>
               </div>
+
+              {infoSubView === "photobook" && selectedPhotoBookIds.length > 0 && (
+                <div className="photobook-batch-panel" style={{
+                  background: "rgba(98, 177, 155, 0.12)",
+                  border: "1px solid rgba(98, 177, 155, 0.3)",
+                  borderRadius: "8px",
+                  padding: "10px 15px",
+                  marginBottom: "15px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "10px"
+                }}>
+                  <span style={{ fontSize: "13px", fontWeight: "bold", color: "#62b19b" }}>
+                    📖 선택된 포토북 항목: {selectedPhotoBookIds.length}개
+                  </span>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      type="button"
+                      className="pill-btn compact-pill"
+                      style={{ background: "#62b19b", color: "#fff", border: "none", fontSize: "11px", padding: "4px 10px" }}
+                      onClick={() => setIsPhotoAlbumModalOpen(true)}
+                    >
+                      🖼️ 포토앨범 보기 & PDF 저장
+                    </button>
+                    <button
+                      type="button"
+                      className="pill-btn compact-pill"
+                      style={{ background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: "11px", padding: "4px 10px" }}
+                      onClick={shareSelectedPhotoBookItems}
+                    >
+                      🔗 공유하기
+                    </button>
+                    <button
+                      type="button"
+                      className="pill-btn compact-pill"
+                      style={{ background: "rgba(239, 68, 68, 0.15)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.3)", fontSize: "11px", padding: "4px 10px" }}
+                      onClick={() => setSelectedPhotoBookIds([])}
+                    >
+                      선택 해제
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {activeItem ? (
                 /* Detail/Edit View */
@@ -5515,40 +5616,81 @@ ${photo.memoText}`;
                     value={photoSearchKey}
                     onChange={e => setPhotoSearchKey(e.target.value)}
                   />
+                  <div className="photobook-selection-controls" style={{ display: "flex", gap: "8px", margin: "8px 0", fontSize: "11px", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: "5px" }}>
+                      <button
+                        type="button"
+                        className="pill-btn compact-pill"
+                        style={{ fontSize: "10px", padding: "2px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
+                        onClick={() => setSelectedPhotoBookIds(filteredPhotoBookItems.map(p => p.id).filter((id): id is string => Boolean(id)))}
+                      >
+                        전체 선택
+                      </button>
+                      <button
+                        type="button"
+                        className="pill-btn compact-pill"
+                        style={{ fontSize: "10px", padding: "2px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
+                        onClick={() => setSelectedPhotoBookIds([])}
+                      >
+                        선택 해제
+                      </button>
+                    </div>
+                    <span style={{ color: "#aaa" }}>선택: {selectedPhotoBookIds.length}개</span>
+                  </div>
                   <div className="info-sidebar-list">
                     {filteredPhotoBookItems.map(photo => {
                       const isActive = activeItem?.type === "photobook" && activeItem?.id === photo.id;
                       const displayTitle = `#${photo.keyword}#${photo.category2}`;
                       const displaySubtitle = `작성일자: ${photo.tag}`;
                       return (
-                        <button
+                        <div
                           key={photo.id}
-                          type="button"
-                          className={`info-sidebar-item-row ${isActive ? "active" : ""}`}
-                          onClick={() => {
-                            setActiveItem({ type: "photobook", id: photo.id || "" });
-                            setEditingPhotoBookItemId(null);
-                          }}
-                          title={`${displayTitle} | ${displaySubtitle}`}
+                          className="info-sidebar-item-row-wrapper"
+                          style={{ display: "flex", alignItems: "center", width: "100%", gap: "6px", marginBottom: "6px" }}
                         >
-                          <div className="info-sidebar-thumb">
-                            {photo.url ? (
-                              <>
-                                <img src={photo.url} alt={photo.keyword} />
-                                <div
-                                  className="info-sidebar-hover-zoom"
-                                  style={{ backgroundImage: `url(${photo.url})` }}
-                                />
-                              </>
-                            ) : (
-                              <span className="info-sidebar-thumb-icon">📖</span>
-                            )}
-                          </div>
-                          <div className="info-sidebar-meta">
-                            <span className="info-sidebar-meta-title">{displayTitle}</span>
-                            <span className="info-sidebar-meta-subtitle">{displaySubtitle}</span>
-                          </div>
-                        </button>
+                          <input
+                            type="checkbox"
+                            className="photobook-item-checkbox"
+                            checked={Boolean(photo.id && selectedPhotoBookIds.includes(photo.id))}
+                            onChange={(e) => {
+                              if (!photo.id) return;
+                              if (e.target.checked) {
+                                setSelectedPhotoBookIds(prev => [...prev, photo.id!]);
+                              } else {
+                                setSelectedPhotoBookIds(prev => prev.filter(id => id !== photo.id));
+                              }
+                            }}
+                            style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "#62b19b", flexShrink: 0 }}
+                          />
+                          <button
+                            type="button"
+                            className={`info-sidebar-item-row ${isActive ? "active" : ""}`}
+                            onClick={() => {
+                              setActiveItem({ type: "photobook", id: photo.id || "" });
+                              setEditingPhotoBookItemId(null);
+                            }}
+                            style={{ flex: 1, margin: 0, overflow: "hidden" }}
+                            title={`${displayTitle} | ${displaySubtitle}`}
+                          >
+                            <div className="info-sidebar-thumb">
+                              {photo.url ? (
+                                <>
+                                  <img src={photo.url} alt={photo.keyword} />
+                                  <div
+                                    className="info-sidebar-hover-zoom"
+                                    style={{ backgroundImage: `url(${photo.url})` }}
+                                  />
+                                </>
+                              ) : (
+                                <span className="info-sidebar-thumb-icon">📖</span>
+                              )}
+                            </div>
+                            <div className="info-sidebar-meta">
+                              <span className="info-sidebar-meta-title">{displayTitle}</span>
+                              <span className="info-sidebar-meta-subtitle">{displaySubtitle}</span>
+                            </div>
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -5557,6 +5699,228 @@ ${photo.memoText}`;
             </div>
 
           </div>
+          {isPhotoAlbumModalOpen && (
+            <div className="photo-album-modal-overlay" role="dialog" aria-modal="true" style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0, 0, 0, 0.85)",
+              zIndex: 9999,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: "20px",
+              boxSizing: "border-box"
+            }}>
+              <div className="printable-album-modal" style={{
+                background: "#1e1e1e",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: "16px",
+                width: "90%",
+                maxWidth: "960px",
+                height: "90%",
+                display: "flex",
+                flexDirection: "column",
+                boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
+                overflow: "hidden",
+                color: "#fff",
+                fontFamily: "var(--font-apple)"
+              }}>
+                {/* Modal Header */}
+                <div className="album-modal-header no-print" style={{
+                  padding: "16px 20px",
+                  borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                  background: "#181818"
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "18px", fontWeight: "bold", color: "#62b19b" }}>🖼️ 포토앨범 PDF & 인쇄</span>
+                    <span style={{ fontSize: "12px", color: "#aaa" }}>선택된 항목: {selectedPhotoBookIds.length}개</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <input
+                      type="text"
+                      placeholder="🔍 앨범 내 해시태그/설명 검색..."
+                      value={albumSearchQuery}
+                      onChange={e => setAlbumSearchQuery(e.target.value)}
+                      style={{
+                        background: "rgba(0, 0, 0, 0.3)",
+                        border: "1px solid rgba(255, 255, 255, 0.15)",
+                        borderRadius: "6px",
+                        color: "#fff",
+                        padding: "6px 12px",
+                        fontSize: "13px",
+                        width: "200px"
+                      }}
+                      className="album-modal-search"
+                    />
+                    <button
+                      type="button"
+                      className="pill-btn"
+                      onClick={() => window.print()}
+                      style={{ background: "#62b19b", color: "#fff", border: "none", display: "inline-flex", alignItems: "center", gap: "5px" }}
+                    >
+                      🖨️ PDF 저장 / 인쇄
+                    </button>
+                    <button
+                      type="button"
+                      className="pill-btn"
+                      onClick={() => {
+                        setIsPhotoAlbumModalOpen(false);
+                        setAlbumSearchQuery("");
+                      }}
+                      style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}
+                    >
+                      닫기
+                    </button>
+                  </div>
+                </div>
+
+                {/* Modal Body: Grid List of Photos */}
+                <div className="album-modal-body" style={{
+                  flex: 1,
+                  padding: "24px",
+                  overflowY: "auto",
+                  background: "#141414"
+                }}>
+                  {/* Cover/Intro shown only when printing */}
+                  <div className="print-only-header" style={{ display: "none", marginBottom: "30px", borderBottom: "2px solid #000", paddingBottom: "15px" }}>
+                    <h1 style={{ fontSize: "28px", margin: 0, fontWeight: "bold", color: "#000" }}>📖 에어제타 포토북 앨범 (Photo Album)</h1>
+                    <p style={{ fontSize: "12px", color: "#666", margin: "5px 0 0 0" }}>출력 일시: {new Date().toLocaleString('ko-KR')} | 총 {selectedPhotoBookIds.length}개 항목</p>
+                  </div>
+
+                  {selectedPhotoBookItems.filter(p => {
+                    if (!albumSearchQuery.trim()) return true;
+                    const query = albumSearchQuery.toLowerCase();
+                    return (
+                      p.keyword.toLowerCase().includes(query) ||
+                      p.category2.toLowerCase().includes(query) ||
+                      p.memoText.toLowerCase().includes(query) ||
+                      p.tag.toLowerCase().includes(query)
+                    );
+                  }).length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "50px", color: "#aaa" }}>
+                      검색 조건에 맞는 포토북 항목이 없습니다.
+                    </div>
+                  ) : (
+                    <div className="album-grid" style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                      gap: "20px"
+                    }}>
+                      {selectedPhotoBookItems.filter(p => {
+                        if (!albumSearchQuery.trim()) return true;
+                        const query = albumSearchQuery.toLowerCase();
+                        return (
+                          p.keyword.toLowerCase().includes(query) ||
+                          p.category2.toLowerCase().includes(query) ||
+                          p.memoText.toLowerCase().includes(query) ||
+                          p.tag.toLowerCase().includes(query)
+                        );
+                      }).map(photo => (
+                        <div
+                          key={photo.id}
+                          className="album-photo-card"
+                          style={{
+                            background: "rgba(255, 255, 255, 0.02)",
+                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            borderRadius: "12px",
+                            padding: "16px",
+                            boxSizing: "border-box",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "12px"
+                          }}
+                        >
+                          {/* Photo Image */}
+                          {photo.url ? (
+                            <div style={{
+                              width: "100%",
+                              height: "180px",
+                              display: "flex",
+                              justifyContent: "center",
+                              alignItems: "center",
+                              overflow: "hidden",
+                              borderRadius: "8px",
+                              background: "#000",
+                              border: "1px solid rgba(255,255,255,0.05)"
+                            }} className="album-card-img-box">
+                              <img
+                                src={photo.url}
+                                alt={photo.keyword}
+                                style={{
+                                  maxWidth: "100%",
+                                  maxHeight: "100%",
+                                  objectFit: "contain"
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div style={{
+                              width: "100%",
+                              height: "180px",
+                              display: "flex",
+                              justifyContent: "center",
+                              alignItems: "center",
+                              borderRadius: "8px",
+                              background: "#2a2a2a",
+                              color: "#666",
+                              fontSize: "40px"
+                            }}>
+                              📖
+                            </div>
+                          )}
+                          
+                          {/* Info & Tags */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+                              <span style={{
+                                background: "rgba(98, 177, 155, 0.15)",
+                                color: "#62b19b",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                fontWeight: "bold"
+                              }} className="album-card-badge">#{photo.keyword}</span>
+                              <span style={{
+                                background: "rgba(255, 255, 255, 0.08)",
+                                color: "#ccc",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "11px"
+                              }} className="album-card-badge">#{photo.category2}</span>
+                              <span style={{
+                                background: "rgba(255, 255, 255, 0.08)",
+                                color: "#ccc",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "11px"
+                              }} className="album-card-badge">{photo.tag}</span>
+                            </div>
+                            
+                            <p style={{
+                              margin: "6px 0 0 0",
+                              fontSize: "12px",
+                              lineHeight: "1.5",
+                              color: "#ddd",
+                              wordBreak: "break-all",
+                              whiteSpace: "pre-wrap"
+                            }} className="album-card-memo">{photo.memoText}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
     );
