@@ -4499,6 +4499,70 @@ function MarkDateView() {
     }
   }
 
+  // Clipboard Paste button handler for Instagram Info Management
+  async function pasteInstaImageFromClipboard() {
+    try {
+      const clipboard = navigator.clipboard as Clipboard & { read?: () => Promise<ClipboardItem[]> };
+      if (!clipboard.read) {
+        alert("이 브라우저에서는 클립보드 붙여넣기를 지원하지 않습니다. '사진 가져오기'를 사용해 주세요.");
+        return;
+      }
+
+      const clipboardItems = await clipboard.read();
+      let file: File | null = null;
+
+      for (const item of clipboardItems) {
+        const imageType = item.types.find(type => type.startsWith("image/"));
+        if (!imageType) continue;
+        const blob = await item.getType(imageType);
+        file = new File([blob], `insta_pasted_${Date.now()}.png`, { type: imageType });
+        break;
+      }
+
+      if (!file) {
+        alert("클립보드에 이미지 데이터가 없습니다. 이미지를 복사한 후 다시 시도해 주세요.");
+        return;
+      }
+
+      await handleInstaImageUpload(file);
+    } catch (e) {
+      console.error(e);
+      alert("클립보드 접근 권한이 없거나 지원되지 않는 브라우저입니다. 복사한 이미지를 입력 창에 직접 붙여넣거나(Ctrl+V) '사진 가져오기'를 사용해 주세요.");
+    }
+  }
+
+  // Clipboard Paste button handler for Photo book
+  async function pastePhotoBookImageFromClipboard() {
+    try {
+      const clipboard = navigator.clipboard as Clipboard & { read?: () => Promise<ClipboardItem[]> };
+      if (!clipboard.read) {
+        alert("이 브라우저에서는 클립보드 붙여넣기를 지원하지 않습니다. '사진 가져오기'를 사용해 주세요.");
+        return;
+      }
+
+      const clipboardItems = await clipboard.read();
+      let file: File | null = null;
+
+      for (const item of clipboardItems) {
+        const imageType = item.types.find(type => type.startsWith("image/"));
+        if (!imageType) continue;
+        const blob = await item.getType(imageType);
+        file = new File([blob], `photobook_pasted_${Date.now()}.png`, { type: imageType });
+        break;
+      }
+
+      if (!file) {
+        alert("클립보드에 이미지 데이터가 없습니다. 이미지를 복사한 후 다시 시도해 주세요.");
+        return;
+      }
+
+      await handlePhotoBookImageUpload(file);
+    } catch (e) {
+      console.error(e);
+      alert("클립보드 접근 권한이 없거나 지원되지 않는 브라우저입니다. 복사한 이미지를 입력 창에 직접 붙여넣거나(Ctrl+V) '사진 가져오기'를 사용해 주세요.");
+    }
+  }
+
   // API Call: Auto Classify Photo book
   async function runPhotoBookAIClassification(file?: File, memoText?: string) {
     setInstaLoading(true);
@@ -4772,30 +4836,41 @@ ${photo.memoText}`;
                         {instaInputImageUrl ? (
                           <div className="paste-preview-container">
                             <img src={instaInputImageUrl} alt="인스타 수정 프리뷰" />
-                            <button type="button" className="remove-preview-btn" onClick={() => {
+                            <button type="button" className="remove-preview-btn" title="이미지 삭제" onClick={() => {
                               setInstaInputImageUrl("");
                               setInstaInputImageStoragePath("");
                               setInstaInputExtractedText("");
-                            }}>이미지 삭제</button>
+                            }}>×</button>
                           </div>
                         ) : (
                           <div className="paste-placeholder">
                             <span className="icon">📸</span>
-                            <p>이미지를 붙여넣기(Ctrl+V)하거나 선택하세요.</p>
-                            <label className="file-select-btn">
-                              사진 가져오기
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden-input"
-                                onChange={async e => {
-                                  const files = Array.from(e.target.files || []) as File[];
-                                  if (files.length > 0) await handleInstaImageUpload(files[0]);
-                                }}
-                              />
-                            </label>
+                            <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요.</p>
                           </div>
                         )}
+                      </div>
+
+                      <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
+                        <label className="file-select-btn" style={{ margin: 0 }}>
+                          📸 사진 가져오기
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden-input"
+                            onChange={async e => {
+                              const files = Array.from(e.target.files || []) as File[];
+                              if (files.length > 0) await handleInstaImageUpload(files[0]);
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="file-select-btn"
+                          onClick={pasteInstaImageFromClipboard}
+                          style={{ margin: 0 }}
+                        >
+                          📋 클립보드 붙여넣기
+                        </button>
                       </div>
 
                       {instaInputExtractedText && (
@@ -4929,6 +5004,7 @@ ${photo.memoText}`;
                       )}
 
                       <div className="info-detail-actions no-print">
+                        <button type="button" className="action-btn" onClick={() => setActiveItem(null)} style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>🏠 등록 화면으로</button>
                         <button type="button" className="action-btn" onClick={() => triggerEditInstaCard(activeCard!)}>✏️ 수정</button>
                         <button type="button" className="action-btn delete-btn" onClick={() => deleteInstaCard(activeCard!.id)}>🗑️ 삭제</button>
                         <button type="button" className="action-btn" onClick={() => copyCardToClipboard(activeCard!)}>📋 복사</button>
@@ -4962,29 +5038,40 @@ ${photo.memoText}`;
                         {photoBookInputImageUrl ? (
                           <div className="paste-preview-container">
                             <img src={photoBookInputImageUrl} alt="포토북 수정 프리뷰" />
-                            <button type="button" className="remove-preview-btn" onClick={() => {
+                            <button type="button" className="remove-preview-btn" title="이미지 삭제" onClick={() => {
                               setPhotoBookInputImageUrl("");
                               setPhotoBookInputImageStoragePath("");
-                            }}>이미지 삭제</button>
+                            }}>×</button>
                           </div>
                         ) : (
                           <div className="paste-placeholder">
                             <span className="icon">📖</span>
-                            <p>이미지를 붙여넣기(Ctrl+V)하거나 선택하세요.</p>
-                            <label className="file-select-btn">
-                              사진 가져오기
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden-input"
-                                onChange={async e => {
-                                  const files = Array.from(e.target.files || []) as File[];
-                                  if (files.length > 0) await handlePhotoBookImageUpload(files[0]);
-                                }}
-                              />
-                            </label>
+                            <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요.</p>
                           </div>
                         )}
+                      </div>
+
+                      <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
+                        <label className="file-select-btn" style={{ margin: 0 }}>
+                          📸 사진 가져오기
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden-input"
+                            onChange={async e => {
+                              const files = Array.from(e.target.files || []) as File[];
+                              if (files.length > 0) await handlePhotoBookImageUpload(files[0]);
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="file-select-btn"
+                          onClick={pastePhotoBookImageFromClipboard}
+                          style={{ margin: 0 }}
+                        >
+                          📋 클립보드 붙여넣기
+                        </button>
                       </div>
 
                       <div className="keyword-input-group" style={{ marginTop: "15px" }}>
@@ -5073,6 +5160,7 @@ ${photo.memoText}`;
                       </div>
 
                       <div className="info-detail-actions no-print">
+                        <button type="button" className="action-btn" onClick={() => setActiveItem(null)} style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>🏠 등록 화면으로</button>
                         <button type="button" className="action-btn" onClick={() => triggerEditPhotoBook(activePhoto!)}>✏️ 수정</button>
                         <button type="button" className="action-btn delete-btn" onClick={() => deletePhotoBookItem(activePhoto!.id)}>🗑️ 삭제</button>
                         <button type="button" className="action-btn" onClick={() => copyPhotoBookToClipboard(activePhoto!)}>📋 복사</button>
@@ -5108,30 +5196,41 @@ ${photo.memoText}`;
                         {instaInputImageUrl ? (
                           <div className="paste-preview-container">
                             <img src={instaInputImageUrl} alt="인스타 업로드 프리뷰" />
-                            <button type="button" className="remove-preview-btn" onClick={() => {
+                            <button type="button" className="remove-preview-btn" title="이미지 삭제" onClick={() => {
                               setInstaInputImageUrl("");
                               setInstaInputImageStoragePath("");
                               setInstaInputExtractedText("");
-                            }}>이미지 삭제</button>
+                            }}>×</button>
                           </div>
                         ) : (
                           <div className="paste-placeholder">
                             <span className="icon">📸</span>
-                            <p>복사한 인스타 이미지를 여기에 <strong>붙여넣기(Ctrl+V)</strong>하거나 파일을 선택하세요.</p>
-                            <label className="file-select-btn">
-                              사진 가져오기
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden-input"
-                                onChange={async e => {
-                                  const files = Array.from(e.target.files || []) as File[];
-                                  if (files.length > 0) await handleInstaImageUpload(files[0]);
-                                }}
-                              />
-                            </label>
+                            <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요.</p>
                           </div>
                         )}
+                      </div>
+
+                      <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
+                        <label className="file-select-btn" style={{ margin: 0 }}>
+                          📸 사진 가져오기
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden-input"
+                            onChange={async e => {
+                              const files = Array.from(e.target.files || []) as File[];
+                              if (files.length > 0) await handleInstaImageUpload(files[0]);
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="file-select-btn"
+                          onClick={pasteInstaImageFromClipboard}
+                          style={{ margin: 0 }}
+                        >
+                          📋 클립보드 붙여넣기
+                        </button>
                       </div>
 
                       {instaInputExtractedText && (
@@ -5218,29 +5317,40 @@ ${photo.memoText}`;
                         {photoBookInputImageUrl ? (
                           <div className="paste-preview-container">
                             <img src={photoBookInputImageUrl} alt="포토북 프리뷰" />
-                            <button type="button" className="remove-preview-btn" onClick={() => {
+                            <button type="button" className="remove-preview-btn" title="이미지 삭제" onClick={() => {
                               setPhotoBookInputImageUrl("");
                               setPhotoBookInputImageStoragePath("");
-                            }}>이미지 삭제</button>
+                            }}>×</button>
                           </div>
                         ) : (
                           <div className="paste-placeholder">
                             <span className="icon">📖</span>
-                            <p>복사한 포토북 이미지를 여기에 <strong>붙여넣기(Ctrl+V)</strong>하거나 파일을 선택하세요.</p>
-                            <label className="file-select-btn">
-                              사진 가져오기
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden-input"
-                                onChange={async e => {
-                                  const files = Array.from(e.target.files || []) as File[];
-                                  if (files.length > 0) await handlePhotoBookImageUpload(files[0]);
-                                }}
-                              />
-                            </label>
+                            <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요.</p>
                           </div>
                         )}
+                      </div>
+
+                      <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
+                        <label className="file-select-btn" style={{ margin: 0 }}>
+                          📸 사진 가져오기
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden-input"
+                            onChange={async e => {
+                              const files = Array.from(e.target.files || []) as File[];
+                              if (files.length > 0) await handlePhotoBookImageUpload(files[0]);
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="file-select-btn"
+                          onClick={pastePhotoBookImageFromClipboard}
+                          style={{ margin: 0 }}
+                        >
+                          📋 클립보드 붙여넣기
+                        </button>
                       </div>
 
                       <div className="keyword-input-group" style={{ marginTop: "15px" }}>

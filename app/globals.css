@@ -6299,6 +6299,37 @@ body {
     height: auto !important;
     object-fit: contain !important;
   }
+
+  .form-title {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+    font-size: 13px !important;
+  }
+
+  .form-title > span:first-child {
+    font-size: 13px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .form-title > span:last-child {
+    font-size: 11px !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 3px !important;
+  }
+
+  .info-date-input {
+    width: 110px !important;
+    padding: 3px 6px !important;
+    font-size: 11px !important;
+    height: auto !important;
+  }
 }
 
 
