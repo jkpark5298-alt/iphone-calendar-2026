@@ -401,6 +401,39 @@ export default function HomePage() {
   const [googleScheduleStatus, setGoogleScheduleStatus] = useState("구글 일정 대기");
   const [undoHistory, setUndoHistory] = useState<UndoState[]>([]);
 
+  // New states for 개편된 정보보관소 (인스타 주요 정보 관리 및 포토북)
+  const [infoSubView, setInfoSubView] = useState<"insta" | "photobook">("insta");
+  const [instaLoading, setInstaLoading] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState("");
+
+  // Instagram Info Form states
+  const [instaInputText, setInstaInputText] = useState("");
+  const [instaInputImageUrl, setInstaInputImageUrl] = useState("");
+  const [instaInputImageStoragePath, setInstaInputImageStoragePath] = useState("");
+  const [instaInputCategory, setInstaInputCategory] = useState("기타");
+  const [instaInputKeyword, setInstaInputKeyword] = useState("");
+  const [instaInputExtractedText, setInstaInputExtractedText] = useState("");
+  const [editingInstaCardId, setEditingInstaCardId] = useState<string | null>(null);
+  const [instaInputImage, setInstaInputImage] = useState<File | null>(null);
+
+  // Photo book Form states
+  const [photoBookInputImageUrl, setPhotoBookInputImageUrl] = useState("");
+  const [photoBookInputImageStoragePath, setPhotoBookInputImageStoragePath] = useState("");
+  const [photoBookInputKeyword, setPhotoBookInputKeyword] = useState("");
+  const [photoBookInputCategory2, setPhotoBookInputCategory2] = useState("");
+  const [photoBookInputMemo, setPhotoBookInputMemo] = useState("");
+  const [editingPhotoBookItemId, setEditingPhotoBookItemId] = useState<string | null>(null);
+  const [photoBookInputImage, setPhotoBookInputImage] = useState<File | null>(null);
+
+  // Restructured Info Repository states for global notes catalog
+  const [allInstaCards, setAllInstaCards] = useState<InstaInfoCard[]>([]);
+  const [allPhotoBookItems, setAllPhotoBookItems] = useState<PhotoItem[]>([]);
+  const [activeItem, setActiveItem] = useState<{ type: "insta" | "photobook"; id: string } | null>(null);
+  const [instaSearchKey, setInstaSearchKey] = useState("");
+  const [photoSearchKey, setPhotoSearchKey] = useState("");
+  const [instaInputDate, setInstaInputDate] = useState("");
+  const [photoBookInputDate, setPhotoBookInputDate] = useState("");
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   const diaryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1068,16 +1101,16 @@ export default function HomePage() {
     setSearchStatus("검색 중...");
     const pattern = `%${keyword}%`;
 
-    const [diaryRes, infoRes, infoMemoRes] = await Promise.all([
+    const [diaryRes, infoCardsRes, infoMemoRes] = await Promise.all([
       supabase
         .from("diary_entries")
         .select("entry_date, diary_text, voice_text")
         .or(`diary_text.ilike.${pattern},voice_text.ilike.${pattern}`)
         .order("entry_date", { ascending: true }),
       supabase
-        .from("info_entries")
-        .select("entry_date, info_text")
-        .ilike("info_text", pattern)
+        .from("info_text_cards")
+        .select("entry_date, content")
+        .ilike("content", pattern)
         .order("entry_date", { ascending: true }),
       supabase
         .from("info_photos")
@@ -1086,7 +1119,7 @@ export default function HomePage() {
         .order("entry_date", { ascending: true }),
     ]);
 
-    const errors = [diaryRes.error, infoRes.error, infoMemoRes.error].filter(Boolean);
+    const errors = [diaryRes.error, infoCardsRes.error, infoMemoRes.error].filter(Boolean);
     if (errors.length) {
       console.warn("Supabase search error:", errors.map(error => error?.message).join(" / "));
       setSearchResults([]);
@@ -1109,27 +1142,45 @@ export default function HomePage() {
       });
     });
 
-    (infoRes.data || []).forEach((row: any) => {
+    (infoCardsRes.data || []).forEach((row: any) => {
       const date = monthDayFromEntryDate(row.entry_date);
       if (!date) return;
+      
+      let cardText = row.content || "";
+      if (cardText.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(cardText);
+          cardText = `[인스타 정보 - ${parsed.category}] #${parsed.keyword} / ${parsed.originalText}`;
+        } catch (e) {}
+      }
+      
       nextResults.push({
         type: "info",
         entryDate: row.entry_date,
         month: date.month,
         day: date.day,
-        text: row.info_text || "정보보관소 검색 결과",
+        text: cardText || "인스타 주요 정보 검색 결과",
       });
     });
 
     (infoMemoRes.data || []).forEach((row: any) => {
       const date = monthDayFromEntryDate(row.entry_date);
       if (!date) return;
+      
+      let captionText = row.caption || "";
+      if (captionText.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(captionText);
+          captionText = `[포토북] #${parsed.keyword} / ${parsed.memo}`;
+        } catch (e) {}
+      }
+      
       nextResults.push({
         type: "info",
         entryDate: row.entry_date,
         month: date.month,
         day: date.day,
-        text: row.caption || "정보보관소 사진 메모 검색 결과",
+        text: captionText || "포토북 사진 메모 검색 결과",
       });
     });
 
@@ -1221,6 +1272,11 @@ export default function HomePage() {
     } catch {
       setCalendarPhotos({});
     }
+
+    try {
+      const rawApiKey = localStorage.getItem("gemini_api_key");
+      if (rawApiKey) setGeminiApiKey(rawApiKey);
+    } catch (e) {}
 
     void loadCalendarPhotosFromSupabase();
     void loadCalendarMarksFromSupabase();
@@ -1349,56 +1405,10 @@ export default function HomePage() {
 
   useEffect(() => {
     if (view !== "info") return;
-
-    let isActive = true;
-    const photoKey = key(currentMonth, currentDay);
-
-    if (isSupabaseConfigured && supabase) {
-      setInfoText("");
-      setInfoPhotos(prev => ({ ...prev, [photoKey]: [] }));
-    } else {
-      try {
-        const raw = localStorage.getItem(storageKey("info", currentMonth, currentDay));
-        const data = raw ? JSON.parse(raw) : {};
-        setInfoText(data.infoText || "");
-
-        const rawInfoPhotos = localStorage.getItem(storageKey("infoPhotos", currentMonth, currentDay));
-        const items = rawInfoPhotos ? JSON.parse(rawInfoPhotos) : [];
-        setInfoPhotos(prev => ({ ...prev, [photoKey]: items }));
-
-        const rawInfoTextCards = localStorage.getItem(storageKey("infoTextCards", currentMonth, currentDay));
-        const cards = rawInfoTextCards ? JSON.parse(rawInfoTextCards) : [];
-        setInfoTextCards(prev => ({ ...prev, [photoKey]: cards }));
-      } catch {
-        setInfoText("");
-      }
-    }
-
-    loadInfoEntryFromSupabase(currentMonth, currentDay).then(remoteData => {
-      if (!isActive) return;
-
-      const remoteInfoText = remoteData?.info_text || "";
-      setInfoText(remoteInfoText);
-      localStorage.setItem(storageKey("info", currentMonth, currentDay), JSON.stringify({ infoText: remoteInfoText }));
-    });
-
-    loadInfoPhotosFromSupabase(currentMonth, currentDay).then(remoteItems => {
-      if (!isActive || !remoteItems) return;
-
-      setInfoPhotos(prev => ({ ...prev, [photoKey]: remoteItems }));
-      setLocalStorageSafely(storageKey("infoPhotos", currentMonth, currentDay), JSON.stringify(remoteItems));
-    });
-
-    loadInfoTextCardsFromSupabase(currentMonth, currentDay).then(remoteCards => {
-      if (!isActive || !remoteCards) return;
-
-      setInfoTextCards(prev => ({ ...prev, [photoKey]: remoteCards }));
-      localStorage.setItem(storageKey("infoTextCards", currentMonth, currentDay), JSON.stringify(remoteCards));
-    });
-
-    return () => {
-      isActive = false;
-    };
+    const defaultDate = entryDate(currentMonth, currentDay);
+    setInstaInputDate(defaultDate);
+    setPhotoBookInputDate(defaultDate);
+    void refreshAllInfoData();
   }, [view, currentMonth, currentDay]);
 
   useEffect(() => {
@@ -2521,6 +2531,7 @@ export default function HomePage() {
         }
 
         finishUndo();
+        void refreshAllInfoData();
         alert("정보보관소 사진 작업을 되돌렸습니다.");
         return;
       }
@@ -2576,6 +2587,7 @@ export default function HomePage() {
         setCurrentDay(undoState.day);
         saveInfoTextCards(undoState.month, undoState.day, restoredCards);
         finishUndo();
+        void refreshAllInfoData();
         alert("정보보관소 글 카드를 되돌렸습니다.");
         return;
       }
@@ -3219,9 +3231,8 @@ export default function HomePage() {
           </h1>
           <div className="head-actions calendar-top-actions calendar-top-actions-redesign">
             <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("diary")}>일기장</button>
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("info")}>정보보관소</button>
+            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfo(currentMonth, currentDay)}>정보보관소</button>
             <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
-            <button type="button" className="mini-btn info calendar-info-top-btn calendar-info-shortcut" onClick={() => openInfo(currentMonth, currentDay)} aria-label="선택 날짜 정보보관소로 이동">I</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
@@ -3593,109 +3604,1808 @@ function MarkDateView() {
     );
   }
 
+  // Load all Instagram Info cards from Supabase (all dates)
+  async function loadAllInfoTextCardsFromSupabase() {
+    if (!isSupabaseConfigured || !supabase) return [];
+    const { data, error } = await supabase
+      .from("info_text_cards")
+      .select("card_id, content, entry_date, created_at, sort_order")
+      .order("entry_date", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Supabase all info text card load error:", error.message);
+      return [];
+    }
+    return (data || []).map((row: any) => ({
+      id: String(row.card_id || row.id || `${Date.now()}`),
+      content: String(row.content || ""),
+      createdAt: row.created_at || new Date().toISOString(),
+      entryDate: row.entry_date
+    }));
+  }
+
+  // Load all Photo Book items from Supabase (all dates)
+  async function loadAllInfoPhotosFromSupabase() {
+    if (!isSupabaseConfigured || !supabase) return [];
+    const { data, error } = await supabase
+      .from("info_photos")
+      .select("id, storage_path, public_url, caption, entry_date, sort_order, created_at")
+      .order("entry_date", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Supabase all info photo load error:", error.message);
+      return [];
+    }
+    return (data || []).map(row => ({
+      url: row.public_url || "",
+      name: row.storage_path?.split("/").pop() || "photo.jpg",
+      tag: row.entry_date, // entry_date
+      extraTag: "",
+      memo: row.caption || "",
+      size: "360",
+      memoWidth: "360",
+      memoHeight: "110",
+      storagePath: row.storage_path,
+      id: row.id,
+    }));
+  }
+
+  // Synchronize and refresh all global notes catalog
+  async function refreshAllInfoData() {
+    let localCards: InstaInfoCard[] = [];
+    let localPhotos: PhotoItem[] = [];
+
+    try {
+      const parsedCards: InstaInfoCard[] = [];
+      const parsedPhotos: PhotoItem[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i) || "";
+        if (k.startsWith("iphone-diary-2026-infoTextCards_")) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const list = JSON.parse(raw) as InfoTextCard[];
+            const dateParts = k.split("_").pop() || "";
+            const [m, d] = dateParts.split("-").map(Number);
+            const dateStr = `2026-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+            list.forEach(c => {
+              parsedCards.push(parseInstaCardContent(c.content, c.id, dateStr, c.createdAt || new Date().toISOString()));
+            });
+          }
+        }
+        if (k.startsWith("iphone-diary-2026-infoPhotos_")) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const list = JSON.parse(raw) as PhotoItem[];
+            parsedPhotos.push(...list);
+          }
+        }
+      }
+      localCards = parsedCards;
+      localPhotos = parsedPhotos;
+    } catch (e) {
+      console.warn("Failed to load local info", e);
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      const [remoteCards, remotePhotos] = await Promise.all([
+        loadAllInfoTextCardsFromSupabase(),
+        loadAllInfoPhotosFromSupabase()
+      ]);
+      
+      const parsedRemoteCards = remoteCards.map(c => 
+        parseInstaCardContent(c.content, c.id, c.entryDate, c.createdAt)
+      );
+
+      setAllInstaCards(parsedRemoteCards);
+      setAllPhotoBookItems(remotePhotos);
+      
+      const groupedCards: Record<string, InfoTextCard[]> = {};
+      const groupedPhotos: Record<string, PhotoItem[]> = {};
+
+      remoteCards.forEach(c => {
+        const dateParts = c.entryDate.split("-");
+        const month = Number(dateParts[1]);
+        const day = Number(dateParts[2]);
+        const kStr = key(month, day);
+        if (!groupedCards[kStr]) groupedCards[kStr] = [];
+        groupedCards[kStr].push({ id: c.id, content: c.content, createdAt: c.createdAt });
+      });
+
+      remotePhotos.forEach(p => {
+        const kStr = p.tag;
+        if (!groupedPhotos[kStr]) groupedPhotos[kStr] = [];
+        groupedPhotos[kStr].push(p);
+      });
+
+      setInfoTextCards(groupedCards);
+      setInfoPhotos(groupedPhotos);
+    } else {
+      setAllInstaCards(localCards);
+      setAllPhotoBookItems(localPhotos);
+    }
+  }
+
+  // Helper to load external scripts (html2canvas, jsPDF)
+  function loadScript(src: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+      document.body.appendChild(script);
+    });
+  }
+
+  // Helper to convert File to base64
+  function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(",")[1];
+        resolve(base64);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  }
+
+  // Helper to convert Image URL to base64
+  async function imageUrlToBase64(url: string): Promise<string> {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.warn("imageUrlToBase64 failed", e);
+      return "";
+    }
+  }
+
+  // Parse markdown formatting for PDF generation
+  function parseMarkdownToHtml(md: string): string {
+    if (!md) return "";
+    return md
+      .replace(/### (.*)/g, '<h4 style="font-size:14px; margin:12px 0 4px 0; color:#111; font-weight:bold;">$1</h4>')
+      .replace(/## (.*)/g, '<h3 style="font-size:15px; margin:16px 0 6px 0; color:#111; font-weight:bold; border-bottom:1px solid #eee; padding-bottom:3px;">$1</h3>')
+      .replace(/# (.*)/g, '<h2 style="font-size:16px; margin:18px 0 8px 0; color:#111; font-weight:bold;">$1</h2>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/^- (.*)/gm, '<li style="margin-left:15px; font-size:13px; color:#333; list-style-type:disc;">$1</li>')
+      .replace(/\n/g, '<br />');
+  }
+
+  // Parse Instagram Card content from serialized JSON
+  type InstaInfoCard = {
+    id: string;
+    category: string;
+    keyword: string;
+    entryDate: string;
+    imageUrl?: string;
+    imageStoragePath?: string;
+    originalText: string;
+    extractedText?: string;
+    factCheckResult?: string;
+    createdAt: string;
+  };
+
+  function parseInstaCardContent(content: string, id: string, entryDate: string, createdAt: string): InstaInfoCard {
+    if (content.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(content);
+        if (parsed.type === "insta_info" || parsed.category) {
+          return {
+            id,
+            category: parsed.category || "기타",
+            keyword: parsed.keyword || "일반",
+            entryDate: parsed.entryDate || entryDate,
+            imageUrl: parsed.imageUrl || "",
+            imageStoragePath: parsed.imageStoragePath || "",
+            originalText: parsed.originalText || parsed.content || "",
+            extractedText: parsed.extractedText || "",
+            factCheckResult: parsed.factCheckResult || "",
+            createdAt
+          };
+        }
+      } catch (e) {}
+    }
+    // Fallback for legacy text cards
+    return {
+      id,
+      category: "기타",
+      keyword: "일반",
+      entryDate,
+      originalText: content,
+      createdAt
+    };
+  }
+
+  // Parse Photo Book memo and keyword from serialized caption
+  function parsePhotoBookMemo(memo: string): { keyword: string; category2: string; memo: string } {
+    if (memo && memo.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(memo);
+        if (parsed.type === "photobook" || parsed.keyword || parsed.category2) {
+          return {
+            keyword: parsed.keyword || "일반",
+            category2: parsed.category2 || "기타",
+            memo: parsed.memo || ""
+          };
+        }
+      } catch (e) {}
+    }
+    // Fallback for legacy info photos
+    let keyword = "일반";
+    let category2 = "기타";
+    let cleanMemo = memo || "";
+    if (cleanMemo.startsWith("#")) {
+      const parts = cleanMemo.split("#").filter(Boolean);
+      if (parts.length >= 2) {
+        keyword = parts[0];
+        category2 = parts[1];
+        const match = cleanMemo.match(/^#[^\s#]+#[^\s#]+/);
+        if (match) {
+          cleanMemo = cleanMemo.replace(/^#[^\s#]+#[^\s#]+\s*/, "");
+        }
+      } else if (parts.length === 1) {
+        keyword = parts[0];
+        const match = cleanMemo.match(/^#[^\s#]+/);
+        if (match) {
+          cleanMemo = cleanMemo.replace(/^#[^\s#]+\s*/, "");
+        }
+      }
+    }
+    return { keyword, category2, memo: cleanMemo };
+  }
+
+  // API Call: AI OCR & Classification for Image Upload
+  async function handleInstaImageUpload(file: File) {
+    setInstaLoading(true);
+    try {
+      const item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999);
+      if (item) {
+        setInstaInputImageUrl(item.url);
+        setInstaInputImageStoragePath(item.storagePath || "");
+        
+        // Convert to Base64 for OCR
+        const base64 = await fileToBase64(file);
+        const mimeType = file.type || "image/jpeg";
+        
+        // Call OCR
+        const ocrRes = await fetch("/api/gemini", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-gemini-api-key": geminiApiKey || ""
+          },
+          body: JSON.stringify({
+            action: "ocr",
+            imageBase64: base64,
+            mimeType
+          })
+        });
+        
+        const ocrData = await ocrRes.json();
+        if (ocrData.error) {
+          console.warn("OCR API Error:", ocrData.error);
+          return;
+        }
+        
+        const extracted = ocrData.result || "";
+        setInstaInputExtractedText(extracted);
+        setInstaInputText(prev => prev ? `${prev}\n${extracted}` : extracted);
+        
+        if (extracted.trim()) {
+          // Auto classify
+          await runAIClassification(extracted);
+        }
+      } else {
+        alert("이미지 업로드에 실패했습니다.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("이미지 분석 중 오류가 발생했습니다: " + e);
+    } finally {
+      setInstaLoading(false);
+    }
+  }
+
+  // API Call: Auto Classify Text
+  async function runAIClassification(text: string) {
+    if (!text.trim()) return;
+    setInstaLoading(true);
+    try {
+      const res = await fetch("/api/gemini", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-gemini-api-key": geminiApiKey || ""
+        },
+        body: JSON.stringify({
+          action: "classify",
+          text
+        })
+      });
+      const data = await res.json();
+      if (data.error) {
+        console.warn("Classification API Error:", data.error);
+        return;
+      }
+      
+      try {
+        const parsed = JSON.parse(data.result);
+        if (parsed.category) setInstaInputCategory(parsed.category);
+        if (parsed.keyword) setInstaInputKeyword(parsed.keyword);
+      } catch (e) {
+        console.warn("Failed to parse classification JSON:", data.result, e);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setInstaLoading(false);
+    }
+  }
+
+  // API Call: Fact Check
+  async function performFactCheck(cardId: string) {
+    const cardKey = key(currentMonth, currentDay);
+    const previousCards = infoTextCards[cardKey] || [];
+    const cardRow = previousCards.find(c => c.id === cardId);
+    if (!cardRow) return;
+    
+    const card = parseInstaCardContent(cardRow.content, cardRow.id, entryDate(currentMonth, currentDay), cardRow.createdAt);
+    
+    setInstaLoading(true);
+    try {
+      let imageBase64 = "";
+      if (card.imageUrl) {
+        imageBase64 = await imageUrlToBase64(card.imageUrl);
+      }
+      
+      const res = await fetch("/api/gemini", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-gemini-api-key": geminiApiKey || ""
+        },
+        body: JSON.stringify({
+          action: "fact-check",
+          text: card.originalText,
+          imageBase64: imageBase64 || undefined
+        })
+      });
+      
+      const data = await res.json();
+      if (data.error) {
+        alert("팩트체크 실패: " + data.error);
+        return;
+      }
+      
+      const factCheckResult = data.result || "";
+      
+      const nextCards = previousCards.map(c => {
+        if (c.id === cardId) {
+          const parsed = JSON.parse(c.content);
+          parsed.factCheckResult = factCheckResult;
+          return { ...c, content: JSON.stringify(parsed) };
+        }
+        return c;
+      });
+      
+      saveInfoTextCards(currentMonth, currentDay, nextCards);
+    } catch (e) {
+      console.error(e);
+      alert("팩트체크 수행 중 오류 발생: " + e);
+    } finally {
+      setInstaLoading(false);
+    }
+  }
+
+  // PDF Export
+  async function downloadFactCheckPDF(card: InstaInfoCard) {
+    try {
+      setInstaLoading(true);
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+
+      const container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.top = "-9999px";
+      container.style.left = "-9999px";
+      container.style.width = "794px";
+      container.style.padding = "50px";
+      container.style.background = "#ffffff";
+      container.style.color = "#333333";
+      container.style.fontFamily = "Apple SD Gothic Neo, Malgun Gothic, sans-serif";
+      container.style.boxSizing = "border-box";
+
+      container.innerHTML = `
+        <div style="border-bottom: 3px solid #333; padding-bottom: 20px; margin-bottom: 25px;">
+          <h1 style="font-size: 26px; margin: 0; color: #111; font-weight: bold; letter-spacing: -0.5px;">🔍 AI Fact Check Report</h1>
+          <p style="font-size: 13px; color: #666; margin: 8px 0 0 0;">인스타 주요 정보 검증 리포트 | 작성일자: ${card.entryDate}</p>
+        </div>
+        
+        <div style="margin-bottom: 25px; padding: 18px; background: #f8f9fa; border-left: 5px solid #0070f3; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <div style="font-size: 13px; font-weight: 600; color: #666; margin-bottom: 6px; text-transform: uppercase;">Index 정보</div>
+          <div style="font-size: 18px; font-weight: 700; color: #111;">${card.category} / ${card.keyword} / ${card.entryDate}</div>
+        </div>
+
+        ${card.imageUrl ? `
+        <div style="margin-bottom: 25px; text-align: center; background: #fafafa; padding: 15px; border-radius: 6px; border: 1px solid #eaeaea;">
+          <img src="${card.imageUrl}" style="max-width: 100%; max-height: 280px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" crossorigin="anonymous" />
+        </div>
+        ` : ""}
+
+        <div style="margin-bottom: 30px;">
+          <h2 style="font-size: 17px; border-bottom: 1.5px solid #eaeaea; padding-bottom: 6px; color: #222; font-weight: 700; margin: 0 0 12px 0;">📝 원본 정보 및 수집 본문</h2>
+          <p style="font-size: 14px; line-height: 1.6; white-space: pre-wrap; color: #444; margin: 0;">${card.originalText}</p>
+        </div>
+
+        <div style="margin-bottom: 30px;">
+          <h2 style="font-size: 17px; border-bottom: 1.5px solid #eaeaea; padding-bottom: 6px; color: #222; font-weight: 700; margin: 0 0 12px 0;">🤖 Gemini 팩트체크 판정 결과</h2>
+          <div style="font-size: 14px; line-height: 1.6; color: #333;">
+            ${parseMarkdownToHtml(card.factCheckResult || "")}
+          </div>
+        </div>
+
+        <div style="border-top: 1.5px solid #eee; padding-top: 18px; text-align: center; font-size: 11px; color: #999; margin-top: 40px;">
+          본 보고서는 Google Gemini AI 모델의 분석 결과를 기초로 작성되었으며 실시간 정보와 차이가 있을 수 있습니다.
+        </div>
+      `;
+
+      document.body.appendChild(container);
+      await new Promise(resolve => setTimeout(resolve, 850));
+
+      const canvas = await (window as any).html2canvas(container, {
+        scale: 2.2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false
+      });
+
+      document.body.removeChild(container);
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const pdf = new (window as any).jspdf.jsPDF("p", "mm", "a4");
+      const imgWidth = 210;
+      const pageHeight = 297;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`AI_팩트체크_${card.category}_${card.keyword}_${card.entryDate}.pdf`);
+    } catch (error) {
+      console.error("PDF download error:", error);
+      alert("PDF 리포트 생성에 실패했습니다: " + error);
+    } finally {
+      setInstaLoading(false);
+    }
+  }
+
+  // CRUD: Save/Update Instagram Card
+  // CRUD: Save/Update Instagram Card
+  async function saveInstaCard() {
+    if (!instaInputText.trim() && !instaInputImageUrl) {
+      alert("인스타 글 또는 이미지를 추가해주세요.");
+      return;
+    }
+
+    const dateStr = instaInputDate || entryDate(currentMonth, currentDay);
+    const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
+    const targetKey = key(tMonth, tDay);
+
+    const targetPreviousCards = infoTextCards[targetKey] || [];
+    registerUndo({
+      label: editingInstaCardId ? "정보보관소 글 카드 수정" : "정보보관소 글 카드 추가",
+      target: "infoTextCards",
+      month: tMonth,
+      day: tDay,
+      previousData: JSON.stringify(targetPreviousCards),
+    });
+
+    let originalCard = allInstaCards.find(c => c.id === editingInstaCardId);
+    let originalDate = originalCard ? originalCard.entryDate : dateStr;
+
+    if (editingInstaCardId && originalDate !== dateStr) {
+      const [oYear, oMonth, oDay] = originalDate.split("-").map(Number);
+      const oldKey = key(oMonth, oDay);
+      const oldPreviousCards = infoTextCards[oldKey] || [];
+      const updatedOldCards = oldPreviousCards.filter(c => c.id !== editingInstaCardId);
+      saveInfoTextCards(oMonth, oDay, updatedOldCards);
+    }
+
+    let nextCards: InfoTextCard[] = [];
+    const content = JSON.stringify({
+      type: "insta_info",
+      category: instaInputCategory || "기타",
+      keyword: instaInputKeyword.trim() || "일반",
+      entryDate: dateStr,
+      imageUrl: instaInputImageUrl,
+      imageStoragePath: instaInputImageStoragePath,
+      originalText: instaInputText.trim(),
+      extractedText: instaInputExtractedText,
+      factCheckResult: originalCard?.factCheckResult || ""
+    });
+
+    if (editingInstaCardId) {
+      const destinationCards = infoTextCards[targetKey] || [];
+      const exists = destinationCards.some(c => c.id === editingInstaCardId);
+      if (exists) {
+        nextCards = destinationCards.map(c => c.id === editingInstaCardId ? { ...c, content } : c);
+      } else {
+        nextCards = [...destinationCards, { id: editingInstaCardId, content, createdAt: originalCard?.createdAt || new Date().toISOString() }];
+      }
+      setEditingInstaCardId(null);
+    } else {
+      const destinationCards = infoTextCards[targetKey] || [];
+      const newCard: InfoTextCard = {
+        id: `insta-${Date.now()}`,
+        content,
+        createdAt: new Date().toISOString()
+      };
+      nextCards = [...destinationCards, newCard];
+    }
+
+    saveInfoTextCards(tMonth, tDay, nextCards);
+
+    // Sync global states
+    await refreshAllInfoData();
+
+    // Reset Form
+    setInstaInputText("");
+    setInstaInputImageUrl("");
+    setInstaInputImageStoragePath("");
+    setInstaInputCategory("기타");
+    setInstaInputKeyword("");
+    setInstaInputExtractedText("");
+    setInstaInputImage(null);
+    setInstaInputDate(entryDate(currentMonth, currentDay));
+    setActiveItem(null);
+  }
+
+  // CRUD: Edit Instagram Card Trigger
+  function triggerEditInstaCard(card: InstaInfoCard) {
+    setEditingInstaCardId(card.id);
+    setInstaInputText(card.originalText);
+    setInstaInputImageUrl(card.imageUrl || "");
+    setInstaInputImageStoragePath(card.imageStoragePath || "");
+    setInstaInputCategory(card.category);
+    setInstaInputKeyword(card.keyword);
+    setInstaInputExtractedText(card.extractedText || "");
+    setInstaInputDate(card.entryDate);
+  }
+
+  // CRUD: Cancel Edit Instagram Card
+  function cancelEditInstaCard() {
+    setEditingInstaCardId(null);
+    setInstaInputText("");
+    setInstaInputImageUrl("");
+    setInstaInputImageStoragePath("");
+    setInstaInputCategory("기타");
+    setInstaInputKeyword("");
+    setInstaInputExtractedText("");
+    setInstaInputImage(null);
+    setInstaInputDate(entryDate(currentMonth, currentDay));
+  }
+
+  // CRUD: Delete Instagram Card
+  async function deleteInstaCard(cardId: string) {
+    const targetCard = allInstaCards.find(c => c.id === cardId);
+    if (!targetCard) return;
+
+    if (!window.confirm("이 인스타 정보를 삭제할까요?")) return;
+
+    const [tYear, tMonth, tDay] = targetCard.entryDate.split("-").map(Number);
+    const cardKey = key(tMonth, tDay);
+    const previousCards = infoTextCards[cardKey] || [];
+
+    registerUndo({
+      label: "정보보관소 글 카드 삭제",
+      target: "infoTextCards",
+      month: tMonth,
+      day: tDay,
+      previousData: JSON.stringify(previousCards),
+    });
+
+    if (targetCard.imageStoragePath) {
+      void deleteSupabasePhoto("info-photos", "info_photos", targetCard.imageStoragePath);
+    }
+
+    const nextCards = previousCards.filter(c => c.id !== cardId);
+    saveInfoTextCards(tMonth, tDay, nextCards);
+
+    // Sync global states
+    await refreshAllInfoData();
+    if (activeItem?.id === cardId) {
+      setActiveItem(null);
+    }
+  }
+
+  // CRUD: Save/Update Photo Book Item
+  async function savePhotoBookItemForm() {
+    if (!photoBookInputImageUrl) {
+      alert("포토북에 업로드할 이미지를 추가해주세요.");
+      return;
+    }
+
+    const dateStr = photoBookInputDate || entryDate(currentMonth, currentDay);
+    const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
+    const targetKey = key(tMonth, tDay);
+
+    const targetPreviousItems = infoPhotos[targetKey] || [];
+
+    registerUndo({
+      label: editingPhotoBookItemId ? "정보보관소 사진 수정" : "정보보관소 사진 추가",
+      target: "infoPhotos",
+      photoKey: targetKey,
+      previousData: JSON.stringify(targetPreviousItems),
+    });
+
+    const serializedCaption = JSON.stringify({
+      type: "photobook",
+      keyword: photoBookInputKeyword.trim() || "일반",
+      category2: photoBookInputCategory2.trim() || "기타",
+      memo: photoBookInputMemo
+    });
+
+    let originalItem = allPhotoBookItems.find(p => p.id === editingPhotoBookItemId);
+    let originalDate = originalItem ? originalItem.tag : dateStr;
+
+    if (editingPhotoBookItemId && originalDate !== dateStr) {
+      const [oYear, oMonth, oDay] = originalDate.split("-").map(Number);
+      const oldKey = key(oMonth, oDay);
+      const oldPreviousItems = infoPhotos[oldKey] || [];
+      const updatedOldItems = oldPreviousItems.filter(p => p.id !== editingPhotoBookItemId);
+      setInfoPhotos(prev => ({ ...prev, [oldKey]: updatedOldItems }));
+      saveInfoPhotos(oMonth, oDay, updatedOldItems);
+    }
+
+    let nextPhotosForDay: PhotoItem[] = [];
+
+    if (editingPhotoBookItemId) {
+      const destinationItems = infoPhotos[targetKey] || [];
+      const exists = destinationItems.some(p => p.id === editingPhotoBookItemId);
+      if (exists) {
+        nextPhotosForDay = destinationItems.map(item => {
+          if (item.id === editingPhotoBookItemId || (item.storagePath && item.storagePath === photoBookInputImageStoragePath)) {
+            return { ...item, memo: serializedCaption, tag: dateStr };
+          }
+          return item;
+        });
+      } else {
+        const itemObj: PhotoItem = {
+          url: photoBookInputImageUrl,
+          name: photoBookInputImageStoragePath.split("/").pop() || "photo.jpg",
+          tag: dateStr,
+          extraTag: "",
+          memo: serializedCaption,
+          size: "360",
+          memoWidth: "360",
+          memoHeight: "110",
+          storagePath: photoBookInputImageStoragePath,
+          id: editingPhotoBookItemId
+        };
+        nextPhotosForDay = [...destinationItems, itemObj];
+      }
+
+      if (isSupabaseConfigured && supabase) {
+        if (editingPhotoBookItemId.startsWith("temp-")) {
+          await supabase.from("info_photos").update({ caption: serializedCaption, entry_date: dateStr }).eq("storage_path", photoBookInputImageStoragePath);
+        } else {
+          await supabase.from("info_photos").update({ caption: serializedCaption, entry_date: dateStr }).eq("id", editingPhotoBookItemId);
+        }
+      }
+      setEditingPhotoBookItemId(null);
+    } else {
+      const destinationItems = infoPhotos[targetKey] || [];
+      const sortOrder = destinationItems.length;
+      const uploadedItem: PhotoItem = {
+        url: photoBookInputImageUrl,
+        name: photoBookInputImageStoragePath.split("/").pop() || "photo.jpg",
+        tag: dateStr,
+        extraTag: "",
+        memo: serializedCaption,
+        size: "360",
+        memoWidth: "360",
+        memoHeight: "110",
+        storagePath: photoBookInputImageStoragePath,
+        id: `temp-${Date.now()}`
+      };
+
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase.from("info_photos").insert({
+          entry_date: dateStr,
+          storage_path: uploadedItem.storagePath,
+          public_url: uploadedItem.url,
+          caption: serializedCaption,
+          sort_order: sortOrder,
+        }).select("id").maybeSingle();
+
+        if (data?.id) {
+          uploadedItem.id = data.id;
+        }
+      }
+      nextPhotosForDay = [...destinationItems, uploadedItem];
+    }
+
+    setInfoPhotos(prev => ({ ...prev, [targetKey]: nextPhotosForDay }));
+    saveInfoPhotos(tMonth, tDay, nextPhotosForDay);
+
+    // Sync global states
+    await refreshAllInfoData();
+
+    // Reset Form
+    setPhotoBookInputImageUrl("");
+    setPhotoBookInputImageStoragePath("");
+    setPhotoBookInputKeyword("");
+    setPhotoBookInputCategory2("");
+    setPhotoBookInputMemo("");
+    setPhotoBookInputImage(null);
+    setPhotoBookInputDate(entryDate(currentMonth, currentDay));
+    setActiveItem(null);
+  }
+
+  // CRUD: Edit Photo Book Trigger
+  function triggerEditPhotoBook(item: PhotoItem) {
+    const parsed = parsePhotoBookMemo(item.memo || "");
+    setEditingPhotoBookItemId(item.id || `temp-${Date.now()}`);
+    setPhotoBookInputImageUrl(item.url);
+    setPhotoBookInputImageStoragePath(item.storagePath || "");
+    setPhotoBookInputKeyword(parsed.keyword);
+    setPhotoBookInputCategory2(parsed.category2);
+    setPhotoBookInputMemo(parsed.memo);
+    setPhotoBookInputDate(item.tag);
+  }
+
+  // CRUD: Cancel Edit Photo Book
+  function cancelEditPhotoBook() {
+    setEditingPhotoBookItemId(null);
+    setPhotoBookInputImageUrl("");
+    setPhotoBookInputImageStoragePath("");
+    setPhotoBookInputKeyword("");
+    setPhotoBookInputCategory2("");
+    setPhotoBookInputMemo("");
+    setPhotoBookInputImage(null);
+    setPhotoBookInputDate(entryDate(currentMonth, currentDay));
+  }
+
+  // CRUD: Delete Photo Book Item
+  async function deletePhotoBookItem(itemId: string) {
+    let targetItem = allPhotoBookItems.find(p => p.id === itemId);
+    if (!targetItem) return;
+
+    if (!window.confirm("이 포토북 카드를 삭제할까요?")) return;
+
+    const dateStr = targetItem.tag;
+    const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
+    const photoKey = key(tMonth, tDay);
+    const previousItems = infoPhotos[photoKey] || [];
+
+    registerUndo({
+      label: "정보보관소 사진 삭제",
+      target: "infoPhotos",
+      photoKey,
+      previousData: JSON.stringify(previousItems),
+    });
+
+    if (targetItem.storagePath) {
+      await deleteSupabasePhoto("info-photos", "info_photos", targetItem.storagePath);
+    }
+
+    const nextPhotosForDay = previousItems.filter(p => p.id !== itemId && p.storagePath !== targetItem?.storagePath);
+    setInfoPhotos(prev => ({ ...prev, [photoKey]: nextPhotosForDay }));
+    saveInfoPhotos(tMonth, tDay, nextPhotosForDay);
+
+    // Sync global states
+    await refreshAllInfoData();
+    if (activeItem?.id === itemId) {
+      setActiveItem(null);
+    }
+  }
+
+  // Image upload handler for Photo book
+  async function handlePhotoBookImageUpload(file: File) {
+    setInstaLoading(true);
+    try {
+      const item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999);
+      if (item) {
+        setPhotoBookInputImageUrl(item.url);
+        setPhotoBookInputImageStoragePath(item.storagePath || "");
+        // Auto classify photo book using AI!
+        await runPhotoBookAIClassification(file);
+      } else {
+        alert("이미지 업로드에 실패했습니다.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("이미지 업로드 중 오류 발생: " + e);
+    } finally {
+      setInstaLoading(false);
+    }
+  }
+
+  // Clipboard Paste for Photo book
+  async function handlePhotoBookPasteZone(event: ClipboardEvent<HTMLDivElement>) {
+    const pastedFiles = (Array.from(event.clipboardData.items) as DataTransferItem[])
+      .filter(item => item.type.startsWith("image/"))
+      .map(item => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+
+    if (pastedFiles.length > 0) {
+      event.preventDefault();
+      await handlePhotoBookImageUpload(pastedFiles[0]);
+    }
+  }
+
+  // Clipboard Paste for Instagram Info Management
+  async function handleInstaPasteZone(event: ClipboardEvent<HTMLDivElement>) {
+    const pastedFiles = (Array.from(event.clipboardData.items) as DataTransferItem[])
+      .filter(item => item.type.startsWith("image/"))
+      .map(item => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+
+    if (pastedFiles.length > 0) {
+      event.preventDefault();
+      await handleInstaImageUpload(pastedFiles[0]);
+      return;
+    }
+
+    const text = event.clipboardData.getData("text");
+    if (text) {
+      setInstaInputText(prev => prev ? `${prev}\n${text}` : text);
+      await runAIClassification(text);
+    }
+  }
+
+  // API Call: Auto Classify Photo book
+  async function runPhotoBookAIClassification(file?: File, memoText?: string) {
+    setInstaLoading(true);
+    try {
+      let imageBase64 = "";
+      let mimeType = "";
+      if (file) {
+        imageBase64 = await fileToBase64(file);
+        mimeType = file.type;
+      } else if (photoBookInputImageUrl) {
+        try {
+          imageBase64 = await imageUrlToBase64(photoBookInputImageUrl);
+          mimeType = "image/jpeg";
+        } catch (e) {
+          console.warn("Failed to fetch image base64 for classification:", e);
+        }
+      }
+
+      const textContext = memoText || photoBookInputMemo;
+
+      const res = await fetch("/api/gemini", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-gemini-api-key": geminiApiKey || ""
+        },
+        body: JSON.stringify({
+          action: "photobook-classify",
+          text: textContext,
+          imageBase64,
+          mimeType
+        })
+      });
+
+      const data = await res.json();
+      if (data.error) {
+        console.warn("Photobook Classification API Error:", data.error);
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(data.result);
+        if (parsed.keyword) setPhotoBookInputKeyword(parsed.keyword);
+        if (parsed.category2) setPhotoBookInputCategory2(parsed.category2);
+      } catch (e) {
+        console.warn("Failed to parse photobook classification JSON:", data.result, e);
+      }
+    } catch (e) {
+      console.error("Photobook classification error:", e);
+    } finally {
+      setInstaLoading(false);
+    }
+  }
+
+  // PC share helper: Copy Card to clipboard
+  function copyCardToClipboard(card: InstaInfoCard) {
+    const text = `[인스타 주요 정보 리포트]
+분류: ${card.category}
+키워드: ${card.keyword}
+작성일자: ${card.entryDate}
+상세내용:
+${card.originalText}
+
+${card.factCheckResult ? `[Gemini AI 팩트체크]\n${card.factCheckResult}` : ""}`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      alert("클립보드에 인스타 정보가 복사되었습니다.");
+    }).catch(err => {
+      console.error("복사 실패:", err);
+      alert("복사 실패했습니다.");
+    });
+  }
+
+  // PC share helper: Copy Photo Book to clipboard
+  function copyPhotoBookToClipboard(photo: any) {
+    const text = `[포토북 이미지 정보]
+키워드: ${photo.keyword}
+2차분류: ${photo.category2}
+작성일자: ${photo.tag}
+메모:
+${photo.memoText}`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      alert("클립보드에 포토북 정보가 복사되었습니다.");
+    }).catch(err => {
+      console.error("복사 실패:", err);
+      alert("복사 실패했습니다.");
+    });
+  }
+
+  // PC share helper: Download Card as TXT
+  function downloadCardAsTxt(card: InstaInfoCard) {
+    const text = `[인스타 주요 정보 리포트]
+분류: ${card.category}
+키워드: ${card.keyword}
+작성일자: ${card.entryDate}
+상세내용:
+${card.originalText}
+
+${card.factCheckResult ? `[Gemini AI 팩트체크]\n${card.factCheckResult}` : ""}`;
+
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `insta_info_${card.category}_${card.keyword}_${card.entryDate}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // PC share helper: Download Photo Book as TXT
+  function downloadPhotoBookAsTxt(photo: any) {
+    const text = `[포토북 이미지 정보]
+키워드: ${photo.keyword}
+2차분류: ${photo.category2}
+작성일자: ${photo.tag}
+메모:
+${photo.memoText}`;
+
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `photobook_${photo.keyword}_${photo.category2}_${photo.tag}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   function InfoView() {
-    const k = key(currentMonth, currentDay);
-    const dayInfoPhotos = infoPhotos[k] || [];
-    const dayInfoTextCards = infoTextCards[k] || [];
-    const infoPhotoCountClass = `count-${Math.min(Math.max(dayInfoPhotos.length, 1), 3)}`;
+    const categories = [
+      "정치", "행정", "경제", "산업", "사회", "교육", "문화", "예술", "과학", "기술", "국제", "외교", "국방", "안보", "기타"
+    ];
+
+    const photoCategories2 = [
+      "여행", "일상", "음식", "기억", "풍경", "인물", "취미", "기타"
+    ];
+
+    // Filter Instagram Info list
+    const filteredInstaCards = allInstaCards.filter(card => {
+      if (!instaSearchKey.trim()) return true;
+      const query = instaSearchKey.toLowerCase();
+      return (
+        card.category.toLowerCase().includes(query) ||
+        card.keyword.toLowerCase().includes(query) ||
+        card.entryDate.toLowerCase().includes(query) ||
+        card.originalText.toLowerCase().includes(query) ||
+        (card.extractedText && card.extractedText.toLowerCase().includes(query)) ||
+        (card.factCheckResult && card.factCheckResult.toLowerCase().includes(query))
+      );
+    });
+
+    // Filter Photo Book list
+    const filteredPhotoBookItems = allPhotoBookItems.map(photo => {
+      const parsed = parsePhotoBookMemo(photo.memo || "");
+      return {
+        ...photo,
+        keyword: parsed.keyword,
+        category2: parsed.category2,
+        memoText: parsed.memo
+      };
+    }).filter(photo => {
+      if (!photoSearchKey.trim()) return true;
+      const query = photoSearchKey.toLowerCase();
+      return (
+        photo.keyword.toLowerCase().includes(query) ||
+        photo.category2.toLowerCase().includes(query) ||
+        photo.tag.toLowerCase().includes(query) ||
+        photo.memoText.toLowerCase().includes(query)
+      );
+    });
+
+    // Find active item details
+    let activeCard: InstaInfoCard | undefined;
+    let activePhoto: any | undefined;
+    if (activeItem) {
+      if (activeItem.type === "insta") {
+        activeCard = allInstaCards.find(c => c.id === activeItem.id);
+      } else if (activeItem.type === "photobook") {
+        const rawPhoto = allPhotoBookItems.find(p => p.id === activeItem.id);
+        if (rawPhoto) {
+          const parsed = parsePhotoBookMemo(rawPhoto.memo || "");
+          activePhoto = {
+            ...rawPhoto,
+            keyword: parsed.keyword,
+            category2: parsed.category2,
+            memoText: parsed.memo
+          };
+        }
+      }
+    }
 
     return (
       <section>
-        <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 720 }} onPaste={handleInfoPhotoPaste} tabIndex={0}>
-          <div className="info-head info-head-one-line">
-            <div className="info-date-nav-one-line">
-              <button type="button" className="pill-btn date-nav-btn" onClick={() => moveInfoDate(-1)}>← 이전일</button>
-              <div className="info-date-one-line">2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</div>
-              <button type="button" className="pill-btn date-nav-btn" onClick={() => moveInfoDate(1)}>다음일 →</button>
-            </div>
+        {/* Loading Indicator */}
+        {instaLoading && (
+          <div className="insta-loading-overlay">
+            <div className="loading-spinner"></div>
+            <p>AI 처리 및 분류 작업 중...</p>
+          </div>
+        )}
 
+        <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 740 }} tabIndex={0}>
+          {/* Header */}
+          <div className="info-head info-head-one-line" style={{ marginBottom: "20px" }}>
             <div className="info-title-one-line">
-              <h2 className="info-title">📂 주요 정보 보관소</h2>
-              <div
-                className="info-image-paste-mini"
-                contentEditable
-                suppressContentEditableWarning
-                role="textbox"
-                aria-label="복사한 이미지 붙여넣기"
-                onPaste={handleInfoPasteZone}
-              >
-                ➜ 이미지 붙여넣기
-              </div>
+              <h2 className="info-title">📂 정보보관소 지식 Wiki</h2>
               <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 월간 캘린더</button>
             </div>
 
             <div className="info-action-one-line">
-              <button type="button" className="today-circle info-date-circle" onClick={() => openDatePicker("info")} aria-label="정보보관소 날짜 선택">{currentDay}</button>
               <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
-              <label className="soft-btn info-action-btn">
-                🖼 사진 가져오기
-                <input className="hidden-input" type="file" accept="image/*" multiple onChange={addInfoPhotos} />
-              </label>
-              <button type="button" className="soft-btn info-action-btn" onClick={pasteInfoPhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
-              <button type="button" className="soft-btn info-action-btn text-card-save-btn" onClick={addInfoTextCardFromBody}>복사글 카드 저장</button>
               <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
             </div>
           </div>
-          <p className="info-text-help-only">문자·카톡·웹페이지 글은 본문을 길게 눌러 붙여넣으세요.</p>
-          <textarea
-            ref={infoTextareaRef}
-            className="info-main-textarea"
-            value={infoText}
-            onFocus={e => focusInfoTextarea(e.currentTarget)}
-            onInput={e => { resizeTextareaToContent(e.currentTarget); keepTextareaAboveKeyboard(e.currentTarget); }}
-            onBlur={stopTextareaKeyboardMode}
-            onPaste={handleInfoTextPaste}
-            onChange={e => saveInfo(e.target.value)}
-            placeholder="오늘의 중요한 스크랩, 정보, 일정, 링크, 메모를 기록하세요."
-          />
-          <HyperlinkPreview text={infoText} />
 
-          {dayInfoTextCards.length > 0 && (
-            <div className="info-text-card-section">
-              <div className="info-text-card-title">📝 글 카드 보관함</div>
-              <div className="info-text-card-grid">
-                {dayInfoTextCards.map((card, index) => (
-                  <div className="info-text-card" key={card.id}>
-                    <div className="info-text-card-content">{card.content}</div>
-                    <PhotoMemoLinkPreview text={card.content} />
-                    <div className="info-text-card-actions">
-                      <button type="button" className="info-text-card-edit" onClick={() => editInfoTextCard(index)}>수정</button>
-                      <button type="button" className="info-text-card-delete" onClick={() => deleteInfoTextCard(index)}>삭제</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {dayInfoPhotos.length === 0 && <div className="empty-photo integrated-info-photo-empty">이미지를 붙여넣거나 사진을 가져오면 이곳에 정리됩니다.</div>}
-          <div className={`info-photo-grid-safe ${infoPhotoCountClass}`}>
-            {dayInfoPhotos.map((photo, index) => (
-              <div className="info-photo-card-safe" key={`${photo.name}-${index}`}>
+          {/* 2-Column Grid Layout */}
+          <div className="info-layout-2col">
+            
+            {/* Left Column: Main Content (Editor or Detail View) */}
+            <div className="info-main-content">
+              {/* Tab Selector at the top of the main area */}
+              <div className="info-subview-tabs" style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
                 <button
                   type="button"
-                  className="original-photo-btn info-original-photo-btn"
-                  onClick={() => openInfoPhotoMenu(k, index)}
-                  aria-label="정보보관소 사진 작업 선택"
+                  className={`info-subview-tab ${infoSubView === "insta" ? "active" : ""}`}
+                  onClick={() => {
+                    setInfoSubView("insta");
+                    setActiveItem(null);
+                    setEditingInstaCardId(null);
+                  }}
+                  style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", background: infoSubView === "insta" ? "rgba(122,184,255,0.15)" : "transparent", color: infoSubView === "insta" ? "#7ab8ff" : "#ccc", cursor: "pointer" }}
                 >
-                  <img src={photo.url} alt={`정보보관소 사진 ${index + 1}`} />
+                  📸 인스타 주요 정보 관리
                 </button>
-                {!getInfoPhotoMemoHidden(k, index, photo) && (
-                  <>
-                    <textarea
-                      className="info-photo-note-safe"
-                      value={normalizeInfoPhotoMemo(photo.memo)}
-                      onFocus={e => expandInfoPhotoNote(e.currentTarget)}
-                      onInput={e => expandInfoPhotoNote(e.currentTarget)}
-                      onBlur={e => collapseInfoPhotoNote(e.currentTarget)}
-                      onChange={e => updateInfoPhotoMemo(k, index, e.target.value)}
-                      placeholder="# 사진 아래에 내용을 입력하세요."
-                    />
-                    <PhotoMemoLinkPreview text={normalizeInfoPhotoMemo(photo.memo)} />
-                  </>
-                )}
+                <button
+                  type="button"
+                  className={`info-subview-tab ${infoSubView === "photobook" ? "active" : ""}`}
+                  onClick={() => {
+                    setInfoSubView("photobook");
+                    setActiveItem(null);
+                    setEditingPhotoBookItemId(null);
+                  }}
+                  style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", background: infoSubView === "photobook" ? "rgba(122,184,255,0.15)" : "transparent", color: infoSubView === "photobook" ? "#7ab8ff" : "#ccc", cursor: "pointer" }}
+                >
+                  📖 포토북 (Photo Book)
+                </button>
               </div>
-            ))}
+
+              {activeItem ? (
+                /* Detail/Edit View */
+                activeItem.type === "insta" && activeCard ? (
+                  editingInstaCardId === activeCard.id ? (
+                    /* Instagram Edit Form */
+                    <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
+                      <h3 className="form-title">📝 인스타 주요 정보 수정</h3>
+                      
+                      <div className="input-group" style={{ marginBottom: "15px" }}>
+                        <label className="field-label">작성일자:</label>
+                        <input
+                          type="date"
+                          className="info-date-input"
+                          min="2026-05-01"
+                          max="2026-12-31"
+                          value={instaInputDate}
+                          onChange={e => setInstaInputDate(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="insta-paste-zone" onPaste={handleInstaPasteZone} tabIndex={0}>
+                        {instaInputImageUrl ? (
+                          <div className="paste-preview-container">
+                            <img src={instaInputImageUrl} alt="인스타 수정 프리뷰" />
+                            <button type="button" className="remove-preview-btn" onClick={() => {
+                              setInstaInputImageUrl("");
+                              setInstaInputImageStoragePath("");
+                              setInstaInputExtractedText("");
+                            }}>이미지 삭제</button>
+                          </div>
+                        ) : (
+                          <div className="paste-placeholder">
+                            <span className="icon">📸</span>
+                            <p>이미지를 붙여넣기(Ctrl+V)하거나 선택하세요.</p>
+                            <label className="file-select-btn">
+                              사진 가져오기
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden-input"
+                                onChange={async e => {
+                                  const files = Array.from(e.target.files || []) as File[];
+                                  if (files.length > 0) await handleInstaImageUpload(files[0]);
+                                }}
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
+
+                      {instaInputExtractedText && (
+                        <div className="ocr-result-indicator" style={{ marginTop: "10px" }}>
+                          <span className="badge">AI OCR</span> 이미지에서 텍스트가 정상 추출되었습니다.
+                        </div>
+                      )}
+
+                      <div className="input-group" style={{ marginTop: "15px" }}>
+                        <label className="field-label">정보 상세 내용 및 수집 본문:</label>
+                        <textarea
+                          className="insta-textarea"
+                          placeholder="인스타 글이나 텍스트를 입력하세요."
+                          value={instaInputText}
+                          onChange={e => setInstaInputText(e.target.value)}
+                        />
+                        {instaInputText.trim() && (
+                          <button
+                            type="button"
+                            className="ai-classify-btn"
+                            onClick={() => runAIClassification(instaInputText)}
+                          >
+                            🪄 AI 카테고리/키워드 자동 추출
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="category-selection" style={{ marginTop: "15px" }}>
+                        <label className="field-label">분류 카테고리:</label>
+                        <div className="category-pills">
+                          {categories.map(cat => (
+                            <button
+                              key={cat}
+                              type="button"
+                              className={`category-pill ${instaInputCategory === cat ? "active" : ""}`}
+                              onClick={() => setInstaInputCategory(cat)}
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="meta-row" style={{ marginTop: "15px" }}>
+                        <div className="keyword-input-group">
+                          <label className="field-label">핵심 키워드:</label>
+                          <input
+                            type="text"
+                            className="keyword-input"
+                            placeholder="예: 투표, 부동산"
+                            value={instaInputKeyword}
+                            onChange={e => setInstaInputKeyword(e.target.value)}
+                          />
+                        </div>
+                        <div className="index-preview-box">
+                          <span className="preview-label">생성될 Index 형식:</span>
+                          <span className="preview-value">{instaInputCategory}-{instaInputKeyword.trim() || "키워드"}-{instaInputDate}</span>
+                        </div>
+                      </div>
+
+                      <div className="form-actions" style={{ marginTop: "20px" }}>
+                        <button type="button" className="pill-btn save-btn" onClick={saveInstaCard}>수정 완료</button>
+                        <button type="button" className="pill-btn cancel-btn" onClick={cancelEditInstaCard}>취소</button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Instagram Card Detail View */
+                    <div className="info-detail-view" id={`fact-check-report-${activeCard.id}`}>
+                      <div className="info-detail-header">
+                        <span className="info-detail-badge">{activeCard.category}-{activeCard.keyword}-{activeCard.entryDate}</span>
+                        <div className="api-key-panel no-print" style={{ padding: "4px 8px", border: "none", background: "transparent" }}>
+                          <input
+                            type="password"
+                            className="api-key-input"
+                            placeholder="🔑 Gemini Key"
+                            style={{ width: "120px" }}
+                            value={geminiApiKey}
+                            onChange={e => {
+                              setGeminiApiKey(e.target.value);
+                              localStorage.setItem("gemini_api_key", e.target.value);
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {activeCard.imageUrl && (
+                        <div className="info-detail-image-box" onClick={() => window.open(activeCard!.imageUrl, "_blank")}>
+                          <img src={activeCard.imageUrl} alt="인스타 주요 정보 첨부 이미지" />
+                        </div>
+                      )}
+
+                      <div className="info-detail-body">
+                        {activeCard.originalText}
+                        <PhotoMemoLinkPreview text={activeCard.originalText} />
+                      </div>
+
+                      {activeCard.extractedText && activeCard.extractedText !== activeCard.originalText && (
+                        <details className="extracted-text-details" style={{ marginBottom: "15px" }}>
+                          <summary>추출된 이미지 텍스트 원본 보기</summary>
+                          <p style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{activeCard.extractedText}</p>
+                        </details>
+                      )}
+
+                      {activeCard.factCheckResult ? (
+                        <div className="fact-check-box" style={{ marginTop: "15px" }}>
+                          <div className="fact-check-title">🛡️ Gemini AI 팩트체크 결과</div>
+                          <div
+                            className="fact-check-content markdown-body"
+                            dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(activeCard.factCheckResult) }}
+                          />
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="fact-check-trigger-btn no-print"
+                          onClick={() => performFactCheck(activeCard!.id)}
+                          disabled={!geminiApiKey}
+                          title={!geminiApiKey ? "API Key를 입력해야 팩트체크가 가능합니다." : ""}
+                        >
+                          🔍 Gemini 팩트체크 수행
+                        </button>
+                      )}
+
+                      <div className="info-detail-actions no-print">
+                        <button type="button" className="action-btn" onClick={() => triggerEditInstaCard(activeCard!)}>✏️ 수정</button>
+                        <button type="button" className="action-btn delete-btn" onClick={() => deleteInstaCard(activeCard!.id)}>🗑️ 삭제</button>
+                        <button type="button" className="action-btn" onClick={() => copyCardToClipboard(activeCard!)}>📋 복사</button>
+                        <button type="button" className="action-btn" onClick={() => downloadCardAsTxt(activeCard!)}>📥 TXT 다운로드</button>
+                        {activeCard.factCheckResult && (
+                          <button type="button" className="action-btn pdf-btn" onClick={() => downloadFactCheckPDF(activeCard!)}>📄 PDF 다운로드</button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                ) : activeItem.type === "photobook" && activePhoto ? (
+                  editingPhotoBookItemId === activePhoto.id ? (
+                    /* Photo Book Edit Form */
+                    <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
+                      <h3 className="form-title">📝 포토북 메모 수정</h3>
+                      
+                      <div className="input-group" style={{ marginBottom: "15px" }}>
+                        <label className="field-label">작성일자:</label>
+                        <input
+                          type="date"
+                          className="info-date-input"
+                          min="2026-05-01"
+                          max="2026-12-31"
+                          value={photoBookInputDate}
+                          onChange={e => setPhotoBookInputDate(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="insta-paste-zone" onPaste={handlePhotoBookPasteZone} tabIndex={0}>
+                        {photoBookInputImageUrl ? (
+                          <div className="paste-preview-container">
+                            <img src={photoBookInputImageUrl} alt="포토북 수정 프리뷰" />
+                            <button type="button" className="remove-preview-btn" onClick={() => {
+                              setPhotoBookInputImageUrl("");
+                              setPhotoBookInputImageStoragePath("");
+                            }}>이미지 삭제</button>
+                          </div>
+                        ) : (
+                          <div className="paste-placeholder">
+                            <span className="icon">📖</span>
+                            <p>이미지를 붙여넣기(Ctrl+V)하거나 선택하세요.</p>
+                            <label className="file-select-btn">
+                              사진 가져오기
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden-input"
+                                onChange={async e => {
+                                  const files = Array.from(e.target.files || []) as File[];
+                                  if (files.length > 0) await handlePhotoBookImageUpload(files[0]);
+                                }}
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="keyword-input-group" style={{ marginTop: "15px" }}>
+                        <label className="field-label">해시태그 키워드 (Keyword):</label>
+                        <input
+                          type="text"
+                          className="keyword-input"
+                          placeholder="예: She, 여행"
+                          value={photoBookInputKeyword}
+                          onChange={e => setPhotoBookInputKeyword(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="input-group" style={{ marginTop: "15px" }}>
+                        <label className="field-label">2차분류:</label>
+                        <div className="category-pills">
+                          {photoCategories2.map(cat => (
+                            <button
+                              key={cat}
+                              type="button"
+                              className={`category-pill ${photoBookInputCategory2 === cat ? "active" : ""}`}
+                              onClick={() => setPhotoBookInputCategory2(cat)}
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="input-group" style={{ marginTop: "15px" }}>
+                        <label className="field-label">사진 설명 및 메모:</label>
+                        <textarea
+                          className="insta-textarea"
+                          style={{ minHeight: "100px" }}
+                          placeholder="사진 설명을 입력하세요."
+                          value={photoBookInputMemo}
+                          onChange={e => setPhotoBookInputMemo(e.target.value)}
+                        />
+                        {photoBookInputMemo.trim() && (
+                          <button
+                            type="button"
+                            className="ai-classify-btn"
+                            onClick={() => runPhotoBookAIClassification(undefined, photoBookInputMemo)}
+                            style={{ marginTop: "8px" }}
+                          >
+                            🪄 AI 자동 분류 (키워드/2차분류)
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="index-preview-box" style={{ margin: "15px 0" }}>
+                        <span className="preview-label">생성될 Index 형식:</span>
+                        <span className="preview-value">#{photoBookInputKeyword.trim() || "keyword"}#{photoBookInputCategory2.trim() || "분류"}#{photoBookInputDate}</span>
+                      </div>
+
+                      <div className="form-actions" style={{ marginTop: "20px" }}>
+                        <button type="button" className="pill-btn save-btn" onClick={savePhotoBookItemForm}>수정 완료</button>
+                        <button type="button" className="pill-btn cancel-btn" onClick={cancelEditPhotoBook}>취소</button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Photo Book Detail View */
+                    <div className="info-detail-view">
+                      <div className="info-detail-header">
+                        <span className="info-detail-badge">#{activePhoto.keyword}#{activePhoto.category2}#{activePhoto.tag}</span>
+                      </div>
+
+                      {activePhoto.url && (
+                        <div className="info-detail-image-box" onClick={() => window.open(activePhoto!.url, "_blank")}>
+                          <img src={activePhoto.url} alt={`포토북 - ${activePhoto.keyword}`} />
+                        </div>
+                      )}
+
+                      <div className="info-detail-body">
+                        {activePhoto.memoText}
+                        <PhotoMemoLinkPreview text={activePhoto.memoText} />
+                      </div>
+
+                      <div className="info-detail-actions no-print">
+                        <button type="button" className="action-btn" onClick={() => triggerEditPhotoBook(activePhoto!)}>✏️ 수정</button>
+                        <button type="button" className="action-btn delete-btn" onClick={() => deletePhotoBookItem(activePhoto!.id)}>🗑️ 삭제</button>
+                        <button type="button" className="action-btn" onClick={() => copyPhotoBookToClipboard(activePhoto!)}>📋 복사</button>
+                        <button type="button" className="action-btn" onClick={() => downloadPhotoBookAsTxt(activePhoto!)}>📥 TXT 다운로드</button>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="empty-state">정보를 불러올 수 없습니다.</div>
+                )
+              ) : (
+                /* Creation Mode Form */
+                <div className="insta-view-container">
+                  {infoSubView === "insta" ? (
+                    /* Instagram Create Form */
+                    <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
+                      <h3 className="form-title" style={{ fontSize: "16px", marginBottom: "15px", color: "#7ab8ff" }}>📸 인스타 주요 정보 관리</h3>
+                      
+                      <div className="input-group" style={{ marginBottom: "15px" }}>
+                        <label className="field-label">작성일자:</label>
+                        <input
+                          type="date"
+                          className="info-date-input"
+                          min="2026-05-01"
+                          max="2026-12-31"
+                          value={instaInputDate}
+                          onChange={e => setInstaInputDate(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="insta-paste-zone" onPaste={handleInstaPasteZone} tabIndex={0}>
+                        {instaInputImageUrl ? (
+                          <div className="paste-preview-container">
+                            <img src={instaInputImageUrl} alt="인스타 업로드 프리뷰" />
+                            <button type="button" className="remove-preview-btn" onClick={() => {
+                              setInstaInputImageUrl("");
+                              setInstaInputImageStoragePath("");
+                              setInstaInputExtractedText("");
+                            }}>이미지 삭제</button>
+                          </div>
+                        ) : (
+                          <div className="paste-placeholder">
+                            <span className="icon">📸</span>
+                            <p>복사한 인스타 이미지를 여기에 <strong>붙여넣기(Ctrl+V)</strong>하거나 파일을 선택하세요.</p>
+                            <label className="file-select-btn">
+                              사진 가져오기
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden-input"
+                                onChange={async e => {
+                                  const files = Array.from(e.target.files || []) as File[];
+                                  if (files.length > 0) await handleInstaImageUpload(files[0]);
+                                }}
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
+
+                      {instaInputExtractedText && (
+                        <div className="ocr-result-indicator" style={{ marginTop: "10px" }}>
+                          <span className="badge">AI OCR</span> 이미지에서 텍스트가 정상 추출되었습니다.
+                        </div>
+                      )}
+
+                      <div className="input-group" style={{ marginTop: "15px" }}>
+                        <label className="field-label">정보 상세 내용 및 수집 본문:</label>
+                        <textarea
+                          className="insta-textarea"
+                          placeholder="인스타 글이나 텍스트를 입력 또는 붙여넣으세요."
+                          value={instaInputText}
+                          onChange={e => setInstaInputText(e.target.value)}
+                        />
+                        {instaInputText.trim() && (
+                          <button
+                            type="button"
+                            className="ai-classify-btn"
+                            onClick={() => runAIClassification(instaInputText)}
+                          >
+                            🪄 AI 카테고리/키워드 자동 추출
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="category-selection" style={{ marginTop: "15px" }}>
+                        <label className="field-label">분류 카테고리:</label>
+                        <div className="category-pills">
+                          {categories.map(cat => (
+                            <button
+                              key={cat}
+                              type="button"
+                              className={`category-pill ${instaInputCategory === cat ? "active" : ""}`}
+                              onClick={() => setInstaInputCategory(cat)}
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="meta-row" style={{ marginTop: "15px" }}>
+                        <div className="keyword-input-group">
+                          <label className="field-label">핵심 키워드:</label>
+                          <input
+                            type="text"
+                            className="keyword-input"
+                            placeholder="예: 투표, 부동산"
+                            value={instaInputKeyword}
+                            onChange={e => setInstaInputKeyword(e.target.value)}
+                          />
+                        </div>
+                        <div className="index-preview-box">
+                          <span className="preview-label">생성될 Index 형식:</span>
+                          <span className="preview-value">{instaInputCategory}-{instaInputKeyword.trim() || "키워드"}-{instaInputDate}</span>
+                        </div>
+                      </div>
+
+                      <div className="form-actions" style={{ marginTop: "20px" }}>
+                        <button type="button" className="pill-btn save-btn" onClick={saveInstaCard}>💾 인스타 정보 카드 저장</button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Photo Book Create Form */
+                    <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
+                      <h3 className="form-title" style={{ fontSize: "16px", marginBottom: "15px", color: "#7ab8ff" }}>📖 포토북 (Photo Book)</h3>
+
+                      <div className="input-group" style={{ marginBottom: "15px" }}>
+                        <label className="field-label">작성일자:</label>
+                        <input
+                          type="date"
+                          className="info-date-input"
+                          min="2026-05-01"
+                          max="2026-12-31"
+                          value={photoBookInputDate}
+                          onChange={e => setPhotoBookInputDate(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="insta-paste-zone" onPaste={handlePhotoBookPasteZone} tabIndex={0}>
+                        {photoBookInputImageUrl ? (
+                          <div className="paste-preview-container">
+                            <img src={photoBookInputImageUrl} alt="포토북 프리뷰" />
+                            <button type="button" className="remove-preview-btn" onClick={() => {
+                              setPhotoBookInputImageUrl("");
+                              setPhotoBookInputImageStoragePath("");
+                            }}>이미지 삭제</button>
+                          </div>
+                        ) : (
+                          <div className="paste-placeholder">
+                            <span className="icon">📖</span>
+                            <p>복사한 포토북 이미지를 여기에 <strong>붙여넣기(Ctrl+V)</strong>하거나 파일을 선택하세요.</p>
+                            <label className="file-select-btn">
+                              사진 가져오기
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden-input"
+                                onChange={async e => {
+                                  const files = Array.from(e.target.files || []) as File[];
+                                  if (files.length > 0) await handlePhotoBookImageUpload(files[0]);
+                                }}
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="keyword-input-group" style={{ marginTop: "15px" }}>
+                        <label className="field-label">해시태그 키워드 (Keyword):</label>
+                        <input
+                          type="text"
+                          className="keyword-input"
+                          placeholder="예: She, 여행"
+                          value={photoBookInputKeyword}
+                          onChange={e => setPhotoBookInputKeyword(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="input-group" style={{ marginTop: "15px" }}>
+                        <label className="field-label">2차분류:</label>
+                        <div className="category-pills">
+                          {photoCategories2.map(cat => (
+                            <button
+                              key={cat}
+                              type="button"
+                              className={`category-pill ${photoBookInputCategory2 === cat ? "active" : ""}`}
+                              onClick={() => setPhotoBookInputCategory2(cat)}
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="input-group" style={{ marginTop: "15px" }}>
+                        <label className="field-label">사진 설명 및 메모:</label>
+                        <textarea
+                          className="insta-textarea"
+                          style={{ minHeight: "100px" }}
+                          placeholder="이 사진과 관련된 아름다운 기록이나 감정을 작성해 보세요."
+                          value={photoBookInputMemo}
+                          onChange={e => setPhotoBookInputMemo(e.target.value)}
+                        />
+                        {photoBookInputMemo.trim() && (
+                          <button
+                            type="button"
+                            className="ai-classify-btn"
+                            onClick={() => runPhotoBookAIClassification(undefined, photoBookInputMemo)}
+                            style={{ marginTop: "8px" }}
+                          >
+                            🪄 AI 자동 분류 (키워드/2차분류)
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="index-preview-box" style={{ margin: "15px 0" }}>
+                        <span className="preview-label">생성될 Index 형식:</span>
+                        <span className="preview-value">#{photoBookInputKeyword.trim() || "keyword"}#{photoBookInputCategory2.trim() || "분류"}#{photoBookInputDate}</span>
+                      </div>
+
+                      <div className="form-actions" style={{ marginTop: "20px" }}>
+                        <button type="button" className="pill-btn save-btn" onClick={savePhotoBookItemForm}>📖 포토북 저장</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Sidebar (displays either Instagram Index List or Photo Book Index List based on active tab) */}
+            <div className="info-right-sidebar">
+              {infoSubView === "insta" ? (
+                /* Instagram Sidebar List */
+                <>
+                  <div className="info-sidebar-title">
+                    <span>📸 인스타 정보 인덱스</span>
+                    <button
+                      type="button"
+                      className="pill-btn compact-pill"
+                      style={{ fontSize: "11px", padding: "2px 6px" }}
+                      onClick={() => {
+                        setActiveItem(null);
+                        setEditingInstaCardId(null);
+                        setInstaInputText("");
+                        setInstaInputImageUrl("");
+                        setInstaInputImageStoragePath("");
+                        setInstaInputCategory("기타");
+                        setInstaInputKeyword("");
+                        setInstaInputExtractedText("");
+                        setInstaInputDate(entryDate(currentMonth, currentDay));
+                      }}
+                    >
+                      + 등록
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    className="info-sidebar-search"
+                    placeholder="인덱스/본문 검색..."
+                    value={instaSearchKey}
+                    onChange={e => setInstaSearchKey(e.target.value)}
+                  />
+                  <div className="info-sidebar-list">
+                    {filteredInstaCards.map(card => {
+                      const isActive = activeItem?.type === "insta" && activeItem?.id === card.id;
+                      const displayTitle = `${card.category}-${card.keyword}`;
+                      const displaySubtitle = `작성일자: ${card.entryDate}`;
+                      return (
+                        <button
+                          key={card.id}
+                          type="button"
+                          className={`info-sidebar-item-row ${isActive ? "active" : ""}`}
+                          onClick={() => {
+                            setActiveItem({ type: "insta", id: card.id });
+                            setEditingInstaCardId(null);
+                          }}
+                          title={`${displayTitle} | ${displaySubtitle}`}
+                        >
+                          <div className="info-sidebar-thumb">
+                            {card.imageUrl ? (
+                              <>
+                                <img src={card.imageUrl} alt={card.keyword} />
+                                <div
+                                  className="info-sidebar-hover-zoom"
+                                  style={{ backgroundImage: `url(${card.imageUrl})` }}
+                                />
+                              </>
+                            ) : (
+                              <span className="info-sidebar-thumb-icon">📸</span>
+                            )}
+                          </div>
+                          <div className="info-sidebar-meta">
+                            <span className="info-sidebar-meta-title">{displayTitle}</span>
+                            <span className="info-sidebar-meta-subtitle">{displaySubtitle}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                /* Photo Book Sidebar List */
+                <>
+                  <div className="info-sidebar-title">
+                    <span>📖 포토북 인덱스</span>
+                    <button
+                      type="button"
+                      className="pill-btn compact-pill"
+                      style={{ fontSize: "11px", padding: "2px 6px" }}
+                      onClick={() => {
+                        setActiveItem(null);
+                        setEditingPhotoBookItemId(null);
+                        setPhotoBookInputImageUrl("");
+                        setPhotoBookInputKeyword("");
+                        setPhotoBookInputCategory2("");
+                        setPhotoBookInputMemo("");
+                        setPhotoBookInputDate(entryDate(currentMonth, currentDay));
+                      }}
+                    >
+                      + 등록
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    className="info-sidebar-search"
+                    placeholder="포토북 검색..."
+                    value={photoSearchKey}
+                    onChange={e => setPhotoSearchKey(e.target.value)}
+                  />
+                  <div className="info-sidebar-list">
+                    {filteredPhotoBookItems.map(photo => {
+                      const isActive = activeItem?.type === "photobook" && activeItem?.id === photo.id;
+                      const displayTitle = `#${photo.keyword}#${photo.category2}`;
+                      const displaySubtitle = `작성일자: ${photo.tag}`;
+                      return (
+                        <button
+                          key={photo.id}
+                          type="button"
+                          className={`info-sidebar-item-row ${isActive ? "active" : ""}`}
+                          onClick={() => {
+                            setActiveItem({ type: "photobook", id: photo.id || "" });
+                            setEditingPhotoBookItemId(null);
+                          }}
+                          title={`${displayTitle} | ${displaySubtitle}`}
+                        >
+                          <div className="info-sidebar-thumb">
+                            {photo.url ? (
+                              <>
+                                <img src={photo.url} alt={photo.keyword} />
+                                <div
+                                  className="info-sidebar-hover-zoom"
+                                  style={{ backgroundImage: `url(${photo.url})` }}
+                                />
+                              </>
+                            ) : (
+                              <span className="info-sidebar-thumb-icon">📖</span>
+                            )}
+                          </div>
+                          <div className="info-sidebar-meta">
+                            <span className="info-sidebar-meta-title">{displayTitle}</span>
+                            <span className="info-sidebar-meta-subtitle">{displaySubtitle}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
           </div>
         </div>
       </section>
