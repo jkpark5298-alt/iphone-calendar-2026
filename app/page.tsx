@@ -894,6 +894,36 @@ export default function HomePage() {
     const cardKey = key(month, day);
     setInfoTextCards(previousCards => ({ ...previousCards, [cardKey]: nextCards }));
     localStorage.setItem(storageKey("infoTextCards", month, day), JSON.stringify(nextCards));
+    
+    // Optimistically update allInstaCards to instantly reflect edits/saves in the sidebar index
+    setAllInstaCards(prevAllCards => {
+      const dateStr = `2026-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const nextCardIds = nextCards.map(c => c.id);
+      
+      const filteredPrev = prevAllCards.filter(c => {
+        if (c.entryDate === dateStr) {
+          return nextCardIds.includes(c.id);
+        }
+        return true;
+      });
+      
+      const newParsedCards = nextCards.map(c => 
+        parseInstaCardContent(c.content, c.id, dateStr, c.createdAt || new Date().toISOString())
+      );
+      
+      const result = [...filteredPrev];
+      newParsedCards.forEach(nc => {
+        const idx = result.findIndex(c => c.id === nc.id);
+        if (idx > -1) {
+          result[idx] = nc;
+        } else {
+          result.push(nc);
+        }
+      });
+      
+      return result;
+    });
+
     void saveInfoTextCardsToSupabase(month, day, nextCards);
   }
 
@@ -3802,6 +3832,14 @@ function MarkDateView() {
       .replace(/\n/g, '<br />');
   }
 
+  function renderHtmlContent(text: string) {
+    if (!text) return "";
+    let html = text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br />');
+    return html;
+  }
+
   // Parse Instagram Card content from serialized JSON
   type InstaInfoCard = {
     id: string;
@@ -3956,6 +3994,84 @@ function MarkDateView() {
     } catch (e) {
       console.error(e);
       alert("이미지 분석 중 오류가 발생했습니다: " + e);
+    } finally {
+      setInstaLoading(false);
+    }
+  }
+
+  // Text formatter helper (B, color red, color yellow)
+  function insertFormatting(type: "bold" | "red" | "yellow") {
+    const textareaId = editingInstaCardId ? "insta-textarea-edit" : "insta-textarea-create";
+    const textarea = document.getElementById(textareaId) as HTMLTextAreaElement | null;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const selectedText = text.substring(start, end);
+
+    let replacement = "";
+    if (type === "bold") {
+      replacement = `**${selectedText}**`;
+    } else if (type === "red") {
+      replacement = `<span style="color:#ff0000">${selectedText}</span>`;
+    } else if (type === "yellow") {
+      replacement = `<span style="color:#ffff00">${selectedText}</span>`;
+    }
+
+    const newText = text.substring(0, start) + replacement + text.substring(end);
+    setInstaInputText(newText);
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + replacement.length, start + replacement.length);
+    }, 0);
+  }
+
+  // Manual OCR trigger for currently uploaded images
+  async function extractTextFromCurrentImages() {
+    if (instaInputImageUrls.length === 0) {
+      alert("추출할 이미지가 없습니다.");
+      return;
+    }
+    setInstaLoading(true);
+    try {
+      let combinedText = "";
+      for (let i = 0; i < instaInputImageUrls.length; i++) {
+        const url = instaInputImageUrls[i];
+        const base64 = await imageUrlToBase64(url);
+        if (!base64) continue;
+        
+        const res = await fetch("/api/gemini", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-gemini-api-key": geminiApiKey || ""
+          },
+          body: JSON.stringify({
+            action: "ocr",
+            imageBase64: base64,
+            mimeType: "image/jpeg"
+          })
+        });
+        
+        const data = await res.json();
+        if (data.result) {
+          combinedText += (combinedText ? "\n" : "") + data.result;
+        }
+      }
+      
+      if (combinedText.trim()) {
+        setInstaInputExtractedText(combinedText);
+        setInstaInputText(prev => prev ? `${prev}\n${combinedText}` : combinedText);
+        alert("이미지에서 텍스트가 정상 추출되어 본문에 추가되었습니다.");
+        await runAIClassification(combinedText);
+      } else {
+        alert("이미지에서 텍스트를 추출할 수 없었습니다.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("텍스트 추출 중 에러가 발생했습니다: " + error);
     } finally {
       setInstaLoading(false);
     }
@@ -4807,7 +4923,7 @@ ${photo.memoText}`;
 
   function InfoView() {
     const categories = [
-      "정치", "행정", "경제", "산업", "사회", "교육", "문화", "예술", "과학", "기술", "국제", "외교", "국방", "안보", "기타"
+      "정치", "행정", "경제", "산업", "사회", "교육", "문화", "예술", "과학", "기술", "국제", "외교", "국방", "안보", "건강", "운동", "기타"
     ];
 
     const photoCategories2 = [
@@ -5036,17 +5152,38 @@ ${photo.memoText}`;
                     <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
                       <h3 className="form-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
                         <span>📝 인스타 주요 정보 수정</span>
-                        <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                          작성일자:
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                           <input
-                            type="date"
-                            className="info-date-input"
-                            min="2026-05-01"
-                            max="2026-12-31"
-                            value={instaInputDate}
-                            onChange={e => setInstaInputDate(e.target.value)}
+                            type="password"
+                            className="api-key-input"
+                            placeholder="🔑 Gemini Key"
+                            style={{
+                              width: "100px",
+                              padding: "4px 8px",
+                              fontSize: "11px",
+                              background: "rgba(0,0,0,0.3)",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              borderRadius: "4px",
+                              color: "#fff"
+                            }}
+                            value={geminiApiKey}
+                            onChange={e => {
+                              setGeminiApiKey(e.target.value);
+                              localStorage.setItem("gemini_api_key", e.target.value);
+                            }}
                           />
-                        </span>
+                          <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                            작성일자:
+                            <input
+                              type="date"
+                              className="info-date-input"
+                              min="2026-05-01"
+                              max="2026-12-31"
+                              value={instaInputDate}
+                              onChange={e => setInstaInputDate(e.target.value)}
+                            />
+                          </span>
+                        </div>
                       </h3>
 
                       <div className="insta-paste-zone" onPaste={handleInstaPasteZone} tabIndex={0} style={{ display: "flex", flexWrap: "wrap", gap: "10px", padding: "10px", minHeight: "150px", justifyContent: "center", alignItems: "center" }}>
@@ -5111,6 +5248,16 @@ ${photo.memoText}`;
                         >
                           📋 클립보드 붙여넣기
                         </button>
+                        {instaInputImageUrls.length > 0 && (
+                          <button
+                            type="button"
+                            className="file-select-btn"
+                            onClick={extractTextFromCurrentImages}
+                            style={{ margin: 0, background: "rgba(122,184,255,0.15)", color: "#7ab8ff", border: "1px solid rgba(122,184,255,0.3)" }}
+                          >
+                            🔍 이미지 텍스트 추출 (AI OCR)
+                          </button>
+                        )}
                       </div>
 
                       {instaInputExtractedText && (
@@ -5141,8 +5288,37 @@ ${photo.memoText}`;
                       </div>
 
                       <div className="input-group" style={{ marginTop: "15px" }}>
-                        <label className="field-label">정보 상세 내용 및 수집 본문:</label>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
+                          <label className="field-label" style={{ margin: 0 }}>정보 상세 내용 및 수집 본문:</label>
+                          <div className="text-formatter-toolbar" style={{ display: "flex", gap: "5px" }}>
+                            <button
+                              type="button"
+                              onClick={() => insertFormatting("bold")}
+                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", color: "#fff", cursor: "pointer", fontWeight: "bold" }}
+                              title="굵게"
+                            >
+                              B
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => insertFormatting("red")}
+                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "4px", color: "#ef4444", cursor: "pointer", fontWeight: "bold" }}
+                              title="빨간색 글자"
+                            >
+                              가 (빨강)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => insertFormatting("yellow")}
+                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(234,179,8,0.2)", border: "1px solid rgba(234,179,8,0.3)", borderRadius: "4px", color: "#eab308", cursor: "pointer", fontWeight: "bold" }}
+                              title="노란색 글자"
+                            >
+                              가 (노랑)
+                            </button>
+                          </div>
+                        </div>
                         <textarea
+                          id="insta-textarea-edit"
                           className="insta-textarea"
                           placeholder="인스타 글이나 텍스트를 입력하세요."
                           value={instaInputText}
@@ -5241,10 +5417,8 @@ ${photo.memoText}`;
                         </div>
                       )}
 
-                      <div className="info-detail-body">
-                        {activeCard.originalText}
-                        <PhotoMemoLinkPreview text={activeCard.originalText} />
-                      </div>
+                      <div className="info-detail-body markdown-body" dangerouslySetInnerHTML={{ __html: renderHtmlContent(activeCard.originalText) }} />
+                      <PhotoMemoLinkPreview text={activeCard.originalText} />
 
                       {activeCard.extractedText && activeCard.extractedText !== activeCard.originalText && (
                         <details className="extracted-text-details" style={{ marginBottom: "15px" }}>
@@ -5449,17 +5623,39 @@ ${photo.memoText}`;
                     <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
                       <h3 className="form-title" style={{ fontSize: "16px", marginBottom: "15px", color: "#7ab8ff", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
                         <span>📸 인스타 주요 정보 관리</span>
-                        <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                          작성일자:
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                           <input
-                            type="date"
-                            className="info-date-input"
-                            min="2026-05-01"
-                            max="2026-12-31"
-                            value={instaInputDate}
-                            onChange={e => setInstaInputDate(e.target.value)}
+                            type="password"
+                            className="api-key-input"
+                            placeholder="🔑 Gemini Key"
+                            style={{
+                              width: "100px",
+                              padding: "4px 8px",
+                              fontSize: "11px",
+                              background: "rgba(0,0,0,0.3)",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              borderRadius: "4px",
+                              color: "#fff"
+                            }}
+                            value={geminiApiKey}
+                            onChange={e => {
+                              setInstaLoading(false);
+                              setGeminiApiKey(e.target.value);
+                              localStorage.setItem("gemini_api_key", e.target.value);
+                            }}
                           />
-                        </span>
+                          <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                            작성일자:
+                            <input
+                              type="date"
+                              className="info-date-input"
+                              min="2026-05-01"
+                              max="2026-12-31"
+                              value={instaInputDate}
+                              onChange={e => setInstaInputDate(e.target.value)}
+                            />
+                          </span>
+                        </div>
                       </h3>
 
                       <div className="insta-paste-zone" onPaste={handleInstaPasteZone} tabIndex={0} style={{ display: "flex", flexWrap: "wrap", gap: "10px", padding: "10px", minHeight: "150px", justifyContent: "center", alignItems: "center" }}>
@@ -5524,6 +5720,16 @@ ${photo.memoText}`;
                         >
                           📋 클립보드 붙여넣기
                         </button>
+                        {instaInputImageUrls.length > 0 && (
+                          <button
+                            type="button"
+                            className="file-select-btn"
+                            onClick={extractTextFromCurrentImages}
+                            style={{ margin: 0, background: "rgba(122,184,255,0.15)", color: "#7ab8ff", border: "1px solid rgba(122,184,255,0.3)" }}
+                          >
+                            🔍 이미지 텍스트 추출 (AI OCR)
+                          </button>
+                        )}
                       </div>
 
                       {instaInputExtractedText && (
@@ -5554,8 +5760,37 @@ ${photo.memoText}`;
                       </div>
 
                       <div className="input-group" style={{ marginTop: "15px" }}>
-                        <label className="field-label">정보 상세 내용 및 수집 본문:</label>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
+                          <label className="field-label" style={{ margin: 0 }}>정보 상세 내용 및 수집 본문:</label>
+                          <div className="text-formatter-toolbar" style={{ display: "flex", gap: "5px" }}>
+                            <button
+                              type="button"
+                              onClick={() => insertFormatting("bold")}
+                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", color: "#fff", cursor: "pointer", fontWeight: "bold" }}
+                              title="굵게"
+                            >
+                              B
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => insertFormatting("red")}
+                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "4px", color: "#ef4444", cursor: "pointer", fontWeight: "bold" }}
+                              title="빨간색 글자"
+                            >
+                              가 (빨강)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => insertFormatting("yellow")}
+                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(234,179,8,0.2)", border: "1px solid rgba(234,179,8,0.3)", borderRadius: "4px", color: "#eab308", cursor: "pointer", fontWeight: "bold" }}
+                              title="노란색 글자"
+                            >
+                              가 (노랑)
+                            </button>
+                          </div>
+                        </div>
                         <textarea
+                          id="insta-textarea-create"
                           className="insta-textarea"
                           placeholder="인스타 글이나 텍스트를 입력 또는 붙여넣으세요."
                           value={instaInputText}
@@ -6391,7 +6626,7 @@ ${photo.memoText}`;
                               color: "#ddd",
                               wordBreak: "break-all",
                               whiteSpace: "pre-wrap"
-                            }} className="infobook-card-memo">{card.originalText}</p>
+                            }} className="infobook-card-memo" dangerouslySetInnerHTML={{ __html: renderHtmlContent(card.originalText) }} />
                           </div>
 
                           {/* Fact Check Result */}
