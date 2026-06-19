@@ -4749,19 +4749,20 @@ ${photo.memoText}`;
                   editingInstaCardId === activeCard.id ? (
                     /* Instagram Edit Form */
                     <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
-                      <h3 className="form-title">📝 인스타 주요 정보 수정</h3>
-                      
-                      <div className="input-group" style={{ marginBottom: "15px" }}>
-                        <label className="field-label">작성일자:</label>
-                        <input
-                          type="date"
-                          className="info-date-input"
-                          min="2026-05-01"
-                          max="2026-12-31"
-                          value={instaInputDate}
-                          onChange={e => setInstaInputDate(e.target.value)}
-                        />
-                      </div>
+                      <h3 className="form-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                        <span>📝 인스타 주요 정보 수정</span>
+                        <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                          작성일자:
+                          <input
+                            type="date"
+                            className="info-date-input"
+                            min="2026-05-01"
+                            max="2026-12-31"
+                            value={instaInputDate}
+                            onChange={e => setInstaInputDate(e.target.value)}
+                          />
+                        </span>
+                      </h3>
 
                       <div className="insta-paste-zone" onPaste={handleInstaPasteZone} tabIndex={0}>
                         {instaInputImageUrl ? (
@@ -4929,19 +4930,20 @@ ${photo.memoText}`;
                   editingPhotoBookItemId === activePhoto.id ? (
                     /* Photo Book Edit Form */
                     <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
-                      <h3 className="form-title">📝 포토북 메모 수정</h3>
-                      
-                      <div className="input-group" style={{ marginBottom: "15px" }}>
-                        <label className="field-label">작성일자:</label>
-                        <input
-                          type="date"
-                          className="info-date-input"
-                          min="2026-05-01"
-                          max="2026-12-31"
-                          value={photoBookInputDate}
-                          onChange={e => setPhotoBookInputDate(e.target.value)}
-                        />
-                      </div>
+                      <h3 className="form-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                        <span>📝 포토북 메모 수정</span>
+                        <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                          작성일자:
+                          <input
+                            type="date"
+                            className="info-date-input"
+                            min="2026-05-01"
+                            max="2026-12-31"
+                            value={photoBookInputDate}
+                            onChange={e => setPhotoBookInputDate(e.target.value)}
+                          />
+                        </span>
+                      </h3>
 
                       <div className="insta-paste-zone" onPaste={handlePhotoBookPasteZone} tabIndex={0}>
                         {photoBookInputImageUrl ? (
@@ -5065,19 +5067,20 @@ ${photo.memoText}`;
                   {infoSubView === "insta" ? (
                     /* Instagram Create Form */
                     <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
-                      <h3 className="form-title" style={{ fontSize: "16px", marginBottom: "15px", color: "#7ab8ff" }}>📸 인스타 주요 정보 관리</h3>
-                      
-                      <div className="input-group" style={{ marginBottom: "15px" }}>
-                        <label className="field-label">작성일자:</label>
-                        <input
-                          type="date"
-                          className="info-date-input"
-                          min="2026-05-01"
-                          max="2026-12-31"
-                          value={instaInputDate}
-                          onChange={e => setInstaInputDate(e.target.value)}
-                        />
-                      </div>
+                      <h3 className="form-title" style={{ fontSize: "16px", marginBottom: "15px", color: "#7ab8ff", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                        <span>📸 인스타 주요 정보 관리</span>
+                        <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                          작성일자:
+                          <input
+                            type="date"
+                            className="info-date-input"
+                            min="2026-05-01"
+                            max="2026-12-31"
+                            value={instaInputDate}
+                            onChange={e => setInstaInputDate(e.target.value)}
+                          />
+                        </span>
+                      </h3>
 
                       <div className="insta-paste-zone" onPaste={handleInstaPasteZone} tabIndex={0}>
                         {instaInputImageUrl ? (
@@ -5174,19 +5177,20 @@ ${photo.memoText}`;
                   ) : (
                     /* Photo Book Create Form */
                     <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
-                      <h3 className="form-title" style={{ fontSize: "16px", marginBottom: "15px", color: "#7ab8ff" }}>📖 포토북 (Photo Book)</h3>
-
-                      <div className="input-group" style={{ marginBottom: "15px" }}>
-                        <label className="field-label">작성일자:</label>
-                        <input
-                          type="date"
-                          className="info-date-input"
-                          min="2026-05-01"
-                          max="2026-12-31"
-                          value={photoBookInputDate}
-                          onChange={e => setPhotoBookInputDate(e.target.value)}
-                        />
-                      </div>
+                      <h3 className="form-title" style={{ fontSize: "16px", marginBottom: "15px", color: "#7ab8ff", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                        <span>📖 포토북 (Photo Book)</span>
+                        <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                          작성일자:
+                          <input
+                            type="date"
+                            className="info-date-input"
+                            min="2026-05-01"
+                            max="2026-12-31"
+                            value={photoBookInputDate}
+                            onChange={e => setPhotoBookInputDate(e.target.value)}
+                          />
+                        </span>
+                      </h3>
 
                       <div className="insta-paste-zone" onPaste={handlePhotoBookPasteZone} tabIndex={0}>
                         {photoBookInputImageUrl ? (
