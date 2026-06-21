@@ -59,6 +59,8 @@ export function useTravelDiaryGeneralInfoState({
   const [isCollectingGeneralInfoClipboard, setIsCollectingGeneralInfoClipboard] = useState(false);
   const [generalInfoImageLoadFailed, setGeneralInfoImageLoadFailed] = useState(false);
   const [generalInfoSupabaseStatus, setGeneralInfoSupabaseStatus] = useState("일반 정보 Supabase 연결 준비");
+  const generalInfoSupabaseStatusRef = useRef(generalInfoSupabaseStatus);
+  generalInfoSupabaseStatusRef.current = generalInfoSupabaseStatus;
   const [generalInfoDraftBackup, setGeneralInfoDraftBackup] = useState<GeneralInfoDraft | null>(null);
   const [isAnalyzingGeneralInfo, setIsAnalyzingGeneralInfo] = useState(false);
 
@@ -76,7 +78,7 @@ export function useTravelDiaryGeneralInfoState({
   ) => {
     try {
       const nextStatus = method === "POST" ? "일반 정보 Supabase 저장 중" : "일반 정보 Supabase 수정 중";
-      if (generalInfoSupabaseStatus !== nextStatus) {
+      if (generalInfoSupabaseStatusRef.current !== nextStatus) {
         setGeneralInfoSupabaseStatus(nextStatus);
       }
 
@@ -117,7 +119,7 @@ export function useTravelDiaryGeneralInfoState({
       }
 
       const successStatus = method === "POST" ? "일반 정보 Supabase 저장 완료" : "일반 정보 Supabase 수정 완료";
-      if (generalInfoSupabaseStatus !== successStatus) {
+      if (generalInfoSupabaseStatusRef.current !== successStatus) {
         setGeneralInfoSupabaseStatus(successStatus);
       }
       showPasteHint(`✅ ${successStatus}`);
@@ -126,17 +128,17 @@ export function useTravelDiaryGeneralInfoState({
       const failStatus = method === "POST"
         ? "이 기기에는 저장됨 · Supabase 저장 실패"
         : "이 기기에는 수정됨 · Supabase 수정 실패";
-      if (generalInfoSupabaseStatus !== failStatus) {
+      if (generalInfoSupabaseStatusRef.current !== failStatus) {
         setGeneralInfoSupabaseStatus(failStatus);
       }
       showPasteHint(`⚠️ ${failStatus} · 인터넷 연결 및 API 권한을 확인하세요.`);
     }
-  }, [generalInfoSupabaseStatus, showPasteHint]);
+  }, [showPasteHint]);
 
   // --- Chapter 3 일반 정보 Supabase CRUD 헬퍼 (API Router 호출 복원) ---
   const loadGeneralInfoItemsFromSupabase = useCallback(async () => {
     try {
-      if (generalInfoSupabaseStatus !== "일반 정보 Supabase 불러오는 중") {
+      if (generalInfoSupabaseStatusRef.current !== "일반 정보 Supabase 불러오는 중") {
         setGeneralInfoSupabaseStatus("일반 정보 Supabase 불러오는 중");
       }
 
@@ -250,22 +252,22 @@ export function useTravelDiaryGeneralInfoState({
         ? `일반 정보 Supabase 불러오기 완료 ${remoteItems.length}건`
         : "일반 정보 Supabase 저장자료 없음";
         
-      if (generalInfoSupabaseStatus !== nextStatus) {
+      if (generalInfoSupabaseStatusRef.current !== nextStatus) {
         setGeneralInfoSupabaseStatus(nextStatus);
       }
     } catch (error) {
       console.error("travel-diary general info load failed", error);
-      if (generalInfoSupabaseStatus !== "일반 정보 Supabase 불러오기 실패 · 이 기기 자료 유지") {
+      if (generalInfoSupabaseStatusRef.current !== "일반 정보 Supabase 불러오기 실패 · 이 기기 자료 유지") {
         setGeneralInfoSupabaseStatus("일반 정보 Supabase 불러오기 실패 · 이 기기 자료 유지");
       }
     }
-  }, [generalInfoSupabaseStatus, syncGeneralInfoItemToSupabase]);
+  }, []);
 
 
 
   const deleteGeneralInfoItemFromSupabase = useCallback(async (itemId: number) => {
     try {
-      if (generalInfoSupabaseStatus !== "일반 정보 Supabase 삭제 중") {
+      if (generalInfoSupabaseStatusRef.current !== "일반 정보 Supabase 삭제 중") {
         setGeneralInfoSupabaseStatus("일반 정보 Supabase 삭제 중");
       }
 
@@ -283,16 +285,16 @@ export function useTravelDiaryGeneralInfoState({
         throw new Error(data.detail || data.error || "일반 정보 Supabase 삭제 실패");
       }
 
-      if (generalInfoSupabaseStatus !== "일반 정보 Supabase 삭제 완료") {
+      if (generalInfoSupabaseStatusRef.current !== "일반 정보 Supabase 삭제 완료") {
         setGeneralInfoSupabaseStatus("일반 정보 Supabase 삭제 완료");
       }
     } catch (error) {
       console.error("travel-diary general info delete failed", error);
-      if (generalInfoSupabaseStatus !== "이 기기에는 삭제됨 · Supabase 삭제 실패") {
+      if (generalInfoSupabaseStatusRef.current !== "이 기기에는 삭제됨 · Supabase 삭제 실패") {
         setGeneralInfoSupabaseStatus("이 기기에는 삭제됨 · Supabase 삭제 실패");
       }
     }
-  }, [generalInfoSupabaseStatus]);
+  }, []);
 
   // --- 일반 정보 백업 및 취소/리셋 핸들러 ---
   const backupCurrentGeneralInfoDraft = useCallback(() => {
