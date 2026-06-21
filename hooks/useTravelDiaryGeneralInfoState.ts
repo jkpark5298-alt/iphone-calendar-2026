@@ -188,10 +188,26 @@ export function useTravelDiaryGeneralInfoState({
       setGeneralInfoItems((prev) => {
         const map = new Map<number, GeneralInfoItem>();
 
-        // 1. Register existing local items first
+        const remoteIdsSet = new Set(restoredItems.map((r) => r.id));
+        const minRemoteId = restoredItems.length > 0
+          ? Math.min(...restoredItems.map((r) => r.id))
+          : Infinity;
+        const now = Date.now();
+        const FIVE_MINUTES = 5 * 60 * 1000;
+
+        // 1. Register existing local items first, but filter out those that were deleted from Supabase.
+        // Keep them if: they exist on remote, they are newly created locally (< 5 min ago), or they might be beyond the 300-limit.
         prev.forEach((item) => {
           if (item && typeof item.id === "number") {
-            map.set(item.id, item);
+            const isRemotePresent = remoteIdsSet.has(item.id);
+            const isNewLocalItem = (now - item.id) < FIVE_MINUTES;
+            const isPossiblyBeyondLimit = remoteItems.length >= 300 && item.id < minRemoteId;
+
+            if (isRemotePresent || isNewLocalItem || isPossiblyBeyondLimit) {
+              map.set(item.id, item);
+            } else {
+              console.log(`Filtering out deleted general info item locally: ID=${item.id}, Title="${item.title}"`);
+            }
           }
         });
 
@@ -1644,6 +1660,11 @@ export function useTravelDiaryGeneralInfoState({
       window.removeEventListener("focus", handleFocus);
       clearInterval(interval);
     };
+  }, [loadGeneralInfoItemsFromSupabase]);
+
+  // Initial sync from Supabase on mount
+  useEffect(() => {
+    void loadGeneralInfoItemsFromSupabase();
   }, [loadGeneralInfoItemsFromSupabase]);
 
   const selectedGeneralInfoItem = useMemo(() => {
