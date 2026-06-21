@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export async function GET(request: Request) {
@@ -49,14 +49,29 @@ export async function GET(request: Request) {
       .insert(testRow)
       .select();
 
-    // 3. Test Supabase DELETE (Cleanup)
-    let deleteError = null;
+    // 3. Test API DELETE route (Cleanup & Auth check)
+    let apiDeleteResult: any = null;
     if (!insertError) {
-      const { error } = await supabase
-        .from("general_info_items")
-        .delete()
-        .eq("id", testId);
-      deleteError = error;
+      try {
+        const { DELETE as generalInfoDelete } = require("../general-info/route");
+        const mockReq = new NextRequest("http://localhost:3000/api/general-info", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            "origin": "http://localhost:3000",
+            "referer": "http://localhost:3000/",
+            "host": "localhost:3000"
+          },
+          body: JSON.stringify({ id: testId })
+        });
+        const apiRes = await generalInfoDelete(mockReq);
+        apiDeleteResult = {
+          status: apiRes.status,
+          data: await apiRes.json()
+        };
+      } catch (e: any) {
+        apiDeleteResult = { error: e.message || String(e) };
+      }
     }
 
     // 4. Test Google Gemini API Key validity
@@ -152,9 +167,7 @@ export async function GET(request: Request) {
           hint: insertError.hint,
         } : null,
         insertedData: insertData,
-        cleanupError: deleteError ? {
-          message: deleteError.message,
-        } : null
+        apiDeleteResult: apiDeleteResult
       },
       geminiApiTest: geminiTestResult
     });
