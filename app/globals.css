@@ -7445,10 +7445,12 @@ body {
   box-shadow: 0 4px 12px rgba(56, 189, 248, 0.08);
 }
 
-.generalInfoCard:hover {
-  background: rgba(30, 41, 59, 0.8);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+@media (hover: hover) {
+  .generalInfoCard:hover {
+    background: rgba(30, 41, 59, 0.8);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  }
 }
 
 .generalInfoCardThumbnail {

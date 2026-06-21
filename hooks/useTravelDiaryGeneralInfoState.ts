@@ -1640,14 +1640,16 @@ export function useTravelDiaryGeneralInfoState({
     }
   }, [resetGeneralInfoRichTextEditor, showPasteHint]);
 
-  // Realtime window focus and periodic (30s) polling sync from Supabase
+  // Tab visibility change and periodic (30s) polling sync from Supabase
   useEffect(() => {
-    const handleFocus = () => {
-      console.log("Window focused: syncing general info items from Supabase...");
-      void loadGeneralInfoItemsFromSupabase();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.log("Tab became visible: syncing general info items from Supabase...");
+        void loadGeneralInfoItemsFromSupabase();
+      }
     };
 
-    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
@@ -1657,7 +1659,7 @@ export function useTravelDiaryGeneralInfoState({
     }, 30000);
 
     return () => {
-      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(interval);
     };
   }, [loadGeneralInfoItemsFromSupabase]);
