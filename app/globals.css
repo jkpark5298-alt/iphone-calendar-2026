@@ -6482,3 +6482,2819 @@ body {
 }
 
 
+
+
+/* ========================================================================= */
+/* ===== Chapter 3 General Info Styles Appended from travelDiary.css ===== */
+/* ========================================================================= */
+
+.urlExtractButton {
+  margin-top: 8px;
+  width: fit-content;
+}
+
+.generalInfoAutoGuide {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  background: rgba(14, 165, 233, 0.06);
+}
+
+.generalInfoAutoGuide strong {
+  color: #7dd3fc;
+  font-size: 13px;
+}
+
+.generalInfoAutoGuide p {
+  margin: 5px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.generalInfoTextDetailSection {
+  min-height: 260px;
+}
+
+.generalInfoTextDetailSection pre {
+  min-height: 220px;
+  resize: vertical;
+}
+
+.generalInfoExtraNoteInput {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  color: #e2e8f0;
+  padding: 10px 11px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.generalInfoExtraNoteInput:focus {
+  outline: 2px solid rgba(56, 189, 248, 0.35);
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+@media (min-width: 1100px) {
+  .rightColumn .generalInfoCard {
+    overflow: visible;
+  }
+
+  .generalInfoInlineDetail {
+    max-height: 72vh;
+    overflow: auto;
+    padding-right: 4px;
+  }
+
+  .generalInfoTextDetailSection pre {
+    max-height: 420px;
+  }
+}
+
+@media (max-width: 760px) {
+  .generalInfoInlineDetail {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .generalInfoTextDetailSection {
+    min-height: auto;
+  }
+
+  .generalInfoTextDetailSection pre {
+    min-height: 180px;
+    max-height: 360px;
+  }
+
+  .generalInfoExtraNoteInput {
+    min-height: 140px;
+    font-size: 13px;
+  }
+}
+
+.generalInfoInlineDetail {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.generalInfoInlineDetail section {
+  padding: 11px;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  background: rgba(2, 6, 23, 0.36);
+}
+
+.generalInfoInlineDetail strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #7dd3fc;
+  font-size: 12px;
+}
+
+.generalInfoInlineDetail p,
+.generalInfoInlineDetail a {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.generalInfoInlineDetail img,
+.generalInfoInlineDetail video {
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  background: #020617;
+}
+
+.generalInfoInlineDetail pre {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: inherit;
+}
+
+.generalInfoClipboardBox {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(56, 189, 248, 0.26);
+  background: rgba(14, 165, 233, 0.07);
+}
+
+.generalInfoClipboardBox strong {
+  display: block;
+  color: #7dd3fc;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.generalInfoClipboardBox p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.generalInfoClipboardBox button {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 760px) {
+  .generalInfoClipboardBox {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .generalInfoClipboardBox button {
+    width: 100%;
+  }
+}
+
+.generalInfoEditNotice {
+  margin-bottom: 12px;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.09);
+}
+
+.generalInfoEditNotice strong {
+  display: block;
+  color: #fde68a;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.generalInfoEditNotice p {
+  margin: 0;
+  color: #fef3c7;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.generalInfoActionButtons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 560px) {
+  .generalInfoActionButtons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .generalInfoActionButtons .smallActionButton {
+    width: 100%;
+  }
+}
+
+.generalInfoCardActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.generalInfoDetailModal {
+  width: min(860px, calc(100vw - 28px));
+  max-height: min(84vh, 760px);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+.generalInfoDetailBody {
+  overflow: auto;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.generalInfoDetailSection {
+  padding: 13px;
+  border-radius: 14px;
+  border: 1px solid #1e293b;
+  background: rgba(2, 6, 23, 0.36);
+}
+
+.generalInfoDetailSection strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #7dd3fc;
+  font-size: 13px;
+}
+
+.generalInfoDetailSection p,
+.generalInfoDetailSection a {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.65;
+  word-break: break-all;
+}
+
+.generalInfoDetailSection img,
+.generalInfoDetailSection video {
+  max-width: 100%;
+  max-height: 360px;
+  border-radius: 14px;
+  border: 1px solid #334155;
+  background: #020617;
+  object-fit: contain;
+}
+
+.generalInfoDetailSection pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.65;
+  font-family: inherit;
+}
+
+@media (max-width: 560px) {
+  .generalInfoCardActions {
+    display: grid;
+  }
+
+  .smallActionButton {
+    width: 100%;
+  }
+}
+
+.generalInfoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.generalInfoGrid label,
+.generalInfoTextBox {
+  display: grid;
+  gap: 7px;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.generalInfoGrid input,
+.generalInfoGrid select,
+.generalInfoTextBox textarea,
+.searchBox input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  color: #e2e8f0;
+  padding: 11px 12px;
+  font-size: 13px;
+}
+
+.generalInfoTextBox {
+  margin-top: 12px;
+}
+
+.generalInfoUploadBox {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px dashed rgba(56, 189, 248, 0.32);
+  background: rgba(14, 165, 233, 0.06);
+}
+
+.generalInfoUploadBox strong {
+  color: #e0f2fe;
+}
+
+.generalInfoUploadBox p {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.generalInfoFactCheckModal {
+  max-width: 860px;
+  width: min(92vw, 860px);
+}
+
+.generalInfoReportModal {
+  max-width: 860px;
+  width: min(92vw, 860px);
+}
+
+.generalInfoReportMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.generalInfoReportMeta span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  color: #bae6fd;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.generalInfoReportText {
+  white-space: pre-wrap;
+  word-break: keep-all;
+  line-height: 1.75;
+  max-height: 58vh;
+  overflow: auto;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.55);
+  color: #e5e7eb;
+  font-family: inherit;
+}
+
+.generalInfoReportLoading {
+  padding: 28px;
+  border-radius: 16px;
+  background: rgba(14, 165, 233, 0.1);
+  color: #bae6fd;
+  text-align: center;
+  font-weight: 800;
+}
+
+.generalInfoReportPreview {
+  max-height: 58vh;
+  overflow-y: auto;
+  padding: 12px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.reportSummaryCard {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(124, 58, 237, 0.08));
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 16px;
+  padding: 16px 20px;
+}
+
+.reportSummaryCard strong {
+  display: block;
+  color: #38bdf8;
+  font-size: 14px;
+  margin-bottom: 6px;
+  font-weight: 800;
+}
+
+.reportSummaryCard p {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 14px;
+  line-height: 1.65;
+  word-break: keep-all;
+}
+
+.reportSectionsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.reportSectionCard {
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 16px;
+  padding: 18px 22px;
+  transition: all 0.25s ease;
+}
+
+.reportSectionCard:hover {
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+}
+
+.reportSectionHeader {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #38bdf8;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  padding-bottom: 8px;
+}
+
+.reportSectionBody {
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.report-markdown-body h3.report-h1 {
+  font-size: 18px;
+  color: #bae6fd;
+  margin: 18px 0 10px;
+  font-weight: 800;
+}
+
+.report-markdown-body h4.report-h2 {
+  font-size: 15px;
+  color: #bae6fd;
+  margin: 16px 0 8px;
+  font-weight: 700;
+}
+
+.report-markdown-body h5.report-h3 {
+  font-size: 14px;
+  color: #bae6fd;
+  margin: 14px 0 6px;
+  font-weight: 700;
+}
+
+.report-markdown-body p.report-p {
+  margin: 0 0 12px 0;
+  line-height: 1.7;
+  word-break: keep-all;
+}
+
+.report-markdown-body p.report-p:last-child {
+  margin-bottom: 0;
+}
+
+.report-markdown-body ul.report-ul {
+  margin: 0 0 12px 20px;
+  padding: 0;
+  list-style-type: disc;
+}
+
+.report-markdown-body ul.report-ul li {
+  margin-bottom: 6px;
+  line-height: 1.65;
+}
+
+.report-markdown-body p.report-list-item {
+  margin: 0 0 8px 0;
+  padding-left: 14px;
+  text-indent: -14px;
+  line-height: 1.65;
+}
+
+.report-markdown-body .report-space {
+  height: 10px;
+}
+
+@media print {
+  /* 1. 화면 전체 감추기 및 배경색 초기화 */
+  html, body, .pageShell {
+    background: white !important;
+    color: black !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  /* 2. 인쇄 비대상 숨김 처리 */
+  .reportNoPrint {
+    display: none !important;
+  }
+  
+  /* 3. 고정 오버레이 해제 및 전체 인쇄 흐름 적용 */
+  .overlay {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+  }
+  
+  .reportPrintArea {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+    color: black !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
+  
+  .generalInfoReportModal {
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+  
+  /* 6. 인쇄 전용 헤더 서식 */
+  .reportPrintHeader {
+    border-bottom: 2px solid #000 !important;
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+  }
+  .reportPrintHeader h1 {
+    font-size: 26px !important;
+    color: black !important;
+    margin: 6px 0 !important;
+    font-weight: 800 !important;
+    word-break: keep-all;
+  }
+  .reportPrintHeader .eyebrow {
+    color: #0284c7 !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+  }
+  .reportPrintMeta {
+    margin: 4px 0 0 0 !important;
+    font-size: 13px !important;
+    color: #475569 !important;
+  }
+  
+  /* 7. 보고서 내용 인쇄 레이아웃 */
+  .generalInfoReportPreview {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    display: block !important;
+    height: auto !important;
+  }
+  
+  .reportSummaryCard {
+    background: #f1f5f9 !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 12px !important;
+    padding: 14px 18px !important;
+    margin-bottom: 20px !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .reportSummaryCard strong {
+    color: #0284c7 !important;
+  }
+  .reportSummaryCard p {
+    color: black !important;
+  }
+  
+  .reportMediaSection {
+    background: #fafafa !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 12px !important;
+    padding: 16px 20px !important;
+    margin-bottom: 20px !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .reportMediaCard {
+    background: #f1f5f9 !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    padding: 6px !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .reportMediaContent {
+    background: #f1f5f9 !important;
+    max-height: 250px !important;
+  }
+  .reportMediaCaption {
+    color: #334155 !important;
+  }
+
+  .reportSectionsContainer {
+    display: block !important;
+  }
+  
+  .reportSectionCard {
+    background: #fafafa !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 12px !important;
+    padding: 16px 20px !important;
+    margin-bottom: 20px !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  .reportSectionHeader {
+    color: #0284c7 !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+    font-size: 15px !important;
+    margin-bottom: 10px !important;
+  }
+  
+  .reportSectionBody {
+    color: black !important;
+  }
+  
+  /* 마크다운 타이포그래피 인쇄 최적화 */
+  .report-markdown-body h3.report-h1,
+  .report-markdown-body h4.report-h2,
+  .report-markdown-body h5.report-h3 {
+    color: #0f172a !important;
+  }
+  
+  .report-markdown-body p.report-p,
+  .report-markdown-body ul.report-ul li,
+  .report-markdown-body p.report-list-item {
+    color: black !important;
+  }
+}
+
+.generalInfoPasteAssistBox {
+  min-height: 74px !important;
+  border-style: dashed !important;
+  border-color: rgba(56, 189, 248, 0.45) !important;
+  background: rgba(14, 165, 233, 0.08) !important;
+}
+
+.generalInfoPasteAssistBox:focus {
+  border-color: rgba(56, 189, 248, 0.85) !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+
+.generalInfoDraftMediaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.generalInfoDraftMediaCard {
+  position: relative;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.55);
+  padding: 10px;
+}
+
+.generalInfoDraftMediaCard img,
+.generalInfoDraftMediaCard video {
+  width: 100%;
+  height: 150px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.65);
+}
+
+.generalInfoDraftMediaCard span {
+  display: block;
+  margin-top: 8px;
+  color: #cbd5e1;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.generalInfoDraftMediaBadge {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.9);
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  z-index: 1;
+}
+
+.generalInfoCoverImageBox {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.generalInfoCoverImageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.generalInfoCoverImageHeader strong {
+  color: #bfdbfe;
+  font-size: 14px;
+}
+
+.generalInfoNoCoverImage,
+.generalInfoImageFallback {
+  padding: 13px;
+  border-radius: 14px;
+  border: 1px dashed rgba(56, 189, 248, 0.3);
+  background: rgba(14, 165, 233, 0.06);
+}
+
+.generalInfoImageFallback {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.18);
+}
+
+.generalInfoNoCoverImage strong,
+.generalInfoImageFallback strong {
+  display: block;
+  color: #7dd3fc;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.generalInfoImageFallback strong {
+  color: #fca5a5;
+}
+
+.generalInfoNoCoverImage p,
+.generalInfoImageFallback p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+  .generalInfoCoverImageHeader {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .generalInfoCoverImageHeader .smallActionButton {
+    width: 100%;
+  }
+}
+
+.generalInfoPreview {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.generalInfoDetailMediaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.generalInfoDetailMediaCard {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.45);
+  padding: 10px;
+}
+
+.generalInfoDetailMediaCard img,
+.generalInfoDetailMediaCard video {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.55);
+}
+
+.generalInfoDetailMediaCard p {
+  margin: 8px 0 0;
+  word-break: break-all;
+}
+
+.generalInfoPreview img,
+.generalInfoPreview video {
+  max-width: 260px;
+  max-height: 180px;
+  border-radius: 14px;
+  border: 1px solid #334155;
+  object-fit: contain;
+  background: #020617;
+}
+
+.generalInfoPreview span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.generalInfoActionRow {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.generalInfoEditableTextarea {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  color: #e2e8f0;
+  padding: 10px 11px;
+  font-size: 12px;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+
+.generalInfoEditableTextarea:focus {
+  outline: 2px solid rgba(56, 189, 248, 0.35);
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.generalInfoFactEditGrid {
+  display: grid;
+  gap: 10px;
+}
+
+.generalInfoFactEditGrid label {
+  display: grid;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.generalInfoFactEditGrid select {
+  width: 100%;
+}
+
+.generalInfoResultBox input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.generalInfoResultBox {
+  margin-top: 12px;
+  padding: 13px;
+  border-radius: 14px;
+  border: 1px solid #1e293b;
+  background: rgba(2, 6, 23, 0.42);
+}
+
+.generalInfoResultBox strong {
+  display: block;
+  margin-bottom: 7px;
+  color: #7dd3fc;
+}
+
+.generalInfoResultBox p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.generalInfoList {
+  display: grid;
+  gap: 10px;
+}
+
+.generalInfoCard {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid #1e293b;
+  background: rgba(15, 23, 42, 0.68);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.generalInfoCard.pinned {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(15, 23, 42, 0.85);
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.08);
+}
+
+.generalInfoCard:hover {
+  background: rgba(30, 41, 59, 0.8);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.generalInfoCardThumbnail {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1e293b;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.generalInfoCardThumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.generalInfoCardPlaceholder {
+  font-size: 24px;
+}
+
+.generalInfoCardContent {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.generalInfoCardContent strong {
+  display: block;
+  font-size: 13px;
+  color: #f8fafc;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.generalInfoCardContent .mutedText {
+  font-size: 11px;
+  color: #64748b;
+  margin: 0 0 4px 0;
+}
+
+.generalInfoCardContent .cardSummary {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+.generalInfoCardDetailButton {
+  padding: 5px 10px;
+  font-size: 11px;
+  background: #3b82f6;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 10px;
+}
+
+.generalInfoCardEditButton {
+  padding: 5px 10px;
+  font-size: 11px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 6px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+}
+
+.generalInfoCardEditButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.35);
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+}
+
+.generalInfoCardEditButton:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 760px) {
+  .generalInfoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .generalInfoUploadBox {
+    display: grid;
+  }
+
+  .generalInfoActionRow .primaryButton,
+  .generalInfoActionRow .gradientButton {
+    width: 100%;
+  }
+}
+
+.factCheckBox,
+.factSummary,
+.detailBox {
+  margin-top: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.34);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.factCheckHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.factCheckHeader span,
+.factSummary small,
+.detailBox summary,
+.planFactLine {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.factSummary p,
+.factCheckBox p,
+.detailBox p {
+  margin: 6px 0;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+@media (max-width: 699px) {
+  .layoutGrid.generalInfoLayoutGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid > .generalInfoRightColumn {
+    min-width: 0 !important;
+    width: 100% !important;
+  
+    max-width: none !important;
+    width: 100% !important;
+  }
+}
+
+@media (min-width: 700px) {
+  .layoutGrid.generalInfoLayoutGrid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 22px !important;
+    align-items: start !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid > .leftColumn {
+    min-width: 0 !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid > .generalInfoRightColumn,
+  .layoutGrid.generalInfoLayoutGrid > .rightColumn {
+    width: 100% !important;
+    min-width: 420px !important;
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  html,
+  body {
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 14px !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid > .generalInfoRightColumn,
+  .layoutGrid.generalInfoLayoutGrid > .rightColumn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid input,
+  .layoutGrid.generalInfoLayoutGrid textarea,
+  .layoutGrid.generalInfoLayoutGrid select,
+  .layoutGrid.generalInfoLayoutGrid button {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoGrid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoUploadBox {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow button,
+  .layoutGrid.generalInfoLayoutGrid .urlExtractButton,
+  .layoutGrid.generalInfoLayoutGrid .primaryButton,
+  .layoutGrid.generalInfoLayoutGrid .gradientButton {
+    width: 100% !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoCard,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoInlineDetail,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoDetailSection,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoResultBox,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoAutoGuide {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoInlineDetail {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoInlineDetail pre,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoExtraNoteInput {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoPreview img,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoPreview video,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoInlineDetail img,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoInlineDetail video {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .layoutGrid.generalInfoLayoutGrid {
+    gap: 12px !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .chapterTitleBox h2,
+  .layoutGrid.generalInfoLayoutGrid .cardTitle,
+  .layoutGrid.generalInfoLayoutGrid h2,
+  .layoutGrid.generalInfoLayoutGrid h3 {
+    word-break: keep-all !important;
+    overflow-wrap: break-word !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoCardHeader {
+    display: grid !important;
+    gap: 4px !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoCardActions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionButtons {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+.generalInfoEditableResultBox {
+  display: grid;
+  gap: 9px;
+}
+
+.generalInfoEditableInput,
+.generalInfoEditableTextarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  color: #e2e8f0;
+  padding: 10px 11px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.generalInfoEditableInput:focus,
+.generalInfoEditableTextarea:focus {
+  outline: 2px solid rgba(56, 189, 248, 0.35);
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.generalInfoEditableTextarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.generalInfoFactEditGrid {
+  display: grid;
+  gap: 10px;
+}
+
+.generalInfoFactEditGrid label {
+  display: grid;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.generalInfoFactEditGrid select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.generalInfoManualEditPanel {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(14, 165, 233, 0.07);
+  display: grid;
+  gap: 14px;
+}
+
+.generalInfoManualEditHeader strong {
+  display: block;
+  color: #7dd3fc;
+  font-size: 15px;
+  margin-bottom: 5px;
+}
+
+.generalInfoManualEditHeader p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.generalInfoManualGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.generalInfoManualGrid label,
+.generalInfoManualField {
+  display: grid;
+  gap: 7px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.generalInfoManualGrid input,
+.generalInfoManualGrid select,
+.generalInfoManualGrid textarea,
+.generalInfoManualField input,
+.generalInfoManualField textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  color: #e2e8f0;
+  padding: 10px 11px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.generalInfoManualGrid textarea,
+.generalInfoManualField textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.generalInfoManualGrid input:focus,
+.generalInfoManualGrid select:focus,
+.generalInfoManualGrid textarea:focus,
+.generalInfoManualField input:focus,
+.generalInfoManualField textarea:focus {
+  outline: 2px solid rgba(56, 189, 248, 0.35);
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.generalInfoManualField span {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+@media (max-width: 760px) {
+  .generalInfoManualGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.generalInfoKeywordEditBox {
+  display: grid !important;
+  gap: 9px !important;
+}
+
+.generalInfoKeywordInput {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  border-radius: 12px !important;
+  border: 1px solid #1e293b !important;
+  background: #020617 !important;
+  color: #e2e8f0 !important;
+  padding: 11px 12px !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+
+.generalInfoKeywordInput:focus {
+  outline: 2px solid rgba(56, 189, 248, 0.35) !important;
+  border-color: rgba(56, 189, 248, 0.6) !important;
+}
+
+.generalInfoKeywordInputBox {
+  display: grid;
+  gap: 8px;
+}
+
+.generalInfoKeywordInputBox input {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  color: #e2e8f0;
+  padding: 10px 11px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.generalInfoKeywordInputBox input:focus {
+  outline: 2px solid rgba(56, 189, 248, 0.35);
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.generalInfoSupabaseStatus {
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: rgba(14, 165, 233, 0.06);
+  color: #93c5fd;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.generalInfoInputRecoveryBar {
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  background: rgba(251, 191, 36, 0.06);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.generalInfoInputRecoveryBar strong {
+  display: block;
+  color: #fde68a;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.generalInfoInputRecoveryBar p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.generalInfoInputRecoveryActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 760px) {
+  .generalInfoInputRecoveryBar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .generalInfoInputRecoveryActions {
+    justify-content: stretch;
+  }
+
+  .generalInfoInputRecoveryActions button {
+    width: 100%;
+  }
+}
+
+.generalInfoMediaCount {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.generalInfoMediaGallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.generalInfoMediaThumb {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #334155;
+  background: #020617;
+  min-height: 88px;
+}
+
+.generalInfoMediaThumb img,
+.generalInfoMediaThumb video {
+  display: block;
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+}
+
+.generalInfoMediaThumb span {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.78);
+  color: #e2e8f0;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+@media (min-width: 700px) {
+  .layoutGrid.generalInfoLayoutGrid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 22px !important;
+    align-items: start !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid > .generalInfoRightColumn {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .card,
+  .layoutGrid.generalInfoLayoutGrid .searchBox,
+  .layoutGrid.generalInfoLayoutGrid .infoItemCard {
+    max-width: none !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionButtons,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoCardActions,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid button {
+    white-space: nowrap !important;
+  }
+}
+
+@media (min-width: 700px) {
+  .ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 22px !important;
+    align-items: start !important;
+    width: 100% !important;
+  }
+
+  .ch3HalfLayout > .leftColumn,
+  .ch3HalfLayout > .rightColumn,
+  .ch3HalfLayout > .generalInfoRightColumn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  .ch3HalfLayout > .leftColumn > *,
+  .ch3HalfLayout > .generalInfoRightColumn > * {
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  .ch3HalfLayout .card,
+  .ch3HalfLayout .searchBox {
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 699px) {
+  .ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.generalInfoManualReportLabel {
+  display: inline-flex !important;
+  width: fit-content !important;
+  margin-top: 8px !important;
+  padding: 5px 9px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(250, 204, 21, 0.38) !important;
+  background: rgba(250, 204, 21, 0.12) !important;
+  color: #fde68a !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+}
+
+.generalInfoReportTextarea,
+.generalInfoInlineAiReportTextarea {
+  resize: vertical !important;
+  min-height: 260px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.generalInfoInlineAiReportTextarea {
+  min-height: 320px !important;
+}
+
+.generalInfoReportTextarea:focus,
+.generalInfoInlineAiReportTextarea:focus {
+  outline: 2px solid rgba(250, 204, 21, 0.28) !important;
+  border-color: rgba(250, 204, 21, 0.55) !important;
+}
+
+.generalInfoTopReportPanel {
+  margin-bottom: 14px !important;
+  padding: 16px !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(250, 204, 21, 0.38) !important;
+  background: rgba(250, 204, 21, 0.08) !important;
+  display: grid !important;
+  gap: 12px !important;
+}
+
+.generalInfoTopReportHeader {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+}
+
+.generalInfoTopReportHeader strong {
+  color: #fef3c7 !important;
+  font-size: 15px !important;
+}
+
+.generalInfoTopReportHeader p {
+  margin: 5px 0 0 !important;
+  color: #cbd5e1 !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+.generalInfoTopReportTextarea {
+  width: 100% !important;
+  min-height: 340px !important;
+  box-sizing: border-box !important;
+  resize: vertical !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(250, 204, 21, 0.4) !important;
+  background: rgba(2, 6, 23, 0.88) !important;
+  color: #e5e7eb !important;
+  padding: 14px !important;
+  line-height: 1.75 !important;
+  font-size: 13px !important;
+  font-family: inherit !important;
+  white-space: pre-wrap !important;
+}
+
+.generalInfoTopReportTextarea:focus {
+  outline: 2px solid rgba(250, 204, 21, 0.3) !important;
+  border-color: rgba(250, 204, 21, 0.65) !important;
+}
+
+.generalInfoTopReportActions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+
+@media (max-width: 699px) {
+  .generalInfoTopReportHeader,
+  .generalInfoTopReportActions {
+    display: grid !important;
+  }
+}
+
+.generalInfoTopReportPanel {
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+  grid-column: 1 / -1 !important;
+}
+
+.generalInfoTopReportPanel .generalInfoReportMeta {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.generalInfoTopReportTextarea {
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  min-height: 520px !important;
+  box-sizing: border-box !important;
+  grid-column: 1 / -1 !important;
+}
+
+.generalInfoTopReportActions {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.generalInfoTopReportActions button {
+  min-width: 120px !important;
+}
+
+@media (min-width: 700px) {
+  .generalInfoRightColumn .generalInfoTopReportPanel {
+    width: 100% !important;
+  }
+
+  .generalInfoRightColumn .generalInfoTopReportTextarea {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 699px) {
+  .generalInfoTopReportTextarea {
+    min-height: 380px !important;
+  }
+}
+
+.generalInfoTopReportPanel,
+.generalInfoTopReportPanel * {
+  box-sizing: border-box !important;
+}
+
+.generalInfoTopReportPanel {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.generalInfoTopReportPanel textarea.generalInfoTopReportTextarea {
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  min-height: 560px !important;
+  grid-column: 1 / -1 !important;
+}
+
+.generalInfoTopReportHeader,
+.generalInfoTopReportPanel .generalInfoReportMeta,
+.generalInfoTopReportActions {
+  width: 100% !important;
+  max-width: none !important;
+  grid-column: 1 / -1 !important;
+}
+
+@media (max-width: 699px) {
+  .generalInfoTopReportPanel textarea.generalInfoTopReportTextarea {
+    min-height: 420px !important;
+  }
+}
+
+.generalInfoCardReportPanel {
+  margin-top: 14px !important;
+  padding: 16px !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(250, 204, 21, 0.38) !important;
+  background: rgba(250, 204, 21, 0.08) !important;
+  display: grid !important;
+  gap: 12px !important;
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+}
+
+.generalInfoCardReportHeader {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  width: 100% !important;
+}
+
+.generalInfoCardReportHeader strong {
+  color: #fef3c7 !important;
+  font-size: 15px !important;
+}
+
+.generalInfoCardReportHeader p {
+  margin: 5px 0 0 !important;
+  color: #cbd5e1 !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+.generalInfoCardReportTextarea {
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  min-height: 520px !important;
+  box-sizing: border-box !important;
+  resize: vertical !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(250, 204, 21, 0.4) !important;
+  background: rgba(2, 6, 23, 0.88) !important;
+  color: #e5e7eb !important;
+  padding: 14px !important;
+  line-height: 1.75 !important;
+  font-size: 13px !important;
+  font-family: inherit !important;
+  white-space: pre-wrap !important;
+}
+
+.generalInfoCardReportTextarea:focus {
+  outline: 2px solid rgba(250, 204, 21, 0.3) !important;
+  border-color: rgba(250, 204, 21, 0.65) !important;
+}
+
+.generalInfoCardReportActions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+
+@media (max-width: 699px) {
+  .generalInfoCardReportHeader,
+  .generalInfoCardReportActions {
+    display: grid !important;
+  }
+
+  .generalInfoCardReportTextarea {
+    min-height: 420px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html,
+  body {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid,
+  .ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    gap: 14px !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid > .generalInfoRightColumn,
+  .ch3HalfLayout > .leftColumn,
+  .ch3HalfLayout > .rightColumn,
+  .ch3HalfLayout > .generalInfoRightColumn {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  .generalInfoRightColumn {
+    margin-top: 12px !important;
+  }
+
+  .generalInfoRightColumn .searchBox {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 8px !important;
+  }
+
+  .generalInfoRightColumn .searchBox input,
+  .generalInfoRightColumn .searchBox span,
+  .generalInfoRightColumn .searchBox * {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    word-break: keep-all !important;
+    overflow-wrap: break-word !important;
+  }
+
+  .generalInfoCardHeader,
+  .generalInfoCardActions,
+  .generalInfoActionButtons,
+  .generalInfoActionRow {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+  }
+
+  .generalInfoCardActions button,
+  .generalInfoActionButtons button,
+  .generalInfoActionRow button {
+    width: 100% !important;
+    white-space: normal !important;
+  }
+
+  .chapterTitleBox,
+  .card,
+  .generalInfoCard,
+  .generalInfoCoverImageBox,
+  .generalInfoIphonePasteZone {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+.generalInfoIphonePasteZone {
+  margin-top: 14px !important;
+  padding: 18px 16px !important;
+  border-radius: 16px !important;
+  border: 1px dashed rgba(56, 189, 248, 0.45) !important;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(15, 23, 42, 0.4)) !important;
+  color: #cbd5e1 !important;
+  min-height: 100px !important;
+  outline: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  cursor: pointer !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  caret-color: transparent !important;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.generalInfoIphonePasteZone:focus,
+.generalInfoIphonePasteZone:active {
+  border-color: #38bdf8 !important;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(15, 23, 42, 0.6)) !important;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
+  transform: scale(0.99) !important;
+}
+
+.generalInfoIphonePasteZone strong {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  color: #38bdf8 !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  margin-bottom: 8px !important;
+}
+
+.generalInfoIphonePasteZone p {
+  margin: 0 !important;
+  color: #94a3b8 !important;
+  font-size: 11.5px !important;
+  line-height: 1.6 !important;
+  max-width: 90% !important;
+}
+
+.generalInfoRichTextBox {
+  gap: 10px !important;
+}
+
+.generalInfoRichTextHeader {
+  display: grid !important;
+  gap: 4px !important;
+}
+
+.generalInfoRichTextHeader strong {
+  color: #bfdbfe !important;
+  font-size: 13px !important;
+}
+
+.generalInfoRichTextHeader span,
+.generalInfoRichTextNote {
+  color: #94a3b8 !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+.generalInfoRichToolbar {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 7px !important;
+}
+
+.generalInfoRichToolbar button {
+  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  background: rgba(15, 23, 42, 0.88) !important;
+  color: #e2e8f0 !important;
+  border-radius: 999px !important;
+  padding: 7px 10px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+}
+
+.generalInfoRichToolbar button:hover {
+  border-color: rgba(56, 189, 248, 0.55) !important;
+  background: rgba(14, 165, 233, 0.16) !important;
+}
+
+.generalInfoRichTextEditor {
+  width: 100% !important;
+  min-height: 220px !important;
+  max-height: 520px !important;
+  overflow-y: auto !important;
+  box-sizing: border-box !important;
+  border-radius: 14px !important;
+  border: 1px solid #1e293b !important;
+  background: #020617 !important;
+  color: #e2e8f0 !important;
+  padding: 13px 14px !important;
+  font-size: 14px !important;
+  line-height: 1.75 !important;
+  font-weight: 500 !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  outline: none !important;
+}
+
+.generalInfoRichTextEditor:focus {
+  outline: 2px solid rgba(56, 189, 248, 0.35) !important;
+  border-color: rgba(56, 189, 248, 0.6) !important;
+}
+
+.generalInfoRichTextEditor:empty::before {
+  content: attr(data-placeholder);
+  color: #64748b;
+}
+
+.generalInfoFormattedTextView {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  background: rgba(2, 6, 23, 0.42) !important;
+  color: #e2e8f0 !important;
+  padding: 12px !important;
+  font-size: 13px !important;
+  line-height: 1.75 !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+}
+
+@media (max-width: 760px) {
+  .generalInfoRichToolbar {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .generalInfoRichToolbar button {
+    width: 100% !important;
+    white-space: normal !important;
+  }
+
+  .generalInfoRichTextEditor {
+    min-height: 260px !important;
+    font-size: 16px !important;
+  }
+}
+
+@media (min-width: 1101px) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout,
+  .layoutGrid.generalInfoLayoutGrid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 22px !important;
+    align-items: start !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid > .generalInfoRightColumn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout,
+  .layoutGrid.generalInfoLayoutGrid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid > .generalInfoRightColumn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+}
+
+.generalInfoRichTextBox {
+  display: grid !important;
+  gap: 10px !important;
+  margin-top: 12px !important;
+}
+
+.generalInfoRichToolbar {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin: 8px 0 10px !important;
+}
+
+.generalInfoRichToolbar button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 34px !important;
+  padding: 7px 11px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(56, 189, 248, 0.42) !important;
+  background: rgba(15, 23, 42, 0.95) !important;
+  color: #e2e8f0 !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+}
+
+.generalInfoRichToolbar button:hover {
+  border-color: rgba(125, 211, 252, 0.75) !important;
+  background: rgba(14, 165, 233, 0.2) !important;
+}
+
+.generalInfoRichTextEditor {
+  display: block !important;
+  width: 100% !important;
+  min-height: 260px !important;
+  max-height: 560px !important;
+  overflow-y: auto !important;
+  box-sizing: border-box !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(56, 189, 248, 0.45) !important;
+  background: #020617 !important;
+  color: #e2e8f0 !important;
+  padding: 14px 15px !important;
+  font-size: 15px !important;
+  line-height: 1.8 !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  outline: none !important;
+}
+
+.generalInfoRichTextEditor:focus {
+  border-color: rgba(125, 211, 252, 0.85) !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18) !important;
+}
+
+.generalInfoRichTextEditor:empty::before {
+  content: attr(data-placeholder) !important;
+  color: #64748b !important;
+}
+
+.generalInfoRichTextNote {
+  margin: 0 !important;
+  color: #94a3b8 !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+@media (max-width: 760px) {
+  .generalInfoRichToolbar {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .generalInfoRichToolbar button {
+    width: 100% !important;
+    white-space: normal !important;
+  }
+
+  .generalInfoRichTextEditor {
+    min-height: 300px !important;
+    font-size: 16px !important;
+  }
+}
+
+.generalInfoRichTextHeader {
+  margin-bottom: 4px !important;
+}
+
+.generalInfoRichTextHeader strong {
+  display: block !important;
+  color: #bfdbfe !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  margin-bottom: 4px !important;
+}
+
+.generalInfoRichTextHeader span {
+  color: #cbd5e1 !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+.generalInfoRichToolbar {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  padding: 10px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(56, 189, 248, 0.2) !important;
+  background: rgba(14, 165, 233, 0.06) !important;
+  margin: 8px 0 10px !important;
+}
+
+.generalInfoRichToolbar button {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  min-height: 36px !important;
+  min-width: 74px !important;
+  padding: 8px 12px !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98)) !important;
+  color: #e5e7eb !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18) !important;
+}
+
+.generalInfoRichToolbar button:hover {
+  transform: translateY(-1px) !important;
+  border-color: rgba(125, 211, 252, 0.75) !important;
+  background: linear-gradient(180deg, rgba(14, 165, 233, 0.28), rgba(15, 23, 42, 0.98)) !important;
+}
+
+.generalInfoRichToolbar button:active {
+  transform: translateY(0) !important;
+}
+
+.generalInfoRichColorDefault {
+  color: #e5e7eb !important;
+}
+
+.generalInfoRichColorRed {
+  color: #fca5a5 !important;
+  border-color: rgba(248, 113, 113, 0.55) !important;
+}
+
+.generalInfoRichColorYellow {
+  color: #fde68a !important;
+  border-color: rgba(250, 204, 21, 0.55) !important;
+}
+
+.generalInfoRichColorBlue {
+  color: #93c5fd !important;
+  border-color: rgba(96, 165, 250, 0.55) !important;
+}
+
+.generalInfoRichColorGreen {
+  color: #86efac !important;
+  border-color: rgba(74, 222, 128, 0.55) !important;
+}
+
+.generalInfoRichTextEditor {
+  margin-top: 2px !important;
+  min-height: 280px !important;
+  border: 1px solid rgba(56, 189, 248, 0.55) !important;
+}
+
+.generalInfoRichTextEditor:empty::before {
+  content: attr(data-placeholder) !important;
+  color: #64748b !important;
+}
+
+@media (max-width: 760px) {
+  .generalInfoRichToolbar {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    padding: 8px !important;
+    border-radius: 12px !important;
+  }
+
+  .generalInfoRichToolbar button {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 6px 2px !important;
+    font-size: 11px !important;
+    min-height: 32px !important;
+    letter-spacing: -0.5px !important;
+    border-radius: 8px !important;
+  }
+}
+
+@media (min-width: 1101px) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 22px !important;
+    align-items: start !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn > * {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .card,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .searchBox,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .generalInfoCard {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 14px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+@media screen and (min-width: 1101px) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 22px !important;
+    align-items: start !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+@media screen and (max-width: 1100px) {
+  html,
+  body {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout,
+  .layoutGrid.generalInfoLayoutGrid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 14px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn,
+  .layoutGrid.generalInfoLayoutGrid > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid > .generalInfoRightColumn {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn > *,
+  .layoutGrid.generalInfoLayoutGrid > .leftColumn > *,
+  .layoutGrid.generalInfoLayoutGrid > .rightColumn > *,
+  .layoutGrid.generalInfoLayoutGrid > .generalInfoRightColumn > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .generalInfoRightColumn {
+    margin-top: 14px !important;
+  }
+
+  .generalInfoGrid,
+  .generalInfoManualGrid,
+  .generalInfoUploadBox,
+  .generalInfoActionRow,
+  .generalInfoActionButtons,
+  .generalInfoCardActions,
+  .generalInfoCardHeader,
+  .searchBox {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 10px !important;
+  }
+
+  .generalInfoGrid input,
+  .generalInfoGrid textarea,
+  .generalInfoGrid select,
+  .generalInfoTextBox,
+  .generalInfoRichTextBox,
+  .generalInfoRichTextEditor,
+  .searchBox input,
+  .generalInfoCard,
+  .generalInfoInlineDetail,
+  .generalInfoCardReportPanel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .generalInfoActionRow button,
+  .generalInfoActionButtons button,
+  .generalInfoCardActions button {
+    width: 100% !important;
+    max-width: 100% !important;
+    white-space: normal !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout,
+  .layoutGrid.generalInfoLayoutGrid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+@media screen and (min-width: 1101px) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: calc(50% - 11px) calc(50% - 11px) !important;
+    column-gap: 22px !important;
+    row-gap: 22px !important;
+    align-items: start !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn {
+    grid-column: 1 / 2 !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
+    grid-column: 2 / 3 !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn > * {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .card,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .searchBox,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .generalInfoCard,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .generalInfoList {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+@media screen and (max-width: 1100px) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 14px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 14px !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+@media screen and (min-width: 1101px) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: minmax(0, calc(50% - 11px)) minmax(0, calc(50% - 11px)) !important;
+    column-gap: 22px !important;
+    row-gap: 22px !important;
+    align-items: start !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn {
+    grid-column: 1 / 2 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
+    grid-column: 2 / 3 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .card,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .searchBox,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .generalInfoCard,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .generalInfoList {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+@media screen and (max-width: 1100px) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    column-gap: 0 !important;
+    row-gap: 14px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    column-gap: 0 !important;
+    row-gap: 14px !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+.ch3MobileOneColumn {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  column-gap: 0 !important;
+  row-gap: 14px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-x: hidden !important;
+}
+
+.ch3MobileOneColumn > .leftColumn,
+.ch3MobileOneColumn > .rightColumn,
+.ch3MobileOneColumn > .generalInfoRightColumn {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
+}
+
+.ch3MobileOneColumn > .leftColumn > *,
+.ch3MobileOneColumn > .rightColumn > *,
+.ch3MobileOneColumn > .generalInfoRightColumn > * {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.ch3PcHalfLayout {
+  display: grid !important;
+  grid-template-columns: minmax(0, calc(50% - 11px)) minmax(0, calc(50% - 11px)) !important;
+  column-gap: 22px !important;
+  row-gap: 22px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+@media screen and (max-width: 1100px),
+       screen and (max-device-width: 932px),
+       (hover: none) and (pointer: coarse) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout.ch3PcHalfLayout,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout.ch3MobileOneColumn,
+  .layoutGrid.generalInfoLayoutGrid,
+  .ch3HalfLayout,
+  .ch3PcHalfLayout,
+  .ch3MobileOneColumn {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    column-gap: 0 !important;
+    row-gap: 14px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn,
+  .layoutGrid.generalInfoLayoutGrid > .leftColumn,
+  .layoutGrid.generalInfoLayoutGrid > .rightColumn,
+  .layoutGrid.generalInfoLayoutGrid > .generalInfoRightColumn,
+  .ch3HalfLayout > .leftColumn,
+  .ch3HalfLayout > .rightColumn,
+  .ch3HalfLayout > .generalInfoRightColumn,
+  .ch3PcHalfLayout > .leftColumn,
+  .ch3PcHalfLayout > .rightColumn,
+  .ch3PcHalfLayout > .generalInfoRightColumn,
+  .ch3MobileOneColumn > .leftColumn,
+  .ch3MobileOneColumn > .rightColumn,
+  .ch3MobileOneColumn > .generalInfoRightColumn {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .leftColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .rightColumn > *,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn > *,
+  .layoutGrid.generalInfoLayoutGrid > .leftColumn > *,
+  .layoutGrid.generalInfoLayoutGrid > .rightColumn > *,
+  .layoutGrid.generalInfoLayoutGrid > .generalInfoRightColumn > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .generalInfoRightColumn {
+    margin-top: 14px !important;
+  }
+}
+
+@media screen and (min-width: 1101px) and (hover: hover) and (pointer: fine) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout,
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout.ch3PcHalfLayout {
+    display: grid !important;
+    grid-template-columns: minmax(0, calc(50% - 11px)) minmax(0, calc(50% - 11px)) !important;
+    column-gap: 22px !important;
+    row-gap: 22px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+

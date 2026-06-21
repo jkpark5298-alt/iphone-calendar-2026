@@ -1,5 +1,10 @@
 "use client";
 
+import { Chapter3Info } from "../components/Chapter3Info";
+import GeneralInfoDetailModal from "../components/GeneralInfoDetailModal";
+import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralInfoState";
+
+
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
@@ -406,7 +411,12 @@ export default function HomePage() {
   const [undoHistory, setUndoHistory] = useState<UndoState[]>([]);
 
   // New states for 개편된 정보보관소 (인스타 주요 정보 관리 및 포토북)
-  const [infoSubView, setInfoSubView] = useState<"insta" | "photobook">("insta");
+  const [infoSubView, setInfoSubView] = useState<"generalInfo" | "photobook">("generalInfo");
+
+  // Chapter 3 General Info hook
+  const infoState = useTravelDiaryGeneralInfoState({
+    showPasteHint: (msg) => alert(msg),
+  });
   const [instaLoading, setInstaLoading] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState("");
 
@@ -4922,28 +4932,9 @@ ${photo.memoText}`;
   }
 
   function InfoView() {
-    const categories = [
-      "정치", "행정", "경제", "산업", "사회", "교육", "문화", "예술", "과학", "기술", "국제", "외교", "국방", "안보", "건강", "운동", "기타"
-    ];
-
     const photoCategories2 = [
       "여행", "일상", "음식", "기억", "풍경", "인물", "취미", "기타"
     ];
-
-    // Filter Instagram Info list
-    const filteredInstaCards = allInstaCards.filter(card => {
-      if (!instaSearchKey.trim()) return true;
-      const query = instaSearchKey.toLowerCase();
-      return (
-        (card.title && card.title.toLowerCase().includes(query)) ||
-        card.category.toLowerCase().includes(query) ||
-        card.keyword.toLowerCase().includes(query) ||
-        card.entryDate.toLowerCase().includes(query) ||
-        card.originalText.toLowerCase().includes(query) ||
-        (card.extractedText && card.extractedText.toLowerCase().includes(query)) ||
-        (card.factCheckResult && card.factCheckResult.toLowerCase().includes(query))
-      );
-    });
 
     // Filter Photo Book list
     const filteredPhotoBookItems = allPhotoBookItems.map(photo => {
@@ -4975,38 +4966,23 @@ ${photo.memoText}`;
       };
     }).filter(photo => selectedPhotoBookIds.includes(photo.id || ""));
 
-    const selectedInstaCardItems = allInstaCards.filter(card => selectedInstaCardIds.includes(card.id));
-
-    // Find active item details
-    let activeCard: InstaInfoCard | undefined;
+    // Find active photobook item details
     let activePhoto: any | undefined;
-    if (activeItem) {
-      if (activeItem.type === "insta") {
-        activeCard = allInstaCards.find(c => c.id === activeItem.id);
-      } else if (activeItem.type === "photobook") {
-        const rawPhoto = allPhotoBookItems.find(p => p.id === activeItem.id);
-        if (rawPhoto) {
-          const parsed = parsePhotoBookMemo(rawPhoto.memo || "");
-          activePhoto = {
-            ...rawPhoto,
-            keyword: parsed.keyword,
-            category2: parsed.category2,
-            memoText: parsed.memo
-          };
-        }
+    if (activeItem && activeItem.type === "photobook") {
+      const rawPhoto = allPhotoBookItems.find(p => p.id === activeItem.id);
+      if (rawPhoto) {
+        const parsed = parsePhotoBookMemo(rawPhoto.memo || "");
+        activePhoto = {
+          ...rawPhoto,
+          keyword: parsed.keyword,
+          category2: parsed.category2,
+          memoText: parsed.memo
+        };
       }
     }
 
     return (
       <section>
-        {/* Loading Indicator */}
-        {instaLoading && (
-          <div className="insta-loading-overlay">
-            <div className="loading-spinner"></div>
-            <p>AI 처리 및 분류 작업 중...</p>
-          </div>
-        )}
-
         <div className="box info-box" style={{ border: "2px solid var(--deep)", minHeight: 740 }} tabIndex={0}>
           {/* Header */}
           <div className="info-head info-head-one-line" style={{ marginBottom: "20px" }}>
@@ -5021,157 +4997,138 @@ ${photo.memoText}`;
             </div>
           </div>
 
-          {/* 2-Column Grid Layout */}
-          <div className="info-layout-2col">
-            
-            {/* Left Column: Main Content (Editor or Detail View) */}
-            <div className="info-main-content">
-              {/* Tab Selector at the top of the main area */}
-              <div className="info-subview-tabs" style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
-                <button
-                  type="button"
-                  className={`info-subview-tab ${infoSubView === "insta" ? "active" : ""}`}
-                  onClick={() => {
-                    setInfoSubView("insta");
-                    setActiveItem(null);
-                    setEditingInstaCardId(null);
-                  }}
-                  style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", background: infoSubView === "insta" ? "rgba(122,184,255,0.15)" : "transparent", color: infoSubView === "insta" ? "#7ab8ff" : "#ccc", cursor: "pointer" }}
-                >
-                  📸 인스타 주요 정보 관리
-                </button>
-                <button
-                  type="button"
-                  className={`info-subview-tab ${infoSubView === "photobook" ? "active" : ""}`}
-                  onClick={() => {
-                    setInfoSubView("photobook");
-                    setActiveItem(null);
-                    setEditingPhotoBookItemId(null);
-                  }}
-                  style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", background: infoSubView === "photobook" ? "rgba(122,184,255,0.15)" : "transparent", color: infoSubView === "photobook" ? "#7ab8ff" : "#ccc", cursor: "pointer" }}
-                >
-                  📖 포토북 (Photo Book)
-                </button>
-              </div>
+          {/* Tab Selector */}
+          <div className="info-subview-tabs" style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
+            <button
+              type="button"
+              className={`info-subview-tab ${infoSubView === "generalInfo" ? "active" : ""}`}
+              onClick={() => {
+                setInfoSubView("generalInfo");
+                setActiveItem(null);
+              }}
+              style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", background: infoSubView === "generalInfo" ? "rgba(122,184,255,0.15)" : "transparent", color: infoSubView === "generalInfo" ? "#7ab8ff" : "#ccc", cursor: "pointer" }}
+            >
+              📂 일반 정보 저장함 (Chapter 3)
+            </button>
+            <button
+              type="button"
+              className={`info-subview-tab ${infoSubView === "photobook" ? "active" : ""}`}
+              onClick={() => {
+                setInfoSubView("photobook");
+                setActiveItem(null);
+                setEditingPhotoBookItemId(null);
+              }}
+              style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", background: infoSubView === "photobook" ? "rgba(122,184,255,0.15)" : "transparent", color: infoSubView === "photobook" ? "#7ab8ff" : "#ccc", cursor: "pointer" }}
+            >
+              📖 포토북 (Photo Book)
+            </button>
+          </div>
 
-              {infoSubView === "insta" && selectedInstaCardIds.length > 0 && (
-                <div className="insta-batch-panel" style={{
-                  background: "rgba(122, 184, 255, 0.12)",
-                  border: "1px solid rgba(122, 184, 255, 0.3)",
-                  borderRadius: "8px",
-                  padding: "10px 15px",
-                  marginBottom: "15px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: "10px"
-                }}>
-                  <span style={{ fontSize: "13px", fontWeight: "bold", color: "#7ab8ff" }}>
-                    📸 선택된 인스타 정보 항목: {selectedInstaCardIds.length}개
-                  </span>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      type="button"
-                      className="pill-btn compact-pill"
-                      style={{ background: "#7ab8ff", color: "#000", border: "none", fontSize: "11px", padding: "4px 10px", fontWeight: "bold" }}
-                      onClick={() => setIsInfoBookModalOpen(true)}
-                    >
-                      📖 정보북 보기 & PDF 저장
-                    </button>
-                    <button
-                      type="button"
-                      className="pill-btn compact-pill"
-                      style={{ background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: "11px", padding: "4px 10px" }}
-                      onClick={shareSelectedInstaCards}
-                    >
-                      🔗 공유하기
-                    </button>
-                    <button
-                      type="button"
-                      className="pill-btn compact-pill"
-                      style={{ background: "rgba(239, 68, 68, 0.15)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.3)", fontSize: "11px", padding: "4px 10px" }}
-                      onClick={() => setSelectedInstaCardIds([])}
-                    >
-                      선택 해제
-                    </button>
+          {infoSubView === "generalInfo" ? (
+            /* Render Chapter 3 Component */
+            <Chapter3Info
+              isGeneralInfoMobileLayout={infoState.isGeneralInfoMobileLayout}
+              generalInfoDraft={infoState.generalInfoDraft}
+              setGeneralInfoDraft={infoState.setGeneralInfoDraft}
+              generalInfoDraftBackup={infoState.generalInfoDraftBackup}
+              generalInfoEditingId={infoState.generalInfoEditingId}
+              generalInfoImageLoadFailed={infoState.generalInfoImageLoadFailed}
+              setGeneralInfoImageLoadFailed={infoState.setGeneralInfoImageLoadFailed}
+              generalInfoKeywordText={infoState.generalInfoKeywordText}
+              setGeneralInfoKeywordText={infoState.setGeneralInfoKeywordText}
+              generalInfoRichTextEditorKey={infoState.generalInfoRichTextEditorKey}
+              generalInfoRichTextRef={infoState.generalInfoRichTextRef}
+              generalInfoRichTextInitialHtml={infoState.generalInfoRichTextInitialHtml}
+              syncGeneralInfoRichTextToDraft={infoState.syncGeneralInfoRichTextToDraft}
+              handleGeneralInfoRichPaste={infoState.handleGeneralInfoRichPaste}
+              handleGeneralInfoRichCommand={infoState.handleGeneralInfoRichCommand}
+              getGeneralInfoToolbarButtonStyle={infoState.getGeneralInfoToolbarButtonStyle}
+              makeGeneralInfoHtmlFromText={infoState.makeGeneralInfoHtmlFromText}
+              handleUndoGeneralInfoDraft={infoState.handleUndoGeneralInfoDraft}
+              handleResetGeneralInfoDraft={infoState.handleResetGeneralInfoDraft}
+              handleCollectGeneralInfoFromClipboard={infoState.handleCollectGeneralInfoFromClipboard}
+              isCollectingGeneralInfoClipboard={infoState.isCollectingGeneralInfoClipboard}
+              handleExtractGeneralInfoUrl={infoState.handleExtractGeneralInfoUrl}
+              isExtractingGeneralInfoUrl={infoState.isExtractingGeneralInfoUrl}
+              handleGeneralInfoFileUpload={infoState.handleGeneralInfoFileUpload}
+              handleGeneralInfoIphonePasteZonePaste={infoState.handleGeneralInfoIphonePasteZonePaste}
+              handleClearGeneralInfoCoverImage={infoState.handleClearGeneralInfoCoverImage}
+              handleRemoveGeneralInfoMediaItem={infoState.handleRemoveGeneralInfoMediaItem}
+              handleAnalyzeGeneralInfoDraft={infoState.handleAnalyzeGeneralInfoDraft}
+              isAnalyzingGeneralInfo={infoState.isAnalyzingGeneralInfo}
+              handleConfirmGeneralInfo={infoState.handleConfirmGeneralInfo}
+              handleCancelEditGeneralInfo={infoState.handleCancelEditGeneralInfo}
+              handleStartEditGeneralInfo={infoState.handleStartEditGeneralInfo}
+              generalInfoItems={infoState.generalInfoItems}
+              filteredGeneralInfoItems={infoState.filteredGeneralInfoItems}
+              generalInfoSearchTerm={infoState.generalInfoSearchTerm}
+              setGeneralInfoSearchTerm={infoState.setGeneralInfoSearchTerm}
+              setGeneralInfoDetailId={infoState.setGeneralInfoDetailId}
+              handleTogglePinGeneralInfo={infoState.handleTogglePinGeneralInfo}
+              loadGeneralInfoItemsFromSupabase={infoState.loadGeneralInfoItemsFromSupabase}
+              generalInfoSupabaseStatus={infoState.generalInfoSupabaseStatus}
+              generalInfoCategories={infoState.generalInfoCategories}
+              normalizeGeneralInfoMediaItems={infoState.normalizeGeneralInfoMediaItems}
+              getGeneralInfoDisplayMediaItems={infoState.getGeneralInfoDisplayMediaItems}
+            />
+          ) : (
+            /* Render Photo Book 2-Column Layout */
+            <div className="info-layout-2col">
+              {/* Left Column: Main Content (Editor or Detail View) */}
+              <div className="info-main-content">
+                {selectedPhotoBookIds.length > 0 && (
+                  <div className="photobook-batch-panel" style={{
+                    background: "rgba(98, 177, 155, 0.12)",
+                    border: "1px solid rgba(98, 177, 155, 0.3)",
+                    borderRadius: "8px",
+                    padding: "10px 15px",
+                    marginBottom: "15px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "10px"
+                  }}>
+                    <span style={{ fontSize: "13px", fontWeight: "bold", color: "#62b19b" }}>
+                      📖 선택된 포토북 항목: {selectedPhotoBookIds.length}개
+                    </span>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button
+                        type="button"
+                        className="pill-btn compact-pill"
+                        style={{ background: "#62b19b", color: "#fff", border: "none", fontSize: "11px", padding: "4px 10px" }}
+                        onClick={() => setIsPhotoAlbumModalOpen(true)}
+                      >
+                        🖼️ 포토앨범 보기 & PDF 저장
+                      </button>
+                      <button
+                        type="button"
+                        className="pill-btn compact-pill"
+                        style={{ background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: "11px", padding: "4px 10px" }}
+                        onClick={shareSelectedPhotoBookItems}
+                      >
+                        🔗 공유하기
+                      </button>
+                      <button
+                        type="button"
+                        className="pill-btn compact-pill"
+                        style={{ background: "rgba(239, 68, 68, 0.15)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.3)", fontSize: "11px", padding: "4px 10px" }}
+                        onClick={() => setSelectedPhotoBookIds([])}
+                      >
+                        선택 해제
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {infoSubView === "photobook" && selectedPhotoBookIds.length > 0 && (
-                <div className="photobook-batch-panel" style={{
-                  background: "rgba(98, 177, 155, 0.12)",
-                  border: "1px solid rgba(98, 177, 155, 0.3)",
-                  borderRadius: "8px",
-                  padding: "10px 15px",
-                  marginBottom: "15px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: "10px"
-                }}>
-                  <span style={{ fontSize: "13px", fontWeight: "bold", color: "#62b19b" }}>
-                    📖 선택된 포토북 항목: {selectedPhotoBookIds.length}개
-                  </span>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      type="button"
-                      className="pill-btn compact-pill"
-                      style={{ background: "#62b19b", color: "#fff", border: "none", fontSize: "11px", padding: "4px 10px" }}
-                      onClick={() => setIsPhotoAlbumModalOpen(true)}
-                    >
-                      🖼️ 포토앨범 보기 & PDF 저장
-                    </button>
-                    <button
-                      type="button"
-                      className="pill-btn compact-pill"
-                      style={{ background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: "11px", padding: "4px 10px" }}
-                      onClick={shareSelectedPhotoBookItems}
-                    >
-                      🔗 공유하기
-                    </button>
-                    <button
-                      type="button"
-                      className="pill-btn compact-pill"
-                      style={{ background: "rgba(239, 68, 68, 0.15)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.3)", fontSize: "11px", padding: "4px 10px" }}
-                      onClick={() => setSelectedPhotoBookIds([])}
-                    >
-                      선택 해제
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {activeItem ? (
-                /* Detail/Edit View */
-                activeItem.type === "insta" && activeCard ? (
-                  editingInstaCardId === activeCard.id ? (
-                    /* Instagram Edit Form */
-                    <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
-                      <h3 className="form-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                        <span>📝 인스타 주요 정보 수정</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                          <input
-                            type="password"
-                            className="api-key-input"
-                            placeholder="🔑 Gemini Key"
-                            style={{
-                              width: "100px",
-                              padding: "4px 8px",
-                              fontSize: "11px",
-                              background: "rgba(0,0,0,0.3)",
-                              border: "1px solid rgba(255,255,255,0.15)",
-                              borderRadius: "4px",
-                              color: "#fff"
-                            }}
-                            value={geminiApiKey}
-                            onChange={e => {
-                              setGeminiApiKey(e.target.value);
-                              localStorage.setItem("gemini_api_key", e.target.value);
-                            }}
-                          />
+                {activeItem ? (
+                  /* Detail/Edit View */
+                  activeItem.type === "photobook" && activePhoto ? (
+                    editingPhotoBookItemId === activePhoto.id ? (
+                      /* Photo Book Edit Form */
+                      <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
+                        <h3 className="form-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                          <span>📝 포토북 메모 수정</span>
                           <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
                             작성일자:
                             <input
@@ -5179,309 +5136,202 @@ ${photo.memoText}`;
                               className="info-date-input"
                               min="2026-05-01"
                               max="2026-12-31"
-                              value={instaInputDate}
-                              onChange={e => setInstaInputDate(e.target.value)}
+                              value={photoBookInputDate}
+                              onChange={e => setPhotoBookInputDate(e.target.value)}
                             />
                           </span>
-                        </div>
-                      </h3>
+                        </h3>
 
-                      <div className="insta-paste-zone" onPaste={handleInstaPasteZone} tabIndex={0} style={{ display: "flex", flexWrap: "wrap", gap: "10px", padding: "10px", minHeight: "150px", justifyContent: "center", alignItems: "center" }}>
-                        {instaInputImageUrls && instaInputImageUrls.length > 0 ? (
-                          instaInputImageUrls.map((url, idx) => (
-                            <div key={idx} className="paste-preview-container" style={{ position: "relative", width: "100px", height: "100px" }}>
-                              <img src={url} alt={`인스타 프리뷰 ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} />
-                              <button type="button" className="remove-preview-btn" title="이미지 삭제" 
-                                style={{
-                                  position: "absolute",
-                                  top: "-5px",
-                                  right: "-5px",
-                                  background: "rgba(255, 0, 0, 0.8)",
-                                  color: "white",
-                                  border: "none",
-                                  borderRadius: "50%",
-                                  width: "20px",
-                                  height: "20px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  cursor: "pointer",
-                                  fontSize: "12px",
-                                  fontWeight: "bold"
-                                }}
-                                onClick={() => {
-                                  const newUrls = instaInputImageUrls.filter((_, i) => i !== idx);
-                                  const newPaths = instaInputImageStoragePaths.filter((_, i) => i !== idx);
-                                  setInstaInputImageUrls(newUrls);
-                                  setInstaInputImageStoragePaths(newPaths);
-                                  setInstaInputImageUrl(newUrls[0] || "");
-                                  setInstaInputImageStoragePath(newPaths[0] || "");
-                                }}>×</button>
+                        <div className="insta-paste-zone" onPaste={handlePhotoBookPasteZone} tabIndex={0}>
+                          {photoBookInputImageUrl ? (
+                            <div className="paste-preview-container">
+                              <img src={photoBookInputImageUrl} alt="포토북 수정 프리뷰" />
+                              <button type="button" className="remove-preview-btn" title="이미지 삭제" onClick={() => {
+                                setPhotoBookInputImageUrl("");
+                                setPhotoBookInputImageStoragePath("");
+                              }}>×</button>
                             </div>
-                          ))
-                        ) : (
-                          <div className="paste-placeholder">
-                            <span className="icon">📸</span>
-                            <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요.</p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
-                        <label className="file-select-btn" style={{ margin: 0 }}>
-                          📸 사진 가져오기
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden-input"
-                            onChange={async e => {
-                              const files = Array.from(e.target.files || []) as File[];
-                              if (files.length > 0) await handleInstaImageUpload(files[0]);
-                            }}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="file-select-btn"
-                          onClick={pasteInstaImageFromClipboard}
-                          style={{ margin: 0 }}
-                        >
-                          📋 클립보드 붙여넣기
-                        </button>
-                        {instaInputImageUrls.length > 0 && (
-                          <button
-                            type="button"
-                            className="file-select-btn"
-                            onClick={extractTextFromCurrentImages}
-                            style={{ margin: 0, background: "rgba(122,184,255,0.15)", color: "#7ab8ff", border: "1px solid rgba(122,184,255,0.3)" }}
-                          >
-                            🔍 이미지 텍스트 추출 (AI OCR)
-                          </button>
-                        )}
-                      </div>
-
-                      {instaInputExtractedText && (
-                        <div className="ocr-result-indicator" style={{ marginTop: "10px" }}>
-                          <span className="badge">AI OCR</span> 이미지에서 텍스트가 정상 추출되었습니다.
+                          ) : (
+                            <div className="paste-placeholder">
+                              <span className="icon">📖</span>
+                              <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요.</p>
+                            </div>
+                          )}
                         </div>
-                      )}
 
-                      <div className="input-group" style={{ marginTop: "15px" }}>
-                        <label className="field-label">제목:</label>
-                        <input
-                          type="text"
-                          className="info-title-input"
-                          style={{
-                            width: "100%",
-                            padding: "10px",
-                            borderRadius: "8px",
-                            border: "1px solid rgba(255,255,255,0.15)",
-                            background: "rgba(0,0,0,0.2)",
-                            color: "#fff",
-                            boxSizing: "border-box",
-                            fontSize: "14px"
-                          }}
-                          placeholder="제목을 입력하세요 (AI 자동 추출 또는 직접 입력 가능)"
-                          value={instaInputTitle}
-                          onChange={e => setInstaInputTitle(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="input-group" style={{ marginTop: "15px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
-                          <label className="field-label" style={{ margin: 0 }}>정보 상세 내용 및 수집 본문:</label>
-                          <div className="text-formatter-toolbar" style={{ display: "flex", gap: "5px" }}>
-                            <button
-                              type="button"
-                              onClick={() => insertFormatting("bold")}
-                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", color: "#fff", cursor: "pointer", fontWeight: "bold" }}
-                              title="굵게"
-                            >
-                              B
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => insertFormatting("red")}
-                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "4px", color: "#ef4444", cursor: "pointer", fontWeight: "bold" }}
-                              title="빨간색 글자"
-                            >
-                              가 (빨강)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => insertFormatting("yellow")}
-                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(234,179,8,0.2)", border: "1px solid rgba(234,179,8,0.3)", borderRadius: "4px", color: "#eab308", cursor: "pointer", fontWeight: "bold" }}
-                              title="노란색 글자"
-                            >
-                              가 (노랑)
-                            </button>
-                          </div>
-                        </div>
-                        <textarea
-                          id="insta-textarea-edit"
-                          className="insta-textarea"
-                          placeholder="인스타 글이나 텍스트를 입력하세요."
-                          value={instaInputText}
-                          onChange={e => setInstaInputText(e.target.value)}
-                        />
-                        {instaInputText.trim() && (
-                          <button
-                            type="button"
-                            className="ai-classify-btn"
-                            onClick={() => runAIClassification(instaInputText)}
-                          >
-                            🪄 AI 카테고리/키워드 자동 추출
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="category-selection" style={{ marginTop: "15px" }}>
-                        <label className="field-label">분류 카테고리:</label>
-                        <div className="category-pills">
-                          {categories.map(cat => (
-                            <button
-                              key={cat}
-                              type="button"
-                              className={`category-pill ${instaInputCategory === cat ? "active" : ""}`}
-                              onClick={() => setInstaInputCategory(cat)}
-                            >
-                              {cat}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="meta-row" style={{ marginTop: "15px" }}>
-                        <div className="keyword-input-group">
-                          <label className="field-label">핵심 키워드:</label>
-                          <input
-                            type="text"
-                            className="keyword-input"
-                            placeholder="예: 투표, 부동산"
-                            value={instaInputKeyword}
-                            onChange={e => setInstaInputKeyword(e.target.value)}
-                          />
-                        </div>
-                        <div className="index-preview-box">
-                          <span className="preview-label">생성될 Index 형식:</span>
-                          <span className="preview-value">{instaInputCategory}-{instaInputKeyword.trim() || "키워드"}-{instaInputDate}</span>
-                        </div>
-                      </div>
-
-                      <div className="form-actions" style={{ marginTop: "20px" }}>
-                        <button type="button" className="pill-btn save-btn" onClick={saveInstaCard}>수정 완료</button>
-                        <button type="button" className="pill-btn cancel-btn" onClick={cancelEditInstaCard}>취소</button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Instagram Card Detail View */
-                    <div className="info-detail-view" id={`fact-check-report-${activeCard.id}`}>
-                      <div className="info-detail-header">
-                        <span className="info-detail-badge">{activeCard.category}-{activeCard.keyword}-{activeCard.entryDate}</span>
-                        <div className="api-key-panel no-print" style={{ padding: "4px 8px", border: "none", background: "transparent" }}>
-                          <input
-                            type="password"
-                            className="api-key-input"
-                            placeholder="🔑 Gemini Key"
-                            style={{ width: "120px" }}
-                            value={geminiApiKey}
-                            onChange={e => {
-                              setGeminiApiKey(e.target.value);
-                              localStorage.setItem("gemini_api_key", e.target.value);
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {activeCard.title && (
-                        <h2 style={{ fontSize: "20px", fontWeight: "bold", margin: "15px 0", color: "#7ab8ff" }}>
-                          {activeCard.title}
-                        </h2>
-                      )}
-
-                      {((activeCard.imageUrls && activeCard.imageUrls.length > 0) || activeCard.imageUrl) && (
-                        <div className="info-detail-image-box" style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "center", marginBottom: "15px" }}>
-                          {(activeCard.imageUrls && activeCard.imageUrls.length > 0 ? activeCard.imageUrls : [activeCard.imageUrl!]).map((url, idx) => (
-                            <img 
-                              key={idx}
-                              src={url} 
-                              alt={`인스타 주요 정보 첨부 이미지 ${idx + 1}`} 
-                              style={{ cursor: "pointer", width: "100px", height: "100px", objectFit: "cover", borderRadius: "8px" }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOriginalImageUrl(url);
-                                setOriginalImageTarget({ type: "insta", id: activeCard.id });
+                        <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
+                          <label className="file-select-btn" style={{ margin: 0 }}>
+                            📸 사진 가져오기
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden-input"
+                              onChange={async e => {
+                                const files = Array.from(e.target.files || []) as File[];
+                                if (files.length > 0) await handlePhotoBookImageUpload(files[0]);
                               }}
                             />
-                          ))}
+                          </label>
+                          <button
+                            type="button"
+                            className="file-select-btn"
+                            onClick={pastePhotoBookImageFromClipboard}
+                            style={{ margin: 0 }}
+                          >
+                            📋 클립보드 붙여넣기
+                          </button>
                         </div>
-                      )}
 
-                      <div className="info-detail-body markdown-body" dangerouslySetInnerHTML={{ __html: renderHtmlContent(activeCard.originalText) }} />
-                      <PhotoMemoLinkPreview text={activeCard.originalText} />
-
-                      {activeCard.extractedText && activeCard.extractedText !== activeCard.originalText && (
-                        <details className="extracted-text-details" style={{ marginBottom: "15px" }}>
-                          <summary>추출된 이미지 텍스트 원본 보기</summary>
-                          <p style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{activeCard.extractedText}</p>
-                        </details>
-                      )}
-
-                      {activeCard.factCheckResult ? (
-                        <div className="fact-check-box" style={{ marginTop: "15px" }}>
-                          <div className="fact-check-title">🛡️ Gemini AI 팩트체크 결과</div>
-                          <div
-                            className="fact-check-content markdown-body"
-                            dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(activeCard.factCheckResult) }}
-                          />
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="fact-check-trigger-btn no-print"
-                          onClick={() => performFactCheck(activeCard!.id)}
-                          disabled={!geminiApiKey}
-                          title={!geminiApiKey ? "API Key를 입력해야 팩트체크가 가능합니다." : ""}
-                        >
-                          🔍 Gemini 팩트체크 수행
-                        </button>
-                      )}
-
-                      <div className="info-detail-actions no-print">
-                        <button type="button" className="action-btn" onClick={() => setActiveItem(null)} style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>🏠 등록 화면으로</button>
-                        <button type="button" className="action-btn" onClick={() => triggerEditInstaCard(activeCard!)}>✏️ 수정</button>
-                        <button type="button" className="action-btn delete-btn" onClick={() => deleteInstaCard(activeCard!.id)}>🗑️ 삭제</button>
-                        <button type="button" className="action-btn" onClick={() => copyCardToClipboard(activeCard!)}>📋 복사</button>
-                        <button type="button" className="action-btn" onClick={() => downloadCardAsTxt(activeCard!)}>📥 TXT 다운로드</button>
-                        {activeCard.factCheckResult && (
-                          <button type="button" className="action-btn pdf-btn" onClick={() => downloadFactCheckPDF(activeCard!)}>📄 PDF 다운로드</button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                ) : activeItem.type === "photobook" && activePhoto ? (
-                  editingPhotoBookItemId === activePhoto.id ? (
-                    /* Photo Book Edit Form */
-                    <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
-                      <h3 className="form-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                        <span>📝 포토북 메모 수정</span>
-                        <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                          작성일자:
+                        <div className="input-group" style={{ marginTop: "15px" }}>
+                          <label className="field-label">키워드 (1-2단어):</label>
                           <input
-                            type="date"
-                            className="info-date-input"
-                            min="2026-05-01"
-                            max="2026-12-31"
-                            value={photoBookInputDate}
-                            onChange={e => setPhotoBookInputDate(e.target.value)}
+                            type="text"
+                            className="info-title-input"
+                            style={{
+                              width: "100%",
+                              padding: "10px",
+                              borderRadius: "8px",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              background: "rgba(0,0,0,0.2)",
+                              color: "#fff",
+                              boxSizing: "border-box",
+                              fontSize: "14px"
+                            }}
+                            placeholder="예: 가족, 바다, 일상"
+                            value={photoBookInputKeyword}
+                            onChange={e => setPhotoBookInputKeyword(e.target.value)}
                           />
-                        </span>
+                        </div>
+
+                        <div className="input-group" style={{ marginTop: "15px" }}>
+                          <label className="field-label">2차 분류 선택:</label>
+                          <select
+                            className="info-category-select"
+                            style={{
+                              width: "100%",
+                              padding: "10px",
+                              borderRadius: "8px",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              background: "rgba(0,0,0,0.2)",
+                              color: "#fff",
+                              fontSize: "14px"
+                            }}
+                            value={photoBookInputCategory2}
+                            onChange={e => setPhotoBookInputCategory2(e.target.value)}
+                          >
+                            {photoCategories2.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="input-group" style={{ marginTop: "15px" }}>
+                          <label className="field-label">메모 내용:</label>
+                          <textarea
+                            className="info-text-textarea"
+                            style={{
+                              width: "100%",
+                              height: "100px",
+                              padding: "10px",
+                              borderRadius: "8px",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              background: "rgba(0,0,0,0.2)",
+                              color: "#fff",
+                              boxSizing: "border-box",
+                              fontSize: "14px",
+                              resize: "vertical"
+                            }}
+                            placeholder="사진에 관련된 메모나 일기 내용을 입력하세요."
+                            value={photoBookInputMemo}
+                            onChange={e => setPhotoBookInputMemo(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="index-preview-box" style={{ margin: "15px 0" }}>
+                          <span className="preview-label">생성될 Index 형식:</span>
+                          <span className="preview-value">#{photoBookInputKeyword.trim() || "keyword"}#{photoBookInputCategory2.trim() || "분류"}#{photoBookInputDate}</span>
+                        </div>
+
+                        <div className="form-actions" style={{ marginTop: "20px" }}>
+                          <button type="button" className="pill-btn save-btn" onClick={savePhotoBookItemForm}>💾 수정 완료</button>
+                          <button type="button" className="pill-btn cancel-btn" onClick={cancelEditPhotoBook} style={{ background: "rgba(255,255,255,0.08)", color: "#fff", marginLeft: "10px" }}>취소</button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Photo Book Detail View */
+                      <div className="info-detail-view" style={{ color: "#fff" }}>
+                        <h3 className="detail-title" style={{ fontSize: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px" }}>
+                          <span>📖 포토북 상세 보기</span>
+                          <span style={{ fontSize: "14px", fontWeight: "normal", color: "#aaa" }}>작성일: {activePhoto.tag}</span>
+                        </h3>
+
+                        {activePhoto.url && (
+                          <div className="detail-media-container" style={{ textAlign: "center", margin: "15px 0", background: "rgba(0,0,0,0.2)", borderRadius: "8px", padding: "10px" }}>
+                            <img src={activePhoto.url} alt="포토북 상세 사진" style={{ maxWidth: "100%", maxHeight: "400px", borderRadius: "6px" }} />
+                          </div>
+                        )}
+
+                        <div className="detail-meta-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", margin: "15px 0", background: "rgba(255,255,255,0.03)", padding: "10px", borderRadius: "8px" }}>
+                          <div>
+                            <strong style={{ color: "#62b19b" }}>🔑 키워드:</strong> <span style={{ fontSize: "15px", fontWeight: "bold" }}>#{activePhoto.keyword}</span>
+                          </div>
+                          <div>
+                            <strong style={{ color: "#62b19b" }}>📂 2차 분류:</strong> <span style={{ fontSize: "15px", fontWeight: "bold" }}>{activePhoto.category2}</span>
+                          </div>
+                        </div>
+
+                        <div className="detail-content-box" style={{ margin: "20px 0" }}>
+                          <h4 style={{ margin: "0 0 8px 0", color: "#aaa" }}>📝 메모 내용</h4>
+                          <div style={{
+                            background: "rgba(0,0,0,0.15)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                            borderRadius: "8px",
+                            padding: "15px",
+                            fontSize: "14px",
+                            lineHeight: "1.6",
+                            wordBreak: "break-all",
+                            whiteSpace: "pre-wrap"
+                          }} className="infobook-card-memo">{activePhoto.memoText || "입력된 메모가 없습니다."}</div>
+                        </div>
+
+                        <div className="info-detail-actions no-print">
+                          <button type="button" className="action-btn" onClick={() => setActiveItem(null)} style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>🏠 등록 화면으로</button>
+                          <button type="button" className="action-btn" onClick={() => triggerEditPhotoBook(activePhoto!)}>✏️ 수정</button>
+                          <button type="button" className="action-btn delete-btn" onClick={() => deletePhotoBookItem(activePhoto!.id!)}>🗑️ 삭제</button>
+                          <button type="button" className="action-btn" onClick={() => copyPhotoBookToClipboard(activePhoto!)}>📋 복사</button>
+                          <button type="button" className="action-btn" onClick={() => downloadPhotoBookAsTxt(activePhoto!)}>📥 TXT 다운로드</button>
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    <div className="empty-state">정보를 불러올 수 없습니다.</div>
+                  )
+                ) : (
+                  /* Creation Mode Form */
+                  <div className="insta-view-container">
+                    {/* Photo Book Create Form */}
+                    <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
+                      <h3 className="form-title" style={{ fontSize: "16px", marginBottom: "15px", color: "#62b19b", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                        <span>📖 포토북 (Photo Book) 등록</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                            작성일자:
+                            <input
+                              type="date"
+                              className="info-date-input"
+                              min="2026-05-01"
+                              max="2026-12-31"
+                              value={photoBookInputDate}
+                              onChange={e => setPhotoBookInputDate(e.target.value)}
+                            />
+                          </span>
+                        </div>
                       </h3>
 
                       <div className="insta-paste-zone" onPaste={handlePhotoBookPasteZone} tabIndex={0}>
                         {photoBookInputImageUrl ? (
                           <div className="paste-preview-container">
-                            <img src={photoBookInputImageUrl} alt="포토북 수정 프리뷰" />
+                            <img src={photoBookInputImageUrl} alt="포토북 등록 프리뷰" />
                             <button type="button" className="remove-preview-btn" title="이미지 삭제" onClick={() => {
                               setPhotoBookInputImageUrl("");
                               setPhotoBookInputImageStoragePath("");
@@ -5518,228 +5368,8 @@ ${photo.memoText}`;
                         </button>
                       </div>
 
-                      <div className="keyword-input-group" style={{ marginTop: "15px" }}>
-                        <label className="field-label">해시태그 키워드 (Keyword):</label>
-                        <input
-                          type="text"
-                          className="keyword-input"
-                          placeholder="예: She, 여행"
-                          value={photoBookInputKeyword}
-                          onChange={e => setPhotoBookInputKeyword(e.target.value)}
-                        />
-                      </div>
-
                       <div className="input-group" style={{ marginTop: "15px" }}>
-                        <label className="field-label">2차분류:</label>
-                        <div className="category-pills">
-                          {photoCategories2.map(cat => (
-                            <button
-                              key={cat}
-                              type="button"
-                              className={`category-pill ${photoBookInputCategory2 === cat ? "active" : ""}`}
-                              onClick={() => setPhotoBookInputCategory2(cat)}
-                            >
-                              {cat}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="input-group" style={{ marginTop: "15px" }}>
-                        <label className="field-label">사진 설명 및 메모:</label>
-                        <textarea
-                          className="insta-textarea"
-                          style={{ minHeight: "100px" }}
-                          placeholder="사진 설명을 입력하세요."
-                          value={photoBookInputMemo}
-                          onChange={e => setPhotoBookInputMemo(e.target.value)}
-                        />
-                        {photoBookInputMemo.trim() && (
-                          <button
-                            type="button"
-                            className="ai-classify-btn"
-                            onClick={() => runPhotoBookAIClassification(undefined, photoBookInputMemo)}
-                            style={{ marginTop: "8px" }}
-                          >
-                            🪄 AI 자동 분류 (키워드/2차분류)
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="index-preview-box" style={{ margin: "15px 0" }}>
-                        <span className="preview-label">생성될 Index 형식:</span>
-                        <span className="preview-value">#{photoBookInputKeyword.trim() || "keyword"}#{photoBookInputCategory2.trim() || "분류"}#{photoBookInputDate}</span>
-                      </div>
-
-                      <div className="form-actions" style={{ marginTop: "20px" }}>
-                        <button type="button" className="pill-btn save-btn" onClick={savePhotoBookItemForm}>수정 완료</button>
-                        <button type="button" className="pill-btn cancel-btn" onClick={cancelEditPhotoBook}>취소</button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Photo Book Detail View */
-                    <div className="info-detail-view">
-                      <div className="info-detail-header">
-                        <span className="info-detail-badge">#{activePhoto.keyword}#{activePhoto.category2}#{activePhoto.tag}</span>
-                      </div>
-
-                      {activePhoto.url && (
-                        <div className="info-detail-image-box">
-                          <img 
-                            src={activePhoto.url} 
-                            alt={`포토북 - ${activePhoto.keyword}`} 
-                            style={{ cursor: "pointer" }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOriginalImageUrl(activePhoto.url || "");
-                              setOriginalImageTarget({ type: "photobook", id: activePhoto.id || "" });
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      <div className="info-detail-body">
-                        {activePhoto.memoText}
-                        <PhotoMemoLinkPreview text={activePhoto.memoText} />
-                      </div>
-
-                      <div className="info-detail-actions no-print">
-                        <button type="button" className="action-btn" onClick={() => setActiveItem(null)} style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>🏠 등록 화면으로</button>
-                        <button type="button" className="action-btn" onClick={() => triggerEditPhotoBook(activePhoto!)}>✏️ 수정</button>
-                        <button type="button" className="action-btn delete-btn" onClick={() => deletePhotoBookItem(activePhoto!.id)}>🗑️ 삭제</button>
-                        <button type="button" className="action-btn" onClick={() => copyPhotoBookToClipboard(activePhoto!)}>📋 복사</button>
-                        <button type="button" className="action-btn" onClick={() => downloadPhotoBookAsTxt(activePhoto!)}>📥 TXT 다운로드</button>
-                      </div>
-                    </div>
-                  )
-                ) : (
-                  <div className="empty-state">정보를 불러올 수 없습니다.</div>
-                )
-              ) : (
-                /* Creation Mode Form */
-                <div className="insta-view-container">
-                  {infoSubView === "insta" ? (
-                    /* Instagram Create Form */
-                    <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
-                      <h3 className="form-title" style={{ fontSize: "16px", marginBottom: "15px", color: "#7ab8ff", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                        <span>📸 인스타 주요 정보 관리</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                          <input
-                            type="password"
-                            className="api-key-input"
-                            placeholder="🔑 Gemini Key"
-                            style={{
-                              width: "100px",
-                              padding: "4px 8px",
-                              fontSize: "11px",
-                              background: "rgba(0,0,0,0.3)",
-                              border: "1px solid rgba(255,255,255,0.15)",
-                              borderRadius: "4px",
-                              color: "#fff"
-                            }}
-                            value={geminiApiKey}
-                            onChange={e => {
-                              setInstaLoading(false);
-                              setGeminiApiKey(e.target.value);
-                              localStorage.setItem("gemini_api_key", e.target.value);
-                            }}
-                          />
-                          <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                            작성일자:
-                            <input
-                              type="date"
-                              className="info-date-input"
-                              min="2026-05-01"
-                              max="2026-12-31"
-                              value={instaInputDate}
-                              onChange={e => setInstaInputDate(e.target.value)}
-                            />
-                          </span>
-                        </div>
-                      </h3>
-
-                      <div className="insta-paste-zone" onPaste={handleInstaPasteZone} tabIndex={0} style={{ display: "flex", flexWrap: "wrap", gap: "10px", padding: "10px", minHeight: "150px", justifyContent: "center", alignItems: "center" }}>
-                        {instaInputImageUrls && instaInputImageUrls.length > 0 ? (
-                          instaInputImageUrls.map((url, idx) => (
-                            <div key={idx} className="paste-preview-container" style={{ position: "relative", width: "100px", height: "100px" }}>
-                              <img src={url} alt={`인스타 프리뷰 ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} />
-                              <button type="button" className="remove-preview-btn" title="이미지 삭제" 
-                                style={{
-                                  position: "absolute",
-                                  top: "-5px",
-                                  right: "-5px",
-                                  background: "rgba(255, 0, 0, 0.8)",
-                                  color: "white",
-                                  border: "none",
-                                  borderRadius: "50%",
-                                  width: "20px",
-                                  height: "20px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  cursor: "pointer",
-                                  fontSize: "12px",
-                                  fontWeight: "bold"
-                                }}
-                                onClick={() => {
-                                  const newUrls = instaInputImageUrls.filter((_, i) => i !== idx);
-                                  const newPaths = instaInputImageStoragePaths.filter((_, i) => i !== idx);
-                                  setInstaInputImageUrls(newUrls);
-                                  setInstaInputImageStoragePaths(newPaths);
-                                  setInstaInputImageUrl(newUrls[0] || "");
-                                  setInstaInputImageStoragePath(newPaths[0] || "");
-                                }}>×</button>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="paste-placeholder">
-                            <span className="icon">📸</span>
-                            <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요.</p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
-                        <label className="file-select-btn" style={{ margin: 0 }}>
-                          📸 사진 가져오기
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden-input"
-                            onChange={async e => {
-                              const files = Array.from(e.target.files || []) as File[];
-                              if (files.length > 0) await handleInstaImageUpload(files[0]);
-                            }}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="file-select-btn"
-                          onClick={pasteInstaImageFromClipboard}
-                          style={{ margin: 0 }}
-                        >
-                          📋 클립보드 붙여넣기
-                        </button>
-                        {instaInputImageUrls.length > 0 && (
-                          <button
-                            type="button"
-                            className="file-select-btn"
-                            onClick={extractTextFromCurrentImages}
-                            style={{ margin: 0, background: "rgba(122,184,255,0.15)", color: "#7ab8ff", border: "1px solid rgba(122,184,255,0.3)" }}
-                          >
-                            🔍 이미지 텍스트 추출 (AI OCR)
-                          </button>
-                        )}
-                      </div>
-
-                      {instaInputExtractedText && (
-                        <div className="ocr-result-indicator" style={{ marginTop: "10px" }}>
-                          <span className="badge">AI OCR</span> 이미지에서 텍스트가 정상 추출되었습니다.
-                        </div>
-                      )}
-
-                      <div className="input-group" style={{ marginTop: "15px" }}>
-                        <label className="field-label">제목:</label>
+                        <label className="field-label">키워드 (1-2단어):</label>
                         <input
                           type="text"
                           className="info-title-input"
@@ -5753,201 +5383,54 @@ ${photo.memoText}`;
                             boxSizing: "border-box",
                             fontSize: "14px"
                           }}
-                          placeholder="제목을 입력하세요 (AI 자동 추출 또는 직접 입력 가능)"
-                          value={instaInputTitle}
-                          onChange={e => setInstaInputTitle(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="input-group" style={{ marginTop: "15px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
-                          <label className="field-label" style={{ margin: 0 }}>정보 상세 내용 및 수집 본문:</label>
-                          <div className="text-formatter-toolbar" style={{ display: "flex", gap: "5px" }}>
-                            <button
-                              type="button"
-                              onClick={() => insertFormatting("bold")}
-                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", color: "#fff", cursor: "pointer", fontWeight: "bold" }}
-                              title="굵게"
-                            >
-                              B
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => insertFormatting("red")}
-                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "4px", color: "#ef4444", cursor: "pointer", fontWeight: "bold" }}
-                              title="빨간색 글자"
-                            >
-                              가 (빨강)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => insertFormatting("yellow")}
-                              style={{ padding: "3px 8px", fontSize: "11px", background: "rgba(234,179,8,0.2)", border: "1px solid rgba(234,179,8,0.3)", borderRadius: "4px", color: "#eab308", cursor: "pointer", fontWeight: "bold" }}
-                              title="노란색 글자"
-                            >
-                              가 (노랑)
-                            </button>
-                          </div>
-                        </div>
-                        <textarea
-                          id="insta-textarea-create"
-                          className="insta-textarea"
-                          placeholder="인스타 글이나 텍스트를 입력 또는 붙여넣으세요."
-                          value={instaInputText}
-                          onChange={e => setInstaInputText(e.target.value)}
-                        />
-                        {instaInputText.trim() && (
-                          <button
-                            type="button"
-                            className="ai-classify-btn"
-                            onClick={() => runAIClassification(instaInputText)}
-                          >
-                            🪄 AI 카테고리/키워드 자동 추출
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="category-selection" style={{ marginTop: "15px" }}>
-                        <label className="field-label">분류 카테고리:</label>
-                        <div className="category-pills">
-                          {categories.map(cat => (
-                            <button
-                              key={cat}
-                              type="button"
-                              className={`category-pill ${instaInputCategory === cat ? "active" : ""}`}
-                              onClick={() => setInstaInputCategory(cat)}
-                            >
-                              {cat}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="meta-row" style={{ marginTop: "15px" }}>
-                        <div className="keyword-input-group">
-                          <label className="field-label">핵심 키워드:</label>
-                          <input
-                            type="text"
-                            className="keyword-input"
-                            placeholder="예: 투표, 부동산"
-                            value={instaInputKeyword}
-                            onChange={e => setInstaInputKeyword(e.target.value)}
-                          />
-                        </div>
-                        <div className="index-preview-box">
-                          <span className="preview-label">생성될 Index 형식:</span>
-                          <span className="preview-value">{instaInputCategory}-{instaInputKeyword.trim() || "키워드"}-{instaInputDate}</span>
-                        </div>
-                      </div>
-
-                      <div className="form-actions" style={{ marginTop: "20px" }}>
-                        <button type="button" className="pill-btn save-btn" onClick={saveInstaCard}>💾 인스타 정보 카드 저장</button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Photo Book Create Form */
-                    <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
-                      <h3 className="form-title" style={{ fontSize: "16px", marginBottom: "15px", color: "#7ab8ff", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                        <span>📖 포토북 (Photo Book)</span>
-                        <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                          작성일자:
-                          <input
-                            type="date"
-                            className="info-date-input"
-                            min="2026-05-01"
-                            max="2026-12-31"
-                            value={photoBookInputDate}
-                            onChange={e => setPhotoBookInputDate(e.target.value)}
-                          />
-                        </span>
-                      </h3>
-
-                      <div className="insta-paste-zone" onPaste={handlePhotoBookPasteZone} tabIndex={0}>
-                        {photoBookInputImageUrl ? (
-                          <div className="paste-preview-container">
-                            <img src={photoBookInputImageUrl} alt="포토북 프리뷰" />
-                            <button type="button" className="remove-preview-btn" title="이미지 삭제" onClick={() => {
-                              setPhotoBookInputImageUrl("");
-                              setPhotoBookInputImageStoragePath("");
-                            }}>×</button>
-                          </div>
-                        ) : (
-                          <div className="paste-placeholder">
-                            <span className="icon">📖</span>
-                            <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요.</p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
-                        <label className="file-select-btn" style={{ margin: 0 }}>
-                          📸 사진 가져오기
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden-input"
-                            onChange={async e => {
-                              const files = Array.from(e.target.files || []) as File[];
-                              if (files.length > 0) await handlePhotoBookImageUpload(files[0]);
-                            }}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="file-select-btn"
-                          onClick={pastePhotoBookImageFromClipboard}
-                          style={{ margin: 0 }}
-                        >
-                          📋 클립보드 붙여넣기
-                        </button>
-                      </div>
-
-                      <div className="keyword-input-group" style={{ marginTop: "15px" }}>
-                        <label className="field-label">해시태그 키워드 (Keyword):</label>
-                        <input
-                          type="text"
-                          className="keyword-input"
-                          placeholder="예: She, 여행"
+                          placeholder="예: 가족, 바다, 일상"
                           value={photoBookInputKeyword}
                           onChange={e => setPhotoBookInputKeyword(e.target.value)}
                         />
                       </div>
 
                       <div className="input-group" style={{ marginTop: "15px" }}>
-                        <label className="field-label">2차분류:</label>
-                        <div className="category-pills">
+                        <label className="field-label">2차 분류 선택:</label>
+                        <select
+                          className="info-category-select"
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(255,255,255,0.15)",
+                            background: "rgba(0,0,0,0.2)",
+                            color: "#fff",
+                            fontSize: "14px"
+                          }}
+                          value={photoBookInputCategory2}
+                          onChange={e => setPhotoBookInputCategory2(e.target.value)}
+                        >
                           {photoCategories2.map(cat => (
-                            <button
-                              key={cat}
-                              type="button"
-                              className={`category-pill ${photoBookInputCategory2 === cat ? "active" : ""}`}
-                              onClick={() => setPhotoBookInputCategory2(cat)}
-                            >
-                              {cat}
-                            </button>
+                            <option key={cat} value={cat}>{cat}</option>
                           ))}
-                        </div>
+                        </select>
                       </div>
 
                       <div className="input-group" style={{ marginTop: "15px" }}>
-                        <label className="field-label">사진 설명 및 메모:</label>
+                        <label className="field-label">메모 내용:</label>
                         <textarea
-                          className="insta-textarea"
-                          style={{ minHeight: "100px" }}
-                          placeholder="이 사진과 관련된 아름다운 기록이나 감정을 작성해 보세요."
+                          className="info-text-textarea"
+                          style={{
+                            width: "100%",
+                            height: "100px",
+                            padding: "10px",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(255,255,255,0.15)",
+                            background: "rgba(0,0,0,0.2)",
+                            color: "#fff",
+                            boxSizing: "border-box",
+                            fontSize: "14px",
+                            resize: "vertical"
+                          }}
+                          placeholder="사진에 관련된 메모나 일기 내용을 입력하세요."
                           value={photoBookInputMemo}
                           onChange={e => setPhotoBookInputMemo(e.target.value)}
                         />
-                        {photoBookInputMemo.trim() && (
-                          <button
-                            type="button"
-                            className="ai-classify-btn"
-                            onClick={() => runPhotoBookAIClassification(undefined, photoBookInputMemo)}
-                            style={{ marginTop: "8px" }}
-                          >
-                            🪄 AI 자동 분류 (키워드/2차분류)
-                          </button>
-                        )}
                       </div>
 
                       <div className="index-preview-box" style={{ margin: "15px 0" }}>
@@ -5959,696 +5442,82 @@ ${photo.memoText}`;
                         <button type="button" className="pill-btn save-btn" onClick={savePhotoBookItemForm}>📖 포토북 저장</button>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Right Column: Sidebar (displays either Instagram Index List or Photo Book Index List based on active tab) */}
-            <div className="info-right-sidebar">
-              {infoSubView === "insta" ? (
-                /* Instagram Sidebar List */
-                <>
-                  <div className="info-sidebar-title">
-                    <span>📸 인스타 정보 인덱스 ({allInstaCards.length})</span>
-                    <button
-                      type="button"
-                      className="pill-btn compact-pill"
-                      style={{ fontSize: "11px", padding: "2px 6px" }}
-                      onClick={() => {
-                        setActiveItem(null);
-                        setEditingInstaCardId(null);
-                        setInstaInputTitle("");
-                        setInstaInputText("");
-                        setInstaInputImageUrl("");
-                        setInstaInputImageStoragePath("");
-                        setInstaInputCategory("기타");
-                        setInstaInputKeyword("");
-                        setInstaInputExtractedText("");
-                        setInstaInputDate(entryDate(currentMonth, currentDay));
-                      }}
-                    >
-                      + 등록
-                    </button>
                   </div>
-                  <input
-                    type="text"
-                    className="info-sidebar-search"
-                    placeholder="인덱스/본문 검색..."
-                    value={instaSearchKey}
-                    onChange={e => setInstaSearchKey(e.target.value)}
-                  />
-                  <div className="insta-selection-controls" style={{ display: "flex", gap: "8px", margin: "8px 0", fontSize: "11px", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", gap: "5px" }}>
-                      <button
-                        type="button"
-                        className="pill-btn compact-pill"
-                        style={{ fontSize: "10px", padding: "2px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
-                        onClick={() => setSelectedInstaCardIds(filteredInstaCards.map(c => c.id).filter((id): id is string => Boolean(id)))}
-                      >
-                        전체 선택
-                      </button>
-                      <button
-                        type="button"
-                        className="pill-btn compact-pill"
-                        style={{ fontSize: "10px", padding: "2px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
-                        onClick={() => setSelectedInstaCardIds([])}
-                      >
-                        선택 해제
-                      </button>
-                    </div>
-                    <span style={{ color: "#aaa" }}>선택: {selectedInstaCardIds.length}개</span>
-                  </div>
-                  <div className="info-sidebar-list">
-                    {filteredInstaCards.map(card => {
-                      const isActive = activeItem?.type === "insta" && activeItem?.id === card.id;
-                      const displayTitle = card.title ? card.title : `${card.category}-${card.keyword}`;
-                      const displaySubtitle = card.title ? `${card.category}-${card.keyword} | ${card.entryDate}` : `작성일자: ${card.entryDate}`;
-                      return (
-                        <div
-                          key={card.id}
-                          className="info-sidebar-item-row-wrapper"
-                          style={{ display: "flex", alignItems: "center", width: "100%", gap: "6px", marginBottom: "6px" }}
-                        >
-                          <input
-                            type="checkbox"
-                            className="insta-item-checkbox"
-                            checked={Boolean(card.id && selectedInstaCardIds.includes(card.id))}
-                            onChange={(e) => {
-                              if (!card.id) return;
-                              if (e.target.checked) {
-                                setSelectedInstaCardIds(prev => [...prev, card.id!]);
-                              } else {
-                                setSelectedInstaCardIds(prev => prev.filter(id => id !== card.id));
-                              }
-                            }}
-                            style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "#7ab8ff", flexShrink: 0 }}
-                          />
-                          <button
-                            type="button"
-                            className={`info-sidebar-item-row ${isActive ? "active" : ""}`}
-                            onClick={() => {
-                              setActiveItem({ type: "insta", id: card.id });
-                              setEditingInstaCardId(null);
-                            }}
-                            style={{ flex: 1, margin: 0, overflow: "hidden" }}
-                            title={`${displayTitle} | ${displaySubtitle}`}
-                          >
-                            <div className="info-sidebar-thumb">
-                              {card.imageUrl ? (
-                                <>
-                                  <img src={card.imageUrl} alt={card.keyword} />
-                                  <div
-                                    className="info-sidebar-hover-zoom"
-                                    style={{ backgroundImage: `url(${card.imageUrl})` }}
-                                  />
-                                </>
-                              ) : (
-                                <span className="info-sidebar-thumb-icon">📸</span>
-                              )}
-                            </div>
-                            <div className="info-sidebar-meta">
-                              <span className="info-sidebar-meta-title">{displayTitle}</span>
-                              <span className="info-sidebar-meta-subtitle">{displaySubtitle}</span>
-                            </div>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              ) : (
-                /* Photo Book Sidebar List */
-                <>
-                  <div className="info-sidebar-title">
-                    <span>📖 포토북 인덱스 ({allPhotoBookItems.length})</span>
-                    <button
-                      type="button"
-                      className="pill-btn compact-pill"
-                      style={{ fontSize: "11px", padding: "2px 6px" }}
-                      onClick={() => {
-                        setActiveItem(null);
-                        setEditingPhotoBookItemId(null);
-                        setPhotoBookInputImageUrl("");
-                        setPhotoBookInputKeyword("");
-                        setPhotoBookInputCategory2("");
-                        setPhotoBookInputMemo("");
-                        setPhotoBookInputDate(entryDate(currentMonth, currentDay));
-                      }}
-                    >
-                      + 등록
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    className="info-sidebar-search"
-                    placeholder="포토북 검색..."
-                    value={photoSearchKey}
-                    onChange={e => setPhotoSearchKey(e.target.value)}
-                  />
-                  <div className="photobook-selection-controls" style={{ display: "flex", gap: "8px", margin: "8px 0", fontSize: "11px", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", gap: "5px" }}>
-                      <button
-                        type="button"
-                        className="pill-btn compact-pill"
-                        style={{ fontSize: "10px", padding: "2px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
-                        onClick={() => setSelectedPhotoBookIds(filteredPhotoBookItems.map(p => p.id).filter((id): id is string => Boolean(id)))}
-                      >
-                        전체 선택
-                      </button>
-                      <button
-                        type="button"
-                        className="pill-btn compact-pill"
-                        style={{ fontSize: "10px", padding: "2px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
-                        onClick={() => setSelectedPhotoBookIds([])}
-                      >
-                        선택 해제
-                      </button>
-                    </div>
-                    <span style={{ color: "#aaa" }}>선택: {selectedPhotoBookIds.length}개</span>
-                  </div>
-                  <div className="info-sidebar-list">
-                    {filteredPhotoBookItems.map(photo => {
-                      const isActive = activeItem?.type === "photobook" && activeItem?.id === photo.id;
-                      const displayTitle = `#${photo.keyword}#${photo.category2}`;
-                      const displaySubtitle = `작성일자: ${photo.tag}`;
-                      return (
-                        <div
-                          key={photo.id}
-                          className="info-sidebar-item-row-wrapper"
-                          style={{ display: "flex", alignItems: "center", width: "100%", gap: "6px", marginBottom: "6px" }}
-                        >
-                          <input
-                            type="checkbox"
-                            className="photobook-item-checkbox"
-                            checked={Boolean(photo.id && selectedPhotoBookIds.includes(photo.id))}
-                            onChange={(e) => {
-                              if (!photo.id) return;
-                              if (e.target.checked) {
-                                setSelectedPhotoBookIds(prev => [...prev, photo.id!]);
-                              } else {
-                                setSelectedPhotoBookIds(prev => prev.filter(id => id !== photo.id));
-                              }
-                            }}
-                            style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "#62b19b", flexShrink: 0 }}
-                          />
-                          <button
-                            type="button"
-                            className={`info-sidebar-item-row ${isActive ? "active" : ""}`}
-                            onClick={() => {
-                              setActiveItem({ type: "photobook", id: photo.id || "" });
-                              setEditingPhotoBookItemId(null);
-                            }}
-                            style={{ flex: 1, margin: 0, overflow: "hidden" }}
-                            title={`${displayTitle} | ${displaySubtitle}`}
-                          >
-                            <div className="info-sidebar-thumb">
-                              {photo.url ? (
-                                <>
-                                  <img src={photo.url} alt={photo.keyword} />
-                                  <div
-                                    className="info-sidebar-hover-zoom"
-                                    style={{ backgroundImage: `url(${photo.url})` }}
-                                  />
-                                </>
-                              ) : (
-                                <span className="info-sidebar-thumb-icon">📖</span>
-                              )}
-                            </div>
-                            <div className="info-sidebar-meta">
-                              <span className="info-sidebar-meta-title">{displayTitle}</span>
-                              <span className="info-sidebar-meta-subtitle">{displaySubtitle}</span>
-                            </div>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-
-          </div>
-          {isPhotoAlbumModalOpen && (
-            <div className="photo-album-modal-overlay" role="dialog" aria-modal="true" style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "rgba(0, 0, 0, 0.85)",
-              zIndex: 9999,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: "20px",
-              boxSizing: "border-box"
-            }}>
-              <div className="printable-album-modal" style={{
-                background: "#1e1e1e",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-                borderRadius: "16px",
-                width: "90%",
-                maxWidth: "960px",
-                height: "90%",
-                display: "flex",
-                flexDirection: "column",
-                boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
-                overflow: "hidden",
-                color: "#fff",
-                fontFamily: "var(--font-apple)"
-              }}>
-                {/* Modal Header */}
-                <div className="album-modal-header no-print" style={{
-                  padding: "16px 20px",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: "10px",
-                  background: "#181818"
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "18px", fontWeight: "bold", color: "#62b19b" }}>🖼️ 포토앨범 PDF & 인쇄</span>
-                    <span style={{ fontSize: "12px", color: "#aaa" }}>선택된 항목: {selectedPhotoBookIds.length}개</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input
-                      type="text"
-                      placeholder="🔍 앨범 내 해시태그/설명 검색..."
-                      value={albumSearchQuery}
-                      onChange={e => setAlbumSearchQuery(e.target.value)}
-                      style={{
-                        background: "rgba(0, 0, 0, 0.3)",
-                        border: "1px solid rgba(255, 255, 255, 0.15)",
-                        borderRadius: "6px",
-                        color: "#fff",
-                        padding: "6px 12px",
-                        fontSize: "13px",
-                        width: "200px"
-                      }}
-                      className="album-modal-search"
-                    />
-                    <button
-                      type="button"
-                      className="pill-btn"
-                      onClick={() => window.print()}
-                      style={{ background: "#62b19b", color: "#fff", border: "none", display: "inline-flex", alignItems: "center", gap: "5px" }}
-                    >
-                      🖨️ PDF 저장 / 인쇄
-                    </button>
-                    <button
-                      type="button"
-                      className="pill-btn"
-                      onClick={() => {
-                        setIsPhotoAlbumModalOpen(false);
-                        setAlbumSearchQuery("");
-                      }}
-                      style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}
-                    >
-                      닫기
-                    </button>
-                  </div>
-                </div>
-
-                {/* Modal Body: Grid List of Photos */}
-                <div className="album-modal-body" style={{
-                  flex: 1,
-                  padding: "24px",
-                  overflowY: "auto",
-                  background: "#141414"
-                }}>
-                  {/* Cover/Intro shown only when printing */}
-                  <div className="print-only-header" style={{ display: "none", marginBottom: "30px", borderBottom: "2px solid #000", paddingBottom: "15px" }}>
-                    <h1 style={{ fontSize: "28px", margin: 0, fontWeight: "bold", color: "#000" }}>📖 에어제타 포토북 앨범 (Photo Album)</h1>
-                    <p style={{ fontSize: "12px", color: "#666", margin: "5px 0 0 0" }}>출력 일시: {new Date().toLocaleString('ko-KR')} | 총 {selectedPhotoBookIds.length}개 항목</p>
-                  </div>
-
-                  {selectedPhotoBookItems.filter(p => {
-                    if (!albumSearchQuery.trim()) return true;
-                    const query = albumSearchQuery.toLowerCase();
-                    return (
-                      p.keyword.toLowerCase().includes(query) ||
-                      p.category2.toLowerCase().includes(query) ||
-                      p.memoText.toLowerCase().includes(query) ||
-                      p.tag.toLowerCase().includes(query)
-                    );
-                  }).length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "50px", color: "#aaa" }}>
-                      검색 조건에 맞는 포토북 항목이 없습니다.
-                    </div>
-                  ) : (
-                    <div className="album-grid" style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                      gap: "20px"
-                    }}>
-                      {selectedPhotoBookItems.filter(p => {
-                        if (!albumSearchQuery.trim()) return true;
-                        const query = albumSearchQuery.toLowerCase();
-                        return (
-                          p.keyword.toLowerCase().includes(query) ||
-                          p.category2.toLowerCase().includes(query) ||
-                          p.memoText.toLowerCase().includes(query) ||
-                          p.tag.toLowerCase().includes(query)
-                        );
-                      }).map(photo => (
-                        <div
-                          key={photo.id}
-                          className="album-photo-card"
-                          style={{
-                            background: "rgba(255, 255, 255, 0.02)",
-                            border: "1px solid rgba(255, 255, 255, 0.08)",
-                            borderRadius: "12px",
-                            padding: "16px",
-                            boxSizing: "border-box",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "12px"
-                          }}
-                        >
-                          {/* Photo Image */}
-                          {photo.url ? (
-                            <div style={{
-                              width: "100%",
-                              height: "180px",
-                              display: "flex",
-                              justifyContent: "center",
-                              alignItems: "center",
-                              overflow: "hidden",
-                              borderRadius: "8px",
-                              background: "#000",
-                              border: "1px solid rgba(255,255,255,0.05)"
-                            }} className="album-card-img-box">
-                              <img
-                                src={photo.url}
-                                alt={photo.keyword}
-                                style={{
-                                  maxWidth: "100%",
-                                  maxHeight: "100%",
-                                  objectFit: "contain"
-                                }}
-                              />
-                            </div>
-                          ) : (
-                            <div style={{
-                              width: "100%",
-                              height: "180px",
-                              display: "flex",
-                              justifyContent: "center",
-                              alignItems: "center",
-                              borderRadius: "8px",
-                              background: "#2a2a2a",
-                              color: "#666",
-                              fontSize: "40px"
-                            }}>
-                              📖
-                            </div>
-                          )}
-                          
-                          {/* Info & Tags */}
-                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
-                              <span style={{
-                                background: "rgba(98, 177, 155, 0.15)",
-                                color: "#62b19b",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                fontSize: "11px",
-                                fontWeight: "bold"
-                              }} className="album-card-badge">#{photo.keyword}</span>
-                              <span style={{
-                                background: "rgba(255, 255, 255, 0.08)",
-                                color: "#ccc",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                fontSize: "11px"
-                              }} className="album-card-badge">#{photo.category2}</span>
-                              <span style={{
-                                background: "rgba(255, 255, 255, 0.08)",
-                                color: "#ccc",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                fontSize: "11px"
-                              }} className="album-card-badge">{photo.tag}</span>
-                            </div>
-                            
-                            <p style={{
-                              margin: "6px 0 0 0",
-                              fontSize: "12px",
-                              lineHeight: "1.5",
-                              color: "#ddd",
-                              wordBreak: "break-all",
-                              whiteSpace: "pre-wrap"
-                            }} className="album-card-memo">{photo.memoText}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
-            </div>
-          )}
-          {isInfoBookModalOpen && (
-            <div className="info-book-modal-overlay" role="dialog" aria-modal="true" style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "rgba(0, 0, 0, 0.85)",
-              zIndex: 9999,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: "20px",
-              boxSizing: "border-box"
-            }}>
-              <div className="printable-infobook-modal" style={{
-                background: "#1e1e1e",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-                borderRadius: "16px",
-                width: "90%",
-                maxWidth: "960px",
-                height: "90%",
-                display: "flex",
-                flexDirection: "column",
-                boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
-                overflow: "hidden",
-                color: "#fff",
-                fontFamily: "var(--font-apple)"
-              }}>
-                {/* Modal Header */}
-                <div className="infobook-modal-header no-print" style={{
-                  padding: "16px 20px",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: "10px",
-                  background: "#181818"
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "18px", fontWeight: "bold", color: "#7ab8ff" }}>📖 인스타 정보북 PDF & 인쇄</span>
-                    <span style={{ fontSize: "12px", color: "#aaa" }}>선택된 항목: {selectedInstaCardIds.length}개</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input
-                      type="text"
-                      placeholder="🔍 정보북 내 본문/키워드 검색..."
-                      value={infoBookSearchQuery}
-                      onChange={e => setInfoBookSearchQuery(e.target.value)}
-                      style={{
-                        background: "rgba(0, 0, 0, 0.3)",
-                        border: "1px solid rgba(255, 255, 255, 0.15)",
-                        borderRadius: "6px",
-                        color: "#fff",
-                        padding: "6px 12px",
-                        fontSize: "13px",
-                        width: "200px"
-                      }}
-                      className="infobook-modal-search"
-                    />
-                    <button
-                      type="button"
-                      className="pill-btn animate-hover"
-                      onClick={() => window.print()}
-                      style={{ background: "#7ab8ff", color: "#000", border: "none", display: "inline-flex", alignItems: "center", gap: "5px", fontWeight: "bold" }}
-                    >
-                      🖨️ PDF 저장 / 인쇄
-                    </button>
-                    <button
-                      type="button"
-                      className="pill-btn compact-pill"
-                      style={{ background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: "12px", padding: "6px 12px" }}
-                      onClick={shareSelectedInstaCards}
-                    >
-                      🔗 공유하기
-                    </button>
-                    <button
-                      type="button"
-                      className="pill-btn"
-                      onClick={() => {
-                        setIsInfoBookModalOpen(false);
-                        setInfoBookSearchQuery("");
-                      }}
-                      style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}
-                    >
-                      닫기
-                    </button>
-                  </div>
+
+              {/* Right Column: Sidebar (Photo Book Index List) */}
+              <div className="info-right-sidebar">
+                <div className="info-sidebar-title">
+                  <span>📖 포토북 인덱스 ({allPhotoBookItems.length})</span>
+                  <button
+                    type="button"
+                    className="pill-btn compact-pill"
+                    style={{ fontSize: "11px", padding: "2px 6px" }}
+                    onClick={() => {
+                      setActiveItem(null);
+                      setEditingPhotoBookItemId(null);
+                      setPhotoBookInputKeyword("");
+                      setPhotoBookInputCategory2("여행");
+                      setPhotoBookInputMemo("");
+                      setPhotoBookInputImageUrl("");
+                      setPhotoBookInputImageStoragePath("");
+                      setPhotoBookInputDate(entryDate(currentMonth, currentDay));
+                    }}
+                  >
+                    + 등록
+                  </button>
                 </div>
-
-                {/* Modal Body */}
-                <div className="infobook-modal-body" style={{
-                  flex: 1,
-                  padding: "24px",
-                  overflowY: "auto",
-                  background: "#141414"
-                }}>
-                  {/* Cover/Intro shown only when printing */}
-                  <div className="print-only-header" style={{ display: "none", marginBottom: "30px", borderBottom: "2px solid #000", paddingBottom: "15px" }}>
-                    <h1 style={{ fontSize: "28px", margin: 0, fontWeight: "bold", color: "#000" }}>📖 에어제타 인스타 정보북 (Information Book)</h1>
-                    <p style={{ fontSize: "12px", color: "#666", margin: "5px 0 0 0" }}>출력 일시: {new Date().toLocaleString('ko-KR')} | 총 {selectedInstaCardItems.length}개 항목</p>
-                  </div>
-
-                  {selectedInstaCardItems.filter(card => {
-                    if (!infoBookSearchQuery.trim()) return true;
-                    const query = infoBookSearchQuery.toLowerCase();
-                    return (
-                      (card.title && card.title.toLowerCase().includes(query)) ||
-                      card.category.toLowerCase().includes(query) ||
-                      card.keyword.toLowerCase().includes(query) ||
-                      card.entryDate.toLowerCase().includes(query) ||
-                      card.originalText.toLowerCase().includes(query) ||
-                      (card.extractedText && card.extractedText.toLowerCase().includes(query)) ||
-                      (card.factCheckResult && card.factCheckResult.toLowerCase().includes(query))
-                    );
-                  }).length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "50px", color: "#aaa" }}>
-                      검색 조건에 맞는 정보북 항목이 없습니다.
-                    </div>
+                <input
+                  type="text"
+                  className="info-sidebar-search"
+                  placeholder="키워드/분류/메모 검색..."
+                  value={photoSearchKey}
+                  onChange={e => setPhotoSearchKey(e.target.value)}
+                />
+                <div className="info-index-list">
+                  {filteredPhotoBookItems.length === 0 ? (
+                    <div className="empty-state">포토북 목록이 비어 있습니다.</div>
                   ) : (
-                    <div className="infobook-grid" style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                      gap: "20px"
-                    }}>
-                      {selectedInstaCardItems.filter(card => {
-                        if (!infoBookSearchQuery.trim()) return true;
-                        const query = infoBookSearchQuery.toLowerCase();
-                        return (
-                          (card.title && card.title.toLowerCase().includes(query)) ||
-                          card.category.toLowerCase().includes(query) ||
-                          card.keyword.toLowerCase().includes(query) ||
-                          card.entryDate.toLowerCase().includes(query) ||
-                          card.originalText.toLowerCase().includes(query) ||
-                          (card.extractedText && card.extractedText.toLowerCase().includes(query)) ||
-                          (card.factCheckResult && card.factCheckResult.toLowerCase().includes(query))
-                        );
-                      }).map(card => (
+                    filteredPhotoBookItems.map((photo, idx) => {
+                      const isActive = activeItem?.type === "photobook" && activeItem?.id === photo.id;
+                      const isSelected = selectedPhotoBookIds.includes(photo.id || "");
+                      return (
                         <div
-                          key={card.id}
-                          className="infobook-card"
-                          style={{
-                            background: "rgba(255, 255, 255, 0.02)",
-                            border: "1px solid rgba(255, 255, 255, 0.08)",
-                            borderRadius: "12px",
-                            padding: "16px",
-                            boxSizing: "border-box",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "12px",
-                            breakInside: "avoid"
-                          }}
+                          key={photo.id || idx}
+                          className={`info-index-item ${isActive ? "active" : ""}`}
+                          onClick={() => setActiveItem({ type: "photobook", id: photo.id || "" })}
+                          style={{ borderLeftColor: "#62b19b" }}
                         >
-                          {/* Header / Badges */}
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{
-                              background: "rgba(122, 184, 255, 0.15)",
-                              color: "#7ab8ff",
-                              padding: "2px 8px",
-                              borderRadius: "4px",
-                              fontSize: "12px",
-                              fontWeight: "bold"
-                            }} className="infobook-card-badge">{card.category}-{card.keyword}</span>
-                            <span style={{ fontSize: "11px", color: "#aaa" }}>{card.entryDate}</span>
-                          </div>
-
-                          {card.title && (
-                            <h3 style={{ margin: "4px 0", fontSize: "14px", fontWeight: "bold", color: "#7ab8ff" }} className="infobook-card-title">
-                              {card.title}
-                            </h3>
-                          )}
-
-                          {/* Images */}
-                          {((card.imageUrls && card.imageUrls.length > 0) || card.imageUrl) && (
-                            <div style={{
-                              display: "flex",
-                              gap: "8px",
-                              overflowX: "auto",
-                              paddingBottom: "5px",
-                              width: "100%"
-                            }} className="infobook-card-images">
-                              {(card.imageUrls && card.imageUrls.length > 0 ? card.imageUrls : [card.imageUrl!]).map((url, idx) => (
-                                <div key={idx} style={{
-                                  width: "80px",
-                                  height: "80px",
-                                  flexShrink: 0,
-                                  borderRadius: "6px",
-                                  overflow: "hidden",
-                                  background: "#000",
-                                  border: "1px solid rgba(255,255,255,0.05)"
-                                }}>
-                                  <img
-                                    src={url}
-                                    alt={`첨부 이미지 ${idx + 1}`}
-                                    style={{
-                                      width: "100%",
-                                      height: "100%",
-                                      objectFit: "cover"
-                                    }}
-                                  />
-                                </div>
-                              ))}
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center", width: "100%" }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                if (e.target.checked) {
+                                  setSelectedPhotoBookIds([...selectedPhotoBookIds, photo.id || ""]);
+                                } else {
+                                  setSelectedPhotoBookIds(selectedPhotoBookIds.filter(id => id !== photo.id));
+                                }
+                              }}
+                              style={{ cursor: "pointer" }}
+                            />
+                            <div className="index-thumb" style={{ width: "40px", height: "40px", flexShrink: 0, borderRadius: "4px", overflow: "hidden", background: "rgba(0,0,0,0.3)" }}>
+                              {photo.url ? (
+                                <img src={photo.url} alt={photo.keyword} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              ) : (
+                                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>📖</div>
+                              )}
                             </div>
-                          )}
-
-                          {/* Text Memo */}
-                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                            <p style={{
-                              margin: 0,
-                              fontSize: "12px",
-                              lineHeight: "1.5",
-                              color: "#ddd",
-                              wordBreak: "break-all",
-                              whiteSpace: "pre-wrap"
-                            }} className="infobook-card-memo" dangerouslySetInnerHTML={{ __html: renderHtmlContent(card.originalText) }} />
-                          </div>
-
-                          {/* Fact Check Result */}
-                          {card.factCheckResult && (
-                            <div style={{
-                              marginTop: "5px",
-                              background: "rgba(122, 184, 255, 0.05)",
-                              border: "1px dashed rgba(122, 184, 255, 0.2)",
-                              borderRadius: "8px",
-                              padding: "10px",
-                              fontSize: "11px"
-                            }} className="infobook-card-factcheck">
-                              <div style={{ fontWeight: "bold", color: "#7ab8ff", marginBottom: "4px" }}>🛡️ AI 팩트체크 결과</div>
-                              <div
-                                style={{ color: "#ccc", lineHeight: "1.4" }}
-                                dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(card.factCheckResult) }}
-                              />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <strong className="index-title" style={{ color: "#fff" }}>#{photo.keyword}#{photo.category2}</strong>
+                              <span className="index-date">{photo.tag}</span>
                             </div>
-                          )}
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -6658,6 +5527,7 @@ ${photo.memoText}`;
       </section>
     );
   }
+
 
   return (
     <main className="app">
@@ -6771,6 +5641,22 @@ ${photo.memoText}`;
           </div>
         </div>
       )}
-    </main>
+    
+      {infoState.selectedGeneralInfoItem && (
+        <GeneralInfoDetailModal
+          item={infoState.selectedGeneralInfoItem}
+          onClose={() => infoState.setGeneralInfoDetailId(null)}
+          onGenerateReport={infoState.handleGenerateGeneralInfoReport}
+          onRunFactCheck={infoState.handleRunPreciseGeneralInfoFactCheck}
+          onEdit={infoState.handleStartEditGeneralInfo}
+          onDelete={(item) => infoState.handleDeleteGeneralInfo(item.id)}
+          onSavePdf={(item) => {
+            window.print();
+          }}
+          onShareReport={infoState.handleShareGeneralInfoReport}
+        />
+      )}
+  
+</main>
   );
 }
