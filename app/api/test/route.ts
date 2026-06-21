@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { DELETE as generalInfoDelete } from "../general-info/route";
 
 export async function GET(request: Request) {
   try {
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
     let apiDeleteResult: any = null;
     if (!insertError) {
       try {
-        const { DELETE as generalInfoDelete } = require("../general-info/route");
+
         const mockReq = new NextRequest("http://localhost:3000/api/general-info", {
           method: "DELETE",
           headers: {

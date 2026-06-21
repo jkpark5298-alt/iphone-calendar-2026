@@ -222,15 +222,6 @@ export function useTravelDiaryGeneralInfoState({
           }
         });
 
-        // Supabase에 저장되어 있지 않은 로컬 일반 정보 항목을 자동 업로드
-        const remoteIds = new Set(restoredItems.map((item: GeneralInfoItem) => item.id));
-        prev.forEach((localItem) => {
-          if (localItem && localItem.id && !remoteIds.has(localItem.id)) {
-            console.log("Auto-uploading local general info item to Supabase:", localItem.title);
-            void syncGeneralInfoItemToSupabase(localItem, "POST");
-          }
-        });
-
         const sortedResult = Array.from(map.values()).sort((a, b) => b.id - a.id);
         
         // Sync to LocalStorage immediately
