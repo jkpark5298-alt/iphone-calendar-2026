@@ -9298,3 +9298,130 @@ body {
   }
 }
 
+
+/* ==========================================
+   Wiki / Photo Book Fixed Height Layout and Scrolling (Desktop)
+   ========================================== */
+
+/* 1. Photo Book Desktop layout column scrolling */
+@media (min-width: 901px) {
+  .info-layout-2col {
+    height: 740px !important;
+    min-height: 740px !important;
+    max-height: 740px !important;
+  }
+  .info-main-content {
+    height: 100% !important;
+    overflow-y: auto !important;
+  }
+  .info-right-sidebar {
+    height: 100% !important;
+    max-height: 100% !important;
+  }
+  .info-index-list {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    padding-right: 4px;
+  }
+}
+
+/* 2. General Info (Chapter 3) Desktop layout column scrolling */
+@media (min-width: 1101px) {
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout {
+    height: 740px !important;
+    min-height: 740px !important;
+    max-height: 740px !important;
+    align-items: stretch !important;
+  }
+  
+  /* Left column: 수집/분류 Card section */
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > section.generalInfoLeftColumn {
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow-y: auto !important;
+    padding-right: 4px;
+    box-sizing: border-box !important;
+  }
+  
+  /* Right column: 저장함/검색 aside */
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
+    height: 100% !important;
+    max-height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Inside right column card container */
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn > .card {
+    height: 100% !important;
+    max-height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Index list inside card */
+  .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .generalInfoList {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    margin-top: 10px !important;
+    padding-right: 4px;
+  }
+}
+
+/* 3. Floating Go-to-Top Button */
+.scroll-to-top-btn {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+  z-index: 99;
+}
+.scroll-to-top-btn:hover {
+  background: #38bdf8;
+  color: #0f172a;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(56, 189, 248, 0.4);
+}
+
+/* Custom Scrollbar styling for a cleaner look */
+.info-main-content::-webkit-scrollbar,
+.info-index-list::-webkit-scrollbar,
+.layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > section.generalInfoLeftColumn::-webkit-scrollbar,
+.layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .generalInfoList::-webkit-scrollbar {
+  width: 6px;
+}
+.info-main-content::-webkit-scrollbar-track,
+.info-index-list::-webkit-scrollbar-track,
+.layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > section.generalInfoLeftColumn::-webkit-scrollbar-track,
+.layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .generalInfoList::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+.info-main-content::-webkit-scrollbar-thumb,
+.info-index-list::-webkit-scrollbar-thumb,
+.layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > section.generalInfoLeftColumn::-webkit-scrollbar-thumb,
+.layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .generalInfoList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+.info-main-content::-webkit-scrollbar-thumb:hover,
+.info-index-list::-webkit-scrollbar-thumb:hover,
+.layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > section.generalInfoLeftColumn::-webkit-scrollbar-thumb:hover,
+.layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .generalInfoList::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}

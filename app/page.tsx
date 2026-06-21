@@ -5075,7 +5075,22 @@ ${photo.memoText}`;
             /* Render Photo Book 2-Column Layout */
             <div className="info-layout-2col">
               {/* Left Column: Main Content (Editor or Detail View) */}
-              <div className="info-main-content">
+              <div className="info-main-content" style={{ position: "relative" }}>
+                {/* Scroll to Top Button */}
+                <button
+                  type="button"
+                  className="scroll-to-top-btn"
+                  onClick={(e) => {
+                    if (window.innerWidth <= 900) {
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    } else {
+                      e.currentTarget.parentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                  }}
+                  title="맨위로"
+                >
+                  ▲
+                </button>
                 {selectedPhotoBookIds.length > 0 && (
                   <div className="photobook-batch-panel" style={{
                     background: "rgba(98, 177, 155, 0.12)",
@@ -5447,7 +5462,19 @@ ${photo.memoText}`;
               </div>
 
               {/* Right Column: Sidebar (Photo Book Index List) */}
-              <div className="info-right-sidebar">
+              <div className="info-right-sidebar" style={{ position: "relative" }}>
+                {/* Scroll to Top Button */}
+                <button
+                  type="button"
+                  className="scroll-to-top-btn"
+                  onClick={(e) => {
+                    const listEl = e.currentTarget.parentElement?.querySelector('.info-index-list');
+                    if (listEl) listEl.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  title="맨위로"
+                >
+                  ▲
+                </button>
                 <div className="info-sidebar-title">
                   <span>📖 포토북 인덱스 ({allPhotoBookItems.length})</span>
                   <button
