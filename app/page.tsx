@@ -5088,7 +5088,7 @@ ${photo.memoText}`;
                     }
                   }}
                   title="맨위로"
-                >↑</button>
+                >맨 위로 ↑</button>
                 {selectedPhotoBookIds.length > 0 && (
                   <div className="photobook-batch-panel" style={{
                     background: "rgba(98, 177, 155, 0.12)",
@@ -5140,9 +5140,9 @@ ${photo.memoText}`;
                     editingPhotoBookItemId === activePhoto.id ? (
                       /* Photo Book Edit Form */
                       <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
-                        <h3 className="form-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                        <h3 className="form-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "nowrap", gap: "10px" }}>
                           <span>📝 포토북 메모 수정</span>
-                          <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                          <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px", whiteSpace: "nowrap" }}>
                             작성일자:
                             <input
                               type="date"
@@ -5324,21 +5324,19 @@ ${photo.memoText}`;
                   <div className="insta-view-container">
                     {/* Photo Book Create Form */}
                     <div className="insta-input-card" style={{ background: "transparent", border: "none", padding: 0 }}>
-                      <h3 className="form-title" style={{ fontSize: "16px", marginBottom: "15px", color: "#62b19b", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                      <h3 className="form-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "nowrap", gap: "10px" }}>
                         <span>📖 포토북 (Photo Book) 등록</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                          <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                            작성일자:
-                            <input
-                              type="date"
-                              className="info-date-input"
-                              min="2026-05-01"
-                              max="2026-12-31"
-                              value={photoBookInputDate}
-                              onChange={e => setPhotoBookInputDate(e.target.value)}
-                            />
-                          </span>
-                        </div>
+                        <span style={{ fontSize: "13px", color: "#ccc", fontWeight: "normal", display: "inline-flex", alignItems: "center", gap: "5px", whiteSpace: "nowrap" }}>
+                          작성일자:
+                          <input
+                            type="date"
+                            className="info-date-input"
+                            min="2026-05-01"
+                            max="2026-12-31"
+                            value={photoBookInputDate}
+                            onChange={e => setPhotoBookInputDate(e.target.value)}
+                          />
+                        </span>
                       </h3>
 
                       <div className="insta-paste-zone" onPaste={handlePhotoBookPasteZone} tabIndex={0}>
@@ -5466,11 +5464,15 @@ ${photo.memoText}`;
                   type="button"
                   className="scroll-to-top-btn"
                   onClick={(e) => {
-                    const listEl = e.currentTarget.parentElement?.querySelector('.info-index-list');
-                    if (listEl) listEl.scrollTo({ top: 0, behavior: 'smooth' });
+                    if (window.innerWidth <= 900) {
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    } else {
+                      const listEl = e.currentTarget.parentElement?.querySelector('.info-index-list');
+                      if (listEl) listEl.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
                   }}
                   title="맨위로"
-                >↑</button>
+                >맨 위로 ↑</button>
                 <div className="info-sidebar-title">
                   <span>📖 포토북 인덱스 ({allPhotoBookItems.length})</span>
                   <button

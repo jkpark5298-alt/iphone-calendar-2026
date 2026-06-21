@@ -9467,3 +9467,141 @@ body {
   border-radius: 6px !important;
   flex: 0 0 auto !important;
 }
+
+/* ==========================================
+   Redesigned Elements for General Info & Photo Book Layouts
+   ========================================== */
+
+/* 1. Redesign scroll-to-top button to dark rounded pill "맨 위로 ↑" style */
+.scroll-to-top-btn {
+  width: auto !important;
+  height: auto !important;
+  padding: 6px 12px !important;
+  border-radius: 999px !important;
+  background: rgba(15, 23, 42, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  z-index: 100 !important;
+  white-space: nowrap !important;
+  transition: all 0.2s ease !important;
+}
+.scroll-to-top-btn:hover {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #ffffff !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 16px rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Mobile layout adjustments for scroll-to-top buttons */
+@media (max-width: 1100px) {
+  .generalInfoLeftColumn > .scroll-to-top-btn {
+    display: none !important;
+  }
+  .generalInfoRightColumn > .scroll-to-top-btn {
+    position: fixed !important;
+    right: 16px !important;
+    bottom: 20px !important;
+    z-index: 9999 !important;
+  }
+}
+@media (max-width: 900px) {
+  .info-main-content > .scroll-to-top-btn {
+    display: none !important;
+  }
+  .info-right-sidebar > .scroll-to-top-btn {
+    position: fixed !important;
+    right: 16px !important;
+    bottom: 20px !important;
+    z-index: 9999 !important;
+  }
+}
+
+/* 2. Photo Book Detail View actions alignment on mobile */
+@media (max-width: 900px) {
+  .info-detail-actions {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    margin-top: 15px !important;
+  }
+  .info-detail-actions .action-btn {
+    flex: none !important;
+    white-space: nowrap !important;
+    text-align: center !important;
+    justify-content: center !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 8px 6px !important;
+    font-size: 11px !important;
+  }
+  .info-detail-actions .action-btn:first-child {
+    grid-column: span 2 !important;
+  }
+}
+
+/* 3. Photo Book Index List & Sidebar scrollability */
+.info-index-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: auto !important; /* Enable both vertical and horizontal scroll */
+}
+
+.info-index-item {
+  min-width: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-left: 4px solid #62b19b !important;
+  border-radius: 6px !important;
+  padding: 10px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+.info-index-item:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+.info-index-item.active {
+  background: rgba(98, 177, 155, 0.15) !important;
+  border-color: rgba(98, 177, 155, 0.4) !important;
+}
+.info-index-item .index-title {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block !important;
+}
+
+@media (max-width: 900px) {
+  .info-right-sidebar {
+    order: 2 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    height: 350px !important; /* Fixed height for mobile */
+    max-height: 350px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important; /* Hide sidebar container's scrollbar */
+    padding: 10px !important;
+  }
+  .info-index-list {
+    flex: 1 !important;
+    overflow: auto !important; /* Scroll inside the list element */
+    max-height: 100% !important;
+    margin-top: 10px !important;
+  }
+}

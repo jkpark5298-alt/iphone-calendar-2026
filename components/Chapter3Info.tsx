@@ -149,7 +149,7 @@ export function Chapter3Info({
             }
           }}
           title="맨위로"
-        >↑</button>
+        >맨 위로 ↑</button>
         <div className="chapterTitleBox">
           <span>Chapter 3</span>
           <h2>일반 정보 수집 / 분류 / 저장</h2>
@@ -567,11 +567,15 @@ export function Chapter3Info({
           type="button"
           className="scroll-to-top-btn"
           onClick={(e) => {
-            const listEl = e.currentTarget.parentElement?.querySelector('.generalInfoList');
-            if (listEl) listEl.scrollTo({ top: 0, behavior: 'smooth' });
+            if (window.innerWidth <= 1100) {
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+              const listEl = e.currentTarget.parentElement?.querySelector('.generalInfoList');
+              if (listEl) listEl.scrollTo({ top: 0, behavior: 'smooth' });
+            }
           }}
           title="맨위로"
-        >↑</button>
+        >맨 위로 ↑</button>
         <Card
           number="3"
           title="일반 정보 저장함 / 검색"
