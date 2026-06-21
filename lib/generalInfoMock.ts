@@ -36,7 +36,27 @@ export const initialGeneralInfoDraft: GeneralInfoDraft = {
 };
 
 export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraft => {
-  const source = [draft.title, draft.text, draft.sourceUrl, draft.fileName]
+  const titleBase = (draft.title || "").trim();
+  const isGeneric = !titleBase || [
+    "일반 정보 자료",
+    "붙여넣은 text 자료",
+    "클립보드 text 자료",
+    "url 자료",
+    "클립보드 이미지 자료"
+  ].includes(titleBase.toLowerCase());
+
+  let extractedTitle = draft.title;
+  if (isGeneric && draft.text.trim()) {
+    const lines = draft.text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length > 0) {
+      const firstLine = lines[0].replace(/<[^>]*>/g, "").trim();
+      if (firstLine) {
+        extractedTitle = firstLine.length > 40 ? firstLine.slice(0, 40) + "..." : firstLine;
+      }
+    }
+  }
+
+  const source = [extractedTitle, draft.text, draft.sourceUrl, draft.fileName]
     .join(" ")
     .toLowerCase();
 
@@ -79,7 +99,7 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
   };
 
   const keywordCandidates = source
-    .replace(/https?:\/\/\S+/g, "")
+    .replace(/https?:\/\/\S/g, "")
     .replace(/[^가-힣a-zA-Z0-9#\s]/g, " ")
     .split(/\s+/)
     .filter((word) => word.length >= 2)
@@ -105,7 +125,7 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
     new Set(keywordCandidates.map((word) => (word.startsWith("#") ? word : "#" + word))),
   ).slice(0, 8);
 
-  const summaryBase = draft.text || draft.title || draft.sourceUrl || draft.fileName;
+  const summaryBase = draft.text || extractedTitle || draft.sourceUrl || draft.fileName;
   const summary =
     summaryBase.length > 90
       ? summaryBase.slice(0, 90) + "..."
@@ -116,6 +136,7 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
 
   return {
     ...draft,
+    title: extractedTitle || "일반 정보 자료",
     primaryCategory,
     secondaryCategory: draft.secondaryCategory || pickSecondaryCategory(),
     thirdCategory:

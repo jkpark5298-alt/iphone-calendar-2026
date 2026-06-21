@@ -120,6 +120,89 @@ export function Chapter3Info({
   normalizeGeneralInfoMediaItems,
   getGeneralInfoDisplayMediaItems,
 }: Chapter3InfoProps) {
+  const [isConfigOpen, setIsConfigOpen] = React.useState(false);
+  const [tempApiKey, setTempApiKey] = React.useState(geminiApiKey);
+  const [keyValidationStatus, setKeyValidationStatus] = React.useState<"idle" | "validating" | "valid" | "invalid">("idle");
+  const [validationError, setValidationError] = React.useState<string | null>(null);
+
+  // Sync tempApiKey and validate on mount if geminiApiKey exists
+  React.useEffect(() => {
+    setTempApiKey(geminiApiKey);
+    if (geminiApiKey) {
+      const verifyOnMount = async () => {
+        setKeyValidationStatus("validating");
+        try {
+          const res = await fetch("/api/test", {
+            headers: {
+              "x-gemini-api-key": geminiApiKey
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.geminiApiTest?.ok) {
+              setKeyValidationStatus("valid");
+              setValidationError(null);
+            } else {
+              setKeyValidationStatus("invalid");
+              setValidationError(data.geminiApiTest?.details || data.geminiApiTest?.message || "유효하지 않은 키입니다.");
+            }
+          } else {
+            setKeyValidationStatus("invalid");
+            setValidationError(`HTTP error: ${res.status}`);
+          }
+        } catch (err: any) {
+          setKeyValidationStatus("invalid");
+          setValidationError(err.message || "네트워크 오류");
+        }
+      };
+      void verifyOnMount();
+    } else {
+      setKeyValidationStatus("idle");
+      setValidationError(null);
+    }
+  }, [geminiApiKey]);
+
+  const handleVerifyAndSaveKey = async () => {
+    if (!tempApiKey.trim()) {
+      setKeyValidationStatus("idle");
+      setValidationError("API Key를 입력해주세요.");
+      return;
+    }
+    setKeyValidationStatus("validating");
+    setValidationError(null);
+    try {
+      const res = await fetch("/api/test", {
+        headers: {
+          "x-gemini-api-key": tempApiKey.trim()
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.geminiApiTest?.ok) {
+          setKeyValidationStatus("valid");
+          setGeminiApiKey(tempApiKey.trim());
+          setIsConfigOpen(false); // Close config and return to original screen
+        } else {
+          setKeyValidationStatus("invalid");
+          setValidationError(data.geminiApiTest?.details || data.geminiApiTest?.message || "유효하지 않은 키입니다.");
+        }
+      } else {
+        setKeyValidationStatus("invalid");
+        setValidationError(`HTTP error: ${res.status}`);
+      }
+    } catch (err: any) {
+      setKeyValidationStatus("invalid");
+      setValidationError(err.message || "네트워크 오류");
+    }
+  };
+
+  const handleClearKey = () => {
+    setGeminiApiKey("");
+    setTempApiKey("");
+    setKeyValidationStatus("idle");
+    setValidationError(null);
+  };
+
   React.useEffect(() => {
     if (generalInfoRichTextRef && "current" in generalInfoRichTextRef && generalInfoRichTextRef.current) {
       // Only set initial HTML on mount/reset to prevent React cursor jumps during typing
@@ -158,78 +241,157 @@ export function Chapter3Info({
           }}
           title="맨위로"
         >맨 위로 ↑</button>
-        <div className="chapterTitleBox">
-          <span>Chapter 3</span>
-          <h2>일반 정보 수집 / 분류 / 저장</h2>
-          <p>
-            여행 정보와 별도로 정치·경제·사회·기술·국제 등 일반 정보를
-            수집하고 AI 분류, Fact Check, 검색 관리를 진행합니다.
+        <div className="chapterTitleBox" style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <h2 style={{ margin: 0, fontWeight: "inherit" }}>일반 정보 공장</h2>
+            {keyValidationStatus === "valid" ? (
+              <button
+                type="button"
+                onClick={() => setIsConfigOpen(!isConfigOpen)}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  borderRadius: "6px",
+                  background: "rgba(74, 222, 128, 0.15)",
+                  color: "#4ade80",
+                  border: "1px solid rgba(74, 222, 128, 0.3)",
+                  cursor: "pointer",
+                  fontWeight: "bold"
+                }}
+              >
+                ● Gemini API Key 등록 완료
+              </button>
+            ) : keyValidationStatus === "invalid" ? (
+              <button
+                type="button"
+                onClick={() => setIsConfigOpen(!isConfigOpen)}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  borderRadius: "6px",
+                  background: "rgba(248, 113, 113, 0.15)",
+                  color: "#f87171",
+                  border: "1px solid rgba(248, 113, 113, 0.3)",
+                  cursor: "pointer",
+                  fontWeight: "bold"
+                }}
+              >
+                ● Gemini API Key 불일치 (재등록)
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsConfigOpen(!isConfigOpen)}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  borderRadius: "6px",
+                  background: "rgba(56, 189, 248, 0.15)",
+                  color: "#38bdf8",
+                  border: "1px solid rgba(56, 189, 248, 0.3)",
+                  cursor: "pointer",
+                  fontWeight: "bold"
+                }}
+              >
+                🔑 Gemini API Key 등록
+              </button>
+            )}
+          </div>
+          <p style={{ margin: "4px 0 0 0" }}>
+            일반 정보 수집하고 AI 분류, Fact Check, 검색 기능 수행
           </p>
         </div>
 
         {/* Google Gemini API Key Config Box */}
-        <div
-          className="geminiKeyBox"
-          style={{
-            marginBottom: "20px",
-            padding: "15px 18px",
-            borderRadius: "14px",
-            border: "1px solid rgba(56, 189, 248, 0.3)",
-            background: "rgba(14, 165, 233, 0.04)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-            <strong style={{ color: "#38bdf8", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-              🤖 Google Gemini API Key 설정
-            </strong>
-            <span style={{ fontSize: "11px", color: geminiApiKey ? "#4ade80" : "#f87171", fontWeight: "bold" }}>
-              {geminiApiKey ? "● API 키 등록 완료" : "○ API 키 등록 필요"}
-            </span>
+        {isConfigOpen && (
+          <div
+            className="geminiKeyBox"
+            style={{
+              marginBottom: "20px",
+              padding: "15px 18px",
+              borderRadius: "14px",
+              border: keyValidationStatus === "invalid" ? "1px solid rgba(248, 113, 113, 0.4)" : "1px solid rgba(56, 189, 248, 0.3)",
+              background: keyValidationStatus === "invalid" ? "rgba(248, 113, 113, 0.04)" : "rgba(14, 165, 233, 0.04)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+              <strong style={{ color: "#38bdf8", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
+                🤖 Google Gemini API Key 설정
+              </strong>
+              <span style={{ fontSize: "11px", color: keyValidationStatus === "valid" ? "#4ade80" : keyValidationStatus === "invalid" ? "#f87171" : keyValidationStatus === "validating" ? "#38bdf8" : "#94a3b8", fontWeight: "bold" }}>
+                {keyValidationStatus === "valid" && "● API 키 등록 완료"}
+                {keyValidationStatus === "invalid" && "● API 키 오류 (불일치)"}
+                {keyValidationStatus === "validating" && "● 검증 중..."}
+                {keyValidationStatus === "idle" && "○ API 키 등록 필요"}
+              </span>
+            </div>
+            <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0, lineHeight: 1.5 }}>
+              AI 이미지 텍스트 추출(OCR), 자동 분류, 요약, Fact Check 기능은 Gemini API Key를 통해 동작합니다.
+            </p>
+            <div style={{ display: "flex", gap: "8px", width: "100%", flexDirection: "column" }}>
+              <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                <input
+                  type="password"
+                  value={tempApiKey}
+                  onChange={(e) => setTempApiKey(e.target.value)}
+                  placeholder="AI 기능을 사용하려면 여기에 Gemini API Key를 입력하세요"
+                  style={{
+                    flex: 1,
+                    borderRadius: "10px",
+                    border: keyValidationStatus === "invalid" ? "1px solid rgba(248, 113, 113, 0.4)" : "1px solid rgba(56, 189, 248, 0.2)",
+                    background: "#020617",
+                    color: "#e2e8f0",
+                    padding: "8px 12px",
+                    fontSize: "13px",
+                  }}
+                />
+                <button
+                  type="button"
+                  className="primaryButton"
+                  onClick={handleVerifyAndSaveKey}
+                  disabled={keyValidationStatus === "validating"}
+                  style={{
+                    padding: "0 14px",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    borderRadius: "10px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {keyValidationStatus === "validating" ? "검증 중..." : "확인"}
+                </button>
+                {geminiApiKey && (
+                  <button
+                    type="button"
+                    className="secondaryButton"
+                    onClick={handleClearKey}
+                    style={{
+                      padding: "0 12px",
+                      fontSize: "12px",
+                      fontWeight: 800,
+                      whiteSpace: "nowrap",
+                      borderRadius: "10px",
+                      borderColor: "rgba(248, 113, 113, 0.3)",
+                      background: "rgba(248, 113, 113, 0.1)",
+                      color: "#f87171",
+                      cursor: "pointer",
+                    }}
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
+              {validationError && (
+                <div style={{ fontSize: "12px", color: "#f87171", marginTop: "4px" }}>
+                  ⚠️ {validationError}
+                </div>
+              )}
+            </div>
           </div>
-          <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0, lineHeight: 1.5 }}>
-            AI 이미지 텍스트 추출(OCR), 자동 분류, 요약, Fact Check 기능은 Gemini API Key를 통해 동작합니다.
-          </p>
-          <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-            <input
-              type="password"
-              value={geminiApiKey}
-              onChange={(e) => setGeminiApiKey(e.target.value)}
-              placeholder="AI 기능을 사용하려면 여기에 Gemini API Key를 입력하세요"
-              style={{
-                flex: 1,
-                borderRadius: "10px",
-                border: "1px solid rgba(56, 189, 248, 0.2)",
-                background: "#020617",
-                color: "#e2e8f0",
-                padding: "8px 12px",
-                fontSize: "13px",
-              }}
-            />
-            {geminiApiKey && (
-              <button
-                type="button"
-                className="secondaryButton"
-                onClick={() => setGeminiApiKey("")}
-                style={{
-                  padding: "0 12px",
-                  fontSize: "12px",
-                  fontWeight: 800,
-                  whiteSpace: "nowrap",
-                  borderRadius: "10px",
-                  borderColor: "rgba(248, 113, 113, 0.3)",
-                  background: "rgba(248, 113, 113, 0.1)",
-                  color: "#f87171",
-                  cursor: "pointer",
-                }}
-              >
-                삭제
-              </button>
-            )}
-          </div>
-        </div>
+        )}
 
         <Card
           number="1"
@@ -247,6 +409,12 @@ export function Chapter3Info({
                 type="button"
                 onClick={handleUndoGeneralInfoDraft}
                 disabled={!generalInfoDraftBackup}
+                style={{
+                  borderColor: generalInfoDraftBackup ? "rgba(234, 179, 8, 0.4)" : "rgba(148, 163, 184, 0.2)",
+                  background: generalInfoDraftBackup ? "rgba(234, 179, 8, 0.15)" : "rgba(148, 163, 184, 0.05)",
+                  color: generalInfoDraftBackup ? "#facc15" : "#64748b",
+                  cursor: generalInfoDraftBackup ? "pointer" : "not-allowed"
+                }}
               >
                 ↩️ 직전 입력 되돌리기
               </button>

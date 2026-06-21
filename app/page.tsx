@@ -5024,7 +5024,7 @@ ${photo.memoText}`;
               }}
               style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", background: infoSubView === "generalInfo" ? "rgba(122,184,255,0.15)" : "transparent", color: infoSubView === "generalInfo" ? "#7ab8ff" : "#ccc", cursor: "pointer" }}
             >
-              📂 일반 정보 저장함 (Chapter 3)
+              📂 일반 정보 저장함
             </button>
             <button
               type="button"
