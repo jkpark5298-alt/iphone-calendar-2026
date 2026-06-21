@@ -119,13 +119,37 @@ const getWriteAuthError = (request: NextRequest) => {
   const authorization = request.headers.get("authorization") || "";
   if (authorization === `Bearer ${token}`) return null;
 
-  // 2. Same-origin request check (to allow the web app frontend itself to make saves)
+  // Gather host headers (including reverse proxy forwarding)
+  const host = request.headers.get("host") || request.nextUrl.host;
+  const forwardedHost = request.headers.get("x-forwarded-host");
+
+  // 2. Origin check (POST/PUT/DELETE requests always send Origin header in modern browsers)
+  const origin = request.headers.get("origin");
+  if (origin) {
+    try {
+      const originUrl = new URL(origin);
+      if (
+        originUrl.host === host ||
+        originUrl.host === request.nextUrl.host ||
+        (forwardedHost && originUrl.host === forwardedHost)
+      ) {
+        return null;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // 3. Same-origin request check using Referer header
   const referer = request.headers.get("referer");
-  const host = request.headers.get("host");
-  if (referer && host) {
+  if (referer) {
     try {
       const refererUrl = new URL(referer);
-      if (refererUrl.host === host) {
+      if (
+        refererUrl.host === host ||
+        refererUrl.host === request.nextUrl.host ||
+        (forwardedHost && refererUrl.host === forwardedHost)
+      ) {
         return null;
       }
     } catch (e) {
@@ -133,7 +157,7 @@ const getWriteAuthError = (request: NextRequest) => {
     }
   }
 
-  // 3. Sec-Fetch-Site check
+  // 4. Sec-Fetch-Site check (not supported in Safari but useful for other browsers)
   const secFetchSite = request.headers.get("sec-fetch-site");
   if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
     return null;
