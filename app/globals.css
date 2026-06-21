@@ -9425,3 +9425,45 @@ body {
 .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout .generalInfoList::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
 }
+
+/* ==========================================
+   General Info Card Header Compact Single-Row Styling
+   ========================================== */
+.layoutGrid.generalInfoLayoutGrid .cardHeader {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin-bottom: 12px !important;
+}
+
+.layoutGrid.generalInfoLayoutGrid .cardHeader > div {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: baseline !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+
+.layoutGrid.generalInfoLayoutGrid .cardHeader h2 {
+  font-size: 14px !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+}
+
+.layoutGrid.generalInfoLayoutGrid .cardHeader p {
+  font-size: 10.5px !important;
+  margin: 0 !important;
+  color: #94a3b8 !important;
+  line-height: 1.2 !important;
+}
+
+.layoutGrid.generalInfoLayoutGrid .cardNumber {
+  width: 22px !important;
+  height: 22px !important;
+  font-size: 11px !important;
+  border-radius: 6px !important;
+  flex: 0 0 auto !important;
+}

@@ -5088,9 +5088,7 @@ ${photo.memoText}`;
                     }
                   }}
                   title="맨위로"
-                >
-                  ▲
-                </button>
+                >↑</button>
                 {selectedPhotoBookIds.length > 0 && (
                   <div className="photobook-batch-panel" style={{
                     background: "rgba(98, 177, 155, 0.12)",
@@ -5472,9 +5470,7 @@ ${photo.memoText}`;
                     if (listEl) listEl.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                   title="맨위로"
-                >
-                  ▲
-                </button>
+                >↑</button>
                 <div className="info-sidebar-title">
                   <span>📖 포토북 인덱스 ({allPhotoBookItems.length})</span>
                   <button
