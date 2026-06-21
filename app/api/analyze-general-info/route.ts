@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as GeneralInfoAnalyzeRequest;
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = request.headers.get("x-gemini-api-key") || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     const model =
       process.env.GEMINI_TEXT_MODEL ||
       process.env.GEMINI_VISION_MODEL ||

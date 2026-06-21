@@ -415,7 +415,19 @@ export default function HomePage() {
 
   // Chapter 3 General Info hook
   const infoState = useTravelDiaryGeneralInfoState({
-    showPasteHint: (msg) => alert(msg),
+    showPasteHint: (msg) => {
+      if (
+        msg.startsWith("⚠️") ||
+        msg.startsWith("❌") ||
+        msg.includes("실패") ||
+        msg.includes("오류") ||
+        msg.includes("제한")
+      ) {
+        alert(msg);
+      } else {
+        console.log(msg);
+      }
+    },
   });
   const [instaLoading, setInstaLoading] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState("");
@@ -1347,6 +1359,10 @@ export default function HomePage() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("gemini_api_key", geminiApiKey);
+  }, [geminiApiKey]);
 
   useEffect(() => {
     if (view !== "diary") return;
@@ -3691,7 +3707,7 @@ function MarkDateView() {
       console.warn("Supabase all info photo load error:", error.message);
       return [];
     }
-    return (data || []).map(row => ({
+    return (data || []).filter(row => !String(row.storage_path || "").includes("general-info/")).map(row => ({
       id: String(row.id || ""),
       url: row.public_url || "",
       name: row.storage_path?.split("/").pop() || "photo.jpg",
@@ -5027,6 +5043,8 @@ ${photo.memoText}`;
           {infoSubView === "generalInfo" ? (
             /* Render Chapter 3 Component */
             <Chapter3Info
+              geminiApiKey={geminiApiKey}
+              setGeminiApiKey={setGeminiApiKey}
               isGeneralInfoMobileLayout={infoState.isGeneralInfoMobileLayout}
               generalInfoDraft={infoState.generalInfoDraft}
               setGeneralInfoDraft={infoState.setGeneralInfoDraft}
@@ -5070,6 +5088,7 @@ ${photo.memoText}`;
               generalInfoCategories={infoState.generalInfoCategories}
               normalizeGeneralInfoMediaItems={infoState.normalizeGeneralInfoMediaItems}
               getGeneralInfoDisplayMediaItems={infoState.getGeneralInfoDisplayMediaItems}
+              handleSaveTemporaryGeneralInfoDraft={infoState.handleSaveTemporaryGeneralInfoDraft}
             />
           ) : (
             /* Render Photo Book 2-Column Layout */

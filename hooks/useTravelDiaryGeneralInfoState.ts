@@ -781,9 +781,23 @@ export function useTravelDiaryGeneralInfoState({
     event.preventDefault();
 
     const clipboardData = event.clipboardData;
-    const pastedFiles = Array.from(clipboardData.files || []).filter((file) =>
-      file.type.startsWith("image/") || file.type.startsWith("video/"),
-    );
+    const pastedFiles = [];
+
+    if (clipboardData.files && clipboardData.files.length > 0) {
+      Array.from(clipboardData.files).forEach((file) => {
+        if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+          pastedFiles.push(file);
+        }
+      });
+    } else if (clipboardData.items && clipboardData.items.length > 0) {
+      for (let i = 0; i < clipboardData.items.length; i++) {
+        const item = clipboardData.items[i];
+        if (item.kind === "file" && (item.type.startsWith("image/") || item.type.startsWith("video/"))) {
+          const file = item.getAsFile();
+          if (file) pastedFiles.push(file);
+        }
+      }
+    }
 
     if (pastedFiles.length > 0) {
       const transfer = new DataTransfer();
@@ -820,14 +834,19 @@ export function useTravelDiaryGeneralInfoState({
       return;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
     try {
       setIsAnalyzingGeneralInfo(true);
       showPasteHint("🤖 Gemini가 일반 정보를 분석하는 중입니다.");
 
+      const customApiKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") || "" : "";
       const response = await fetch("/api/analyze-general-info", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-gemini-api-key": customApiKey,
         },
         body: JSON.stringify({
           title: generalInfoDraft.title,
@@ -837,7 +856,9 @@ export function useTravelDiaryGeneralInfoState({
           fileType: generalInfoDraft.fileType,
           summary: generalInfoDraft.summary,
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
@@ -914,6 +935,18 @@ export function useTravelDiaryGeneralInfoState({
 
     return uploadedItems;
   }, [dataUrlToGeneralInfoFile]);
+
+  const handleSaveTemporaryGeneralInfoDraft = useCallback(() => {
+    const html = getCurrentGeneralInfoRichTextHtml();
+    const draftToSave = {
+      draft: generalInfoDraft,
+      keywordText: generalInfoKeywordText,
+      richTextHtml: html,
+      editingId: generalInfoEditingId
+    };
+    localStorage.setItem("travel_diary_general_info_temp_draft", JSON.stringify(draftToSave));
+    showPasteHint("💾 현재 입력 중인 내용이 임시 저장되었습니다.");
+  }, [generalInfoDraft, generalInfoKeywordText, getCurrentGeneralInfoRichTextHtml, generalInfoEditingId, showPasteHint]);
 
   const handleConfirmGeneralInfo = useCallback(async () => {
     const analyzed =
@@ -1013,6 +1046,7 @@ export function useTravelDiaryGeneralInfoState({
       setGeneralInfoKeywordText("");
       setGeneralInfoDraft(initialGeneralInfoDraft);
       resetGeneralInfoRichTextEditor("", "");
+      localStorage.removeItem("travel_diary_general_info_temp_draft");
       showPasteHint("✅ 수정 저장 완료 · 새 일반 정보 입력 준비 완료");
       return;
     }
@@ -1030,6 +1064,7 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoKeywordText("");
     setGeneralInfoDraft(initialGeneralInfoDraft);
     resetGeneralInfoRichTextEditor("", "");
+    localStorage.removeItem("travel_diary_general_info_temp_draft");
     showPasteHint("✅ 저장 완료 · 새 일반 정보 입력 준비 완료");
   }, [
     generalInfoDraft,
@@ -1217,10 +1252,12 @@ export function useTravelDiaryGeneralInfoState({
       setIsGeneratingGeneralInfoReport(true);
       showPasteHint("📄 AI 보고서를 작성합니다.");
 
+      const customApiKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") || "" : "";
       const response = await fetch("/api/general-info-factcheck", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-gemini-api-key": customApiKey,
         },
         body: JSON.stringify(buildGeneralInfoFactCheckPayload(item)),
       });
@@ -1369,10 +1406,12 @@ export function useTravelDiaryGeneralInfoState({
       setIsRunningGeneralInfoFactCheck(true);
       showPasteHint("🔎 Gemini가 정밀 검증 중입니다.");
 
+      const customApiKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") || "" : "";
       const response = await fetch("/api/general-info-factcheck", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-gemini-api-key": customApiKey,
         },
         body: JSON.stringify(buildGeneralInfoFactCheckPayload(item)),
       });
@@ -1519,10 +1558,44 @@ export function useTravelDiaryGeneralInfoState({
     showPasteHint,
   ]);
 
+  // Update isGeneralInfoMobileLayout based on window size
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const checkLayout = () => {
+      setIsGeneralInfoMobileLayout(window.innerWidth <= 1100);
+    };
+    checkLayout();
+    window.addEventListener("resize", checkLayout);
+    return () => window.removeEventListener("resize", checkLayout);
+  }, []);
+
   // Auto-persist generalInfoItems to localStorage whenever they change
   useEffect(() => {
     persistGeneralInfoItemsToLocalStorage(generalInfoItems);
   }, [generalInfoItems]);
+
+  // Load temporary draft from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("travel_diary_general_info_temp_draft");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.draft) {
+            setGeneralInfoDraft(parsed.draft);
+            if (parsed.keywordText !== undefined) setGeneralInfoKeywordText(parsed.keywordText);
+            if (parsed.editingId !== undefined) setGeneralInfoEditingId(parsed.editingId);
+            if (parsed.richTextHtml !== undefined) {
+              resetGeneralInfoRichTextEditor(parsed.draft.text || "", parsed.richTextHtml);
+            }
+            showPasteHint("📂 이전에 임시 저장된 내용을 불러왔습니다.");
+          }
+        } catch (e) {
+          console.error("Failed to parse temp draft", e);
+        }
+      }
+    }
+  }, [resetGeneralInfoRichTextEditor, showPasteHint]);
 
   // Realtime window focus and periodic (30s) polling sync from Supabase
   useEffect(() => {
@@ -1602,6 +1675,7 @@ export function useTravelDiaryGeneralInfoState({
     loadGeneralInfoItemsFromSupabase,
     handleUndoGeneralInfoDraft,
     handleResetGeneralInfoDraft,
+    handleSaveTemporaryGeneralInfoDraft,
     handleCollectGeneralInfoFromClipboard,
     handleExtractGeneralInfoUrl,
     handleGeneralInfoFileUpload,

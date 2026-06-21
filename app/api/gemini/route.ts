@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY || request.headers.get("x-gemini-api-key");
+    const apiKey = request.headers.get("x-gemini-api-key") || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
         { error: "Gemini API key is missing. Please set GEMINI_API_KEY in .env.local or enter it in the settings." },

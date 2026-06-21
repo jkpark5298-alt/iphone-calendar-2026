@@ -171,7 +171,7 @@ const buildFallbackReport = (payload: FactCheckRequest) => {
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as FactCheckRequest;
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = request.headers.get("x-gemini-api-key") || process.env.GEMINI_API_KEY;
     const { inlineParts, mediaText } = buildMediaEvidence(payload);
 
     if (!apiKey) {

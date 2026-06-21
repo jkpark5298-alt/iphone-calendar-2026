@@ -9605,3 +9605,21 @@ body {
     margin-top: 10px !important;
   }
 }
+
+/* Mobile screen ratio and iOS Safari focus zoom fixes */
+@media (max-width: 900px) {
+  html, body, .app {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+  }
+  
+  .generalInfoGrid input,
+  .generalInfoGrid select,
+  .generalInfoTextBox textarea,
+  .generalInfoRichTextEditor,
+  .searchBox input,
+  .geminiKeyBox input {
+    font-size: 16px !important;
+  }
+}

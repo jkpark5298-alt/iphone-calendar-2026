@@ -11,6 +11,10 @@ import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "..
 import { Card, EmptyState } from "./SharedComponents";
 
 export interface Chapter3InfoProps {
+  // Gemini API Key
+  geminiApiKey: string;
+  setGeminiApiKey: React.Dispatch<React.SetStateAction<string>>;
+
   // 레이아웃
   isGeneralInfoMobileLayout: boolean;
 
@@ -48,6 +52,7 @@ export interface Chapter3InfoProps {
   handleAnalyzeGeneralInfoDraft: () => void;
   isAnalyzingGeneralInfo: boolean;
   handleConfirmGeneralInfo: () => void;
+  handleSaveTemporaryGeneralInfoDraft: () => void;
   handleCancelEditGeneralInfo: () => void;
   handleStartEditGeneralInfo: (item: GeneralInfoItem) => void;
 
@@ -68,6 +73,8 @@ export interface Chapter3InfoProps {
 }
 
 export function Chapter3Info({
+  geminiApiKey,
+  setGeminiApiKey,
   isGeneralInfoMobileLayout,
   generalInfoDraft,
   setGeneralInfoDraft,
@@ -98,6 +105,7 @@ export function Chapter3Info({
   handleAnalyzeGeneralInfoDraft,
   isAnalyzingGeneralInfo,
   handleConfirmGeneralInfo,
+  handleSaveTemporaryGeneralInfoDraft,
   handleCancelEditGeneralInfo,
   handleStartEditGeneralInfo,
   generalInfoItems,
@@ -157,6 +165,70 @@ export function Chapter3Info({
             여행 정보와 별도로 정치·경제·사회·기술·국제 등 일반 정보를
             수집하고 AI 분류, Fact Check, 검색 관리를 진행합니다.
           </p>
+        </div>
+
+        {/* Google Gemini API Key Config Box */}
+        <div
+          className="geminiKeyBox"
+          style={{
+            marginBottom: "20px",
+            padding: "15px 18px",
+            borderRadius: "14px",
+            border: "1px solid rgba(56, 189, 248, 0.3)",
+            background: "rgba(14, 165, 233, 0.04)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+            <strong style={{ color: "#38bdf8", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
+              🤖 Google Gemini API Key 설정
+            </strong>
+            <span style={{ fontSize: "11px", color: geminiApiKey ? "#4ade80" : "#f87171", fontWeight: "bold" }}>
+              {geminiApiKey ? "● API 키 등록 완료" : "○ API 키 등록 필요"}
+            </span>
+          </div>
+          <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0, lineHeight: 1.5 }}>
+            AI 이미지 텍스트 추출(OCR), 자동 분류, 요약, Fact Check 기능은 Gemini API Key를 통해 동작합니다.
+          </p>
+          <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+            <input
+              type="password"
+              value={geminiApiKey}
+              onChange={(e) => setGeminiApiKey(e.target.value)}
+              placeholder="AI 기능을 사용하려면 여기에 Gemini API Key를 입력하세요"
+              style={{
+                flex: 1,
+                borderRadius: "10px",
+                border: "1px solid rgba(56, 189, 248, 0.2)",
+                background: "#020617",
+                color: "#e2e8f0",
+                padding: "8px 12px",
+                fontSize: "13px",
+              }}
+            />
+            {geminiApiKey && (
+              <button
+                type="button"
+                className="secondaryButton"
+                onClick={() => setGeminiApiKey("")}
+                style={{
+                  padding: "0 12px",
+                  fontSize: "12px",
+                  fontWeight: 800,
+                  whiteSpace: "nowrap",
+                  borderRadius: "10px",
+                  borderColor: "rgba(248, 113, 113, 0.3)",
+                  background: "rgba(248, 113, 113, 0.1)",
+                  color: "#f87171",
+                  cursor: "pointer",
+                }}
+              >
+                삭제
+              </button>
+            )}
+          </div>
         </div>
 
         <Card
@@ -342,13 +414,9 @@ export function Chapter3Info({
             role="textbox"
             tabIndex={0}
             onPaste={handleGeneralInfoIphonePasteZonePaste}
+            style={{ textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", padding: "15px", cursor: "pointer" }}
           >
             <strong>📱 아이폰 이미지/인스타 링크 붙여넣기</strong>
-            <p>
-              인스타·카카오톡·Safari에서 이미지나 링크를 복사한 뒤 이 박스를 길게 눌러
-              [붙여넣기]를 선택하세요. 이미지가 직접 들어오지 않으면 사진 앱에 저장 후
-              [이미지/동영상 선택]을 사용하세요.
-            </p>
           </div>
 
           {/* 대표 이미지 */}
@@ -428,6 +496,14 @@ export function Chapter3Info({
             </button>
             <button className="gradientButton" onClick={handleConfirmGeneralInfo}>
               {generalInfoEditingId ? "수정 저장" : "Confirm 저장"}
+            </button>
+            <button
+              className="secondaryButton"
+              type="button"
+              onClick={handleSaveTemporaryGeneralInfoDraft}
+              style={{ background: "rgba(122, 184, 255, 0.12)", color: "#7ab8ff", border: "1px solid rgba(122, 184, 255, 0.25)" }}
+            >
+              💾 임시 저장
             </button>
             {generalInfoEditingId && (
               <button className="secondaryButton" type="button" onClick={handleCancelEditGeneralInfo}>
