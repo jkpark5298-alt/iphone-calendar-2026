@@ -54,6 +54,7 @@ type CalendarMarkItem = {
 type SearchResult = {
   type: "diary" | "info";
   entryDate: string;
+  year: number;
   month: number;
   day: number;
   text: string;
@@ -107,38 +108,54 @@ function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
-function key(month: number, day: number) {
-  return `${month}-${day}`;
+function key(month: number, day: number, year: number = 2026) {
+  if (year === 2026) {
+    return `${month}-${day}`;
+  }
+  return `${year}-${month}-${day}`;
 }
 
+function parseScheduleKey(scheduleKey: string) {
+  const parts = scheduleKey.split("-");
+  if (parts.length === 3) {
+    return {
+      year: Number(parts[0]),
+      month: Number(parts[1]),
+      day: Number(parts[2]),
+    };
+  } else {
+    return {
+      year: 2026,
+      month: Number(parts[0]),
+      day: Number(parts[1]),
+    };
+  }
+}
 
 function parseScheduleKeyDate(scheduleKey: string) {
-  const [monthText, dayText] = scheduleKey.split("-");
-  const month = Number(monthText);
-  const day = Number(dayText);
-
+  const { year, month, day } = parseScheduleKey(scheduleKey);
   if (!Number.isFinite(month) || !Number.isFinite(day)) return null;
-  return new Date(2026, month - 1, day).getTime();
+  return new Date(year, month - 1, day).getTime();
 }
 
 function parseScheduleEndDate(value: string | undefined, fallbackTime: number) {
-  if (!value || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return fallbackTime;
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return fallbackTime;
 
   const [yearText, monthText, dayText] = value.split("-");
   const year = Number(yearText);
   const month = Number(monthText);
   const day = Number(dayText);
 
-  if (year !== 2026 || !Number.isFinite(month) || !Number.isFinite(day)) return fallbackTime;
+  if (!Number.isFinite(month) || !Number.isFinite(day)) return fallbackTime;
   return new Date(year, month - 1, day).getTime();
 }
 
-function scheduleCoversCalendarDay(scheduleKey: string, item: ScheduleItem, month: number, day: number) {
+function scheduleCoversCalendarDay(scheduleKey: string, item: ScheduleItem, month: number, day: number, year: number = 2026) {
   const fallbackStartTime = parseScheduleKeyDate(scheduleKey);
   if (fallbackStartTime === null) return false;
 
   const startTime = parseScheduleEndDate(item.startDate, fallbackStartTime);
-  const currentTime = new Date(2026, month - 1, day).getTime();
+  const currentTime = new Date(year, month - 1, day).getTime();
   const endTime = parseScheduleEndDate(item.endDate, startTime);
 
   const first = Math.min(startTime, endTime);
@@ -147,16 +164,19 @@ function scheduleCoversCalendarDay(scheduleKey: string, item: ScheduleItem, mont
   return currentTime >= first && currentTime <= last;
 }
 
-function getCalendarDaySchedules(allSchedules: Record<string, ScheduleItem[]>, month: number, day: number) {
+function getCalendarDaySchedules(allSchedules: Record<string, ScheduleItem[]>, month: number, day: number, year: number = 2026) {
   return Object.entries(allSchedules)
     .flatMap(([scheduleKey, items]) =>
       items
-        .filter(item => scheduleCoversCalendarDay(scheduleKey, item, month, day))
+        .filter(item => scheduleCoversCalendarDay(scheduleKey, item, month, day, year))
         .map(item => ({ ...item, calendarSourceKey: scheduleKey }))
     )
     .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
 }
 
+function getDaysInMonth(year: number, month: number) {
+  return new Date(year, month, 0).getDate();
+}
 
 function dateValueFromYmd(value?: string) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -166,21 +186,18 @@ function dateValueFromYmd(value?: string) {
   const month = Number(monthText);
   const day = Number(dayText);
 
-  if (year !== 2026 || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  if (!Number.isFinite(month) || !Number.isFinite(day)) return null;
   return new Date(year, month - 1, day).getTime();
 }
 
 function dateValueFromScheduleKey(scheduleKey: string) {
-  const [monthText, dayText] = scheduleKey.split("-");
-  const month = Number(monthText);
-  const day = Number(dayText);
-
+  const { year, month, day } = parseScheduleKey(scheduleKey);
   if (!Number.isFinite(month) || !Number.isFinite(day)) return null;
-  return new Date(2026, month - 1, day).getTime();
+  return new Date(year, month - 1, day).getTime();
 }
 
-function getVisibleSchedulesForDay(allSchedules: Record<string, ScheduleItem[]>, month: number, day: number) {
-  const targetTime = new Date(2026, month - 1, day).getTime();
+function getVisibleSchedulesForDay(allSchedules: Record<string, ScheduleItem[]>, month: number, day: number, year: number = 2026) {
+  const targetTime = new Date(year, month - 1, day).getTime();
 
   return Object.entries(allSchedules)
     .flatMap(([scheduleKey, items]) => {
@@ -201,12 +218,18 @@ function getVisibleSchedulesForDay(allSchedules: Record<string, ScheduleItem[]>,
     .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
 }
 
-function tag(month: number, day: number) {
-  return `#${pad(month)}/${pad(day)}#`;
+function tag(month: number, day: number, year: number = 2026) {
+  if (year === 2026) {
+    return `#${pad(month)}/${pad(day)}#`;
+  }
+  return `#${year}/${pad(month)}/${pad(day)}#`;
 }
 
-function infoTag(month: number, day: number) {
-  return `#날짜(${pad(month)}/${pad(day)})#`;
+function infoTag(month: number, day: number, year: number = 2026) {
+  if (year === 2026) {
+    return `#날짜(${pad(month)}/${pad(day)})#`;
+  }
+  return `#날짜(${year}/${pad(month)}/${pad(day)})#`;
 }
 
 function memoWithDateTag(memo: string | undefined, month: number, day: number) {
@@ -217,27 +240,37 @@ function memoWithDateTag(memo: string | undefined, month: number, day: number) {
   return dateTag;
 }
 
-function getWeekday(month: number, day: number) {
-  return weekdays[new Date(2026, month - 1, day).getDay()];
+function getWeekday(month: number, day: number, year: number = 2026) {
+  return weekdays[new Date(year, month - 1, day).getDay()];
 }
 
-function isSunday(month: number, day: number) {
-  return new Date(2026, month - 1, day).getDay() === 0;
+function isSunday(month: number, day: number, year: number = 2026) {
+  return new Date(year, month - 1, day).getDay() === 0;
+}
+
+function getHolidayLabel(month: number, day: number) {
+  return holidays[`${month}-${day}`];
 }
 
 function isHoliday(month: number, day: number) {
-  return Boolean(holidays[key(month, day)]);
+  return Boolean(getHolidayLabel(month, day));
 }
 
-function storageKey(type: string, month: number, day: number) {
-  return `iphone-diary-2026-${type}-${pad(month)}-${pad(day)}`;
+function storageKey(type: string, month: number, day: number, year: number = 2026) {
+  if (year === 2026) {
+    return `iphone-diary-2026-${type}-${pad(month)}-${pad(day)}`;
+  }
+  return `iphone-diary-${year}-${type}-${pad(month)}-${pad(day)}`;
 }
 
-function weatherStorageKey(month: number, day: number) {
-  return `iphone-diary-2026-weather-${pad(month)}-${pad(day)}`;
+function weatherStorageKey(month: number, day: number, year: number = 2026) {
+  if (year === 2026) {
+    return `iphone-diary-2026-weather-${pad(month)}-${pad(day)}`;
+  }
+  return `iphone-diary-${year}-weather-${pad(month)}-${pad(day)}`;
 }
 
-function isWeatherForSelectedDate(weatherData: any, month: number, day: number) {
+function isWeatherForSelectedDate(weatherData: any, month: number, day: number, year: number = 2026) {
   const observedAt = String(weatherData?.observedAt || "");
   if (!observedAt) return false;
 
@@ -246,15 +279,15 @@ function isWeatherForSelectedDate(weatherData: any, month: number, day: number) 
   const dayPattern = String(day);
 
   return (
-    normalized.includes(`2026.${monthPattern}.${dayPattern}.`) ||
-    normalized.includes(`2026.${pad(month)}.${pad(day)}.`) ||
-    normalized.includes(`2026-${pad(month)}-${pad(day)}`)
+    normalized.includes(`${year}.${monthPattern}.${dayPattern}.`) ||
+    normalized.includes(`${year}.${pad(month)}.${pad(day)}.`) ||
+    normalized.includes(`${year}-${pad(month)}-${pad(day)}`)
   );
 }
 
-function isSelectedDiaryDateToday(month: number, day: number) {
+function isSelectedDiaryDateToday(month: number, day: number, year: number = 2026) {
   const now = new Date();
-  return now.getFullYear() === 2026 && now.getMonth() + 1 === month && now.getDate() === day;
+  return now.getFullYear() === year && now.getMonth() + 1 === month && now.getDate() === day;
 }
 
 
@@ -272,17 +305,23 @@ function getWeatherIcon(value: string) {
   return "🌤️";
 }
 
-function entryDate(month: number, day: number) {
-  return `2026-${pad(month)}-${pad(day)}`;
+function entryDate(month: number, day: number, year: number = 2026) {
+  return `${year}-${pad(month)}-${pad(day)}`;
 }
 
 function monthDayFromEntryDate(value: string) {
-  const match = String(value || "").match(/^2026-(\d{2})-(\d{2})$/);
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
-  const month = Number(match[1]);
-  const day = Number(match[2]);
-  if (month < 5 || month > 12 || day < 1 || day > (monthDays[month] || 31)) return null;
-  return { month, day };
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const maxDay = getDaysInMonth(year, month);
+  if (year === 2026) {
+    if (month < 5 || month > 12 || day < 1 || day > maxDay) return null;
+  } else {
+    if (month < 1 || month > 12 || day < 1 || day > maxDay) return null;
+  }
+  return { year, month, day };
 }
 
 function normalizeInfoPhotoMemo(value: string | undefined) {
@@ -342,18 +381,38 @@ function getSafeToday() {
   const month = today.getMonth() + 1;
   const day = today.getDate();
 
+  if (year > 2026) {
+    return { year, month, day };
+  }
   if (year === 2026 && month >= 5 && month <= 12) {
-    return { month, day };
+    return { year: 2026, month, day };
   }
 
-  return { month: 5, day: 24 };
+  return { year: 2026, month: 5, day: 24 };
 }
 
+
+type InstaInfoCard = {
+  id: string;
+  title?: string;
+  category: string;
+  keyword: string;
+  entryDate: string;
+  imageUrl?: string;
+  imageStoragePath?: string;
+  imageUrls?: string[];
+  imageStoragePaths?: string[];
+  originalText: string;
+  extractedText?: string;
+  factCheckResult?: string;
+  createdAt: string;
+};
 
 type UndoState = {
   label: string;
   target: "infoPhotos" | "diaryPhotos" | "schedules" | "diaryText" | "infoText" | "infoTextCards";
   photoKey?: string;
+  year?: number;
   month?: number;
   day?: number;
   previousData: string;
@@ -365,6 +424,7 @@ type UndoState = {
 export default function HomePage() {
   const todayDefault = useMemo(() => getSafeToday(), []);
   const [view, setView] = useState<View>("calendar");
+  const [currentYear, setCurrentYear] = useState(todayDefault.year ?? 2026);
   const [currentMonth, setCurrentMonth] = useState(todayDefault.month);
   const [currentDay, setCurrentDay] = useState(todayDefault.day);
   const [diaryText, setDiaryText] = useState("");
@@ -384,7 +444,7 @@ export default function HomePage() {
   const [markType, setMarkType] = useState<CalendarMarkType>("C");
   const [markPlus, setMarkPlus] = useState(false);
   const [scheduleTitle, setScheduleTitle] = useState("");
-  const [scheduleStartDate, setScheduleStartDate] = useState(`2026-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
+  const [scheduleStartDate, setScheduleStartDate] = useState(`${todayDefault.year ?? 2026}-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [scheduleStartTime, setScheduleStartTime] = useState("");
   const [scheduleEndDate, setScheduleEndDate] = useState("");
   const [scheduleEndTime, setScheduleEndTime] = useState("24:00");
@@ -402,7 +462,7 @@ export default function HomePage() {
   const [originalImageTarget, setOriginalImageTarget] = useState<OriginalImageTarget>(null);
   const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
-  const [datePickerValue, setDatePickerValue] = useState(`2026-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
+  const [datePickerValue, setDatePickerValue] = useState(`${todayDefault.year ?? 2026}-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchStatus, setSearchStatus] = useState("검색어를 입력하세요.");
@@ -587,13 +647,13 @@ export default function HomePage() {
     }
   }
 
-  async function loadDiaryEntryFromSupabase(month: number, day: number) {
+  async function loadDiaryEntryFromSupabase(month: number, day: number, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return null;
 
     const { data, error } = await supabase
       .from("diary_entries")
       .select("diary_text, voice_text, weather")
-      .eq("entry_date", entryDate(month, day))
+      .eq("entry_date", entryDate(month, day, year))
       .maybeSingle();
 
     if (error) {
@@ -604,13 +664,13 @@ export default function HomePage() {
     return data as { diary_text?: string | null; voice_text?: string | null; weather?: any } | null;
   }
 
-  async function loadInfoEntryFromSupabase(month: number, day: number) {
+  async function loadInfoEntryFromSupabase(month: number, day: number, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return null;
 
     const { data, error } = await supabase
       .from("info_entries")
       .select("info_text")
-      .eq("entry_date", entryDate(month, day))
+      .eq("entry_date", entryDate(month, day, year))
       .maybeSingle();
 
     if (error) {
@@ -622,7 +682,7 @@ export default function HomePage() {
   }
 
 
-  function photoItemFromSupabaseRow(row: any, month: number, day: number): PhotoItem {
+  function photoItemFromSupabaseRow(row: any, month: number, day: number, year: number = 2026): PhotoItem {
     const storagePath = row.storage_path || "";
     const fallbackName = storagePath.split("/").pop() || "photo.jpg";
 
@@ -641,17 +701,17 @@ export default function HomePage() {
     };
   }
 
-  function deletedPhotoStorageKey(photoType: "diary" | "info") {
-    return `iphone-calendar-2026-deleted-${photoType}-photos`;
+  function deletedPhotoStorageKey(photoType: "diary" | "info", year: number = currentYear) {
+    return `iphone-calendar-${year}-deleted-${photoType}-photos`;
   }
 
   function photoDeleteIdentity(item: PhotoItem | { storagePath?: string; url?: string; name?: string }) {
     return item.storagePath || item.url || item.name || "";
   }
 
-  function getDeletedPhotoIdentities(photoType: "diary" | "info") {
+  function getDeletedPhotoIdentities(photoType: "diary" | "info", year: number = currentYear) {
     try {
-      const raw = localStorage.getItem(deletedPhotoStorageKey(photoType));
+      const raw = localStorage.getItem(deletedPhotoStorageKey(photoType, year));
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
     } catch {
@@ -659,41 +719,41 @@ export default function HomePage() {
     }
   }
 
-  function saveDeletedPhotoIdentities(photoType: "diary" | "info", identities: string[]) {
+  function saveDeletedPhotoIdentities(photoType: "diary" | "info", identities: string[], year: number = currentYear) {
     const uniqueIdentities = Array.from(new Set(identities.filter(Boolean)));
     try {
-      localStorage.setItem(deletedPhotoStorageKey(photoType), JSON.stringify(uniqueIdentities));
+      localStorage.setItem(deletedPhotoStorageKey(photoType, year), JSON.stringify(uniqueIdentities));
     } catch {
       // 삭제 표시 저장 실패 시 화면 상태만 유지합니다.
     }
   }
 
-  function markPhotoAsDeleted(photoType: "diary" | "info", item: PhotoItem) {
+  function markPhotoAsDeleted(photoType: "diary" | "info", item: PhotoItem, year: number = currentYear) {
     const identity = photoDeleteIdentity(item);
     if (!identity) return;
-    saveDeletedPhotoIdentities(photoType, [...getDeletedPhotoIdentities(photoType), identity]);
+    saveDeletedPhotoIdentities(photoType, [...getDeletedPhotoIdentities(photoType, year), identity], year);
   }
 
-  function clearDeletedPhotoMarkers(photoType: "diary" | "info", items: PhotoItem[]) {
+  function clearDeletedPhotoMarkers(photoType: "diary" | "info", items: PhotoItem[], year: number = currentYear) {
     const identitiesToRestore = new Set(items.map(photoDeleteIdentity).filter(Boolean));
     if (!identitiesToRestore.size) return;
-    const remaining = getDeletedPhotoIdentities(photoType).filter(identity => !identitiesToRestore.has(identity));
-    saveDeletedPhotoIdentities(photoType, remaining);
+    const remaining = getDeletedPhotoIdentities(photoType, year).filter(identity => !identitiesToRestore.has(identity));
+    saveDeletedPhotoIdentities(photoType, remaining, year);
   }
 
-  function isPhotoMarkedDeleted(photoType: "diary" | "info", item: PhotoItem | { storagePath?: string; url?: string; name?: string }) {
+  function isPhotoMarkedDeleted(photoType: "diary" | "info", item: PhotoItem | { storagePath?: string; url?: string; name?: string }, year: number = currentYear) {
     const identity = photoDeleteIdentity(item);
     if (!identity) return false;
-    return getDeletedPhotoIdentities(photoType).includes(identity);
+    return getDeletedPhotoIdentities(photoType, year).includes(identity);
   }
 
-  async function loadDiaryPhotosFromSupabase(month: number, day: number) {
+  async function loadDiaryPhotosFromSupabase(month: number, day: number, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return null;
 
     const { data, error } = await supabase
       .from("diary_photos")
       .select("id, storage_path, public_url, sort_order, is_calendar_photo")
-      .eq("entry_date", entryDate(month, day))
+      .eq("entry_date", entryDate(month, day, year))
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true });
 
@@ -703,17 +763,17 @@ export default function HomePage() {
     }
 
     return (data || [])
-      .map(row => photoItemFromSupabaseRow(row, month, day))
-      .filter(item => !isPhotoMarkedDeleted("diary", item));
+      .map(row => photoItemFromSupabaseRow(row, month, day, year))
+      .filter(item => !isPhotoMarkedDeleted("diary", item, year));
   }
 
-  async function loadInfoPhotosFromSupabase(month: number, day: number) {
+  async function loadInfoPhotosFromSupabase(month: number, day: number, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return null;
 
     const { data, error } = await supabase
       .from("info_photos")
       .select("id, storage_path, public_url, caption, sort_order")
-      .eq("entry_date", entryDate(month, day))
+      .eq("entry_date", entryDate(month, day, year))
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true });
 
@@ -723,8 +783,8 @@ export default function HomePage() {
     }
 
     return (data || [])
-      .map(row => photoItemFromSupabaseRow(row, month, day))
-      .filter(item => !isPhotoMarkedDeleted("info", item));
+      .map(row => photoItemFromSupabaseRow(row, month, day, year))
+      .filter(item => !isPhotoMarkedDeleted("info", item, year));
   }
 
   async function loadCalendarPhotosFromSupabase() {
@@ -746,10 +806,11 @@ export default function HomePage() {
     (data || []).forEach(row => {
       const parts = String(row.entry_date || "").split("-");
       if (parts.length !== 3) return;
-      if (isPhotoMarkedDeleted("diary", { storagePath: row.storage_path || "", url: row.public_url || "" })) return;
+      const year = Number(parts[0]);
       const month = Number(parts[1]);
       const day = Number(parts[2]);
-      const photoKey = key(month, day);
+      if (isPhotoMarkedDeleted("diary", { storagePath: row.storage_path || "", url: row.public_url || "" }, year)) return;
+      const photoKey = key(month, day, year);
       nextCalendarPhotos[photoKey] = row.public_url;
       nextCalendarPhotoIndexes[photoKey] = Number(row.sort_order || 0);
     });
@@ -778,13 +839,19 @@ export default function HomePage() {
 
     const nextMarks: Record<string, CalendarMarkItem[]> = {};
     (data || []).forEach((row: any) => {
-      const month = Number(row.month);
+      let month = Number(row.month);
+      let year = 2026;
+      if (month > 100) {
+        year = Math.floor(month / 100);
+        month = month % 100;
+      }
       const day = Number(row.day);
       const type = row.mark_type as CalendarMarkType;
-      if (!monthDays[month] || day < 1 || day > monthDays[month]) return;
+      const maxDay = getDaysInMonth(year, month);
+      if (day < 1 || day > maxDay) return;
       if (!["C", "A", "심야", "노조"].includes(type)) return;
 
-      const markKey = key(month, day);
+      const markKey = key(month, day, year);
       nextMarks[markKey] = [
         ...(nextMarks[markKey] || []),
         {
@@ -816,18 +883,26 @@ export default function HomePage() {
 
     const nextSchedules: Record<string, ScheduleItem[]> = {};
     (data || []).forEach((row: any) => {
-      const month = Number(row.month);
-      const day = Number(row.day);
-      if (!monthDays[month] || day < 1 || day > monthDays[month]) return;
+      const startParts = String(row.start_date || "").split("-");
+      let year = 2026;
+      let month = Number(row.month);
+      let day = Number(row.day);
+      if (startParts.length === 3) {
+        year = Number(startParts[0]);
+        month = Number(startParts[1]);
+        day = Number(startParts[2]);
+      }
+      const maxDay = getDaysInMonth(year, month);
+      if (month < 1 || month > 12 || day < 1 || day > maxDay) return;
 
-      const scheduleKey = row.schedule_key || key(month, day);
+      const scheduleKey = row.schedule_key || key(month, day, year);
       const color = String(row.color || "yellow") as ScheduleColor;
       const item: ScheduleItem = {
         id: String(row.schedule_id || row.id || `${scheduleKey}-${Date.now()}`),
         title: String(row.title || ""),
-        startDate: row.start_date || `2026-${pad(month)}-${pad(day)}`,
+        startDate: row.start_date || `${year}-${pad(month)}-${pad(day)}`,
         startTime: row.start_time || "08:00",
-        endDate: row.end_date || `2026-${pad(month)}-${pad(day)}`,
+        endDate: row.end_date || `${year}-${pad(month)}-${pad(day)}`,
         endTime: row.end_time || "24:00",
         repeat: row.repeat || "없음",
         color: ["yellow", "blue", "red", "green", "lightGreen", "orange", "navy", "purple"].includes(color) ? color : "yellow",
@@ -842,9 +917,7 @@ export default function HomePage() {
     if (!isSupabaseConfigured || !supabase) return;
 
     const rows = Object.entries(nextSchedules).flatMap(([scheduleKey, items]) => {
-      const [monthText, dayText] = scheduleKey.split("-");
-      const month = Number(monthText);
-      const day = Number(dayText);
+      const { year, month, day } = parseScheduleKey(scheduleKey);
 
       return items.map(item => ({
         schedule_id: item.id,
@@ -852,9 +925,9 @@ export default function HomePage() {
         month,
         day,
         title: item.title,
-        start_date: item.startDate || `2026-${pad(month)}-${pad(day)}`,
+        start_date: item.startDate || `${year}-${pad(month)}-${pad(day)}`,
         start_time: item.startTime || "08:00",
-        end_date: item.endDate || item.startDate || `2026-${pad(month)}-${pad(day)}`,
+        end_date: item.endDate || item.startDate || `${year}-${pad(month)}-${pad(day)}`,
         end_time: item.endTime || "24:00",
         repeat: item.repeat || "없음",
         color: item.color || "yellow",
@@ -865,8 +938,7 @@ export default function HomePage() {
     const { error: deleteError } = await supabase
       .from("calendar_schedules")
       .delete()
-      .gte("month", 5)
-      .lte("month", 12);
+      .neq("schedule_id", "placeholder");
 
     if (deleteError) {
       console.warn("Supabase schedule clear error:", deleteError.message);
@@ -879,14 +951,14 @@ export default function HomePage() {
     if (insertError) console.warn("Supabase schedule save error:", insertError.message);
   }
 
-  function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string) {
+  function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return;
 
     void supabase
       .from("diary_entries")
       .upsert(
         {
-          entry_date: entryDate(month, day),
+          entry_date: entryDate(month, day, year),
           diary_text: nextDiaryText,
           voice_text: nextVoiceText,
           updated_at: new Date().toISOString(),
@@ -898,14 +970,14 @@ export default function HomePage() {
       });
   }
 
-  function saveInfoEntryToSupabase(month: number, day: number, nextInfoText: string) {
+  function saveInfoEntryToSupabase(month: number, day: number, nextInfoText: string, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return;
 
     void supabase
       .from("info_entries")
       .upsert(
         {
-          entry_date: entryDate(month, day),
+          entry_date: entryDate(month, day, year),
           info_text: nextInfoText,
           updated_at: new Date().toISOString(),
         },
@@ -916,14 +988,14 @@ export default function HomePage() {
       });
   }
 
-  function saveInfoTextCards(month: number, day: number, nextCards: InfoTextCard[]) {
-    const cardKey = key(month, day);
+  function saveInfoTextCards(month: number, day: number, nextCards: InfoTextCard[], year: number = currentYear) {
+    const cardKey = key(month, day, year);
     setInfoTextCards(previousCards => ({ ...previousCards, [cardKey]: nextCards }));
-    localStorage.setItem(storageKey("infoTextCards", month, day), JSON.stringify(nextCards));
+    localStorage.setItem(storageKey("infoTextCards", month, day, year), JSON.stringify(nextCards));
     
     // Optimistically update allInstaCards to instantly reflect edits/saves in the sidebar index
     setAllInstaCards(prevAllCards => {
-      const dateStr = `2026-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const dateStr = entryDate(month, day, year);
       const nextCardIds = nextCards.map(c => c.id);
       
       const filteredPrev = prevAllCards.filter(c => {
@@ -950,16 +1022,16 @@ export default function HomePage() {
       return result;
     });
 
-    void saveInfoTextCardsToSupabase(month, day, nextCards);
+    void saveInfoTextCardsToSupabase(month, day, nextCards, year);
   }
 
-  async function loadInfoTextCardsFromSupabase(month: number, day: number) {
+  async function loadInfoTextCardsFromSupabase(month: number, day: number, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return null;
 
     const { data, error } = await supabase
       .from("info_text_cards")
       .select("card_id, content, created_at, sort_order")
-      .eq("entry_date", entryDate(month, day))
+      .eq("entry_date", entryDate(month, day, year))
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true });
 
@@ -975,10 +1047,10 @@ export default function HomePage() {
     })) as InfoTextCard[];
   }
 
-  async function saveInfoTextCardsToSupabase(month: number, day: number, nextCards: InfoTextCard[]) {
+  async function saveInfoTextCardsToSupabase(month: number, day: number, nextCards: InfoTextCard[], year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return;
 
-    const targetDate = entryDate(month, day);
+    const targetDate = entryDate(month, day, year);
     const { error: deleteError } = await supabase.from("info_text_cards").delete().eq("entry_date", targetDate);
     if (deleteError) {
       console.warn("Supabase info text card clear error:", deleteError.message);
@@ -1069,7 +1141,7 @@ export default function HomePage() {
   }
 
   function editInfoTextCard(cardIndex: number) {
-    const cardKey = key(currentMonth, currentDay);
+    const cardKey = key(currentMonth, currentDay, currentYear);
     const previousCards = infoTextCards[cardKey] || [];
     const targetCard = previousCards[cardIndex];
 
@@ -1084,7 +1156,7 @@ export default function HomePage() {
   function saveEditingInfoTextCard() {
     if (!editingInfoTextCard) return;
 
-    const cardKey = key(currentMonth, currentDay);
+    const cardKey = key(currentMonth, currentDay, currentYear);
     const previousCards = infoTextCards[cardKey] || [];
     const targetCard = previousCards[editingInfoTextCard.index];
 
@@ -1102,6 +1174,7 @@ export default function HomePage() {
     registerUndo({
       label: "정보보관소 글 카드 수정",
       target: "infoTextCards",
+      year: currentYear,
       month: currentMonth,
       day: currentDay,
       previousData: JSON.stringify(previousCards),
@@ -1113,12 +1186,12 @@ export default function HomePage() {
         : card
     );
 
-    saveInfoTextCards(currentMonth, currentDay, nextCards);
+    saveInfoTextCards(currentMonth, currentDay, nextCards, currentYear);
     setEditingInfoTextCard(null);
   }
 
   function deleteInfoTextCard(cardIndex: number) {
-    const cardKey = key(currentMonth, currentDay);
+    const cardKey = key(currentMonth, currentDay, currentYear);
     const previousCards = infoTextCards[cardKey] || [];
     if (!previousCards[cardIndex]) return;
     if (!window.confirm("이 글 카드를 삭제할까요?")) return;
@@ -1126,23 +1199,24 @@ export default function HomePage() {
     registerUndo({
       label: "정보보관소 글 카드 삭제",
       target: "infoTextCards",
+      year: currentYear,
       month: currentMonth,
       day: currentDay,
       previousData: JSON.stringify(previousCards),
     });
 
     const nextCards = previousCards.filter((_, index) => index !== cardIndex);
-    saveInfoTextCards(currentMonth, currentDay, nextCards);
+    saveInfoTextCards(currentMonth, currentDay, nextCards, currentYear);
   }
 
-  function saveWeatherToSupabase(month: number, day: number, weatherData: Record<string, string>) {
+  function saveWeatherToSupabase(month: number, day: number, weatherData: Record<string, string>, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return;
 
     void supabase
       .from("diary_entries")
       .upsert(
         {
-          entry_date: entryDate(month, day),
+          entry_date: entryDate(month, day, year),
           weather: weatherData,
           updated_at: new Date().toISOString(),
         },
@@ -1205,6 +1279,7 @@ export default function HomePage() {
       nextResults.push({
         type: "diary",
         entryDate: row.entry_date,
+        year: date.year,
         month: date.month,
         day: date.day,
         text: text || "일기장 검색 결과",
@@ -1226,6 +1301,7 @@ export default function HomePage() {
       nextResults.push({
         type: "info",
         entryDate: row.entry_date,
+        year: date.year,
         month: date.month,
         day: date.day,
         text: cardText || "인스타 주요 정보 검색 결과",
@@ -1247,6 +1323,7 @@ export default function HomePage() {
       nextResults.push({
         type: "info",
         entryDate: row.entry_date,
+        year: date.year,
         month: date.month,
         day: date.day,
         text: captionText || "포토북 사진 메모 검색 결과",
@@ -1254,9 +1331,7 @@ export default function HomePage() {
     });
 
     Object.entries(schedules).forEach(([scheduleKey, items]) => {
-      const [monthText, dayText] = scheduleKey.split("-");
-      const month = Number(monthText);
-      const day = Number(dayText);
+      const { year, month, day } = parseScheduleKey(scheduleKey);
       if (!month || !day) return;
 
       items.forEach(item => {
@@ -1266,7 +1341,8 @@ export default function HomePage() {
 
         nextResults.push({
           type: "diary",
-          entryDate: entryDate(month, day),
+          entryDate: entryDate(month, day, year),
+          year,
           month,
           day,
           text: `캘린더 일정 · ${scheduleText}`,
@@ -1280,7 +1356,8 @@ export default function HomePage() {
 
       nextResults.push({
         type: "diary",
-        entryDate: entryDate(currentMonth, currentDay),
+        entryDate: entryDate(currentMonth, currentDay, currentYear),
+        year: currentYear,
         month: currentMonth,
         day: currentDay,
         text: `구글 일정 · ${item.allDay ? "종일" : item.start || "시간 없음"} ${item.title}`,
@@ -1298,12 +1375,12 @@ export default function HomePage() {
     setSearchStatus(results.length ? `${results.length}개 검색 결과` : "검색 결과가 없습니다.");
   }
 
-  async function loadGoogleSchedulesForDay(month: number, day: number) {
+  async function loadGoogleSchedulesForDay(month: number, day: number, year: number = currentYear) {
     setGoogleScheduleStatus("구글 일정 조회 중");
     setGoogleSchedules([]);
 
     try {
-      const response = await fetch(`/api/google-calendar?date=${entryDate(month, day)}`, { cache: "no-store" });
+      const response = await fetch(`/api/google-calendar?date=${entryDate(month, day, year)}`, { cache: "no-store" });
       const data = await response.json();
 
       if (!response.ok || !data.ok) {
@@ -1376,7 +1453,7 @@ export default function HomePage() {
     if (view !== "diary") return;
 
     let isActive = true;
-    const photoKey = key(currentMonth, currentDay);
+    const photoKey = key(currentMonth, currentDay, currentYear);
 
     // Supabase가 설정된 상태에서는 서버 데이터를 우선합니다.
     // 예전 localStorage 데이터가 기기마다 달라서 아이폰/PC가 다르게 보이는 문제를 방지합니다.
@@ -1386,25 +1463,25 @@ export default function HomePage() {
       setPhotos(prev => ({ ...prev, [photoKey]: [] }));
     } else {
       try {
-        const raw = localStorage.getItem(storageKey("diary", currentMonth, currentDay));
+        const raw = localStorage.getItem(storageKey("diary", currentMonth, currentDay, currentYear));
         const data = raw ? JSON.parse(raw) : {};
         setDiaryText(data.diaryText || "");
         setVoiceText(data.voiceText || "");
 
-        const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay));
+        const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay, currentYear));
         const items = rawPhotos ? JSON.parse(rawPhotos) : [];
         setPhotos(prev => ({ ...prev, [photoKey]: items }));
 
-        const rawWeather = localStorage.getItem(weatherStorageKey(currentMonth, currentDay));
+        const rawWeather = localStorage.getItem(weatherStorageKey(currentMonth, currentDay, currentYear));
         if (rawWeather) {
           const cachedWeather = JSON.parse(rawWeather);
-          if (isWeatherForSelectedDate(cachedWeather, currentMonth, currentDay)) {
+          if (isWeatherForSelectedDate(cachedWeather, currentMonth, currentDay, currentYear)) {
             setWeather(cachedWeather.weather || "확인 필요");
             setTemp(cachedWeather.temperature || "-");
             setWeatherTime(cachedWeather.observedAt || "-");
             setWeatherSource(cachedWeather.source || "기상청");
           } else {
-            localStorage.removeItem(weatherStorageKey(currentMonth, currentDay));
+            localStorage.removeItem(weatherStorageKey(currentMonth, currentDay, currentYear));
             setWeather("해당일 날씨 조회 필요");
             setTemp("-");
             setWeatherTime("-");
@@ -1417,7 +1494,7 @@ export default function HomePage() {
       }
     }
 
-    loadDiaryEntryFromSupabase(currentMonth, currentDay).then(remoteData => {
+    loadDiaryEntryFromSupabase(currentMonth, currentDay, currentYear).then(remoteData => {
       if (!isActive) return;
 
       const remoteDiaryText = remoteData?.diary_text || "";
@@ -1425,18 +1502,18 @@ export default function HomePage() {
       setDiaryText(remoteDiaryText);
       setVoiceText(remoteVoiceText);
       localStorage.setItem(
-        storageKey("diary", currentMonth, currentDay),
+        storageKey("diary", currentMonth, currentDay, currentYear),
         JSON.stringify({ diaryText: remoteDiaryText, voiceText: remoteVoiceText })
       );
 
       const remoteWeather = remoteData?.weather;
       if (remoteWeather && typeof remoteWeather === "object") {
-        if (isWeatherForSelectedDate(remoteWeather, currentMonth, currentDay)) {
+        if (isWeatherForSelectedDate(remoteWeather, currentMonth, currentDay, currentYear)) {
           setWeather(remoteWeather.weather || "확인 필요");
           setTemp(remoteWeather.temperature || "-");
           setWeatherTime(remoteWeather.observedAt || "-");
           setWeatherSource(remoteWeather.source || "기상청");
-          localStorage.setItem(weatherStorageKey(currentMonth, currentDay), JSON.stringify(remoteWeather));
+          localStorage.setItem(weatherStorageKey(currentMonth, currentDay, currentYear), JSON.stringify(remoteWeather));
         } else {
           setWeather("해당일 날씨 조회 필요");
           setTemp("-");
@@ -1446,11 +1523,11 @@ export default function HomePage() {
       }
     });
 
-    loadDiaryPhotosFromSupabase(currentMonth, currentDay).then(remoteItems => {
+    loadDiaryPhotosFromSupabase(currentMonth, currentDay, currentYear).then(remoteItems => {
       if (!isActive || !remoteItems) return;
 
       setPhotos(prev => ({ ...prev, [photoKey]: remoteItems }));
-      setLocalStorageSafely(storageKey("photos", currentMonth, currentDay), JSON.stringify(remoteItems));
+      setLocalStorageSafely(storageKey("photos", currentMonth, currentDay, currentYear), JSON.stringify(remoteItems));
 
       const calendarIndex = remoteItems.findIndex(item => item.isCalendarPhoto);
       if (calendarIndex >= 0) {
@@ -1473,12 +1550,26 @@ export default function HomePage() {
     });
 
     fetchWeatherFromKma();
-    void loadGoogleSchedulesForDay(currentMonth, currentDay);
+    void loadGoogleSchedulesForDay(currentMonth, currentDay, currentYear);
 
     return () => {
       isActive = false;
     };
-  }, [view, currentMonth, currentDay]);
+  }, [view, currentMonth, currentDay, currentYear]);
+
+  useEffect(() => {
+    try {
+      const rawRedDates = localStorage.getItem(`iphone-calendar-${currentYear}-red-dates`);
+      if (rawRedDates) {
+        setRedDates(JSON.parse(rawRedDates));
+      } else {
+        setRedDates({});
+      }
+    } catch {
+      setRedDates({});
+    }
+  }, [currentYear]);
+
 
   useEffect(() => {
     if (view !== "info") return;
@@ -1521,7 +1612,7 @@ export default function HomePage() {
   }, [activeItem]);
 
   async function fetchWeatherFromKma() {
-    if (!isSelectedDiaryDateToday(currentMonth, currentDay)) {
+    if (!isSelectedDiaryDateToday(currentMonth, currentDay, currentYear)) {
       return;
     }
 
@@ -1551,8 +1642,8 @@ export default function HomePage() {
       const weatherSnapshot = { weather: nextWeather, temperature: nextTemperature, observedAt: nextObservedAt, source: "기상청" };
 
       setWeatherSource("기상청");
-      localStorage.setItem(weatherStorageKey(currentMonth, currentDay), JSON.stringify(weatherSnapshot));
-      saveWeatherToSupabase(currentMonth, currentDay, weatherSnapshot);
+      localStorage.setItem(weatherStorageKey(currentMonth, currentDay, currentYear), JSON.stringify(weatherSnapshot));
+      saveWeatherToSupabase(currentMonth, currentDay, weatherSnapshot, currentYear);
     } catch {
       setWeather("기상청 연결 필요");
       setTemp("-");
@@ -1566,56 +1657,85 @@ export default function HomePage() {
     setView("calendar");
   }
 
-  function openDiary(month: number, day: number) {
+  function handleYearChange(offset: number) {
+    const nextYear = currentYear + offset;
+    if (nextYear < 2026 || nextYear > 2036) {
+      alert("2026년부터 2036년까지만 지원합니다.");
+      return;
+    }
+    let nextMonth = currentMonth;
+    if (nextYear === 2026 && currentMonth < 5) {
+      nextMonth = 5;
+    }
+    setCurrentYear(nextYear);
+    setCurrentMonth(nextMonth);
+  }
+
+  function openDiary(month: number, day: number, year: number = currentYear) {
+    setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);
     setView("diary");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function openInfo(month: number, day: number) {
+  function openInfo(month: number, day: number, year: number = currentYear) {
+    setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);
     setView("info");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function getAdjacentDate(month: number, day: number, direction: -1 | 1) {
+  function getAdjacentDate(year: number, month: number, day: number, direction: -1 | 1) {
+    let nextYear = year;
     let nextMonth = month;
     let nextDay = day + direction;
 
     if (nextDay < 1) {
-      if (nextMonth <= 5) return { month: 5, day: 1 };
       nextMonth -= 1;
-      nextDay = monthDays[nextMonth];
-    }
-
-    if (nextDay > monthDays[nextMonth]) {
-      if (nextMonth >= 12) return { month: 12, day: 31 };
+      if (nextMonth < (nextYear === 2026 ? 5 : 1)) {
+        if (nextYear > 2026) {
+          nextYear -= 1;
+          nextMonth = 12;
+          nextDay = getDaysInMonth(nextYear, nextMonth);
+        } else {
+          return { year: 2026, month: 5, day: 1 };
+        }
+      } else {
+        nextDay = getDaysInMonth(nextYear, nextMonth);
+      }
+    } else if (nextDay > getDaysInMonth(nextYear, nextMonth)) {
       nextMonth += 1;
-      nextDay = 1;
+      if (nextMonth > 12) {
+        nextYear += 1;
+        nextMonth = 1;
+        nextDay = 1;
+      } else {
+        nextDay = 1;
+      }
     }
 
-    return { month: nextMonth, day: nextDay };
+    return { year: nextYear, month: nextMonth, day: nextDay };
   }
 
   function moveDiaryDate(direction: -1 | 1) {
-    const nextDate = getAdjacentDate(currentMonth, currentDay, direction);
-    openDiary(nextDate.month, nextDate.day);
+    const nextDate = getAdjacentDate(currentYear, currentMonth, currentDay, direction);
+    openDiary(nextDate.month, nextDate.day, nextDate.year);
   }
 
   function moveInfoDate(direction: -1 | 1) {
-    const nextDate = getAdjacentDate(currentMonth, currentDay, direction);
-    openInfo(nextDate.month, nextDate.day);
+    const nextDate = getAdjacentDate(currentYear, currentMonth, currentDay, direction);
+    openInfo(nextDate.month, nextDate.day, nextDate.year);
   }
 
   function openSchedule(month: number, day: number) {
     setCurrentMonth(month);
     setCurrentDay(day);
     setScheduleTitle("");
-    setScheduleStartDate(`2026-${pad(month)}-${pad(day)}`);
+    setScheduleStartDate(`${currentYear}-${pad(month)}-${pad(day)}`);
     setScheduleStartTime("08:00");
-    setScheduleEndDate(`2026-${pad(month)}-${pad(day)}`);
+    setScheduleEndDate(`${currentYear}-${pad(month)}-${pad(day)}`);
     setScheduleEndTime("24:00");
     setScheduleRepeat("없음");
     setScheduleColor("yellow");
@@ -1633,13 +1753,13 @@ export default function HomePage() {
   function saveRedDateInput() {
     const parsedDays = (redDateInput.match(/\d+/g) || [])
       .map(value => Number(value))
-      .filter(value => Number.isInteger(value) && value >= 1 && value <= monthDays[currentMonth]);
+      .filter(value => Number.isInteger(value) && value >= 1 && value <= getDaysInMonth(currentYear, currentMonth));
 
     const uniqueDays = Array.from(new Set<number>(parsedDays)).sort((a: number, b: number) => a - b);
     const nextRedDates = { ...redDates, [currentMonth]: uniqueDays };
     setRedDates(nextRedDates);
     setRedDateInput(uniqueDays.join(", "));
-    localStorage.setItem("iphone-calendar-2026-red-dates", JSON.stringify(nextRedDates));
+    localStorage.setItem(`iphone-calendar-${currentYear}-red-dates`, JSON.stringify(nextRedDates));
     alert(uniqueDays.length ? `${currentMonth}월 ${uniqueDays.join(", ")}일을 빨간 날짜로 저장했습니다.` : `${currentMonth}월 빨간 날짜를 모두 해제했습니다.`);
     setView("calendar");
   }
@@ -1660,7 +1780,7 @@ export default function HomePage() {
   function addCalendarMarks() {
     const parsedDays = (markDateInput.match(/\d+/g) || [])
       .map(value => Number(value))
-      .filter(value => Number.isInteger(value) && value >= 1 && value <= monthDays[currentMonth]);
+      .filter(value => Number.isInteger(value) && value >= 1 && value <= getDaysInMonth(currentYear, currentMonth));
 
     const uniqueDays = Array.from(new Set<number>(parsedDays)).sort((a: number, b: number) => a - b);
     if (!uniqueDays.length) {
@@ -1672,7 +1792,7 @@ export default function HomePage() {
     const nextMarks = { ...calendarMarks };
 
     uniqueDays.forEach(day => {
-      const markKey = key(currentMonth, day);
+      const markKey = key(currentMonth, day, currentYear);
       const current = nextMarks[markKey] || [];
       const exists = current.some(item => item.type === markType && item.plus === nextPlus);
       if (!exists) {
@@ -1690,11 +1810,12 @@ export default function HomePage() {
     const supabaseClient = supabase;
     if (isSupabaseConfigured && supabaseClient) {
       uniqueDays.forEach(day => {
+        const dbMonth = currentYear === 2026 ? currentMonth : currentYear * 100 + currentMonth;
         void supabaseClient
           .from("calendar_marks")
           .upsert(
             {
-              month: currentMonth,
+              month: dbMonth,
               day,
               mark_type: markType,
               plus: nextPlus,
@@ -1712,8 +1833,8 @@ export default function HomePage() {
     alert(`${currentMonth}월 ${uniqueDays.join(", ")}일에 ${markType}${nextPlus ? "+" : ""} 표시를 저장했습니다.`);
   }
 
-  function deleteCalendarMark(month: number, day: number, mark: CalendarMarkItem) {
-    const markKey = key(month, day);
+  function deleteCalendarMark(month: number, day: number, mark: CalendarMarkItem, year: number = currentYear) {
+    const markKey = key(month, day, year);
     const nextMarks = {
       ...calendarMarks,
       [markKey]: (calendarMarks[markKey] || []).filter(item => !(item.type === mark.type && item.plus === mark.plus)),
@@ -1724,10 +1845,11 @@ export default function HomePage() {
     saveCalendarMarks(nextMarks);
 
     if (isSupabaseConfigured && supabase) {
+      const dbMonth = year === 2026 ? month : year * 100 + month;
       void supabase
         .from("calendar_marks")
         .delete()
-        .eq("month", month)
+        .eq("month", dbMonth)
         .eq("day", day)
         .eq("mark_type", mark.type)
         .eq("plus", mark.plus)
@@ -1739,6 +1861,7 @@ export default function HomePage() {
 
   function moveToTodayOnCalendar() {
     const today = getSafeToday();
+    setCurrentYear(today.year ?? 2026);
     setCurrentMonth(today.month);
     setCurrentDay(today.day);
     setView("calendar");
@@ -1752,40 +1875,57 @@ export default function HomePage() {
     const day = today.getDate();
 
     if (year === 2026 && month >= 5 && month <= 12) {
-      openDiary(month, day);
+      openDiary(month, day, 2026);
+      return;
+    }
+    if (year >= 2027 && year <= 2036) {
+      openDiary(month, day, year);
       return;
     }
 
-    openDiary(5, 24);
+    openDiary(5, 24, 2026);
   }
 
   function openDatePicker(mode: "diary" | "info") {
     setDatePickerMode(mode);
-    setDatePickerValue(`2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setDatePickerValue(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`);
   }
 
   function applyDatePicker() {
     if (!datePickerMode) return;
-    const match = datePickerValue.match(/^2026-(\d{2})-(\d{2})$/);
+    const match = datePickerValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match) {
-      alert("2026년 5월~12월 날짜를 선택해 주세요.");
+      alert("올바른 날짜를 선택해 주세요.");
       return;
     }
 
-    const month = Number(match[1]);
-    const day = Number(match[2]);
-    if (month < 5 || month > 12 || day < 1 || day > monthDays[month]) {
-      alert("2026년 5월~12월 범위 안의 날짜를 선택해 주세요.");
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const maxDay = getDaysInMonth(year, month);
+
+    if (year === 2026) {
+      if (month < 5 || month > 12 || day < 1 || day > maxDay) {
+        alert("2026년 5월~12월 범위 안의 날짜를 선택해 주세요.");
+        return;
+      }
+    } else if (year >= 2027 && year <= 2036) {
+      if (month < 1 || month > 12 || day < 1 || day > maxDay) {
+        alert("2027년~2036년 범위 안의 날짜를 선택해 주세요.");
+        return;
+      }
+    } else {
+      alert("선택 가능한 날짜 범위를 벗어났습니다 (2026-05-01 ~ 2036-12-31).");
       return;
     }
 
     setDatePickerMode(null);
-    if (datePickerMode === "diary") openDiary(month, day);
-    if (datePickerMode === "info") openInfo(month, day);
+    if (datePickerMode === "diary") openDiary(month, day, year);
+    if (datePickerMode === "info") openInfo(month, day, year);
   }
 
-  function saveDiary(nextDiaryText: string, nextVoiceText: string) {
-    const currentKey = key(currentMonth, currentDay);
+  function saveDiary(nextDiaryText: string, nextVoiceText: string, year: number = currentYear) {
+    const currentKey = key(currentMonth, currentDay, year);
     const editStart = diaryEditStartRef.current;
 
     if (
@@ -1796,6 +1936,7 @@ export default function HomePage() {
       registerUndo({
         label: "일기장 본문 수정",
         target: "diaryText",
+        year,
         month: currentMonth,
         day: currentDay,
         previousData: JSON.stringify({ diaryText: editStart.diaryText, voiceText: editStart.voiceText }),
@@ -1805,14 +1946,14 @@ export default function HomePage() {
     setDiaryText(nextDiaryText);
     setVoiceText(nextVoiceText);
     localStorage.setItem(
-      storageKey("diary", currentMonth, currentDay),
+      storageKey("diary", currentMonth, currentDay, year),
       JSON.stringify({ diaryText: nextDiaryText, voiceText: nextVoiceText })
     );
-    saveDiaryEntryToSupabase(currentMonth, currentDay, nextDiaryText, nextVoiceText);
+    saveDiaryEntryToSupabase(currentMonth, currentDay, nextDiaryText, nextVoiceText, year);
   }
 
-  function saveInfo(nextInfoText: string) {
-    const currentKey = key(currentMonth, currentDay);
+  function saveInfo(nextInfoText: string, year: number = currentYear) {
+    const currentKey = key(currentMonth, currentDay, year);
     const editStart = infoEditStartRef.current;
 
     if (
@@ -1823,6 +1964,7 @@ export default function HomePage() {
       registerUndo({
         label: "정보보관소 본문 수정",
         target: "infoText",
+        year,
         month: currentMonth,
         day: currentDay,
         previousData: JSON.stringify({ infoText: editStart.infoText }),
@@ -1830,12 +1972,12 @@ export default function HomePage() {
     }
 
     setInfoText(nextInfoText);
-    localStorage.setItem(storageKey("info", currentMonth, currentDay), JSON.stringify({ infoText: nextInfoText }));
-    saveInfoEntryToSupabase(currentMonth, currentDay, nextInfoText);
+    localStorage.setItem(storageKey("info", currentMonth, currentDay, year), JSON.stringify({ infoText: nextInfoText }));
+    saveInfoEntryToSupabase(currentMonth, currentDay, nextInfoText, year);
   }
 
-  function saveInfoPhotos(month: number, day: number, nextPhotos: PhotoItem[]) {
-    setLocalStorageSafely(storageKey("infoPhotos", month, day), JSON.stringify(nextPhotos));
+  function saveInfoPhotos(month: number, day: number, nextPhotos: PhotoItem[], year: number = currentYear) {
+    setLocalStorageSafely(storageKey("infoPhotos", month, day, year), JSON.stringify(nextPhotos));
   }
 
 
@@ -1913,13 +2055,13 @@ export default function HomePage() {
     return normalized || "photo.jpg";
   }
 
-  async function uploadPhotoToSupabase(file: File, bucket: "diary-photos" | "info-photos", month: number, day: number, sortOrder: number) {
+  async function uploadPhotoToSupabase(file: File, bucket: "diary-photos" | "info-photos", month: number, day: number, sortOrder: number, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return null;
 
     try {
       const optimizedDataUrl = await makeOptimizedImageDataUrl(file);
       const blob = dataUrlToBlob(optimizedDataUrl);
-      const folder = `${entryDate(month, day)}`;
+      const folder = `${entryDate(month, day, year)}`;
       const storagePath = `${folder}/${Date.now()}-${sortOrder}-${safeFileName(file.name || "photo.jpg")}.jpg`;
 
       const { error: uploadError } = await supabase.storage
@@ -1935,7 +2077,7 @@ export default function HomePage() {
       return {
         url: data.publicUrl,
         name: file.name || "photo.jpg",
-        tag: tag(month, day),
+        tag: tag(month, day, year),
         extraTag: "",
         memo: bucket === "info-photos" ? "#" : "",
         size: "360",
@@ -1949,11 +2091,11 @@ export default function HomePage() {
     }
   }
 
-  async function saveDiaryPhotoRecordToSupabase(month: number, day: number, item: PhotoItem, sortOrder: number, isCalendarPhoto = false) {
+  async function saveDiaryPhotoRecordToSupabase(month: number, day: number, item: PhotoItem, sortOrder: number, isCalendarPhoto = false, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase || !item.storagePath) return;
 
     const { error } = await supabase.from("diary_photos").insert({
-      entry_date: entryDate(month, day),
+      entry_date: entryDate(month, day, year),
       storage_path: item.storagePath,
       public_url: item.url,
       sort_order: sortOrder,
@@ -1963,11 +2105,11 @@ export default function HomePage() {
     if (error) console.warn("Supabase diary photo record error:", error.message);
   }
 
-  async function saveInfoPhotoRecordToSupabase(month: number, day: number, item: PhotoItem, sortOrder: number) {
+  async function saveInfoPhotoRecordToSupabase(month: number, day: number, item: PhotoItem, sortOrder: number, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase || !item.storagePath) return;
 
     const { error } = await supabase.from("info_photos").insert({
-      entry_date: entryDate(month, day),
+      entry_date: entryDate(month, day, year),
       storage_path: item.storagePath,
       public_url: item.url,
       caption: normalizeInfoPhotoMemo(item.memo),
@@ -1990,13 +2132,14 @@ export default function HomePage() {
   async function saveInfoPhotoFiles(files: File[]) {
     if (!files.length) return;
 
-    const k = key(currentMonth, currentDay);
+    const k = key(currentMonth, currentDay, currentYear);
     const previousItems = infoPhotos[k] || [];
 
     registerUndo({
       label: "정보보관소 사진 추가",
       target: "infoPhotos",
       photoKey: k,
+      year: currentYear,
       previousData: JSON.stringify(previousItems),
     });
 
@@ -2004,11 +2147,11 @@ export default function HomePage() {
 
     for (const [offset, file] of files.entries()) {
       const sortOrder = previousItems.length + offset;
-      const uploadedItem = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, sortOrder);
+      const uploadedItem = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, sortOrder, currentYear);
 
       if (uploadedItem) {
         newItems.push(uploadedItem);
-        await saveInfoPhotoRecordToSupabase(currentMonth, currentDay, uploadedItem, sortOrder);
+        await saveInfoPhotoRecordToSupabase(currentMonth, currentDay, uploadedItem, sortOrder, currentYear);
       } else {
         newItems.push({
           url: await makeOptimizedImageDataUrl(file),
@@ -2115,8 +2258,8 @@ export default function HomePage() {
     const nextPhotosForDay = items.filter((_, itemIndex) => itemIndex !== index);
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
-    const [month, day] = k.split("-").map(Number);
-    saveInfoPhotos(month, day, nextPhotosForDay);
+    const { year, month, day } = parseScheduleKey(k);
+    saveInfoPhotos(month, day, nextPhotosForDay, year);
 
     // 되돌리기 지원을 위해 Supabase Storage 파일은 즉시 삭제하지 않습니다.
     // 실제 파일 정리는 추후 별도 "완전 삭제/정리" 기능에서 처리합니다.
@@ -2134,8 +2277,8 @@ export default function HomePage() {
     );
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
-    const [month, day] = k.split("-").map(Number);
-    saveInfoPhotos(month, day, nextPhotosForDay);
+    const { year, month, day } = parseScheduleKey(k);
+    saveInfoPhotos(month, day, nextPhotosForDay, year);
   }
 
 
@@ -2206,8 +2349,8 @@ export default function HomePage() {
     );
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
-    const [month, day] = k.split("-").map(Number);
-    saveInfoPhotos(month, day, nextPhotosForDay);
+    const { year, month, day } = parseScheduleKey(k);
+    saveInfoPhotos(month, day, nextPhotosForDay, year);
     saveInfoPhotoMemoToSupabase(currentItem, normalizedMemo);
   }
 
@@ -2234,8 +2377,8 @@ export default function HomePage() {
     );
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
-    const [month, day] = k.split("-").map(Number);
-    saveInfoPhotos(month, day, nextPhotosForDay);
+    const { year, month, day } = parseScheduleKey(k);
+    saveInfoPhotos(month, day, nextPhotosForDay, year);
     saveInfoPhotoMemoToSupabase(targetItem, "");
   }
 
@@ -2258,21 +2401,21 @@ export default function HomePage() {
     }
 
     if (action === "delete") {
-      if (!window.confirm(`${index + 1}번 사진을 삭제할까요?`)) return;
+      if (!window.confirm(`${index + 1}번째 사진을 삭제하시겠습니까?`)) return;
       await deleteInfoPhoto(photoKey, index);
       setSelectedInfoPhotoMenu(null);
       return;
     }
 
     if (action === "clearMemo") {
-      if (!window.confirm(`${index + 1}번 사진의 메모를 삭제할까요? 사진은 유지됩니다.`)) return;
+      if (!window.confirm(`${index + 1}번째 사진의 메모를 삭제하시겠습니까? 사진은 유지됩니다.`)) return;
       clearInfoPhotoMemo(photoKey, index);
       setSelectedInfoPhotoMenu(null);
       return;
     }
 
     if (action === "editMemo") {
-      const nextMemo = window.prompt("사진 메모를 입력하세요.", normalizeInfoPhotoMemo(targetItem.memo));
+      const nextMemo = window.prompt("사진 메모를 입력하세요:", normalizeInfoPhotoMemo(targetItem.memo));
       if (nextMemo === null) return;
       updateInfoPhotoMemo(photoKey, index, nextMemo);
       setSelectedInfoPhotoMenu(null);
@@ -2295,7 +2438,6 @@ export default function HomePage() {
     setSelectedInfoPhotoMenu({ photoKey, index });
   }
 
-
   function updateInfoPhotoSize(k: string, index: number, size: string) {
     const items = infoPhotos[k] || [];
     if (!items[index]) return;
@@ -2305,8 +2447,8 @@ export default function HomePage() {
     );
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
-    const [month, day] = k.split("-").map(Number);
-    saveInfoPhotos(month, day, nextPhotosForDay);
+    const { year, month, day } = parseScheduleKey(k);
+    saveInfoPhotos(month, day, nextPhotosForDay, year);
   }
 
 
@@ -2319,8 +2461,8 @@ export default function HomePage() {
     );
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
-    const [month, day] = k.split("-").map(Number);
-    saveInfoPhotos(month, day, nextPhotosForDay);
+    const { year, month, day } = parseScheduleKey(k);
+    saveInfoPhotos(month, day, nextPhotosForDay, year);
   }
 
   function updateDiaryPhotoExtraTag(k: string, index: number, extraTag: string) {
@@ -2332,7 +2474,8 @@ export default function HomePage() {
     );
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
-    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
+    const { year, month, day } = parseScheduleKey(k);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos, calendarPhotoIndexes, year);
   }
 
   function updateDiaryPhotoMemo(k: string, index: number, memo: string) {
@@ -2344,8 +2487,8 @@ export default function HomePage() {
     );
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
-    const [month, day] = k.split("-").map(Number);
-    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
+    const { year, month, day } = parseScheduleKey(k);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos, calendarPhotoIndexes, year);
   }
 
   function updateDiaryPhotoSize(k: string, index: number, size: string) {
@@ -2357,8 +2500,8 @@ export default function HomePage() {
     );
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
-    const [month, day] = k.split("-").map(Number);
-    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
+    const { year, month, day } = parseScheduleKey(k);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos, calendarPhotoIndexes, year);
   }
 
 
@@ -2371,10 +2514,9 @@ export default function HomePage() {
     );
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
-    const [month, day] = k.split("-").map(Number);
-    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
+    const { year, month, day } = parseScheduleKey(k);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos, calendarPhotoIndexes, year);
   }
-
 
   function updateDiaryPhotoCardFrame(k: string, index: number, size: string, memoHeight: string) {
     const items = photos[k] || [];
@@ -2385,8 +2527,8 @@ export default function HomePage() {
     );
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
-    const [month, day] = k.split("-").map(Number);
-    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
+    const { year, month, day } = parseScheduleKey(k);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos, calendarPhotoIndexes, year);
   }
 
   function updateInfoPhotoCardFrame(k: string, index: number, size: string, memoHeight: string) {
@@ -2398,22 +2540,22 @@ export default function HomePage() {
     );
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
-    const [month, day] = k.split("-").map(Number);
-    saveInfoPhotos(month, day, nextPhotosForDay);
+    const { year, month, day } = parseScheduleKey(k);
+    saveInfoPhotos(month, day, nextPhotosForDay, year);
   }
-
 
   function moveDiaryPhoto(k: string, index: number, direction: -1 | 1) {
     const items = photos[k] || [];
     const targetIndex = index + direction;
     if (!items[index] || targetIndex < 0 || targetIndex >= items.length) return;
 
-    const [month, day] = k.split("-").map(Number);
+    const { year, month, day } = parseScheduleKey(k);
 
     registerUndo({
       label: "일기장 사진 순서 변경",
       target: "diaryPhotos",
       photoKey: k,
+      year,
       month,
       day,
       previousData: JSON.stringify(items),
@@ -2425,7 +2567,7 @@ export default function HomePage() {
     [nextPhotosForDay[index], nextPhotosForDay[targetIndex]] = [nextPhotosForDay[targetIndex], nextPhotosForDay[index]];
     const nextPhotos = { ...photos, [k]: nextPhotosForDay };
     setPhotos(nextPhotos);
-    savePhotos(Number(k.split("-")[0]), Number(k.split("-")[1]), nextPhotosForDay, calendarPhotos);
+    savePhotos(month, day, nextPhotosForDay, calendarPhotos, calendarPhotoIndexes, year);
   }
 
   function moveInfoPhoto(k: string, index: number, direction: -1 | 1) {
@@ -2433,10 +2575,15 @@ export default function HomePage() {
     const targetIndex = index + direction;
     if (!items[index] || targetIndex < 0 || targetIndex >= items.length) return;
 
+    const { year, month, day } = parseScheduleKey(k);
+
     registerUndo({
       label: "정보보관소 사진 순서 변경",
       target: "infoPhotos",
       photoKey: k,
+      year,
+      month,
+      day,
       previousData: JSON.stringify(items),
     });
 
@@ -2444,8 +2591,7 @@ export default function HomePage() {
     [nextPhotosForDay[index], nextPhotosForDay[targetIndex]] = [nextPhotosForDay[targetIndex], nextPhotosForDay[index]];
     const nextInfoPhotos = { ...infoPhotos, [k]: nextPhotosForDay };
     setInfoPhotos(nextInfoPhotos);
-    const [month, day] = k.split("-").map(Number);
-    saveInfoPhotos(month, day, nextPhotosForDay);
+    saveInfoPhotos(month, day, nextPhotosForDay, year);
   }
 
   function startPhotoCardResize(
@@ -2575,13 +2721,13 @@ export default function HomePage() {
   }
 
   function beginDiaryTextUndoSession() {
-    const currentKey = key(currentMonth, currentDay);
+    const currentKey = key(currentMonth, currentDay, currentYear);
     if (diaryEditStartRef.current?.key === currentKey) return;
     diaryEditStartRef.current = { key: currentKey, diaryText, voiceText };
   }
 
   function beginInfoTextUndoSession() {
-    const currentKey = key(currentMonth, currentDay);
+    const currentKey = key(currentMonth, currentDay, currentYear);
     if (infoEditStartRef.current?.key === currentKey) return;
     infoEditStartRef.current = { key: currentKey, infoText };
   }
@@ -2597,11 +2743,11 @@ export default function HomePage() {
     try {
       if (undoState.target === "infoPhotos" && undoState.photoKey) {
         const restoredItems = JSON.parse(undoState.previousData) as PhotoItem[];
-        clearDeletedPhotoMarkers("info", restoredItems);
+        const { year, month, day } = parseScheduleKey(undoState.photoKey);
+        clearDeletedPhotoMarkers("info", restoredItems, year);
         const nextInfoPhotos = { ...infoPhotos, [undoState.photoKey]: restoredItems };
         setInfoPhotos(nextInfoPhotos);
-        const [month, day] = undoState.photoKey.split("-").map(Number);
-        saveInfoPhotos(month, day, restoredItems);
+        saveInfoPhotos(month, day, restoredItems, year);
 
         if (undoState.previousInfoMemoHidden) {
           const hiddenMap = JSON.parse(undoState.previousInfoMemoHidden) as Record<string, string | null>;
@@ -2626,12 +2772,13 @@ export default function HomePage() {
           ? JSON.parse(undoState.previousCalendarPhotoIndexes) as Record<string, number>
           : calendarPhotoIndexes;
 
-        clearDeletedPhotoMarkers("diary", restoredItems);
+        const { year } = parseScheduleKey(undoState.photoKey);
+        clearDeletedPhotoMarkers("diary", restoredItems, year);
         const nextPhotos = { ...photos, [undoState.photoKey]: restoredItems };
         setPhotos(nextPhotos);
         setCalendarPhotos(restoredCalendarPhotos);
         setCalendarPhotoIndexes(restoredCalendarPhotoIndexes);
-        savePhotos(undoState.month, undoState.day, restoredItems, restoredCalendarPhotos, restoredCalendarPhotoIndexes);
+        savePhotos(undoState.month, undoState.day, restoredItems, restoredCalendarPhotos, restoredCalendarPhotoIndexes, year);
 
         finishUndo();
         alert("일기장 사진 작업을 되돌렸습니다.");
@@ -2642,7 +2789,8 @@ export default function HomePage() {
         const restored = JSON.parse(undoState.previousData) as { diaryText: string; voiceText: string };
         setCurrentMonth(undoState.month);
         setCurrentDay(undoState.day);
-        saveDiary(restored.diaryText || "", restored.voiceText || "");
+        if (undoState.year) setCurrentYear(undoState.year);
+        saveDiary(restored.diaryText || "", restored.voiceText || "", undoState.year);
         diaryEditStartRef.current = null;
         finishUndo();
         requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
@@ -2654,7 +2802,8 @@ export default function HomePage() {
         const restored = JSON.parse(undoState.previousData) as { infoText: string };
         setCurrentMonth(undoState.month);
         setCurrentDay(undoState.day);
-        saveInfo(restored.infoText || "");
+        if (undoState.year) setCurrentYear(undoState.year);
+        saveInfo(restored.infoText || "", undoState.year);
         infoEditStartRef.current = null;
         finishUndo();
         requestAnimationFrame(() => resizeTextareaToContent(infoTextareaRef.current));
@@ -2666,7 +2815,8 @@ export default function HomePage() {
         const restoredCards = JSON.parse(undoState.previousData) as InfoTextCard[];
         setCurrentMonth(undoState.month);
         setCurrentDay(undoState.day);
-        saveInfoTextCards(undoState.month, undoState.day, restoredCards);
+        if (undoState.year) setCurrentYear(undoState.year);
+        saveInfoTextCards(undoState.month, undoState.day, restoredCards, undoState.year);
         finishUndo();
         void refreshAllInfoData();
         alert("정보보관소 글 카드를 되돌렸습니다.");
@@ -2692,10 +2842,11 @@ export default function HomePage() {
       return;
     }
 
-    const selectedStartDate = scheduleStartDate || `2026-${pad(currentMonth)}-${pad(currentDay)}`;
+    const selectedStartDate = scheduleStartDate || `${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`;
+    const startYear = Number(selectedStartDate.slice(0, 4));
     const startMonth = Number(selectedStartDate.slice(5, 7));
     const startDay = Number(selectedStartDate.slice(8, 10));
-    const k = key(startMonth, startDay);
+    const k = key(startMonth, startDay, startYear);
     const scheduleData: ScheduleItem = {
       id: editingScheduleId || `${Date.now()}`,
       title: trimmedTitle,
@@ -2723,7 +2874,7 @@ export default function HomePage() {
     saveSchedules(nextSchedules);
 
     setScheduleTitle("");
-    setScheduleStartDate(`2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleStartDate(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`);
     setScheduleStartTime("08:00");
     setScheduleEndTime("24:00");
     setScheduleRepeat("없음");
@@ -2735,9 +2886,9 @@ export default function HomePage() {
   function editSchedule(item: ScheduleItem) {
     setEditingScheduleId(item.id);
     setScheduleTitle(item.title);
-    setScheduleStartDate(item.startDate || `2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleStartDate(item.startDate || `${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`);
     setScheduleStartTime(item.startTime || "");
-    setScheduleEndDate(item.endDate || `2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleEndDate(item.endDate || `${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`);
     setScheduleEndTime(item.endTime || "24:00");
     setScheduleRepeat(item.repeat || "없음");
     setScheduleColor(item.color || "yellow");
@@ -2748,7 +2899,7 @@ export default function HomePage() {
     setEditingScheduleId(null);
     setScheduleTitle("");
     setScheduleStartTime("");
-    setScheduleEndDate(`2026-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleEndDate(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`);
     setScheduleRepeat("없음");
     setScheduleColor("yellow");
   }
@@ -2763,7 +2914,7 @@ export default function HomePage() {
   }
 
   function deleteSchedule(scheduleId: string) {
-    const k = key(currentMonth, currentDay);
+    const k = key(currentMonth, currentDay, currentYear);
     const nextForDay = (schedules[k] || []).filter(item => item.id !== scheduleId);
     const nextSchedules = { ...schedules, [k]: nextForDay };
 
@@ -2777,8 +2928,8 @@ export default function HomePage() {
     if (editingScheduleId === scheduleId) cancelScheduleEdit();
   }
 
-  function savePhotos(month: number, day: number, nextPhotos: PhotoItem[], nextCalendarPhotos: Record<string, string>, nextCalendarPhotoIndexes = calendarPhotoIndexes) {
-    const okPhotos = setLocalStorageSafely(storageKey("photos", month, day), JSON.stringify(nextPhotos));
+  function savePhotos(month: number, day: number, nextPhotos: PhotoItem[], nextCalendarPhotos: Record<string, string>, nextCalendarPhotoIndexes = calendarPhotoIndexes, year: number = currentYear) {
+    const okPhotos = setLocalStorageSafely(storageKey("photos", month, day, year), JSON.stringify(nextPhotos));
     const okCalendar = setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
     const okIndexes = setLocalStorageSafely("iphone-diary-2026-calendar-photo-indexes", JSON.stringify(nextCalendarPhotoIndexes));
     return okPhotos && okCalendar && okIndexes;
@@ -2787,7 +2938,7 @@ export default function HomePage() {
   async function savePhotoFiles(files: File[]) {
     if (!files.length) return;
 
-    const k = key(currentMonth, currentDay);
+    const k = key(currentMonth, currentDay, currentYear);
     const previousItems = photos[k] || [];
     const previousCalendarPhotos = { ...calendarPhotos };
     const previousCalendarPhotoIndexes = { ...calendarPhotoIndexes };
@@ -2795,16 +2946,16 @@ export default function HomePage() {
 
     for (const [offset, file] of files.entries()) {
       const sortOrder = previousItems.length + offset;
-      const uploadedItem = await uploadPhotoToSupabase(file, "diary-photos", currentMonth, currentDay, sortOrder);
+      const uploadedItem = await uploadPhotoToSupabase(file, "diary-photos", currentMonth, currentDay, sortOrder, currentYear);
 
       if (uploadedItem) {
         newItems.push(uploadedItem);
-        await saveDiaryPhotoRecordToSupabase(currentMonth, currentDay, uploadedItem, sortOrder, previousItems.length === 0 && offset === 0);
+        await saveDiaryPhotoRecordToSupabase(currentMonth, currentDay, uploadedItem, sortOrder, previousItems.length === 0 && offset === 0, currentYear);
       } else {
         newItems.push({
           url: await makeOptimizedImageDataUrl(file),
           name: file.name,
-          tag: tag(currentMonth, currentDay),
+          tag: tag(currentMonth, currentDay, currentYear),
           extraTag: "",
           memo: "",
           size: "360",
@@ -2820,6 +2971,7 @@ export default function HomePage() {
       label: "일기장 사진 추가",
       target: "diaryPhotos",
       photoKey: k,
+      year: currentYear,
       month: currentMonth,
       day: currentDay,
       previousData: JSON.stringify(previousItems),
@@ -2840,7 +2992,7 @@ export default function HomePage() {
     setPhotos(nextPhotos);
     setCalendarPhotos(nextCalendarPhotos);
     setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
-    savePhotos(currentMonth, currentDay, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes);
+    savePhotos(currentMonth, currentDay, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes, currentYear);
   }
 
   async function addPhotos(event: ChangeEvent<HTMLInputElement>) {
@@ -2867,11 +3019,11 @@ export default function HomePage() {
     const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes, [k]: index };
     setCalendarPhotos(nextCalendarPhotos);
     setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
-    const [month, day] = k.split("-").map(Number);
-    savePhotos(month, day, items, nextCalendarPhotos, nextCalendarPhotoIndexes);
+    const { year, month, day } = parseScheduleKey(k);
+    savePhotos(month, day, items, nextCalendarPhotos, nextCalendarPhotoIndexes, year);
 
     if (isSupabaseConfigured && supabase && items[index].storagePath) {
-      const targetDate = entryDate(month, day);
+      const targetDate = entryDate(month, day, year);
       const { error: clearError } = await supabase
         .from("diary_photos")
         .update({ is_calendar_photo: false })
@@ -2889,10 +3041,10 @@ export default function HomePage() {
   }
 
   function openCalendarPhotoOriginal(k: string) {
-    const [month, day] = k.split("-").map(Number);
+    const { year, month, day } = parseScheduleKey(k);
     const dayItems = photos[k] || (() => {
       try {
-        const raw = localStorage.getItem(storageKey("photos", month, day));
+        const raw = localStorage.getItem(storageKey("photos", month, day, year));
         return raw ? JSON.parse(raw) as PhotoItem[] : [];
       } catch {
         return [];
@@ -2909,7 +3061,7 @@ export default function HomePage() {
 
     const deletingItem = items[index];
     const deletedUrl = deletingItem.url;
-    const [month, day] = k.split("-").map(Number);
+    const { year, month, day } = parseScheduleKey(k);
 
     registerUndo({
       label: "일기장 사진 삭제",
@@ -2917,6 +3069,7 @@ export default function HomePage() {
       photoKey: k,
       month,
       day,
+      year,
       previousData: JSON.stringify(items),
       previousCalendarPhotos: JSON.stringify(calendarPhotos),
       previousCalendarPhotoIndexes: JSON.stringify(calendarPhotoIndexes),
@@ -2946,7 +3099,7 @@ export default function HomePage() {
     setPhotos(nextPhotos);
     setCalendarPhotos(nextCalendarPhotos);
     setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
-    savePhotos(month, day, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes);
+    savePhotos(month, day, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes, year);
 
     // 되돌리기 지원을 위해 Supabase Storage 파일은 즉시 삭제하지 않습니다.
     // 실제 파일 정리는 추후 별도 "완전 삭제/정리" 기능에서 처리합니다.
@@ -3217,16 +3370,16 @@ export default function HomePage() {
   }
 
   function CalendarView() {
-    const first = new Date(2026, currentMonth - 1, 1).getDay();
+    const first = new Date(currentYear, currentMonth - 1, 1).getDay();
     const cells = [];
     for (let i = 0; i < first; i++) cells.push(<div key={`empty-${i}`} className="day empty" />);
 
-    for (let day = 1; day <= monthDays[currentMonth]; day++) {
-      const k = key(currentMonth, day);
+    for (let day = 1; day <= getDaysInMonth(currentYear, currentMonth); day++) {
+      const k = key(currentMonth, day, currentYear);
       const manuallyRed = (redDates[currentMonth] || []).includes(day);
       const redMarked = manuallyRed;
-      const isToday = todayDefault.month === currentMonth && todayDefault.day === day;
-      const daySchedules = getVisibleSchedulesForDay(schedules, currentMonth, day);
+      const isToday = todayDefault.month === currentMonth && todayDefault.day === day && todayDefault.year === currentYear;
+      const daySchedules = getVisibleSchedulesForDay(schedules, currentMonth, day, currentYear);
       const dayMarks = calendarMarks[k] || [];
       const isSelected = currentDay === day;
       cells.push(
@@ -3293,7 +3446,10 @@ export default function HomePage() {
     return (
       <section>
         <div className="month-tabs">
-          {Array.from({ length: 8 }, (_, i) => i + 5).map(month => (
+          {(currentYear === 2026
+            ? Array.from({ length: 8 }, (_, i) => i + 5)
+            : Array.from({ length: 12 }, (_, i) => i + 1)
+          ).map(month => (
             <button
               key={month}
               type="button"
@@ -3307,8 +3463,12 @@ export default function HomePage() {
 
         <div className="section-title calendar-headline">
           <h1 className="calendar-title-line">
-            <span className="main-title">2026년 아이폰 캘린더</span>
-            <button type="button" className="month-badge month-diary-link" onClick={() => openDiary(currentMonth, currentDay)} aria-label="선택 날짜 일기장으로 이동">{currentMonth}월</button>
+            <span className="main-title">
+              <button type="button" className="year-nav-btn" onClick={() => handleYearChange(-1)}>◀</button>
+              {currentYear}년 아이폰 캘린더
+              <button type="button" className="year-nav-btn" onClick={() => handleYearChange(1)}>▶</button>
+            </span>
+            <button type="button" className="month-badge month-diary-link" onClick={() => openDiary(currentMonth, currentDay, currentYear)} aria-label="선택 날짜 일기장으로 이동">{currentMonth}월</button>
           </h1>
           <div className="head-actions calendar-top-actions calendar-top-actions-redesign">
             <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("diary")}>일기장</button>
@@ -3359,16 +3519,16 @@ export default function HomePage() {
   }
 
   function DiaryView() {
-    const k = key(currentMonth, currentDay);
+    const k = key(currentMonth, currentDay, currentYear);
     const dayPhotos = photos[k] || [];
-    const daySchedules = getVisibleSchedulesForDay(schedules, currentMonth, currentDay);
+    const daySchedules = getVisibleSchedulesForDay(schedules, currentMonth, currentDay, currentYear);
     const diaryPhotoCountClass = `count-${Math.min(Math.max(dayPhotos.length, 1), 4)}`;
     return (
       <section>
         <div className="diary-head diary-head-redesign diary-head-final">
           <div className="diary-date-nav-row diary-date-nav-final">
             <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(-1)}>← 이전일</button>
-            <h1>2026. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay)})</h1>
+            <h1>{currentYear}. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay, currentYear)})</h1>
             <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(1)}>다음일 →</button>
           </div>
 
@@ -3489,14 +3649,14 @@ export default function HomePage() {
   }
 
   function ScheduleView() {
-    const k = key(currentMonth, currentDay);
+    const k = key(currentMonth, currentDay, currentYear);
     const daySchedules = schedules[k] || [];
 
     return (
       <section>
         <div className="schedule-page box">
           <div className="schedule-head">
-            <h2>+ 일정 기록 ({pad(currentMonth)}.{pad(currentDay)})</h2>
+            <h2>+ 일정 기록 ({currentYear}.{pad(currentMonth)}.{pad(currentDay)})</h2>
             <div className="head-actions schedule-actions">
               <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
               <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
@@ -3737,29 +3897,48 @@ function MarkDateView() {
   async function refreshAllInfoData() {
     let localCards: InstaInfoCard[] = [];
     let localPhotos: PhotoItem[] = [];
+    const groupedCards: Record<string, InfoTextCard[]> = {};
+    const groupedPhotos: Record<string, PhotoItem[]> = {};
 
     try {
       const parsedCards: InstaInfoCard[] = [];
       const parsedPhotos: PhotoItem[] = [];
+      const cardRegex = /^iphone-diary-(\d{4})-infoTextCards[-_](\d{2})-(\d{2})$/;
+      const photoRegex = /^iphone-diary-(\d{4})-infoPhotos[-_](\d{2})-(\d{2})$/;
+
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i) || "";
-        if (k.startsWith("iphone-diary-2026-infoTextCards_")) {
+        const cardMatch = k.match(cardRegex);
+        if (cardMatch) {
           const raw = localStorage.getItem(k);
           if (raw) {
             const list = JSON.parse(raw) as InfoTextCard[];
-            const dateParts = k.split("_").pop() || "";
-            const [m, d] = dateParts.split("-").map(Number);
-            const dateStr = `2026-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+            const y = Number(cardMatch[1]);
+            const m = Number(cardMatch[2]);
+            const d = Number(cardMatch[3]);
+            const dateStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
             list.forEach(c => {
               parsedCards.push(parseInstaCardContent(c.content, c.id, dateStr, c.createdAt || new Date().toISOString()));
             });
+            const kStr = key(m, d, y);
+            groupedCards[kStr] = list;
           }
         }
-        if (k.startsWith("iphone-diary-2026-infoPhotos_")) {
+        const photoMatch = k.match(photoRegex);
+        if (photoMatch) {
           const raw = localStorage.getItem(k);
           if (raw) {
             const list = JSON.parse(raw) as PhotoItem[];
+            const y = Number(photoMatch[1]);
+            const m = Number(photoMatch[2]);
+            const d = Number(photoMatch[3]);
+            const dateStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+            list.forEach(p => {
+              p.tag = dateStr;
+            });
             parsedPhotos.push(...list);
+            const kStr = key(m, d, y);
+            groupedPhotos[kStr] = list;
           }
         }
       }
@@ -3782,29 +3961,41 @@ function MarkDateView() {
       setAllInstaCards(parsedRemoteCards);
       setAllPhotoBookItems(remotePhotos);
       
-      const groupedCards: Record<string, InfoTextCard[]> = {};
-      const groupedPhotos: Record<string, PhotoItem[]> = {};
+      const remoteGroupedCards: Record<string, InfoTextCard[]> = {};
+      const remoteGroupedPhotos: Record<string, PhotoItem[]> = {};
 
       remoteCards.forEach(c => {
         const dateParts = c.entryDate.split("-");
+        const year = Number(dateParts[0]);
         const month = Number(dateParts[1]);
         const day = Number(dateParts[2]);
-        const kStr = key(month, day);
-        if (!groupedCards[kStr]) groupedCards[kStr] = [];
-        groupedCards[kStr].push({ id: c.id, content: c.content, createdAt: c.createdAt });
+        const kStr = key(month, day, year);
+        if (!remoteGroupedCards[kStr]) remoteGroupedCards[kStr] = [];
+        remoteGroupedCards[kStr].push({ id: c.id, content: c.content, createdAt: c.createdAt });
       });
 
       remotePhotos.forEach(p => {
-        const kStr = p.tag;
-        if (!groupedPhotos[kStr]) groupedPhotos[kStr] = [];
-        groupedPhotos[kStr].push(p);
+        let kStr = p.tag;
+        if (kStr.includes("-")) {
+          const dateParts = kStr.split("-");
+          if (dateParts.length === 3) {
+            const year = Number(dateParts[0]);
+            const month = Number(dateParts[1]);
+            const day = Number(dateParts[2]);
+            kStr = key(month, day, year);
+          }
+        }
+        if (!remoteGroupedPhotos[kStr]) remoteGroupedPhotos[kStr] = [];
+        remoteGroupedPhotos[kStr].push(p);
       });
 
-      setInfoTextCards(groupedCards);
-      setInfoPhotos(groupedPhotos);
+      setInfoTextCards(remoteGroupedCards);
+      setInfoPhotos(remoteGroupedPhotos);
     } else {
       setAllInstaCards(localCards);
       setAllPhotoBookItems(localPhotos);
+      setInfoTextCards(groupedCards);
+      setInfoPhotos(groupedPhotos);
     }
   }
 
@@ -3879,21 +4070,6 @@ function MarkDateView() {
   }
 
   // Parse Instagram Card content from serialized JSON
-  type InstaInfoCard = {
-    id: string;
-    title?: string;
-    category: string;
-    keyword: string;
-    entryDate: string;
-    imageUrl?: string;
-    imageStoragePath?: string;
-    imageUrls?: string[];
-    imageStoragePaths?: string[];
-    originalText: string;
-    extractedText?: string;
-    factCheckResult?: string;
-    createdAt: string;
-  };
 
   function parseInstaCardContent(content: string, id: string, entryDate: string, createdAt: string): InstaInfoCard {
     if (content.startsWith("{")) {
@@ -4000,7 +4176,7 @@ function MarkDateView() {
   async function handleInstaImageUpload(file: File) {
     setInstaLoading(true);
     try {
-      const item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999);
+      const item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999, currentYear);
       if (item) {
         setInstaInputImageUrl(prev => prev || item.url);
         setInstaInputImageStoragePath(prev => prev || item.storagePath || "");
@@ -4167,12 +4343,12 @@ function MarkDateView() {
 
   // API Call: Fact Check
   async function performFactCheck(cardId: string) {
-    const cardKey = key(currentMonth, currentDay);
+    const cardKey = key(currentMonth, currentDay, currentYear);
     const previousCards = infoTextCards[cardKey] || [];
     const cardRow = previousCards.find(c => c.id === cardId);
     if (!cardRow) return;
     
-    const card = parseInstaCardContent(cardRow.content, cardRow.id, entryDate(currentMonth, currentDay), cardRow.createdAt);
+    const card = parseInstaCardContent(cardRow.content, cardRow.id, entryDate(currentMonth, currentDay, currentYear), cardRow.createdAt);
     
     setInstaLoading(true);
     try {
@@ -4319,14 +4495,15 @@ function MarkDateView() {
       return;
     }
 
-    const dateStr = instaInputDate || entryDate(currentMonth, currentDay);
+    const dateStr = instaInputDate || entryDate(currentMonth, currentDay, currentYear);
     const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
-    const targetKey = key(tMonth, tDay);
+    const targetKey = key(tMonth, tDay, tYear);
 
     const targetPreviousCards = infoTextCards[targetKey] || [];
     registerUndo({
       label: editingInstaCardId ? "정보보관소 글 카드 수정" : "정보보관소 글 카드 추가",
       target: "infoTextCards",
+      year: tYear,
       month: tMonth,
       day: tDay,
       previousData: JSON.stringify(targetPreviousCards),
@@ -4337,10 +4514,10 @@ function MarkDateView() {
 
     if (editingInstaCardId && originalDate !== dateStr) {
       const [oYear, oMonth, oDay] = originalDate.split("-").map(Number);
-      const oldKey = key(oMonth, oDay);
+      const oldKey = key(oMonth, oDay, oYear);
       const oldPreviousCards = infoTextCards[oldKey] || [];
       const updatedOldCards = oldPreviousCards.filter(c => c.id !== editingInstaCardId);
-      saveInfoTextCards(oMonth, oDay, updatedOldCards);
+      saveInfoTextCards(oMonth, oDay, updatedOldCards, oYear);
     }
 
     let nextCards: InfoTextCard[] = [];
@@ -4378,7 +4555,7 @@ function MarkDateView() {
       nextCards = [...destinationCards, newCard];
     }
 
-    saveInfoTextCards(tMonth, tDay, nextCards);
+    saveInfoTextCards(tMonth, tDay, nextCards, tYear);
 
     // Sync global states
     await refreshAllInfoData();
@@ -4436,12 +4613,13 @@ function MarkDateView() {
     if (!window.confirm("이 인스타 정보를 삭제할까요?")) return;
 
     const [tYear, tMonth, tDay] = targetCard.entryDate.split("-").map(Number);
-    const cardKey = key(tMonth, tDay);
+    const cardKey = key(tMonth, tDay, tYear);
     const previousCards = infoTextCards[cardKey] || [];
 
     registerUndo({
       label: "정보보관소 글 카드 삭제",
       target: "infoTextCards",
+      year: tYear,
       month: tMonth,
       day: tDay,
       previousData: JSON.stringify(previousCards),
@@ -4452,7 +4630,7 @@ function MarkDateView() {
     }
 
     const nextCards = previousCards.filter(c => c.id !== cardId);
-    saveInfoTextCards(tMonth, tDay, nextCards);
+    saveInfoTextCards(tMonth, tDay, nextCards, tYear);
 
     // Sync global states
     await refreshAllInfoData();
@@ -4476,9 +4654,9 @@ function MarkDateView() {
       storagePath: photoBookInputImageStoragePaths[i + 1] || ""
     }));
 
-    const dateStr = photoBookInputDate || entryDate(currentMonth, currentDay);
+    const dateStr = photoBookInputDate || entryDate(currentMonth, currentDay, currentYear);
     const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
-    const targetKey = key(tMonth, tDay);
+    const targetKey = key(tMonth, tDay, tYear);
 
     const targetPreviousItems = infoPhotos[targetKey] || [];
 
@@ -4486,6 +4664,7 @@ function MarkDateView() {
       label: editingPhotoBookItemId ? "정보보관소 사진 수정" : "정보보관소 사진 추가",
       target: "infoPhotos",
       photoKey: targetKey,
+      year: tYear,
       previousData: JSON.stringify(targetPreviousItems),
     });
 
@@ -4503,11 +4682,11 @@ function MarkDateView() {
 
     if (editingPhotoBookItemId && originalDate !== dateStr) {
       const [oYear, oMonth, oDay] = originalDate.split("-").map(Number);
-      const oldKey = key(oMonth, oDay);
+      const oldKey = key(oMonth, oDay, oYear);
       const oldPreviousItems = infoPhotos[oldKey] || [];
       const updatedOldItems = oldPreviousItems.filter(p => p.id !== editingPhotoBookItemId);
       setInfoPhotos(prev => ({ ...prev, [oldKey]: updatedOldItems }));
-      saveInfoPhotos(oMonth, oDay, updatedOldItems);
+      saveInfoPhotos(oMonth, oDay, updatedOldItems, oYear);
     }
 
     let nextPhotosForDay: PhotoItem[] = [];
@@ -4596,7 +4775,7 @@ function MarkDateView() {
     }
 
     setInfoPhotos(prev => ({ ...prev, [targetKey]: nextPhotosForDay }));
-    saveInfoPhotos(tMonth, tDay, nextPhotosForDay);
+    saveInfoPhotos(tMonth, tDay, nextPhotosForDay, tYear);
 
     // Sync global states
     await refreshAllInfoData();
@@ -4658,13 +4837,14 @@ function MarkDateView() {
 
     const dateStr = targetItem.tag;
     const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
-    const photoKey = key(tMonth, tDay);
+    const photoKey = key(tMonth, tDay, tYear);
     const previousItems = infoPhotos[photoKey] || [];
 
     registerUndo({
       label: "정보보관소 사진 삭제",
       target: "infoPhotos",
       photoKey,
+      year: tYear,
       previousData: JSON.stringify(previousItems),
     });
 
@@ -4687,7 +4867,7 @@ function MarkDateView() {
 
     const nextPhotosForDay = previousItems.filter(p => p.id !== itemId && p.storagePath !== targetItem?.storagePath);
     setInfoPhotos(prev => ({ ...prev, [photoKey]: nextPhotosForDay }));
-    saveInfoPhotos(tMonth, tDay, nextPhotosForDay);
+    saveInfoPhotos(tMonth, tDay, nextPhotosForDay, tYear);
 
     // Sync global states
     await refreshAllInfoData();
@@ -4705,7 +4885,7 @@ function MarkDateView() {
 
       const uploadedItems: PhotoItem[] = [];
       for (const file of fileList) {
-        const item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999);
+        const item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999, currentYear);
         if (item) {
           uploadedItems.push(item);
         }
@@ -5302,7 +5482,7 @@ ${photo.memoText}
                               type="date"
                               className="info-date-input"
                               min="2026-05-01"
-                              max="2026-12-31"
+                              max="2036-12-31"
                               value={photoBookInputDate}
                               onChange={e => setPhotoBookInputDate(e.target.value)}
                             />
@@ -5630,7 +5810,7 @@ ${photo.memoText}
                             type="date"
                             className="info-date-input"
                             min="2026-05-01"
-                            max="2026-12-31"
+                            max="2036-12-31"
                             value={photoBookInputDate}
                             onChange={e => setPhotoBookInputDate(e.target.value)}
                           />
@@ -5924,7 +6104,7 @@ ${photo.memoText}
             <input
               type="date"
               min="2026-05-01"
-              max="2026-12-31"
+              max="2036-12-31"
               value={datePickerValue}
               onChange={event => setDatePickerValue(event.target.value)}
             />
