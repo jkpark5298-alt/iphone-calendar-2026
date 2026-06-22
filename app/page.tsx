@@ -448,6 +448,9 @@ export default function HomePage() {
   // Photo book Form states
   const [photoBookInputImageUrl, setPhotoBookInputImageUrl] = useState("");
   const [photoBookInputImageStoragePath, setPhotoBookInputImageStoragePath] = useState("");
+  const [photoBookInputImageUrls, setPhotoBookInputImageUrls] = useState<string[]>([]);
+  const [photoBookInputImageStoragePaths, setPhotoBookInputImageStoragePaths] = useState<string[]>([]);
+  const [activePreviewPhotoUrl, setActivePreviewPhotoUrl] = useState<string | null>(null);
   const [photoBookInputKeyword, setPhotoBookInputKeyword] = useState("");
   const [photoBookInputCategory2, setPhotoBookInputCategory2] = useState("");
   const [photoBookInputMemo, setPhotoBookInputMemo] = useState("");
@@ -468,6 +471,7 @@ export default function HomePage() {
   const [selectedInstaCardIds, setSelectedInstaCardIds] = useState<string[]>([]);
   const [isInfoBookModalOpen, setIsInfoBookModalOpen] = useState(false);
   const [infoBookSearchQuery, setInfoBookSearchQuery] = useState("");
+  const [isPhotoMemoExpanded, setIsPhotoMemoExpanded] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -1318,6 +1322,10 @@ export default function HomePage() {
 
 
   useEffect(() => {
+    setActivePreviewPhotoUrl(null);
+  }, [activeItem]);
+
+  useEffect(() => {
     let localSchedules: Record<string, ScheduleItem[]> = {};
 
     try {
@@ -1507,6 +1515,10 @@ export default function HomePage() {
     if (view !== "info") return;
     requestAnimationFrame(() => resizeTextareaToContent(infoTextareaRef.current));
   }, [view, infoText, currentMonth, currentDay]);
+
+  useEffect(() => {
+    setIsPhotoMemoExpanded(false);
+  }, [activeItem]);
 
   async function fetchWeatherFromKma() {
     if (!isSelectedDiaryDateToday(currentMonth, currentDay)) {
@@ -3919,35 +3931,48 @@ function MarkDateView() {
     };
   }
 
-  function parsePhotoBookMemo(memo: string): { keyword: string; category2: string; memo: string } {
+  function parsePhotoBookMemo(memo: string): { 
+    keyword: string; 
+    category2: string; 
+    memo: string; 
+    additionalImages?: Array<{url: string; storagePath: string}>;
+  } {
     let cleanMemo = memo || "";
 
-    // 1. Check if memo contains serialized JSON within hashtag format (e.g. #{"type":"photobook",...}#...)
-    const jsonMatch = cleanMemo.match(/\{"type":"photobook"[^}]*\}/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          keyword: parsed.keyword || "일반",
-          category2: parsed.category2 || "기타",
-          memo: parsed.memo || cleanMemo.replace(jsonMatch[0], "").replace(/^[#\s]+|[#\s]+$/g, "")
-        };
-      } catch (e) {}
-    }
-
-    // 2. Check standard JSON structure
-    if (cleanMemo.startsWith("{")) {
+    // 2. Check standard JSON structure first, or if it starts with {
+    if (cleanMemo.trim().startsWith("{")) {
       try {
         const parsed = JSON.parse(cleanMemo);
         if (parsed.type === "photobook" || parsed.keyword || parsed.category2) {
           return {
             keyword: parsed.keyword || "일반",
             category2: parsed.category2 || "기타",
-            memo: parsed.memo || ""
+            memo: parsed.memo || "",
+            additionalImages: parsed.additionalImages || []
           };
         }
       } catch (e) {}
     }
+
+    // 1. Check if memo contains serialized JSON within hashtag format
+    const startIndex = cleanMemo.indexOf('{"type":"photobook"');
+    if (startIndex !== -1) {
+      for (let i = cleanMemo.length; i > startIndex; i--) {
+        const subStr = cleanMemo.substring(startIndex, i);
+        if (subStr.endsWith("}")) {
+          try {
+            const parsed = JSON.parse(subStr);
+            return {
+              keyword: parsed.keyword || "일반",
+              category2: parsed.category2 || "기타",
+              memo: parsed.memo || cleanMemo.replace(subStr, "").replace(/^[#\s]+|[#\s]+$/g, ""),
+              additionalImages: parsed.additionalImages || []
+            };
+          } catch (e) {}
+        }
+      }
+    }
+
     // Fallback for legacy info photos
     let keyword = "일반";
     let category2 = "기타";
@@ -3968,7 +3993,7 @@ function MarkDateView() {
         }
       }
     }
-    return { keyword, category2, memo: cleanMemo };
+    return { keyword, category2, memo: cleanMemo, additionalImages: [] };
   }
 
   // API Call: AI OCR & Classification for Image Upload
@@ -4438,10 +4463,18 @@ function MarkDateView() {
 
   // CRUD: Save/Update Photo Book Item
   async function savePhotoBookItemForm() {
-    if (!photoBookInputImageUrl) {
+    if (photoBookInputImageUrls.length === 0) {
       alert("포토북에 업로드할 이미지를 추가해주세요.");
       return;
     }
+
+    const primaryUrl = photoBookInputImageUrls[0] || "";
+    const primaryStoragePath = photoBookInputImageStoragePaths[0] || "";
+
+    const additionalImages = photoBookInputImageUrls.slice(1).map((url, i) => ({
+      url,
+      storagePath: photoBookInputImageStoragePaths[i + 1] || ""
+    }));
 
     const dateStr = photoBookInputDate || entryDate(currentMonth, currentDay);
     const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
@@ -4460,11 +4493,13 @@ function MarkDateView() {
       type: "photobook",
       keyword: photoBookInputKeyword.trim() || "일반",
       category2: photoBookInputCategory2.trim() || "기타",
-      memo: photoBookInputMemo
+      memo: photoBookInputMemo,
+      additionalImages
     });
 
     let originalItem = allPhotoBookItems.find(p => p.id === editingPhotoBookItemId);
     let originalDate = originalItem ? originalItem.tag : dateStr;
+    const originalStoragePath = originalItem?.storagePath || photoBookInputImageStoragePath;
 
     if (editingPhotoBookItemId && originalDate !== dateStr) {
       const [oYear, oMonth, oDay] = originalDate.split("-").map(Number);
@@ -4482,22 +4517,29 @@ function MarkDateView() {
       const exists = destinationItems.some(p => p.id === editingPhotoBookItemId);
       if (exists) {
         nextPhotosForDay = destinationItems.map(item => {
-          if (item.id === editingPhotoBookItemId || (item.storagePath && item.storagePath === photoBookInputImageStoragePath)) {
-            return { ...item, memo: serializedCaption, tag: dateStr };
+          if (item.id === editingPhotoBookItemId || (item.storagePath && item.storagePath === originalStoragePath)) {
+            return { 
+              ...item, 
+              url: primaryUrl,
+              name: primaryStoragePath.split("/").pop() || "photo.jpg",
+              storagePath: primaryStoragePath,
+              memo: serializedCaption, 
+              tag: dateStr 
+            };
           }
           return item;
         });
       } else {
         const itemObj: PhotoItem = {
-          url: photoBookInputImageUrl,
-          name: photoBookInputImageStoragePath.split("/").pop() || "photo.jpg",
+          url: primaryUrl,
+          name: primaryStoragePath.split("/").pop() || "photo.jpg",
           tag: dateStr,
           extraTag: "",
           memo: serializedCaption,
           size: "360",
           memoWidth: "360",
           memoHeight: "110",
-          storagePath: photoBookInputImageStoragePath,
+          storagePath: primaryStoragePath,
           id: editingPhotoBookItemId
         };
         nextPhotosForDay = [...destinationItems, itemObj];
@@ -4505,9 +4547,19 @@ function MarkDateView() {
 
       if (isSupabaseConfigured && supabase) {
         if (editingPhotoBookItemId.startsWith("temp-")) {
-          await supabase.from("info_photos").update({ caption: serializedCaption, entry_date: dateStr }).eq("storage_path", photoBookInputImageStoragePath);
+          await supabase.from("info_photos").update({ 
+            caption: serializedCaption, 
+            entry_date: dateStr,
+            public_url: primaryUrl,
+            storage_path: primaryStoragePath
+          }).eq("storage_path", originalStoragePath);
         } else {
-          await supabase.from("info_photos").update({ caption: serializedCaption, entry_date: dateStr }).eq("id", editingPhotoBookItemId);
+          await supabase.from("info_photos").update({ 
+            caption: serializedCaption, 
+            entry_date: dateStr,
+            public_url: primaryUrl,
+            storage_path: primaryStoragePath
+          }).eq("id", editingPhotoBookItemId);
         }
       }
       setEditingPhotoBookItemId(null);
@@ -4515,15 +4567,15 @@ function MarkDateView() {
       const destinationItems = infoPhotos[targetKey] || [];
       const sortOrder = destinationItems.length;
       const uploadedItem: PhotoItem = {
-        url: photoBookInputImageUrl,
-        name: photoBookInputImageStoragePath.split("/").pop() || "photo.jpg",
+        url: primaryUrl,
+        name: primaryStoragePath.split("/").pop() || "photo.jpg",
         tag: dateStr,
         extraTag: "",
         memo: serializedCaption,
         size: "360",
         memoWidth: "360",
         memoHeight: "110",
-        storagePath: photoBookInputImageStoragePath,
+        storagePath: primaryStoragePath,
         id: `temp-${Date.now()}`
       };
 
@@ -4552,6 +4604,8 @@ function MarkDateView() {
     // Reset Form
     setPhotoBookInputImageUrl("");
     setPhotoBookInputImageStoragePath("");
+    setPhotoBookInputImageUrls([]);
+    setPhotoBookInputImageStoragePaths([]);
     setPhotoBookInputKeyword("");
     setPhotoBookInputCategory2("");
     setPhotoBookInputMemo("");
@@ -4564,8 +4618,17 @@ function MarkDateView() {
   function triggerEditPhotoBook(item: PhotoItem) {
     const parsed = parsePhotoBookMemo(item.memo || "");
     setEditingPhotoBookItemId(item.id || `temp-${Date.now()}`);
-    setPhotoBookInputImageUrl(item.url);
-    setPhotoBookInputImageStoragePath(item.storagePath || "");
+    
+    const mainUrl = item.url || "";
+    const mainStorage = item.storagePath || "";
+    const additionalUrls = parsed.additionalImages?.map(img => img.url) || [];
+    const additionalStorages = parsed.additionalImages?.map(img => img.storagePath) || [];
+
+    setPhotoBookInputImageUrl(mainUrl);
+    setPhotoBookInputImageStoragePath(mainStorage);
+    setPhotoBookInputImageUrls(mainUrl ? [mainUrl, ...additionalUrls] : additionalUrls);
+    setPhotoBookInputImageStoragePaths(mainStorage ? [mainStorage, ...additionalStorages] : additionalStorages);
+
     setPhotoBookInputKeyword(parsed.keyword);
     setPhotoBookInputCategory2(parsed.category2);
     setPhotoBookInputMemo(parsed.memo);
@@ -4577,6 +4640,8 @@ function MarkDateView() {
     setEditingPhotoBookItemId(null);
     setPhotoBookInputImageUrl("");
     setPhotoBookInputImageStoragePath("");
+    setPhotoBookInputImageUrls([]);
+    setPhotoBookInputImageStoragePaths([]);
     setPhotoBookInputKeyword("");
     setPhotoBookInputCategory2("");
     setPhotoBookInputMemo("");
@@ -4607,6 +4672,19 @@ function MarkDateView() {
       await deleteSupabasePhoto("info-photos", "info_photos", targetItem.storagePath);
     }
 
+    // Delete any additional images from storage
+    if (isSupabaseConfigured && supabase) {
+      const parsed = parsePhotoBookMemo(targetItem.memo || "");
+      if (parsed.additionalImages && parsed.additionalImages.length > 0) {
+        for (const img of parsed.additionalImages) {
+          if (img.storagePath) {
+            const { error: storageError } = await supabase.storage.from("info-photos").remove([img.storagePath]);
+            if (storageError) console.warn("Supabase additional photo storage delete error:", storageError.message);
+          }
+        }
+      }
+    }
+
     const nextPhotosForDay = previousItems.filter(p => p.id !== itemId && p.storagePath !== targetItem?.storagePath);
     setInfoPhotos(prev => ({ ...prev, [photoKey]: nextPhotosForDay }));
     saveInfoPhotos(tMonth, tDay, nextPhotosForDay);
@@ -4619,15 +4697,37 @@ function MarkDateView() {
   }
 
   // Image upload handler for Photo book
-  async function handlePhotoBookImageUpload(file: File) {
+  async function handlePhotoBookImageUpload(files: File | File[]) {
     setInstaLoading(true);
     try {
-      const item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999);
-      if (item) {
-        setPhotoBookInputImageUrl(item.url);
-        setPhotoBookInputImageStoragePath(item.storagePath || "");
+      const fileList = Array.isArray(files) ? files : [files];
+      if (fileList.length === 0) return;
+
+      const uploadedItems: PhotoItem[] = [];
+      for (const file of fileList) {
+        const item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999);
+        if (item) {
+          uploadedItems.push(item);
+        }
+      }
+
+      if (uploadedItems.length > 0) {
+        setPhotoBookInputImageUrls(prev => {
+          const next = [...prev, ...uploadedItems.map(item => item.url)];
+          return next;
+        });
+
+        setPhotoBookInputImageStoragePaths(prev => {
+          const next = [...prev, ...uploadedItems.map(item => item.storagePath || "")];
+          return next;
+        });
+
+        // Set primary fallback images if not already set
+        setPhotoBookInputImageUrl(prev => prev || uploadedItems[0].url);
+        setPhotoBookInputImageStoragePath(prev => prev || uploadedItems[0].storagePath || "");
+
         // Auto classify photo book using AI!
-        await runPhotoBookAIClassification(file);
+        await runPhotoBookAIClassification(fileList[0]);
       } else {
         alert("이미지 업로드에 실패했습니다.");
       }
@@ -4636,6 +4736,22 @@ function MarkDateView() {
       alert("이미지 업로드 중 오류 발생: " + e);
     } finally {
       setInstaLoading(false);
+    }
+  }
+
+  // Drag & Drop handlers for Photo book
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  async function handlePhotoBookDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = Array.from(e.dataTransfer.files);
+    const imageFiles = files.filter(file => file.type.startsWith("image/"));
+    if (imageFiles.length > 0) {
+      await handlePhotoBookImageUpload(imageFiles);
     }
   }
 
@@ -4648,7 +4764,7 @@ function MarkDateView() {
 
     if (pastedFiles.length > 0) {
       event.preventDefault();
-      await handlePhotoBookImageUpload(pastedFiles[0]);
+      await handlePhotoBookImageUpload(pastedFiles);
     }
   }
 
@@ -4811,12 +4927,17 @@ ${card.factCheckResult ? `[Gemini AI 팩트체크]\n${card.factCheckResult}` : "
 
   // PC share helper: Copy Photo Book to clipboard
   function copyPhotoBookToClipboard(photo: any) {
-    const text = `[포토북 이미지 정보]
+    let text = `[포토북 이미지 정보]
 키워드: ${photo.keyword}
 2차분류: ${photo.category2}
 작성일자: ${photo.tag}
 메모:
-${photo.memoText}`;
+${photo.memoText}
+대표 이미지: ${photo.url}`;
+
+    if (photo.additionalImages && photo.additionalImages.length > 0) {
+      text += `\n추가 이미지 목록:\n` + photo.additionalImages.map((img: any, i: number) => `${i + 1}. ${img.url}`).join("\n");
+    }
 
     navigator.clipboard.writeText(text).then(() => {
       alert("클립보드에 포토북 정보가 복사되었습니다.");
@@ -4834,7 +4955,8 @@ ${photo.memoText}`;
         ...photo,
         keyword: parsed.keyword,
         category2: parsed.category2,
-        memoText: parsed.memo
+        memoText: parsed.memo,
+        additionalImages: parsed.additionalImages || []
       };
     });
     if (selectedPhotos.length === 0) {
@@ -4847,6 +4969,11 @@ ${photo.memoText}`;
       text += `${idx + 1}. #${p.keyword} #${p.category2} (작성일자: ${p.tag})\n`;
       if (p.memoText) text += `메모: ${p.memoText}\n`;
       if (p.url) text += `이미지: ${p.url}\n`;
+      if (p.additionalImages && p.additionalImages.length > 0) {
+        p.additionalImages.forEach((img, i) => {
+          text += `추가 이미지 ${i + 1}: ${img.url}\n`;
+        });
+      }
       text += `\n`;
     });
 
@@ -4931,12 +5058,17 @@ ${card.factCheckResult ? `[Gemini AI 팩트체크]\n${card.factCheckResult}` : "
 
   // PC share helper: Download Photo Book as TXT
   function downloadPhotoBookAsTxt(photo: any) {
-    const text = `[포토북 이미지 정보]
+    let text = `[포토북 이미지 정보]
 키워드: ${photo.keyword}
 2차분류: ${photo.category2}
 작성일자: ${photo.tag}
 메모:
-${photo.memoText}`;
+${photo.memoText}
+대표 이미지: ${photo.url}`;
+
+    if (photo.additionalImages && photo.additionalImages.length > 0) {
+      text += `\n추가 이미지 목록:\n` + photo.additionalImages.map((img: any, i: number) => `${i + 1}. ${img.url}`).join("\n");
+    }
 
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -4949,7 +5081,7 @@ ${photo.memoText}`;
 
   function InfoView() {
     const photoCategories2 = [
-      "여행", "일상", "음식", "기억", "풍경", "인물", "취미", "기타"
+      "여행", "일상", "음식", "기억", "풍경", "인물", "취미", "She", "기타"
     ];
 
     // Filter Photo Book list
@@ -4959,7 +5091,8 @@ ${photo.memoText}`;
         ...photo,
         keyword: parsed.keyword,
         category2: parsed.category2,
-        memoText: parsed.memo
+        memoText: parsed.memo,
+        additionalImages: parsed.additionalImages || []
       };
     }).filter(photo => {
       if (!photoSearchKey.trim()) return true;
@@ -4978,7 +5111,8 @@ ${photo.memoText}`;
         ...photo,
         keyword: parsed.keyword,
         category2: parsed.category2,
-        memoText: parsed.memo
+        memoText: parsed.memo,
+        additionalImages: parsed.additionalImages || []
       };
     }).filter(photo => selectedPhotoBookIds.includes(photo.id || ""));
 
@@ -4992,7 +5126,8 @@ ${photo.memoText}`;
           ...rawPhoto,
           keyword: parsed.keyword,
           category2: parsed.category2,
-          memoText: parsed.memo
+          memoText: parsed.memo,
+          additionalImages: parsed.additionalImages || []
         };
       }
     }
@@ -5174,19 +5309,74 @@ ${photo.memoText}`;
                           </span>
                         </h3>
 
-                        <div className="insta-paste-zone" onPaste={handlePhotoBookPasteZone} tabIndex={0}>
-                          {photoBookInputImageUrl ? (
-                            <div className="paste-preview-container">
-                              <img src={photoBookInputImageUrl} alt="포토북 수정 프리뷰" />
-                              <button type="button" className="remove-preview-btn" title="이미지 삭제" onClick={() => {
-                                setPhotoBookInputImageUrl("");
-                                setPhotoBookInputImageStoragePath("");
-                              }}>×</button>
+                        <div 
+                          className="insta-paste-zone" 
+                          onPaste={handlePhotoBookPasteZone} 
+                          onDragOver={handleDragOver}
+                          onDrop={handlePhotoBookDrop}
+                          tabIndex={0}
+                          style={{ minHeight: "120px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", border: "2px dashed rgba(255,255,255,0.15)", borderRadius: "10px", padding: "15px", background: "rgba(0,0,0,0.15)", outline: "none" }}
+                        >
+                          {photoBookInputImageUrls.length > 0 ? (
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: "10px", width: "100%" }}>
+                              {photoBookInputImageUrls.map((url, idx) => (
+                                <div key={idx} className="paste-preview-container" style={{ position: "relative", width: "80px", height: "80px", borderRadius: "6px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.2)" }}>
+                                  <img src={url} alt={`미리보기 ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                  <button 
+                                    type="button" 
+                                    className="remove-preview-btn" 
+                                    title="이미지 삭제" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const nextUrls = [...photoBookInputImageUrls];
+                                      const nextPaths = [...photoBookInputImageStoragePaths];
+                                      nextUrls.splice(idx, 1);
+                                      nextPaths.splice(idx, 1);
+                                      setPhotoBookInputImageUrls(nextUrls);
+                                      setPhotoBookInputImageStoragePaths(nextPaths);
+                                      setPhotoBookInputImageUrl(nextUrls[0] || "");
+                                      setPhotoBookInputImageStoragePath(nextPaths[0] || "");
+                                    }}
+                                    style={{
+                                      position: "absolute",
+                                      top: "2px",
+                                      right: "2px",
+                                      background: "rgba(239, 68, 68, 0.8)",
+                                      color: "#fff",
+                                      border: "none",
+                                      borderRadius: "50%",
+                                      width: "18px",
+                                      height: "18px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      fontSize: "12px",
+                                      cursor: "pointer"
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                              <label style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "80px", height: "80px", borderRadius: "6px", border: "1px dashed rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.05)", cursor: "pointer", fontSize: "12px", color: "#ccc" }}>
+                                <span>➕ 추가</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  className="hidden-input"
+                                  style={{ display: "none" }}
+                                  onChange={async e => {
+                                    const files = Array.from(e.target.files || []) as File[];
+                                    if (files.length > 0) await handlePhotoBookImageUpload(files);
+                                  }}
+                                />
+                              </label>
                             </div>
                           ) : (
                             <div className="paste-placeholder">
                               <span className="icon">📖</span>
-                              <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요.</p>
+                              <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요. (여러 장 가능)</p>
                             </div>
                           )}
                         </div>
@@ -5197,10 +5387,11 @@ ${photo.memoText}`;
                             <input
                               type="file"
                               accept="image/*"
+                              multiple
                               className="hidden-input"
                               onChange={async e => {
                                 const files = Array.from(e.target.files || []) as File[];
-                                if (files.length > 0) await handlePhotoBookImageUpload(files[0]);
+                                if (files.length > 0) await handlePhotoBookImageUpload(files);
                               }}
                             />
                           </label>
@@ -5263,7 +5454,8 @@ ${photo.memoText}`;
                             className="info-text-textarea"
                             style={{
                               width: "100%",
-                              height: "100px",
+                              height: "40px",
+                              minHeight: "40px",
                               padding: "10px",
                               borderRadius: "8px",
                               border: "1px solid rgba(255,255,255,0.15)",
@@ -5299,7 +5491,54 @@ ${photo.memoText}`;
 
                         {activePhoto.url && (
                           <div className="detail-media-container" style={{ textAlign: "center", margin: "15px 0", background: "rgba(0,0,0,0.2)", borderRadius: "8px", padding: "10px" }}>
-                            <img src={activePhoto.url} alt="포토북 상세 사진" style={{ maxWidth: "100%", maxHeight: "400px", borderRadius: "6px" }} />
+                            <img 
+                              src={activePreviewPhotoUrl || activePhoto.url} 
+                              alt="포토북 상세 사진" 
+                              style={{ maxWidth: "100%", maxHeight: "400px", borderRadius: "6px", cursor: "zoom-in" }} 
+                              onClick={() => {
+                                window.open(activePreviewPhotoUrl || activePhoto.url, "_blank");
+                              }}
+                            />
+                            {activePhoto.additionalImages && activePhoto.additionalImages.length > 0 && (
+                              <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "15px", flexWrap: "wrap" }}>
+                                <div 
+                                  onClick={() => setActivePreviewPhotoUrl(activePhoto.url)}
+                                  style={{
+                                    width: "60px",
+                                    height: "60px",
+                                    borderRadius: "4px",
+                                    overflow: "hidden",
+                                    border: (activePreviewPhotoUrl === null || activePreviewPhotoUrl === activePhoto.url) ? "2px solid #62b19b" : "2px solid transparent",
+                                    cursor: "pointer",
+                                    opacity: (activePreviewPhotoUrl === null || activePreviewPhotoUrl === activePhoto.url) ? 1 : 0.6,
+                                    transition: "all 0.2s"
+                                  }}
+                                >
+                                  <img src={activePhoto.url} alt="Main" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                </div>
+                                {activePhoto.additionalImages.map((img: any, idx: number) => {
+                                  const isActive = activePreviewPhotoUrl === img.url;
+                                  return (
+                                    <div 
+                                      key={idx}
+                                      onClick={() => setActivePreviewPhotoUrl(img.url)}
+                                      style={{
+                                        width: "60px",
+                                        height: "60px",
+                                        borderRadius: "4px",
+                                        overflow: "hidden",
+                                        border: isActive ? "2px solid #62b19b" : "2px solid transparent",
+                                        cursor: "pointer",
+                                        opacity: isActive ? 1 : 0.6,
+                                        transition: "all 0.2s"
+                                      }}
+                                    >
+                                      <img src={img.url} alt={`Additional ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -5322,8 +5561,48 @@ ${photo.memoText}`;
                             fontSize: "14px",
                             lineHeight: "1.6",
                             wordBreak: "break-all",
-                            whiteSpace: "pre-wrap"
-                          }} className="infobook-card-memo">{activePhoto.memoText || "입력된 메모가 없습니다."}</div>
+                            whiteSpace: "pre-wrap",
+                            maxHeight: isPhotoMemoExpanded ? "none" : "100px",
+                            overflow: "hidden",
+                            position: "relative"
+                          }} className="infobook-card-memo">
+                            {activePhoto.memoText || "입력된 메모가 없습니다."}
+                            {!isPhotoMemoExpanded && activePhoto.memoText && activePhoto.memoText.length > 150 && (
+                              <div style={{
+                                position: "absolute",
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                height: "40px",
+                                background: "linear-gradient(to top, rgba(15,23,42,0.95), transparent)",
+                                pointerEvents: "none"
+                              }} />
+                            )}
+                          </div>
+                          {activePhoto.memoText && activePhoto.memoText.length > 150 && (
+                            <button
+                              type="button"
+                              onClick={() => setIsPhotoMemoExpanded(!isPhotoMemoExpanded)}
+                              style={{
+                                width: "100%",
+                                padding: "6px 0",
+                                marginTop: "6px",
+                                background: "rgba(255,255,255,0.05)",
+                                border: "1px solid rgba(255,255,255,0.08)",
+                                borderRadius: "6px",
+                                color: "#62b19b",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "4px"
+                              }}
+                            >
+                              {isPhotoMemoExpanded ? "🔼 접기" : "🔽 메모 전체 보기 (펼치기)"}
+                            </button>
+                          )}
                         </div>
 
                         <div className="info-detail-actions no-print">
@@ -5358,19 +5637,74 @@ ${photo.memoText}`;
                         </span>
                       </h3>
 
-                      <div className="insta-paste-zone" onPaste={handlePhotoBookPasteZone} tabIndex={0}>
-                        {photoBookInputImageUrl ? (
-                          <div className="paste-preview-container">
-                            <img src={photoBookInputImageUrl} alt="포토북 등록 프리뷰" />
-                            <button type="button" className="remove-preview-btn" title="이미지 삭제" onClick={() => {
-                              setPhotoBookInputImageUrl("");
-                              setPhotoBookInputImageStoragePath("");
-                            }}>×</button>
+                      <div 
+                        className="insta-paste-zone" 
+                        onPaste={handlePhotoBookPasteZone} 
+                        onDragOver={handleDragOver}
+                        onDrop={handlePhotoBookDrop}
+                        tabIndex={0}
+                        style={{ minHeight: "120px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", border: "2px dashed rgba(255,255,255,0.15)", borderRadius: "10px", padding: "15px", background: "rgba(0,0,0,0.15)", outline: "none" }}
+                      >
+                        {photoBookInputImageUrls.length > 0 ? (
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: "10px", width: "100%" }}>
+                            {photoBookInputImageUrls.map((url, idx) => (
+                              <div key={idx} className="paste-preview-container" style={{ position: "relative", width: "80px", height: "80px", borderRadius: "6px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.2)" }}>
+                                <img src={url} alt={`미리보기 ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                <button 
+                                  type="button" 
+                                  className="remove-preview-btn" 
+                                  title="이미지 삭제" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const nextUrls = [...photoBookInputImageUrls];
+                                    const nextPaths = [...photoBookInputImageStoragePaths];
+                                    nextUrls.splice(idx, 1);
+                                    nextPaths.splice(idx, 1);
+                                    setPhotoBookInputImageUrls(nextUrls);
+                                    setPhotoBookInputImageStoragePaths(nextPaths);
+                                    setPhotoBookInputImageUrl(nextUrls[0] || "");
+                                    setPhotoBookInputImageStoragePath(nextPaths[0] || "");
+                                  }}
+                                  style={{
+                                    position: "absolute",
+                                    top: "2px",
+                                    right: "2px",
+                                    background: "rgba(239, 68, 68, 0.8)",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: "50%",
+                                    width: "18px",
+                                    height: "18px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: "12px",
+                                    cursor: "pointer"
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                            <label style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "80px", height: "80px", borderRadius: "6px", border: "1px dashed rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.05)", cursor: "pointer", fontSize: "12px", color: "#ccc" }}>
+                              <span>➕ 추가</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden-input"
+                                style={{ display: "none" }}
+                                onChange={async e => {
+                                  const files = Array.from(e.target.files || []) as File[];
+                                  if (files.length > 0) await handlePhotoBookImageUpload(files);
+                                }}
+                              />
+                            </label>
                           </div>
                         ) : (
                           <div className="paste-placeholder">
                             <span className="icon">📖</span>
-                            <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요.</p>
+                            <p>여기에 이미지를 드롭하거나 복사-붙여넣기(Ctrl+V) 하세요. (여러 장 가능)</p>
                           </div>
                         )}
                       </div>
@@ -5381,10 +5715,11 @@ ${photo.memoText}`;
                           <input
                             type="file"
                             accept="image/*"
+                            multiple
                             className="hidden-input"
                             onChange={async e => {
                               const files = Array.from(e.target.files || []) as File[];
-                              if (files.length > 0) await handlePhotoBookImageUpload(files[0]);
+                              if (files.length > 0) await handlePhotoBookImageUpload(files);
                             }}
                           />
                         </label>
@@ -5447,7 +5782,8 @@ ${photo.memoText}`;
                           className="info-text-textarea"
                           style={{
                             width: "100%",
-                            height: "100px",
+                            height: "40px",
+                            minHeight: "40px",
                             padding: "10px",
                             borderRadius: "8px",
                             border: "1px solid rgba(255,255,255,0.15)",
