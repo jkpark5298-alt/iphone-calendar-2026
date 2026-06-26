@@ -926,6 +926,7 @@ export default function HomePage() {
         month,
         day,
         title: item.title,
+        entry_date: item.startDate || `${year}-${pad(month)}-${pad(day)}`,
         start_date: item.startDate || `${year}-${pad(month)}-${pad(day)}`,
         start_time: item.startTime || "08:00",
         end_date: item.endDate || item.startDate || `${year}-${pad(month)}-${pad(day)}`,
