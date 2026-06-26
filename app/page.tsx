@@ -937,39 +937,28 @@ export default function HomePage() {
       }));
     });
 
+    // 전체 삭제 후 현재 상태로 전체 재삽입
+    // → 삭제된 일정이 Supabase에서도 확실히 제거됨
+    const { error: deleteError } = await supabase
+      .from("calendar_schedules")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+
+    if (deleteError) {
+      console.warn("Supabase schedule clear error:", deleteError.message);
+      return;
+    }
+
     if (!rows.length) return;
 
-    // 전체 삭제 대신 upsert 사용 → 다른 기기의 데이터를 덮어쓰지 않음
-    const { error: upsertError } = await supabase
+    const { error: insertError } = await supabase
       .from("calendar_schedules")
-      .upsert(rows, { onConflict: "schedule_id" });
+      .insert(rows);
 
-    if (upsertError) console.warn("Supabase schedule save error:", upsertError.message);
+    if (insertError) console.warn("Supabase schedule save error:", insertError.message);
   }
 
-  // 일정 1개를 Supabase에서 삭제
-  // schedule_id(timestamp) 또는 id(UUID) 둘 다 시도해서 확실하게 삭제
-  async function deleteScheduleFromSupabase(scheduleId: string) {
-    if (!isSupabaseConfigured || !supabase) return;
 
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(scheduleId);
-
-    if (isUuid) {
-      // UUID 형태면 기본키(id) 컬럼으로 삭제
-      const { error } = await supabase
-        .from("calendar_schedules")
-        .delete()
-        .eq("id", scheduleId);
-      if (error) console.warn("Supabase schedule delete(id) error:", error.message);
-    } else {
-      // timestamp 문자열이면 schedule_id 컬럼으로 삭제
-      const { error } = await supabase
-        .from("calendar_schedules")
-        .delete()
-        .eq("schedule_id", scheduleId);
-      if (error) console.warn("Supabase schedule delete(schedule_id) error:", error.message);
-    }
-  }
 
   function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return;
@@ -2998,21 +2987,13 @@ export default function HomePage() {
       previousData: JSON.stringify(schedules),
     });
 
-    // state + localStorage 업데이트
-    setSchedules(nextSchedules);
-    localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
-
-    // 1단계: 해당 일정 삭제 (schedule_id 또는 id 콼럼)
-    void deleteScheduleFromSupabase(scheduleId);
-
-    // 2단계: 남은 일정을 upsert하여 완전 동기화 보장
-    // (삭제 실패 시에도 종속적으로 Supabase 상태를 올바르게 유지)
-    if (Object.values(nextSchedules).some(arr => arr.length > 0)) {
-      void saveSchedulesToSupabase(nextSchedules);
-    }
+    // saveSchedules = state + localStorage + Supabase 전체 동기화
+    // Supabase는 전체 삭제 후 재삽입 → 삭제된 일정이 확실히 제거됨
+    saveSchedules(nextSchedules);
 
     if (editingScheduleId === scheduleId) cancelScheduleEdit();
   }
+
 
   function savePhotos(month: number, day: number, nextPhotos: PhotoItem[], nextCalendarPhotos: Record<string, string>, nextCalendarPhotoIndexes = calendarPhotoIndexes, year: number = currentYear) {
     const okPhotos = setLocalStorageSafely(storageKey("photos", month, day, year), JSON.stringify(nextPhotos));
