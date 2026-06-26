@@ -1451,6 +1451,29 @@ export default function HomePage() {
         void saveSchedulesToSupabase(localSchedules);
       }
     });
+
+    // 탭/창이 다시 활성화될 때 Supabase에서 최신 일정 재조회
+    // → 아이폰에서 삭제/추가한 내용이 PC에도 즉시 반영됨
+    function syncSchedulesFromSupabase() {
+      void loadCalendarSchedulesFromSupabase().then(remoteSchedules => {
+        if (!remoteSchedules || Object.keys(remoteSchedules).length === 0) return;
+        setSchedules(remoteSchedules);
+        localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(remoteSchedules));
+      });
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") syncSchedulesFromSupabase();
+    };
+    const handleFocus = () => syncSchedulesFromSupabase();
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
   }, []);
 
   useEffect(() => {
