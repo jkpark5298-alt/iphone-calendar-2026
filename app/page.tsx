@@ -1439,23 +1439,37 @@ export default function HomePage() {
 
     void loadCalendarPhotosFromSupabase();
     void loadCalendarMarksFromSupabase();
-    void loadCalendarSchedulesFromSupabase().then(remoteSchedules => {
-      if (!remoteSchedules) return;
 
-      if (Object.keys(remoteSchedules).length > 0) {
-        setSchedules(remoteSchedules);
-        localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(remoteSchedules));
-        return;
-      }
+    const pendingSave = localStorage.getItem("iphone-calendar-schedule-pending") === "true";
 
-      if (Object.keys(localSchedules).length > 0) {
-        void saveSchedulesToSupabase(localSchedules);
-      }
-    });
+    if (pendingSave && Object.keys(localSchedules).length > 0) {
+      // 이전 Supabase 저장이 실패한 데이터가 있음 → 로컈 데이터를 먼저 Supabase에 밀어넣음
+      // (아이폰에서 삭제 후 앱 닫힐 경우가 이 코드 실행됨)
+      void saveSchedulesToSupabase(localSchedules).then(() => {
+        localStorage.setItem("iphone-calendar-schedule-pending", "false");
+      });
+      // 로컈 상태가 이미 정확하므로 Supabase에서 다시 로드하지 않음
+    } else {
+      void loadCalendarSchedulesFromSupabase().then(remoteSchedules => {
+        if (!remoteSchedules) return;
+
+        if (Object.keys(remoteSchedules).length > 0) {
+          setSchedules(remoteSchedules);
+          localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(remoteSchedules));
+          return;
+        }
+
+        if (Object.keys(localSchedules).length > 0) {
+          void saveSchedulesToSupabase(localSchedules);
+        }
+      });
+    }
 
     // 탭/창이 다시 활성화될 때 Supabase에서 최신 일정 재조회
-    // → 아이폰에서 삭제/추가한 내용이 PC에도 즉시 반영됨
+    // → 다른 기기(PC)  에서 추가/삭제한 내용이 반영됨
     function syncSchedulesFromSupabase() {
+      // pending이 있으면 로컈이 우선 → 원격으로 덞어쓰지 않음
+      if (localStorage.getItem("iphone-calendar-schedule-pending") === "true") return;
       void loadCalendarSchedulesFromSupabase().then(remoteSchedules => {
         if (!remoteSchedules || Object.keys(remoteSchedules).length === 0) return;
         setSchedules(remoteSchedules);
@@ -2776,7 +2790,12 @@ export default function HomePage() {
   function saveSchedules(nextSchedules: Record<string, ScheduleItem[]>) {
     setSchedules(nextSchedules);
     localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
-    void saveSchedulesToSupabase(nextSchedules);
+    // 네트워크 실패를 대비한 pending 플래그 설정
+    // → 다음 앱 실행 시 pending=true면 로컈 데이터를 먼저 Supabase에 밀어넣음
+    localStorage.setItem("iphone-calendar-schedule-pending", "true");
+    void saveSchedulesToSupabase(nextSchedules).then(() => {
+      localStorage.setItem("iphone-calendar-schedule-pending", "false");
+    });
   }
 
   function registerUndo(nextUndo: UndoState) {
