@@ -13,16 +13,10 @@
  * ──────────────────────────────────────────────────────────────────────────
  */
 
-import { createClient } from "@supabase/supabase-js";
+// 공유 Supabase 클라이언트 사용 → GoTrueClient 중복 경고 방지
+import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-export const isConfigured = Boolean(supabaseUrl && supabaseAnonKey);
-
-const client = isConfigured
-  ? createClient(supabaseUrl as string, supabaseAnonKey as string)
-  : null;
+export const isConfigured = isSupabaseConfigured;
 
 /**
  * 특정 연도의 모든 레드 데이트를 Supabase에서 불러옵니다.
@@ -31,9 +25,9 @@ const client = isConfigured
 export async function loadRedDatesFromSupabase(
   year: number
 ): Promise<Record<number, number[]> | null> {
-  if (!client) return null;
+  if (!isSupabaseConfigured || !supabase) return null;
 
-  const { data, error } = await client
+  const { data, error } = await supabase
     .from("red_dates")
     .select("month, days")
     .eq("year", year);
@@ -60,9 +54,9 @@ export async function saveRedDateToSupabase(
   month: number,
   days: number[]
 ): Promise<boolean> {
-  if (!client) return false;
+  if (!isSupabaseConfigured || !supabase) return false;
 
-  const { error } = await client
+  const { error } = await supabase
     .from("red_dates")
     .upsert(
       { year, month, days },

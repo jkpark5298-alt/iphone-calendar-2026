@@ -947,16 +947,28 @@ export default function HomePage() {
     if (upsertError) console.warn("Supabase schedule save error:", upsertError.message);
   }
 
-  // 일정 1개를 Supabase에서 삭제 (schedule_id 기준)
+  // 일정 1개를 Supabase에서 삭제
+  // schedule_id(timestamp) 또는 id(UUID) 둘 다 시도해서 확실하게 삭제
   async function deleteScheduleFromSupabase(scheduleId: string) {
     if (!isSupabaseConfigured || !supabase) return;
 
-    const { error } = await supabase
-      .from("calendar_schedules")
-      .delete()
-      .eq("schedule_id", scheduleId);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(scheduleId);
 
-    if (error) console.warn("Supabase schedule delete error:", error.message);
+    if (isUuid) {
+      // UUID 형태면 기본키(id) 컬럼으로 삭제
+      const { error } = await supabase
+        .from("calendar_schedules")
+        .delete()
+        .eq("id", scheduleId);
+      if (error) console.warn("Supabase schedule delete(id) error:", error.message);
+    } else {
+      // timestamp 문자열이면 schedule_id 컬럼으로 삭제
+      const { error } = await supabase
+        .from("calendar_schedules")
+        .delete()
+        .eq("schedule_id", scheduleId);
+      if (error) console.warn("Supabase schedule delete(schedule_id) error:", error.message);
+    }
   }
 
   function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string, year: number = currentYear) {
@@ -2986,11 +2998,19 @@ export default function HomePage() {
       previousData: JSON.stringify(schedules),
     });
 
-    // 로컬스토리지 및 state 업데이트
+    // state + localStorage 업데이트
     setSchedules(nextSchedules);
     localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
-    // Supabase에서 해당 일정 1개만 삭제 → 다른 기기의 데이터를 건드리지 않음
+
+    // 1단계: 해당 일정 삭제 (schedule_id 또는 id 콼럼)
     void deleteScheduleFromSupabase(scheduleId);
+
+    // 2단계: 남은 일정을 upsert하여 완전 동기화 보장
+    // (삭제 실패 시에도 종속적으로 Supabase 상태를 올바르게 유지)
+    if (Object.values(nextSchedules).some(arr => arr.length > 0)) {
+      void saveSchedulesToSupabase(nextSchedules);
+    }
+
     if (editingScheduleId === scheduleId) cancelScheduleEdit();
   }
 
