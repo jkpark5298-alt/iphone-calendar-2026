@@ -7,6 +7,7 @@ import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralIn
 
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateApi";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
@@ -935,20 +936,26 @@ export default function HomePage() {
       }));
     });
 
-    const { error: deleteError } = await supabase
-      .from("calendar_schedules")
-      .delete()
-      .neq("schedule_id", "placeholder");
-
-    if (deleteError) {
-      console.warn("Supabase schedule clear error:", deleteError.message);
-      return;
-    }
-
     if (!rows.length) return;
 
-    const { error: insertError } = await supabase.from("calendar_schedules").insert(rows);
-    if (insertError) console.warn("Supabase schedule save error:", insertError.message);
+    // 전체 삭제 대신 upsert 사용 → 다른 기기의 데이터를 덮어쓰지 않음
+    const { error: upsertError } = await supabase
+      .from("calendar_schedules")
+      .upsert(rows, { onConflict: "schedule_id" });
+
+    if (upsertError) console.warn("Supabase schedule save error:", upsertError.message);
+  }
+
+  // 일정 1개를 Supabase에서 삭제 (schedule_id 기준)
+  async function deleteScheduleFromSupabase(scheduleId: string) {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const { error } = await supabase
+      .from("calendar_schedules")
+      .delete()
+      .eq("schedule_id", scheduleId);
+
+    if (error) console.warn("Supabase schedule delete error:", error.message);
   }
 
   function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string, year: number = currentYear) {
@@ -1558,16 +1565,42 @@ export default function HomePage() {
   }, [view, currentMonth, currentDay, currentYear]);
 
   useEffect(() => {
-    try {
-      const rawRedDates = localStorage.getItem(`iphone-calendar-${currentYear}-red-dates`);
-      if (rawRedDates) {
-        setRedDates(JSON.parse(rawRedDates));
-      } else {
-        setRedDates({});
-      }
-    } catch {
-      setRedDates({});
-    }
+    // Supabase에서 먼저 불러오고, 실패하면 localStorage fallback
+    loadRedDatesFromSupabase(currentYear)
+      .then(remote => {
+        if (remote && Object.keys(remote).length > 0) {
+          setRedDates(remote);
+          // 로컬스토리지도 최신으로 갱신
+          localStorage.setItem(`iphone-calendar-${currentYear}-red-dates`, JSON.stringify(remote));
+        } else {
+          // Supabase에 데이터 없으면 로컬스토리지 확인 후 Supabase 업로드
+          try {
+            const rawRedDates = localStorage.getItem(`iphone-calendar-${currentYear}-red-dates`);
+            if (rawRedDates) {
+              const local = JSON.parse(rawRedDates) as Record<number, number[]>;
+              setRedDates(local);
+              // 로컬에 데이터가 있으면 Supabase에도 올림
+              Object.entries(local).forEach(([month, days]) => {
+                void saveRedDateToSupabase(currentYear, Number(month), days);
+              });
+            } else {
+              setRedDates({});
+            }
+          } catch {
+            setRedDates({});
+          }
+        }
+      })
+      .catch(() => {
+        // 네트워크 오류 시 localStorage fallback
+        try {
+          const rawRedDates = localStorage.getItem(`iphone-calendar-${currentYear}-red-dates`);
+          if (rawRedDates) setRedDates(JSON.parse(rawRedDates));
+          else setRedDates({});
+        } catch {
+          setRedDates({});
+        }
+      });
   }, [currentYear]);
 
 
@@ -1759,7 +1792,12 @@ export default function HomePage() {
     const nextRedDates = { ...redDates, [currentMonth]: uniqueDays };
     setRedDates(nextRedDates);
     setRedDateInput(uniqueDays.join(", "));
+    // localStorage에도 유지 (오프라인 fallback)
     localStorage.setItem(`iphone-calendar-${currentYear}-red-dates`, JSON.stringify(nextRedDates));
+    // Supabase에 저장 → PC/iPhone/iPad 공유
+    saveRedDateToSupabase(currentYear, currentMonth, uniqueDays).catch(() => {
+      console.warn("빨간 날짜 Supabase 저장 실패 – 로컬스토리지에만 저장됨");
+    });
     alert(uniqueDays.length ? `${currentMonth}월 ${uniqueDays.join(", ")}일을 빨간 날짜로 저장했습니다.` : `${currentMonth}월 빨간 날짜를 모두 해제했습니다.`);
     setView("calendar");
   }
@@ -2924,7 +2962,11 @@ export default function HomePage() {
       previousData: JSON.stringify(schedules),
     });
 
-    saveSchedules(nextSchedules);
+    // 로컬스토리지 및 state 업데이트
+    setSchedules(nextSchedules);
+    localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
+    // Supabase에서 해당 일정 1개만 삭제 → 다른 기기의 데이터를 건드리지 않음
+    void deleteScheduleFromSupabase(scheduleId);
     if (editingScheduleId === scheduleId) cancelScheduleEdit();
   }
 
