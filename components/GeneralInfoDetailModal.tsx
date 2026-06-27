@@ -297,9 +297,15 @@ export default function GeneralInfoDetailModal({
                         style={{ width: "100%", maxHeight: "500px", objectFit: "contain", borderRadius: "10px", background: "rgba(2, 6, 23, 0.55)", display: "block" }}
                       />
                     )}
-                    <p className="mutedText" style={{ margin: "8px 0 0", wordBreak: "break-all" }}>
+                    <p className="mutedText" style={{ margin: "8px 0 4px", wordBreak: "break-all" }}>
                       {media.name || `자료 이미지 ${index + 1}`}
                     </p>
+                    {media.memo?.trim() && (
+                      <div className="generalInfoDetailMediaMemo">
+                        <span className="generalInfoDetailMediaMemoIcon">📝</span>
+                        <span className="generalInfoDetailMediaMemoText">{media.memo}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

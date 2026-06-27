@@ -17,6 +17,7 @@ type GeneralInfoPayload = {
     preview: string;
     storagePath?: string;
     fileUrl?: string;
+    memo?: string;
   }>;
   primaryCategory: string;
   secondaryCategory: string;
@@ -67,6 +68,8 @@ const normalizeMediaItems = (value: unknown): GeneralInfoPayload["mediaItems"] =
       const storagePath = normalizeString(source.storagePath, 1000) || undefined;
       const fileUrl = normalizeString((source as Record<string, unknown>).fileUrl, 4000) || undefined;
 
+      const memo = normalizeString(source.memo, 2000) || undefined;
+
       return {
         id: normalizeNumberId(source.id) || Date.now(),
         name: normalizeString(source.name, 240),
@@ -74,6 +77,7 @@ const normalizeMediaItems = (value: unknown): GeneralInfoPayload["mediaItems"] =
         preview: preview || fileUrl || "",
         storagePath,
         fileUrl,
+        ...(memo ? { memo } : {}),
       };
     })
     // storagePath나 fileUrl이 있으면 preview가 없어도 저장 (Storage 이미지 보존)

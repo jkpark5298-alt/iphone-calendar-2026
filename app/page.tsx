@@ -517,6 +517,9 @@ export default function HomePage() {
   const [photoBookInputMemo, setPhotoBookInputMemo] = useState("");
   const [editingPhotoBookItemId, setEditingPhotoBookItemId] = useState<string | null>(null);
   const [photoBookInputImage, setPhotoBookInputImage] = useState<File | null>(null);
+  const [photoBookInputImageMemos, setPhotoBookInputImageMemos] = useState<string[]>([]);
+  const [pbMemoEditIdx, setPbMemoEditIdx] = useState<number | null>(null);
+  const [photoBookTab, setPhotoBookTab] = useState<"index" | "register">("index");
 
   // Restructured Info Repository states for global notes catalog
   const [allInstaCards, setAllInstaCards] = useState<InstaInfoCard[]>([]);
@@ -4196,7 +4199,8 @@ function MarkDateView() {
   function parsePhotoBookMemo(memo: string): { 
     keyword: string; 
     category2: string; 
-    memo: string; 
+    memo: string;
+    imageMemos: string[];
     additionalImages?: Array<{url: string; storagePath: string}>;
   } {
     let cleanMemo = memo || "";
@@ -4210,6 +4214,7 @@ function MarkDateView() {
             keyword: parsed.keyword || "일반",
             category2: parsed.category2 || "기타",
             memo: parsed.memo || "",
+            imageMemos: Array.isArray(parsed.imageMemos) ? parsed.imageMemos : [],
             additionalImages: parsed.additionalImages || []
           };
         }
@@ -4228,6 +4233,7 @@ function MarkDateView() {
               keyword: parsed.keyword || "일반",
               category2: parsed.category2 || "기타",
               memo: parsed.memo || cleanMemo.replace(subStr, "").replace(/^[#\s]+|[#\s]+$/g, ""),
+              imageMemos: Array.isArray(parsed.imageMemos) ? parsed.imageMemos : [],
               additionalImages: parsed.additionalImages || []
             };
           } catch (e) {}
@@ -4255,7 +4261,7 @@ function MarkDateView() {
         }
       }
     }
-    return { keyword, category2, memo: cleanMemo, additionalImages: [] };
+    return { keyword, category2, memo: cleanMemo, imageMemos: [], additionalImages: [] };
   }
 
   // API Call: AI OCR & Classification for Image Upload
@@ -4759,6 +4765,7 @@ function MarkDateView() {
       keyword: photoBookInputKeyword.trim() || "일반",
       category2: photoBookInputCategory2.trim() || "기타",
       memo: photoBookInputMemo,
+      imageMemos: photoBookInputImageMemos,
       additionalImages
     });
 
@@ -4876,7 +4883,10 @@ function MarkDateView() {
     setPhotoBookInputMemo("");
     setPhotoBookInputImage(null);
     setPhotoBookInputDate(entryDate(currentMonth, currentDay));
+    setPhotoBookInputImageMemos([]);
+    setPbMemoEditIdx(null);
     setActiveItem(null);
+    setPhotoBookTab("index");
   }
 
   // CRUD: Edit Photo Book Trigger
@@ -4898,6 +4908,9 @@ function MarkDateView() {
     setPhotoBookInputCategory2(parsed.category2);
     setPhotoBookInputMemo(parsed.memo);
     setPhotoBookInputDate(item.tag);
+    setPhotoBookInputImageMemos(parsed.imageMemos || []);
+    setPbMemoEditIdx(null);
+    setPhotoBookTab("register");
   }
 
   // CRUD: Cancel Edit Photo Book
@@ -4912,6 +4925,9 @@ function MarkDateView() {
     setPhotoBookInputMemo("");
     setPhotoBookInputImage(null);
     setPhotoBookInputDate(entryDate(currentMonth, currentDay));
+    setPhotoBookInputImageMemos([]);
+    setPbMemoEditIdx(null);
+    setPhotoBookTab("index");
   }
 
   // CRUD: Delete Photo Book Item
@@ -5393,6 +5409,7 @@ ${photo.memoText}
           keyword: parsed.keyword,
           category2: parsed.category2,
           memoText: parsed.memo,
+          imageMemos: parsed.imageMemos || [],
           additionalImages: parsed.additionalImages || []
         };
       }
@@ -5483,6 +5500,9 @@ ${photo.memoText}
               generalInfoSearchTerm={infoState.generalInfoSearchTerm}
               setGeneralInfoSearchTerm={infoState.setGeneralInfoSearchTerm}
               setGeneralInfoDetailId={infoState.setGeneralInfoDetailId}
+              generalInfoDetailId={infoState.generalInfoDetailId}
+              generalInfoActiveTab={infoState.generalInfoActiveTab}
+              setGeneralInfoActiveTab={infoState.setGeneralInfoActiveTab}
               handleTogglePinGeneralInfo={infoState.handleTogglePinGeneralInfo}
               loadGeneralInfoItemsFromSupabase={infoState.loadGeneralInfoItemsFromSupabase}
               generalInfoSupabaseStatus={infoState.generalInfoSupabaseStatus}
@@ -5492,10 +5512,35 @@ ${photo.memoText}
               handleSaveTemporaryGeneralInfoDraft={infoState.handleSaveTemporaryGeneralInfoDraft}
             />
           ) : (
-            /* Render Photo Book 2-Column Layout */
-            <div className="info-layout-2col">
-              {/* Left Column: Main Content (Editor or Detail View) */}
-              <div className="info-main-content" style={{ position: "relative" }}>
+            /* Photo Book Tab-based Layout */
+            <div style={{ width: "100%" }}>
+              {/* Tab buttons */}
+              <div className="ch3TabBar">
+                <button
+                  className={`ch3TabBtn ${photoBookTab === "index" ? "active" : ""}`}
+                  onClick={() => setPhotoBookTab("index")}
+                >📖 포토북 인덱스</button>
+                <button
+                  className={`ch3TabBtn ${photoBookTab === "register" ? "active" : ""}`}
+                  onClick={() => {
+                    setActiveItem(null);
+                    setEditingPhotoBookItemId(null);
+                    setPhotoBookInputKeyword("");
+                    setPhotoBookInputCategory2("여행");
+                    setPhotoBookInputMemo("");
+                    setPhotoBookInputImageUrl("");
+                    setPhotoBookInputImageStoragePath("");
+                    setPhotoBookInputImageUrls([]);
+                    setPhotoBookInputImageStoragePaths([]);
+                    setPhotoBookInputDate(entryDate(currentMonth, currentDay));
+                    setPhotoBookTab("register");
+                  }}
+                >📖 포토북 등록</button>
+              </div>
+
+              {/* Register Tab: edit / create / detail forms */}
+              {photoBookTab === "register" && (
+              <div style={{ position: "relative" }}>
                 {/* Scroll to Top Button */}
                 <button
                   type="button"
@@ -5509,50 +5554,7 @@ ${photo.memoText}
                   }}
                   title="맨위로"
                 >맨 위로 ↑</button>
-                {selectedPhotoBookIds.length > 0 && (
-                  <div className="photobook-batch-panel" style={{
-                    background: "rgba(98, 177, 155, 0.12)",
-                    border: "1px solid rgba(98, 177, 155, 0.3)",
-                    borderRadius: "8px",
-                    padding: "10px 15px",
-                    marginBottom: "15px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "10px"
-                  }}>
-                    <span style={{ fontSize: "13px", fontWeight: "bold", color: "#62b19b" }}>
-                      📖 선택된 포토북 항목: {selectedPhotoBookIds.length}개
-                    </span>
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <button
-                        type="button"
-                        className="pill-btn compact-pill"
-                        style={{ background: "#62b19b", color: "#fff", border: "none", fontSize: "11px", padding: "4px 10px" }}
-                        onClick={() => setIsPhotoAlbumModalOpen(true)}
-                      >
-                        🖼️ 포토앨범 보기 & PDF 저장
-                      </button>
-                      <button
-                        type="button"
-                        className="pill-btn compact-pill"
-                        style={{ background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: "11px", padding: "4px 10px" }}
-                        onClick={shareSelectedPhotoBookItems}
-                      >
-                        🔗 공유하기
-                      </button>
-                      <button
-                        type="button"
-                        className="pill-btn compact-pill"
-                        style={{ background: "rgba(239, 68, 68, 0.15)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.3)", fontSize: "11px", padding: "4px 10px" }}
-                        onClick={() => setSelectedPhotoBookIds([])}
-                      >
-                        선택 해제
-                      </button>
-                    </div>
-                  </div>
-                )}
+{/* 선택 액션 바는 인덱스 탭으로 이동 */}
 
                 {activeItem ? (
                   /* Detail/Edit View */
@@ -5584,47 +5586,83 @@ ${photo.memoText}
                           style={{ minHeight: "120px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", border: "2px dashed rgba(255,255,255,0.15)", borderRadius: "10px", padding: "15px", background: "rgba(0,0,0,0.15)", outline: "none" }}
                         >
                           {photoBookInputImageUrls.length > 0 ? (
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: "10px", width: "100%" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))", gap: "6px", width: "100%" }}>
                               {photoBookInputImageUrls.map((url, idx) => (
-                                <div key={idx} className="paste-preview-container" style={{ position: "relative", width: "80px", height: "80px", borderRadius: "6px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.2)" }}>
-                                  <img src={url} alt={`미리보기 ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                  <button 
-                                    type="button" 
-                                    className="remove-preview-btn" 
-                                    title="이미지 삭제" 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const nextUrls = [...photoBookInputImageUrls];
-                                      const nextPaths = [...photoBookInputImageStoragePaths];
-                                      nextUrls.splice(idx, 1);
-                                      nextPaths.splice(idx, 1);
-                                      setPhotoBookInputImageUrls(nextUrls);
-                                      setPhotoBookInputImageStoragePaths(nextPaths);
-                                      setPhotoBookInputImageUrl(nextUrls[0] || "");
-                                      setPhotoBookInputImageStoragePath(nextPaths[0] || "");
-                                    }}
-                                    style={{
-                                      position: "absolute",
-                                      top: "2px",
-                                      right: "2px",
-                                      background: "rgba(239, 68, 68, 0.8)",
-                                      color: "#fff",
-                                      border: "none",
-                                      borderRadius: "50%",
-                                      width: "18px",
-                                      height: "18px",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      fontSize: "12px",
-                                      cursor: "pointer"
-                                    }}
-                                  >
-                                    ×
-                                  </button>
+                                <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                  <div style={{ position: "relative", width: "52px", height: "52px", borderRadius: "5px", overflow: "hidden", border: pbMemoEditIdx === idx ? "2px solid #62b19b" : "1px solid rgba(255,255,255,0.2)" }}>
+                                    <img
+                                      src={url}
+                                      alt={`미리보기 ${idx + 1}`}
+                                      style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                                      onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}
+                                    />
+                                    <button 
+                                      type="button" 
+                                      className="remove-preview-btn" 
+                                      title="이미지 삭제" 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const nextUrls = [...photoBookInputImageUrls];
+                                        const nextPaths = [...photoBookInputImageStoragePaths];
+                                        const nextMemos = [...photoBookInputImageMemos];
+                                        nextUrls.splice(idx, 1);
+                                        nextPaths.splice(idx, 1);
+                                        nextMemos.splice(idx, 1);
+                                        setPhotoBookInputImageUrls(nextUrls);
+                                        setPhotoBookInputImageStoragePaths(nextPaths);
+                                        setPhotoBookInputImageMemos(nextMemos);
+                                        setPhotoBookInputImageUrl(nextUrls[0] || "");
+                                        setPhotoBookInputImageStoragePath(nextPaths[0] || "");
+                                        if (pbMemoEditIdx === idx) setPbMemoEditIdx(null);
+                                      }}
+                                      style={{ position: "absolute", top: "2px", right: "2px", background: "rgba(239, 68, 68, 0.8)", color: "#fff", border: "none", borderRadius: "50%", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", cursor: "pointer" }}
+                                    >×</button>
+                                  </div>
+                                  <div className="generalInfoDraftMediaHint" onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}>
+                                    {photoBookInputImageMemos[idx] ? "📝 메모" : "＋ 메모"}
+                                  </div>
+                                  {pbMemoEditIdx === idx && (
+                                    <div className="generalInfoMediaMemoEdit">
+                                      <textarea
+                                        className="generalInfoMediaMemoTextarea"
+                                        value={photoBookInputImageMemos[idx] || ""}
+                                        onChange={e => {
+                                          const next = [...photoBookInputImageMemos];
+                                          next[idx] = e.target.value;
+                                          setPhotoBookInputImageMemos(next);
+                                        }}
+                                        placeholder="이미지 메모 입력..."
+                                        autoFocus
+                                      />
+                                      <div className="generalInfoMediaMemoEditActions">
+                                        <button className="generalInfoMediaMemoBtnOk" onClick={() => setPbMemoEditIdx(null)}>✓ 완료</button>
+                                        {photoBookInputImageMemos[idx] && (
+                                          <button className="generalInfoMediaMemoBtnDelete" onClick={() => {
+                                            const next = [...photoBookInputImageMemos];
+                                            next[idx] = "";
+                                            setPhotoBookInputImageMemos(next);
+                                            setPbMemoEditIdx(null);
+                                          }}>✕ 삭제</button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {pbMemoEditIdx !== idx && photoBookInputImageMemos[idx] && (
+                                    <div className="generalInfoMediaMemoDisplay">
+                                      <p className="generalInfoMediaMemoText">{photoBookInputImageMemos[idx]}</p>
+                                      <div className="generalInfoMediaMemoActions">
+                                        <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnEdit" onClick={() => setPbMemoEditIdx(idx)}>(0)</button>
+                                        <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnDel" onClick={() => {
+                                          const next = [...photoBookInputImageMemos];
+                                          next[idx] = "";
+                                          setPhotoBookInputImageMemos(next);
+                                        }}>(-)</button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
-                              <label style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "80px", height: "80px", borderRadius: "6px", border: "1px dashed rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.05)", cursor: "pointer", fontSize: "12px", color: "#ccc" }}>
+                              <label style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "52px", height: "52px", borderRadius: "5px", border: "1px dashed rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.05)", cursor: "pointer", fontSize: "11px", color: "#ccc" }}>
                                 <span>➕ 추가</span>
                                 <input
                                   type="file"
@@ -5742,9 +5780,9 @@ ${photo.memoText}
                           <span className="preview-value">#{photoBookInputKeyword.trim() || "keyword"}#{photoBookInputCategory2.trim() || "분류"}#{photoBookInputDate}</span>
                         </div>
 
-                        <div className="form-actions" style={{ marginTop: "20px" }}>
-                          <button type="button" className="pill-btn save-btn" onClick={savePhotoBookItemForm}>💾 수정 완료</button>
-                          <button type="button" className="pill-btn cancel-btn" onClick={cancelEditPhotoBook} style={{ background: "rgba(255,255,255,0.08)", color: "#fff", marginLeft: "10px" }}>취소</button>
+                        <div style={{ position: "sticky", bottom: "70px", zIndex: 10, background: "rgba(10,18,32,0.92)", borderTop: "1px solid rgba(255,255,255,0.1)", padding: "12px 0", marginTop: "24px", marginBottom: "20px", display: "flex", gap: "10px", flexWrap: "wrap", backdropFilter: "blur(6px)" }}>
+                          <button type="button" className="pill-btn save-btn" onClick={savePhotoBookItemForm} style={{ fontSize: "15px", padding: "12px 28px", fontWeight: "bold" }}>💾 수정 완료</button>
+                          <button type="button" className="pill-btn cancel-btn" onClick={cancelEditPhotoBook} style={{ background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: "14px", padding: "12px 22px" }}>✕ 취소</button>
                         </div>
                       </div>
                     ) : (
@@ -5756,11 +5794,11 @@ ${photo.memoText}
                         </h3>
 
                         {activePhoto.url && (
-                          <div className="detail-media-container" style={{ textAlign: "center", margin: "15px 0", background: "rgba(0,0,0,0.2)", borderRadius: "8px", padding: "10px" }}>
+                          <div className="detail-media-container" style={{ textAlign: "center", margin: "15px 0", background: "rgba(0,0,0,0.15)", borderRadius: "10px", padding: "12px", minHeight: "65vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                             <img 
                               src={activePreviewPhotoUrl || activePhoto.url} 
                               alt="포토북 상세 사진" 
-                              style={{ maxWidth: "100%", maxHeight: "400px", borderRadius: "6px", cursor: "zoom-in" }} 
+                              style={{ width: "100%", height: "auto", minHeight: "60vh", maxWidth: "100%", borderRadius: "8px", cursor: "zoom-in", objectFit: "contain", display: "block" }} 
                               onClick={() => {
                                 window.open(activePreviewPhotoUrl || activePhoto.url, "_blank");
                               }}
@@ -5805,6 +5843,18 @@ ${photo.memoText}
                                 })}
                               </div>
                             )}
+                            {/* 현재 선택 이미지 메모 표시 */}
+                            {(() => {
+                              const curUrl = activePreviewPhotoUrl || activePhoto.url;
+                              const allImgUrls = [activePhoto.url, ...(activePhoto.additionalImages?.map((img: any) => img.url) || [])];
+                              const imgMemo = (activePhoto.imageMemos || [])[allImgUrls.indexOf(curUrl)];
+                              return imgMemo ? (
+                                <div className="generalInfoDetailMediaMemo" style={{ marginTop: "12px", padding: "12px 16px", borderRadius: "10px", background: "rgba(98,177,155,0.12)", border: "1px solid rgba(98,177,155,0.3)" }}>
+                                  <span className="generalInfoDetailMediaMemoIcon" style={{ fontSize: "22px", marginRight: "8px" }}>📝</span>
+                                  <span className="generalInfoDetailMediaMemoText" style={{ fontSize: "18px", lineHeight: "1.7", fontWeight: "500" }}>{imgMemo}</span>
+                                </div>
+                              ) : null;
+                            })()}
                           </div>
                         )}
 
@@ -5818,17 +5868,17 @@ ${photo.memoText}
                         </div>
 
                         <div className="detail-content-box" style={{ margin: "20px 0" }}>
-                          <h4 style={{ margin: "0 0 8px 0", color: "#aaa" }}>📝 메모 내용</h4>
+                          <h4 style={{ margin: "0 0 8px 0", color: "#aaa", fontSize: "17px" }}>📝 메모 내용</h4>
                           <div style={{
                             background: "rgba(0,0,0,0.15)",
                             border: "1px solid rgba(255,255,255,0.08)",
                             borderRadius: "8px",
-                            padding: "15px",
-                            fontSize: "14px",
-                            lineHeight: "1.6",
+                            padding: "18px",
+                            fontSize: "22px",
+                            lineHeight: "1.7",
                             wordBreak: "break-all",
                             whiteSpace: "pre-wrap",
-                            maxHeight: isPhotoMemoExpanded ? "none" : "100px",
+                            maxHeight: isPhotoMemoExpanded ? "none" : "200px",
                             overflow: "hidden",
                             position: "relative"
                           }} className="infobook-card-memo">
@@ -5872,7 +5922,7 @@ ${photo.memoText}
                         </div>
 
                         <div className="info-detail-actions no-print">
-                          <button type="button" className="action-btn" onClick={() => setActiveItem(null)} style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>🏠 등록 화면으로</button>
+                          <button type="button" className="action-btn" onClick={() => { setActiveItem(null); setPhotoBookTab("index"); }} style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>🏠 목록으로</button>
                           <button type="button" className="action-btn" onClick={() => triggerEditPhotoBook(activePhoto!)}>✏️ 수정</button>
                           <button type="button" className="action-btn delete-btn" onClick={() => deletePhotoBookItem(activePhoto!.id!)}>🗑️ 삭제</button>
                           <button type="button" className="action-btn" onClick={() => copyPhotoBookToClipboard(activePhoto!)}>📋 복사</button>
@@ -5912,47 +5962,83 @@ ${photo.memoText}
                         style={{ minHeight: "120px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", border: "2px dashed rgba(255,255,255,0.15)", borderRadius: "10px", padding: "15px", background: "rgba(0,0,0,0.15)", outline: "none" }}
                       >
                         {photoBookInputImageUrls.length > 0 ? (
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: "10px", width: "100%" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))", gap: "6px", width: "100%" }}>
                             {photoBookInputImageUrls.map((url, idx) => (
-                              <div key={idx} className="paste-preview-container" style={{ position: "relative", width: "80px", height: "80px", borderRadius: "6px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.2)" }}>
-                                <img src={url} alt={`미리보기 ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                <button 
-                                  type="button" 
-                                  className="remove-preview-btn" 
-                                  title="이미지 삭제" 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const nextUrls = [...photoBookInputImageUrls];
-                                    const nextPaths = [...photoBookInputImageStoragePaths];
-                                    nextUrls.splice(idx, 1);
-                                    nextPaths.splice(idx, 1);
-                                    setPhotoBookInputImageUrls(nextUrls);
-                                    setPhotoBookInputImageStoragePaths(nextPaths);
-                                    setPhotoBookInputImageUrl(nextUrls[0] || "");
-                                    setPhotoBookInputImageStoragePath(nextPaths[0] || "");
-                                  }}
-                                  style={{
-                                    position: "absolute",
-                                    top: "2px",
-                                    right: "2px",
-                                    background: "rgba(239, 68, 68, 0.8)",
-                                    color: "#fff",
-                                    border: "none",
-                                    borderRadius: "50%",
-                                    width: "18px",
-                                    height: "18px",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: "12px",
-                                    cursor: "pointer"
-                                  }}
-                                >
-                                  ×
-                                </button>
+                              <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                <div style={{ position: "relative", width: "52px", height: "52px", borderRadius: "5px", overflow: "hidden", border: pbMemoEditIdx === idx ? "2px solid #62b19b" : "1px solid rgba(255,255,255,0.2)" }}>
+                                  <img
+                                    src={url}
+                                    alt={`미리보기 ${idx + 1}`}
+                                    style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                                    onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}
+                                  />
+                                  <button 
+                                    type="button" 
+                                    className="remove-preview-btn" 
+                                    title="이미지 삭제" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const nextUrls = [...photoBookInputImageUrls];
+                                      const nextPaths = [...photoBookInputImageStoragePaths];
+                                      const nextMemos = [...photoBookInputImageMemos];
+                                      nextUrls.splice(idx, 1);
+                                      nextPaths.splice(idx, 1);
+                                      nextMemos.splice(idx, 1);
+                                      setPhotoBookInputImageUrls(nextUrls);
+                                      setPhotoBookInputImageStoragePaths(nextPaths);
+                                      setPhotoBookInputImageMemos(nextMemos);
+                                      setPhotoBookInputImageUrl(nextUrls[0] || "");
+                                      setPhotoBookInputImageStoragePath(nextPaths[0] || "");
+                                      if (pbMemoEditIdx === idx) setPbMemoEditIdx(null);
+                                    }}
+                                    style={{ position: "absolute", top: "2px", right: "2px", background: "rgba(239, 68, 68, 0.8)", color: "#fff", border: "none", borderRadius: "50%", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", cursor: "pointer" }}
+                                  >×</button>
+                                </div>
+                                <div className="generalInfoDraftMediaHint" onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}>
+                                  {photoBookInputImageMemos[idx] ? "📝 메모" : "＋ 메모"}
+                                </div>
+                                {pbMemoEditIdx === idx && (
+                                  <div className="generalInfoMediaMemoEdit">
+                                    <textarea
+                                      className="generalInfoMediaMemoTextarea"
+                                      value={photoBookInputImageMemos[idx] || ""}
+                                      onChange={e => {
+                                        const next = [...photoBookInputImageMemos];
+                                        next[idx] = e.target.value;
+                                        setPhotoBookInputImageMemos(next);
+                                      }}
+                                      placeholder="이미지 메모 입력..."
+                                      autoFocus
+                                    />
+                                    <div className="generalInfoMediaMemoEditActions">
+                                      <button className="generalInfoMediaMemoBtnOk" onClick={() => setPbMemoEditIdx(null)}>✓ 완료</button>
+                                      {photoBookInputImageMemos[idx] && (
+                                        <button className="generalInfoMediaMemoBtnDelete" onClick={() => {
+                                          const next = [...photoBookInputImageMemos];
+                                          next[idx] = "";
+                                          setPhotoBookInputImageMemos(next);
+                                          setPbMemoEditIdx(null);
+                                        }}>✕ 삭제</button>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                                {pbMemoEditIdx !== idx && photoBookInputImageMemos[idx] && (
+                                  <div className="generalInfoMediaMemoDisplay">
+                                    <p className="generalInfoMediaMemoText">{photoBookInputImageMemos[idx]}</p>
+                                    <div className="generalInfoMediaMemoActions">
+                                      <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnEdit" onClick={() => setPbMemoEditIdx(idx)}>(0)</button>
+                                      <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnDel" onClick={() => {
+                                        const next = [...photoBookInputImageMemos];
+                                        next[idx] = "";
+                                        setPhotoBookInputImageMemos(next);
+                                      }}>(-)</button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             ))}
-                            <label style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "80px", height: "80px", borderRadius: "6px", border: "1px dashed rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.05)", cursor: "pointer", fontSize: "12px", color: "#ccc" }}>
+                            <label style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "52px", height: "52px", borderRadius: "5px", border: "1px dashed rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.05)", cursor: "pointer", fontSize: "11px", color: "#ccc" }}>
                               <span>➕ 추가</span>
                               <input
                                 type="file"
@@ -6070,50 +6156,27 @@ ${photo.memoText}
                         <span className="preview-value">#{photoBookInputKeyword.trim() || "keyword"}#{photoBookInputCategory2.trim() || "분류"}#{photoBookInputDate}</span>
                       </div>
 
-                      <div className="form-actions" style={{ marginTop: "20px" }}>
-                        <button type="button" className="pill-btn save-btn" onClick={savePhotoBookItemForm}>📖 포토북 저장</button>
+                      <div style={{ position: "sticky", bottom: "70px", zIndex: 10, background: "rgba(10,18,32,0.92)", borderTop: "1px solid rgba(255,255,255,0.1)", padding: "12px 0", marginTop: "24px", marginBottom: "20px", backdropFilter: "blur(6px)" }}>
+                        <button type="button" className="pill-btn save-btn" onClick={savePhotoBookItemForm} style={{ fontSize: "15px", padding: "12px 28px", fontWeight: "bold" }}>📖 포토북 저장</button>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
+              )}
 
-              {/* Right Column: Sidebar (Photo Book Index List) */}
-              <div className="info-right-sidebar" style={{ position: "relative" }}>
+              {/* Index Tab: search + list */}
+              {photoBookTab === "index" && (
+              <div style={{ position: "relative" }}>
+              {/* (Index tab content below — replaces right sidebar) */}
+              <div style={{ position: "relative" }}>
                 {/* Scroll to Top Button */}
                 <button
                   type="button"
                   className="scroll-to-top-btn"
-                  onClick={(e) => {
-                    if (window.innerWidth <= 900) {
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    } else {
-                      const listEl = e.currentTarget.parentElement?.querySelector('.info-index-list');
-                      if (listEl) listEl.scrollTo({ top: 0, behavior: 'smooth' });
-                    }
-                  }}
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                   title="맨위로"
                 >맨 위로 ↑</button>
-                <div className="info-sidebar-title">
-                  <span>📖 포토북 인덱스 ({allPhotoBookItems.length})</span>
-                  <button
-                    type="button"
-                    className="pill-btn compact-pill"
-                    style={{ fontSize: "11px", padding: "2px 6px" }}
-                    onClick={() => {
-                      setActiveItem(null);
-                      setEditingPhotoBookItemId(null);
-                      setPhotoBookInputKeyword("");
-                      setPhotoBookInputCategory2("여행");
-                      setPhotoBookInputMemo("");
-                      setPhotoBookInputImageUrl("");
-                      setPhotoBookInputImageStoragePath("");
-                      setPhotoBookInputDate(entryDate(currentMonth, currentDay));
-                    }}
-                  >
-                    + 등록
-                  </button>
-                </div>
                 <input
                   type="text"
                   className="info-sidebar-search"
@@ -6121,7 +6184,50 @@ ${photo.memoText}
                   value={photoSearchKey}
                   onChange={e => setPhotoSearchKey(e.target.value)}
                 />
-                <div className="info-index-list">
+                {/* 선택 액션 바 — 항목 선택 시 표시 */}
+                {selectedPhotoBookIds.length > 0 && (
+                  <div style={{
+                    background: "rgba(98, 177, 155, 0.12)",
+                    border: "1px solid rgba(98, 177, 155, 0.3)",
+                    borderRadius: "8px",
+                    padding: "8px 12px",
+                    marginBottom: "10px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "8px"
+                  }}>
+                    <span style={{ fontSize: "13px", fontWeight: "bold", color: "#62b19b" }}>
+                      ☑️ 선택된 항목: {selectedPhotoBookIds.length}개
+                    </span>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        className="pill-btn compact-pill"
+                        style={{ background: "#62b19b", color: "#fff", border: "none", fontSize: "11px", padding: "4px 10px", borderRadius: "6px", cursor: "pointer" }}
+                        onClick={() => setIsPhotoAlbumModalOpen(true)}
+                      >🖼️ 포토앨범 & PDF</button>
+                      <button
+                        type="button"
+                        className="pill-btn compact-pill"
+                        style={{ background: "rgba(255,255,255,0.08)", color: "#e2e8f0", border: "1px solid rgba(255,255,255,0.15)", fontSize: "11px", padding: "4px 10px", borderRadius: "6px", cursor: "pointer" }}
+                        onClick={shareSelectedPhotoBookItems}
+                      >🔗 공유하기</button>
+                      <button
+                        type="button"
+                        className="pill-btn compact-pill"
+                        style={{ background: "rgba(239, 68, 68, 0.12)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.3)", fontSize: "11px", padding: "4px 10px", borderRadius: "6px", cursor: "pointer" }}
+                        onClick={() => setSelectedPhotoBookIds([])}
+                      >✕ 선택 해제</button>
+                    </div>
+                  </div>
+                )}
+                {/* 체크박스 안내 */}
+                <div style={{ fontSize: "10px", color: "#64748b", textAlign: "right", marginBottom: "6px", paddingRight: "4px" }}>
+                  ☑️ 체크박스: 여러 항목 선택 후 포토앨범 보기 / PDF 저장 / 공유
+                </div>
+                <div className="pbIndexList">
                   {filteredPhotoBookItems.length === 0 ? (
                     <div className="empty-state">포토북 목록이 비어 있습니다.</div>
                   ) : (
@@ -6131,35 +6237,52 @@ ${photo.memoText}
                       return (
                         <div
                           key={photo.id || idx}
-                          className={`info-index-item ${isActive ? "active" : ""}`}
-                          onClick={() => setActiveItem({ type: "photobook", id: photo.id || "" })}
-                          style={{ borderLeftColor: "#62b19b" }}
+                          className={`pbIndexCard ${isActive ? "active" : ""}`}
                         >
-                          <div style={{ display: "flex", gap: "8px", alignItems: "center", width: "100%" }}>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                if (e.target.checked) {
-                                  setSelectedPhotoBookIds([...selectedPhotoBookIds, photo.id || ""]);
-                                } else {
-                                  setSelectedPhotoBookIds(selectedPhotoBookIds.filter(id => id !== photo.id));
-                                }
-                              }}
-                              style={{ cursor: "pointer" }}
-                            />
-                            <div className="index-thumb" style={{ width: "40px", height: "40px", flexShrink: 0, borderRadius: "4px", overflow: "hidden", background: "rgba(0,0,0,0.3)" }}>
-                              {photo.url ? (
-                                <img src={photo.url} alt={photo.keyword} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                              ) : (
-                                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>📖</div>
-                              )}
+                          {/* ── 사진 컬럼 ── */}
+                          <div
+                            className="pbIndexCardPhoto"
+                            onClick={() => { setActiveItem({ type: "photobook", id: photo.id || "" }); setPhotoBookTab("register"); }}
+                          >
+                            {photo.url ? (
+                              <img src={photo.url} alt={photo.keyword} />
+                            ) : (
+                              <div className="pbIndexCardPlaceholder">📖</div>
+                            )}
+                          </div>
+                          {/* ── 정보 컬럼 ── */}
+                          <div
+                            className="pbIndexCardInfo"
+                            onClick={() => { setActiveItem({ type: "photobook", id: photo.id || "" }); setPhotoBookTab("register"); }}
+                          >
+                            <span className="pbIndexCardKeyword">#{photo.keyword}</span>
+                            <span className="pbIndexCardCategory">{photo.category2}</span>
+                            <span className="pbIndexCardDate">{photo.tag}</span>
+                          </div>
+                          {/* ── 액션 컬럼 ── */}
+                          <div className="pbIndexCardActions">
+                            <div className="pbIndexCardCheckbox">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (e.target.checked) {
+                                    setSelectedPhotoBookIds([...selectedPhotoBookIds, photo.id || ""]);
+                                  } else {
+                                    setSelectedPhotoBookIds(selectedPhotoBookIds.filter(id => id !== photo.id));
+                                  }
+                                }}
+                              />
                             </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <strong className="index-title" style={{ color: "#fff" }}>#{photo.keyword}#{photo.category2}</strong>
-                              <span className="index-date">{photo.tag}</span>
-                            </div>
+                            <button
+                              className="pbIndexCardBtnEdit"
+                              onClick={(e) => { e.stopPropagation(); triggerEditPhotoBook(photo); }}
+                            >✏️ 수정</button>
+                            <button
+                              className="pbIndexCardBtnDetail"
+                              onClick={(e) => { e.stopPropagation(); setActiveItem({ type: "photobook", id: photo.id || "" }); setPhotoBookTab("register"); }}
+                            >📋 상세</button>
                           </div>
                         </div>
                       );
@@ -6167,6 +6290,8 @@ ${photo.memoText}
                   )}
                 </div>
               </div>
+              </div>
+              )}
             </div>
           )}
         </div>

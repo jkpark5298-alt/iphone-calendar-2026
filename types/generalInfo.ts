@@ -11,6 +11,7 @@ export interface GeneralInfoMediaItem {
   /** @deprecated fileUrl 사용 권장 */
   url?: string;
   fileUrl?: string;
+  memo?: string;
 }
 
 export type GeneralInfoFactCheckStatus =

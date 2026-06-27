@@ -6728,7 +6728,8 @@ body {
   }
 }
 
-.generalInfoCardActions {
+/* 구버전 generalInfoCardActions — 카드 외부(inline detail) 영역에만 적용 */
+.generalInfoInlineDetail .generalInfoCardActions {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -7438,22 +7439,296 @@ body {
   line-height: 1.6;
 }
 
-.generalInfoList {
-  display: grid;
+/* ==========================================
+   이미지 메모 기능 스타일
+   ========================================== */
+
+/* 드래프트 미디어 카드 썸네일 래퍼 */
+.generalInfoDraftMediaThumb {
+  position: relative;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.generalInfoDraftMediaThumb img,
+.generalInfoDraftMediaThumb video {
+  width: 100%;
+  display: block;
+  border-radius: 8px;
+}
+
+.generalInfoDraftMediaHint {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.58);
+  color: #94a3b8;
+  font-size: 10px;
+  padding: 4px 8px;
+  text-align: center;
+  transition: background 0.15s;
+}
+
+.generalInfoDraftMediaThumb:hover .generalInfoDraftMediaHint {
+  background: rgba(56, 189, 248, 0.35);
+  color: #e0f2fe;
+}
+
+/* 메모 편집 영역 */
+.generalInfoMediaMemoEdit {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.generalInfoMediaMemoTextarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(2, 6, 23, 0.7);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  color: #e2e8f0;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.55;
+  resize: vertical;
+  outline: none;
+}
+
+.generalInfoMediaMemoTextarea:focus {
+  border-color: rgba(56, 189, 248, 0.65);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
+}
+
+.generalInfoMediaMemoEditActions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.generalInfoMediaMemoBtnOk {
+  padding: 4px 10px;
+  font-size: 11px;
+  background: rgba(56, 189, 248, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 6px;
+  color: #7dd3fc;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.generalInfoMediaMemoBtnDelete {
+  padding: 4px 10px;
+  font-size: 11px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #f87171;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* 저장된 메모 표시 */
+.generalInfoMediaMemoDisplay {
+  margin-top: 6px;
+  background: rgba(2, 6, 23, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  padding: 7px 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.generalInfoMediaMemoText {
+  flex: 1;
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.generalInfoMediaMemoActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.generalInfoMediaMemoBtn {
+  padding: 2px 7px;
+  font-size: 11px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1.4;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.generalInfoMediaMemoBtnEdit {
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
+}
+
+.generalInfoMediaMemoBtnDel {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+}
+
+/* 파일명 + 삭제 */
+.generalInfoDraftMediaFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.generalInfoDraftMediaName {
+  font-size: 10px;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* 상세보기 모달 메모 */
+.generalInfoDetailMediaMemo {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+
+.generalInfoDetailMediaMemoIcon {
+  font-size: 13px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.generalInfoDetailMediaMemoText {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ==========================================
+   Card 컴포넌트 기본 헤더 — 번호+제목 한 줄
+   ========================================== */
+.cardHeader {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
   gap: 10px;
+  margin-bottom: 14px;
+}
+
+.cardHeader > div {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cardHeader h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  color: #f8fafc;
+  white-space: nowrap;
+}
+
+.cardHeader p {
+  font-size: 11px;
+  margin: 0;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+.cardNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: rgba(56, 189, 248, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+/* ==========================================
+   정보보관소 탭 버튼
+   ========================================== */
+.ch3TabBar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.ch3TabBtn {
+  flex: 1;
+  padding: 11px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  text-align: center;
+}
+
+.ch3TabBtn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+}
+
+.ch3TabBtn.active {
+  background: rgba(122, 184, 255, 0.14);
+  border-color: rgba(122, 184, 255, 0.45);
+  color: #7ab8ff;
+}
+
+/* ==========================================
+   정보저장함 카드 — 가로형 (이미지 2/5 · 제목 2/5 · 버튼 1/5)
+   ========================================== */
+.generalInfoList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .generalInfoCard {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
-  border-radius: 16px;
+  display: grid;
+  grid-template-columns: 2fr 2fr 1fr;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  border-radius: 12px;
   border: 1px solid #1e293b;
   background: rgba(15, 23, 42, 0.68);
   cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
+  transition: background 0.2s, box-shadow 0.2s, border-color 0.2s;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .generalInfoCard.pinned {
@@ -7462,59 +7737,76 @@ body {
   box-shadow: 0 4px 12px rgba(56, 189, 248, 0.08);
 }
 
+.generalInfoCard.active {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(30, 41, 59, 0.88);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
 @media (hover: hover) {
   .generalInfoCard:hover {
-    background: rgba(30, 41, 59, 0.8);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    background: rgba(30, 41, 59, 0.82);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   }
 }
 
+/* 이미지 영역 — 2/5, 카드 전체 높이에 맞게 채움 */
 .generalInfoCardThumbnail {
-  width: 60px;
-  height: 60px;
-  border-radius: 8px;
-  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  min-height: 80px;
   background: #1e293b;
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .generalInfoCardThumbnail img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .generalInfoCardPlaceholder {
-  font-size: 24px;
+  font-size: 26px;
 }
 
+/* 제목/날짜/요약 영역 — 2/5 */
 .generalInfoCardContent {
-  flex-grow: 1;
+  padding: 8px 10px;
   min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.generalInfoCardPinMark {
+  margin-right: 3px;
 }
 
 .generalInfoCardContent strong {
-  display: block;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   font-size: 13px;
   color: #f8fafc;
-  margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  margin-bottom: 3px;
+  line-height: 1.3;
+  word-break: break-word;
 }
 
 .generalInfoCardContent .mutedText {
-  font-size: 11px;
+  font-size: 10px;
   color: #64748b;
-  margin: 0 0 4px 0;
+  margin: 0 0 3px 0;
 }
 
 .generalInfoCardContent .cardSummary {
-  font-size: 12px;
+  font-size: 11px;
   color: #94a3b8;
   margin: 0;
   display: -webkit-box;
@@ -7524,41 +7816,240 @@ body {
   line-height: 1.3;
 }
 
+/* 버튼 영역 — 1/5 */
+.generalInfoCardActions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  height: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
 .generalInfoCardDetailButton {
-  padding: 5px 10px;
-  font-size: 11px;
-  background: #3b82f6;
+  padding: 4px 6px;
+  font-size: 10px;
+  background: rgba(59, 130, 246, 0.85);
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   color: white;
   cursor: pointer;
-  flex-shrink: 0;
-  margin-left: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .generalInfoCardEditButton {
-  padding: 5px 10px;
-  font-size: 11px;
+  padding: 4px 6px;
+  font-size: 10px;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   color: white;
   cursor: pointer;
-  flex-shrink: 0;
-  margin-left: 6px;
   font-weight: 700;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+  transition: background 0.2s ease;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.2);
+  line-height: 1.3;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .generalInfoCardEditButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.35);
   background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
 }
 
 .generalInfoCardEditButton:active {
-  transform: translateY(0);
+  opacity: 0.85;
+}
+
+.generalInfoCardPinButton {
+  padding: 3px 6px;
+  font-size: 10px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+  line-height: 1.3;
+  text-align: center;
+}
+
+/* ==========================================
+   포토북 인덱스 카드 — 2열 그리드 · 세로형 카드
+   (사진 상단 310px → 정보 → 버튼 행)
+   ========================================== */
+.pbIndexList {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pbIndexCard {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid rgba(30, 41, 59, 0.9);
+  background: rgba(15, 23, 42, 0.75);
+  overflow: hidden;
+  transition: background 0.18s, box-shadow 0.18s, border-color 0.18s;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.pbIndexCard.active {
+  border-color: rgba(98, 177, 155, 0.6);
+  background: rgba(22, 36, 58, 0.92);
+  box-shadow: 0 0 0 2px rgba(98, 177, 155, 0.22);
+}
+
+@media (hover: hover) {
+  .pbIndexCard:hover {
+    background: rgba(22, 36, 58, 0.88);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    border-color: rgba(98, 177, 155, 0.3);
+  }
+}
+
+/* ── 사진 영역 (상단) ── */
+.pbIndexCardPhoto {
+  width: 100%;
+  height: 310px;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #0d1929;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.pbIndexCardPhoto img {
+  width: 100%;
+  height: 310px;
+  object-fit: contain;
+  display: block;
+  transition: opacity 0.15s;
+  background: #0d1929;
+}
+
+.pbIndexCardPhoto:hover img {
+  opacity: 0.88;
+}
+
+.pbIndexCardPlaceholder {
+  font-size: 48px;
+  opacity: 0.4;
+}
+
+/* ── 정보 영역 (중단) ── */
+.pbIndexCardInfo {
+  padding: 10px 12px 6px;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pbIndexCardKeyword {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.pbIndexCardCategory {
+  font-size: 12px;
+  color: #62b19b;
+}
+
+.pbIndexCardDate {
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* ── 액션 영역 (하단 — 버튼 가로 배열) ── */
+.pbIndexCardActions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+}
+
+.pbIndexCardCheckbox {
+  display: flex;
+  align-items: center;
+  margin-right: 2px;
+}
+
+.pbIndexCardCheckbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #62b19b;
+  flex-shrink: 0;
+}
+
+.pbIndexCardBtnEdit {
+  flex: 1;
+  padding: 5px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #fff;
+  text-align: center;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.pbIndexCardBtnDetail {
+  flex: 1;
+  padding: 5px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 6px;
+  cursor: pointer;
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
+  text-align: center;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.pbIndexCardBtnEdit:hover,
+.pbIndexCardBtnDetail:hover {
+  opacity: 0.82;
+}
+
+/* ── 구 클래스 — 하위호환 ── */
+.pbIndexCardContent { display: none; }
+
+.generalInfoCardPinButton.pinned {
+  opacity: 1;
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(56, 189, 248, 0.35);
 }
 
 @media (max-width: 760px) {
@@ -8412,8 +8903,6 @@ body {
     overflow-wrap: break-word !important;
   }
 
-  .generalInfoCardHeader,
-  .generalInfoCardActions,
   .generalInfoActionButtons,
   .generalInfoActionRow {
     display: grid !important;
@@ -8421,11 +8910,29 @@ body {
     width: 100% !important;
   }
 
-  .generalInfoCardActions button,
   .generalInfoActionButtons button,
   .generalInfoActionRow button {
     width: 100% !important;
     white-space: normal !important;
+  }
+
+  /* 카드 내 버튼 영역 — 가로 그리드 유지 */
+  .generalInfoCard .generalInfoCardActions {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 5px !important;
+    padding: 8px !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .generalInfoCard .generalInfoCardDetailButton,
+  .generalInfoCard .generalInfoCardEditButton,
+  .generalInfoCard .generalInfoCardPinButton {
+    width: 100% !important;
+    white-space: nowrap !important;
+    font-size: 10px !important;
   }
 
   .chapterTitleBox,
@@ -9633,6 +10140,32 @@ body {
     box-sizing: border-box !important;
   }
   
+  /* ==========================================
+     포토북 인덱스 카드 — 모바일 (아이폰 등)
+     단열 1컬럼, 이미지 높이 축소
+     ========================================== */
+  .pbIndexList {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  .pbIndexCardPhoto {
+    height: 200px !important;
+  }
+  .pbIndexCardPhoto img {
+    height: 200px !important;
+  }
+  .pbIndexCardKeyword {
+    font-size: 13px !important;
+  }
+  .pbIndexCardCategory,
+  .pbIndexCardDate {
+    font-size: 11px !important;
+  }
+  .pbIndexCardBtnEdit,
+  .pbIndexCardBtnDetail {
+    font-size: 11px !important;
+  }
+
   .generalInfoGrid input,
   .generalInfoGrid select,
   .generalInfoTextBox textarea,

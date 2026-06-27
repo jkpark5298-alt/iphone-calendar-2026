@@ -15,6 +15,10 @@ export interface Chapter3InfoProps {
   geminiApiKey: string;
   setGeminiApiKey: React.Dispatch<React.SetStateAction<string>>;
 
+  // 탭
+  generalInfoActiveTab: "storage" | "collect";
+  setGeneralInfoActiveTab: React.Dispatch<React.SetStateAction<"storage" | "collect">>;
+
   // 레이아웃
   isGeneralInfoMobileLayout: boolean;
 
@@ -61,6 +65,7 @@ export interface Chapter3InfoProps {
   filteredGeneralInfoItems: GeneralInfoItem[];
   generalInfoSearchTerm: string;
   setGeneralInfoSearchTerm: (value: string) => void;
+  generalInfoDetailId: number | null;
   setGeneralInfoDetailId: (id: number | null) => void;
   handleTogglePinGeneralInfo: (itemId: number) => void;
   loadGeneralInfoItemsFromSupabase: () => Promise<void>;
@@ -75,6 +80,8 @@ export interface Chapter3InfoProps {
 export function Chapter3Info({
   geminiApiKey,
   setGeminiApiKey,
+  generalInfoActiveTab,
+  setGeneralInfoActiveTab,
   isGeneralInfoMobileLayout,
   generalInfoDraft,
   setGeneralInfoDraft,
@@ -112,6 +119,7 @@ export function Chapter3Info({
   filteredGeneralInfoItems,
   generalInfoSearchTerm,
   setGeneralInfoSearchTerm,
+  generalInfoDetailId,
   setGeneralInfoDetailId,
   handleTogglePinGeneralInfo,
   loadGeneralInfoItemsFromSupabase,
@@ -120,7 +128,26 @@ export function Chapter3Info({
   normalizeGeneralInfoMediaItems,
   getGeneralInfoDisplayMediaItems,
 }: Chapter3InfoProps) {
+  const activeTab = generalInfoActiveTab;
+  const setActiveTab = setGeneralInfoActiveTab;
+  const [memoEditIndex, setMemoEditIndex] = React.useState<number | null>(null);
   const [isConfigOpen, setIsConfigOpen] = React.useState(false);
+
+  // 미디어 아이템 메모 업데이트
+  const handleUpdateMediaMemo = React.useCallback((index: number, memo: string) => {
+    setGeneralInfoDraft(prev => {
+      const items = normalizeGeneralInfoMediaItems(prev);
+      const updated = items.map((m, i) => i === index ? { ...m, memo } : m);
+      const main = updated[0];
+      return {
+        ...prev,
+        fileName: main?.name || prev.fileName,
+        filePreview: main?.preview || prev.filePreview,
+        fileType: main?.type || prev.fileType,
+        mediaItems: updated,
+      };
+    });
+  }, [normalizeGeneralInfoMediaItems, setGeneralInfoDraft]);
   const [tempApiKey, setTempApiKey] = React.useState(geminiApiKey);
   const [keyValidationStatus, setKeyValidationStatus] = React.useState<"idle" | "validating" | "valid" | "invalid">("idle");
   const [validationError, setValidationError] = React.useState<string | null>(null);
@@ -211,23 +238,28 @@ export function Chapter3Info({
   }, [generalInfoRichTextEditorKey, generalInfoRichTextInitialHtml, generalInfoRichTextRef]);
 
   return (
-    <div
-      className={`layoutGrid generalInfoLayoutGrid ch3HalfLayout ${isGeneralInfoMobileLayout ? "ch3MobileOneColumn" : "ch3PcHalfLayout"}`}
-      style={{
-        display: "grid",
-        gridTemplateColumns: isGeneralInfoMobileLayout
-          ? "minmax(0, 1fr)"
-          : "minmax(0, calc(50% - 11px)) minmax(0, calc(50% - 11px))",
-        columnGap: isGeneralInfoMobileLayout ? 0 : 22,
-        rowGap: isGeneralInfoMobileLayout ? 14 : 22,
-        alignItems: "start",
-        width: "100%",
-        maxWidth: "100%",
-        minWidth: 0,
-        overflowX: "hidden",
-      }}
-    >
-      <section className="leftColumn generalInfoLeftColumn" style={{ position: "relative" }}>
+    <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" }}>
+      {/* ===== 탭 버튼 ===== */}
+      <div className="ch3TabBar">
+        <button
+          type="button"
+          className={`ch3TabBtn ${activeTab === "storage" ? "active" : ""}`}
+          onClick={() => setActiveTab("storage")}
+        >
+          🗂️ 정보 창고
+        </button>
+        <button
+          type="button"
+          className={`ch3TabBtn ${activeTab === "collect" ? "active" : ""}`}
+          onClick={() => setActiveTab("collect")}
+        >
+          ✍️ 일반 정보 수집
+        </button>
+      </div>
+
+      {/* ===== 정보 수집 탭 (입력 + AI 분류) ===== */}
+      {activeTab === "collect" && (
+      <section className="leftColumn generalInfoLeftColumn" style={{ position: "relative", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
         {/* Scroll to Top Button */}
         <button
           type="button"
@@ -609,38 +641,110 @@ export function Chapter3Info({
 
             {normalizeGeneralInfoMediaItems(generalInfoDraft).length > 0 ? (
               <div className="generalInfoDraftMediaGrid">
-                {normalizeGeneralInfoMediaItems(generalInfoDraft).map((media, index) => (
-                  <div className="generalInfoDraftMediaCard" key={media.id || index}>
-                    <div className="generalInfoDraftMediaBadge">
-                      {index === 0 ? "대표" : `추가 ${index}`}
-                    </div>
-                    {media.type === "video" ? (
-                      <video src={media.preview} controls />
-                    ) : generalInfoImageLoadFailed && index === 0 ? (
-                      <div className="generalInfoImageFallback">
-                        <strong>이미지 로드 실패</strong>
-                        <p>
-                          외부 사이트 이미지가 직접 표시를 막았을 수 있습니다.
-                          이미지를 다시 복사해 [클립보드에서 일반 정보 붙여넣기]로 교체하세요.
-                        </p>
+                {normalizeGeneralInfoMediaItems(generalInfoDraft).map((media, index) => {
+                  const isEditingMemo = memoEditIndex === index;
+                  const hasMemo = !!media.memo?.trim();
+                  return (
+                    <div className="generalInfoDraftMediaCard" key={media.id || index}>
+                      <div className="generalInfoDraftMediaBadge">
+                        {index === 0 ? "대표" : `추가 ${index}`}
                       </div>
-                    ) : (
-                      <img
-                        src={media.preview}
-                        alt={media.name || `자료 이미지 ${index + 1}`}
-                        onError={() => { if (index === 0) setGeneralInfoImageLoadFailed(true); }}
-                      />
-                    )}
-                    <span>{media.name || `자료 이미지 ${index + 1}`}</span>
-                    <button
-                      className="secondaryButton smallActionButton dangerSmallButton"
-                      type="button"
-                      onClick={() => handleRemoveGeneralInfoMediaItem(index)}
-                    >
-                      삭제
-                    </button>
-                  </div>
-                ))}
+                      {/* 이미지/동영상 — 클릭 시 메모 입력 토글 */}
+                      <div
+                        className="generalInfoDraftMediaThumb"
+                        onClick={() => setMemoEditIndex(isEditingMemo ? null : index)}
+                        title="클릭하면 메모 입력/수정"
+                      >
+                        {media.type === "video" ? (
+                          <video src={media.preview} controls onClick={e => e.stopPropagation()} />
+                        ) : generalInfoImageLoadFailed && index === 0 ? (
+                          <div className="generalInfoImageFallback">
+                            <strong>이미지 로드 실패</strong>
+                            <p>이미지를 다시 복사해 붙여넣기로 교체하세요.</p>
+                          </div>
+                        ) : (
+                          <img
+                            src={media.preview}
+                            alt={media.name || `자료 이미지 ${index + 1}`}
+                            onError={() => { if (index === 0) setGeneralInfoImageLoadFailed(true); }}
+                          />
+                        )}
+                        <div className="generalInfoDraftMediaHint">
+                          {isEditingMemo ? "▲ 닫기" : (hasMemo ? "✏️ 메모 수정" : "＋ 메모 추가")}
+                        </div>
+                      </div>
+
+                      {/* 메모 입력 영역 */}
+                      {isEditingMemo && (
+                        <div className="generalInfoMediaMemoEdit">
+                          <textarea
+                            className="generalInfoMediaMemoTextarea"
+                            value={media.memo || ""}
+                            onChange={e => handleUpdateMediaMemo(index, e.target.value)}
+                            placeholder="이미지에 대한 간단한 메모를 입력하세요..."
+                            rows={3}
+                            autoFocus
+                          />
+                          <div className="generalInfoMediaMemoEditActions">
+                            <button
+                              type="button"
+                              className="generalInfoMediaMemoBtnOk"
+                              onClick={() => setMemoEditIndex(null)}
+                            >
+                              ✓ 완료
+                            </button>
+                            {hasMemo && (
+                              <button
+                                type="button"
+                                className="generalInfoMediaMemoBtnDelete"
+                                onClick={() => { handleUpdateMediaMemo(index, ""); setMemoEditIndex(null); }}
+                              >
+                                ✕ 메모 삭제
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 저장된 메모 표시 (편집 모드 아닐 때) */}
+                      {!isEditingMemo && hasMemo && (
+                        <div className="generalInfoMediaMemoDisplay">
+                          <span className="generalInfoMediaMemoText">{media.memo}</span>
+                          <div className="generalInfoMediaMemoActions">
+                            <button
+                              type="button"
+                              className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnEdit"
+                              onClick={() => setMemoEditIndex(index)}
+                              title="메모 수정"
+                            >
+                              (0)
+                            </button>
+                            <button
+                              type="button"
+                              className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnDel"
+                              onClick={() => handleUpdateMediaMemo(index, "")}
+                              title="메모 삭제"
+                            >
+                              (-)
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 파일명 + 삭제 버튼 */}
+                      <div className="generalInfoDraftMediaFooter">
+                        <span className="generalInfoDraftMediaName">{media.name || `자료 이미지 ${index + 1}`}</span>
+                        <button
+                          className="secondaryButton smallActionButton dangerSmallButton"
+                          type="button"
+                          onClick={() => handleRemoveGeneralInfoMediaItem(index)}
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="generalInfoNoCoverImage">
@@ -803,9 +907,11 @@ export function Chapter3Info({
           </div>
         </Card>
       </section>
+      )} {/* end activeTab === "collect" */}
 
-      {/* Right Column: 저장함 */}
-      <aside className="rightColumn generalInfoRightColumn" style={{ position: "relative" }}>
+      {/* ===== 정보 창고 탭 (저장함) ===== */}
+      {activeTab === "storage" && (
+      <aside className="rightColumn generalInfoRightColumn" style={{ position: "relative", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
         {/* Scroll to Top Button */}
         <button
           type="button"
@@ -822,8 +928,8 @@ export function Chapter3Info({
         >맨 위로 ↑</button>
         <Card
           number="3"
-          title="일반 정보 저장함 / 검색"
-          subtitle="Confirm 저장된 정보를 분류·키워드·본문 기준으로 검색합니다."
+          title="정보 창고"
+          subtitle="저장된 정보를 분류·키워드·본문 기준으로 검색합니다."
         >
           <div className="searchBox" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <div style={{ display: "flex", gap: "8px" }}>
@@ -875,71 +981,68 @@ export function Chapter3Info({
             <div className="generalInfoList">
               {filteredGeneralInfoItems.map((item) => (
                 <article
-                  className={`generalInfoCard ${item.isPinned ? "pinned" : ""}`}
+                  className={`generalInfoCard ${item.isPinned ? "pinned" : ""} ${generalInfoDetailId === item.id ? "active" : ""}`}
                   key={item.id}
                   onClick={() => setGeneralInfoDetailId(item.id)}
                 >
-                  <div className="generalInfoCardThumbnail" style={{ width: "60px", height: "60px", flexShrink: 0, borderRadius: "8px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", background: "#1e293b" }}>
+                  {/* 이미지 — 2/5 */}
+                  <div className="generalInfoCardThumbnail">
                     {getGeneralInfoDisplayMediaItems(item).length > 0 ? (
                       <img
                         src={getGeneralInfoDisplayMediaItems(item)[0].preview}
                         alt={item.title}
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
                       />
                     ) : (
-                      <div className="generalInfoCardPlaceholder" style={{ fontSize: "24px" }}>📄</div>
+                      <div className="generalInfoCardPlaceholder">📄</div>
                     )}
                   </div>
+
+                  {/* 제목/날짜/요약 — 2/5 */}
                   <div className="generalInfoCardContent">
                     <strong>
-                      {item.isPinned && <span style={{ marginRight: "4px" }}>📌</span>}
+                      {item.isPinned && <span className="generalInfoCardPinMark">📌</span>}
                       {item.title}
                     </strong>
                     <p className="mutedText">{item.createdAt}</p>
                     <p className="cardSummary">{item.summary || "클립보드 이미지 자료"}</p>
                   </div>
-                  <button
-                    className={`generalInfoCardPinButton ${item.isPinned ? "pinned" : ""}`}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleTogglePinGeneralInfo(item.id);
-                    }}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      fontSize: "14px",
-                      padding: "6px",
-                      marginLeft: "auto",
-                      opacity: item.isPinned ? 1 : 0.3,
-                      transition: "opacity 0.2s",
-                    }}
-                    title={item.isPinned ? "고정 해제" : "상단 고정"}
-                  >
-                    📌
-                  </button>
-                  <button
-                    className="generalInfoCardEditButton"
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStartEditGeneralInfo(item);
-                    }}
-                    title="자료 수정"
-                  >
-                    ✏️ 수정
-                  </button>
-                  <button className="generalInfoCardDetailButton" type="button" style={{ marginLeft: "4px" }}>
-                    상세보기
-                  </button>
+
+                  {/* 수정/상세보기 버튼 — 나머지 1/5 */}
+                  <div className="generalInfoCardActions">
+                    <button
+                      className="generalInfoCardEditButton"
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartEditGeneralInfo(item);
+                      }}
+                      title="자료 수정"
+                    >
+                      ✏️ 수정
+                    </button>
+                    <button className="generalInfoCardDetailButton" type="button" title="상세보기">
+                      상세보기
+                    </button>
+                    <button
+                      className={`generalInfoCardPinButton ${item.isPinned ? "pinned" : ""}`}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTogglePinGeneralInfo(item.id);
+                      }}
+                      title={item.isPinned ? "고정 해제" : "상단 고정"}
+                    >
+                      📌
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
           )}
         </Card>
       </aside>
+      )} {/* end activeTab === "storage" */}
     </div>
   );
 }

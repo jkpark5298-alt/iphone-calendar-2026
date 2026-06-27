@@ -55,6 +55,7 @@ export function useTravelDiaryGeneralInfoState({
   const [generalInfoSearchTerm, setGeneralInfoSearchTerm] = useState("");
   const [isExtractingGeneralInfoUrl, setIsExtractingGeneralInfoUrl] = useState(false);
   const [generalInfoDetailId, setGeneralInfoDetailId] = useState<number | null>(null);
+  const [generalInfoActiveTab, setGeneralInfoActiveTab] = useState<"storage" | "collect">("storage");
   const [generalInfoEditingId, setGeneralInfoEditingId] = useState<number | null>(null);
   const [isCollectingGeneralInfoClipboard, setIsCollectingGeneralInfoClipboard] = useState(false);
   const [generalInfoImageLoadFailed, setGeneralInfoImageLoadFailed] = useState(false);
@@ -1126,6 +1127,7 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoImageLoadFailed(false);
     setGeneralInfoEditingId(item.id);
     setGeneralInfoDetailId(null);
+    setGeneralInfoActiveTab("collect"); // 수정 시 자동으로 수집 탭 전환
 
     setGeneralInfoKeywordText(
       (item.keywords || []).map((keyword) => `#${String(keyword).replace(/^#+/, "")}`).join(", "),
@@ -1696,6 +1698,8 @@ export function useTravelDiaryGeneralInfoState({
     setIsExtractingGeneralInfoUrl,
     generalInfoDetailId,
     setGeneralInfoDetailId,
+    generalInfoActiveTab,
+    setGeneralInfoActiveTab,
     generalInfoEditingId,
     setGeneralInfoEditingId,
     isCollectingGeneralInfoClipboard,
