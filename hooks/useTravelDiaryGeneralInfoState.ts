@@ -567,10 +567,30 @@ export function useTravelDiaryGeneralInfoState({
 
     const cleanedText = decodeGeneralInfoPastedText(pastedText);
 
-    document.execCommand("insertText", false, cleanedText);
-    // onInput event fires automatically after execCommand, so no need to call sync here
+    // execCommand is deprecated; try it first and fall back to Selection API (needed for iOS Safari)
+    const inserted = document.execCommand("insertText", false, cleanedText);
+
+    if (!inserted) {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const textNode = document.createTextNode(cleanedText);
+        range.insertNode(textNode);
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } else if (generalInfoRichTextRef.current) {
+        generalInfoRichTextRef.current.textContent =
+          (generalInfoRichTextRef.current.textContent || "") + cleanedText;
+      }
+    }
+
+    // Sync state after paste (onInput is not attached, so call explicitly)
+    syncGeneralInfoRichTextToDraft();
     showPasteHint("✅ Text를 편집기에 붙여넣었습니다.");
-  }, [decodeGeneralInfoPastedText, syncGeneralInfoRichTextToDraft, showPasteHint, handleGeneralInfoFileUpload]);
+  }, [decodeGeneralInfoPastedText, syncGeneralInfoRichTextToDraft, showPasteHint, handleGeneralInfoFileUpload, generalInfoRichTextRef]);
 
   const handleExtractGeneralInfoUrl = useCallback(async () => {
     const targetUrl = generalInfoDraft.sourceUrl.trim();
