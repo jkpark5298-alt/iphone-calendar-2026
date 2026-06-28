@@ -1498,9 +1498,17 @@ export default function HomePage() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", handleFocus);
 
+    // 30초 주기 자동 폴링 — PC/아이폰 간 실시간에 가까운 동기화
+    const pollingInterval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        syncSchedulesFromSupabase();
+      }
+    }, 30000);
+
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleFocus);
+      clearInterval(pollingInterval);
     };
   }, []);
 
@@ -2113,7 +2121,7 @@ export default function HomePage() {
   async function makeOptimizedImageDataUrl(file: File) {
     const originalDataUrl = await readImageFileAsDataUrl(file);
     if (!file.type.startsWith("image/")) return originalDataUrl;
-    return makeImageDataUrl(originalDataUrl, 720, 0.62);
+    return makeImageDataUrl(originalDataUrl, 1200, 0.85);
   }
 
   async function makeCalendarThumbDataUrl(dataUrl: string) {
