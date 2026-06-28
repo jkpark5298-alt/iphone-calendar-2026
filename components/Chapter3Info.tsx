@@ -560,7 +560,6 @@ export function Chapter3Info({
               suppressContentEditableWarning
               role="textbox"
               tabIndex={0}
-              onInput={syncGeneralInfoRichTextToDraft}
               onBlur={syncGeneralInfoRichTextToDraft}
               onPaste={handleGeneralInfoRichPaste}
               data-placeholder="기사 내용, 보고서 요약, 복사한 텍스트, 메모를 입력하세요."

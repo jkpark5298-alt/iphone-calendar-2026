@@ -45,7 +45,6 @@ export function useTravelDiaryGeneralInfoState({
   const [generalInfoDraft, setGeneralInfoDraft] = useState<GeneralInfoDraft>(initialGeneralInfoDraft);
   const [isGeneralInfoMobileLayout, setIsGeneralInfoMobileLayout] = useState(false);
   const generalInfoRichTextRef = useRef<HTMLDivElement | null>(null);
-  const syncRichTextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [generalInfoRichTextInitialHtml, setGeneralInfoRichTextInitialHtml] = useState("");
   const [generalInfoRichTextEditorKey, setGeneralInfoRichTextEditorKey] = useState(0);
   const [generalInfoKeywordText, setGeneralInfoKeywordText] = useState("");
@@ -416,17 +415,14 @@ export function useTravelDiaryGeneralInfoState({
   }, [generalInfoDraft.text, generalInfoRichTextInitialHtml]);
 
   const syncGeneralInfoRichTextToDraft = useCallback(() => {
-    if (syncRichTextTimerRef.current) clearTimeout(syncRichTextTimerRef.current);
-    syncRichTextTimerRef.current = setTimeout(() => {
-      const plainText = String(generalInfoRichTextRef.current?.innerText || "")
-        .replace(/\u00a0/g, " ")
-        .replace(/\n{4,}/g, "\n\n\n");
+    const plainText = String(generalInfoRichTextRef.current?.innerText || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\n{4,}/g, "\n\n\n");
 
-      setGeneralInfoDraft((prev) => ({
-        ...prev,
-        text: plainText,
-      }));
-    }, 300);
+    setGeneralInfoDraft((prev) => {
+      if (prev.text === plainText) return prev; // 변경 없으면 리렌더 스킵
+      return { ...prev, text: plainText };
+    });
   }, []);
 
   const getGeneralInfoToolbarButtonStyle = useCallback((
