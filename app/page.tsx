@@ -23,6 +23,7 @@ type PhotoItem = {
   storagePath?: string;
   id?: string;
   isCalendarPhoto?: boolean;
+  isPinned?: boolean;
 };
 type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple";
 type OriginalImageTarget = 
@@ -540,9 +541,15 @@ export default function HomePage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   const diaryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const diaryRichTextRef = useRef<HTMLDivElement | null>(null);
   const infoTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const diaryEditStartRef = useRef<{ key: string; diaryText: string; voiceText: string } | null>(null);
   const infoEditStartRef = useRef<{ key: string; infoText: string } | null>(null);
+
+  function handleDiaryRichCommand(command: string, value?: string) {
+    diaryRichTextRef.current?.focus();
+    document.execCommand(command, false, value);
+  }
 
   function resizeTextareaToContent(element: HTMLTextAreaElement | null) {
     if (!element) return;
@@ -3680,17 +3687,66 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-        <textarea
-          ref={diaryTextareaRef}
-          className="diary-textarea diary-main-textarea diary-full-textarea"
-          value={diaryText}
-          onFocus={e => focusDiaryTextarea(e.currentTarget)}
-          onInput={e => { resizeTextareaToContent(e.currentTarget); keepTextareaAboveKeyboard(e.currentTarget); }}
-          onBlur={stopTextareaKeyboardMode}
-          onPaste={handleDiaryTextPaste}
-          onChange={e => saveDiary(e.target.value, voiceText)}
-          placeholder="오늘의 기록을 남겨보세요...."
-        />
+        {/* ── Text 입력 / 편집 (일반정보저장함과 동일한 Rich Text 편집기) ── */}
+        <div className="generalInfoTextBox generalInfoRichTextBox" style={{ margin: "10px 0" }}>
+          <div className="generalInfoRichTextHeader">
+            <strong>Text 입력 / 편집</strong>
+            <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄 편집 가능</span>
+          </div>
+          <div className="generalInfoRichToolbar" aria-label="Text 편집 도구">
+            <button type="button" onClick={() => handleDiaryRichCommand("bold")}>B 굵게</button>
+            <button type="button" onClick={() => handleDiaryRichCommand("underline")}>U 밑줄</button>
+            <button type="button" onClick={() => handleDiaryRichCommand("removeFormat")}>서식 지우기</button>
+            <button type="button" className="generalInfoRichColorDefault" onClick={() => handleDiaryRichCommand("foreColor", "#e2e8f0")}>● 기본</button>
+            <button type="button" className="generalInfoRichColorRed" onClick={() => handleDiaryRichCommand("foreColor", "#f87171")}>● 빨강</button>
+            <button type="button" className="generalInfoRichColorYellow" onClick={() => handleDiaryRichCommand("foreColor", "#facc15")}>● 노랑</button>
+            <button type="button" className="generalInfoRichColorBlue" onClick={() => handleDiaryRichCommand("foreColor", "#60a5fa")}>● 파랑</button>
+            <button type="button" className="generalInfoRichColorGreen" onClick={() => handleDiaryRichCommand("foreColor", "#4ade80")}>● 초록</button>
+          </div>
+          <div
+            key={`diary-rich-${currentYear}-${currentMonth}-${currentDay}`}
+            ref={(el) => {
+              diaryRichTextRef.current = el;
+              if (el && el.innerHTML === "") el.innerHTML = diaryText || "";
+            }}
+            className="generalInfoRichTextEditor"
+            contentEditable
+            suppressContentEditableWarning
+            role="textbox"
+            tabIndex={0}
+            data-placeholder="오늘의 기록을 남겨보세요...."
+            onInput={() => {
+              const html = diaryRichTextRef.current?.innerHTML || "";
+              saveDiary(html, voiceText);
+            }}
+            onBlur={() => {
+              const html = diaryRichTextRef.current?.innerHTML || "";
+              saveDiary(html, voiceText);
+            }}
+            onPaste={(e) => {
+              e.preventDefault();
+              const text = e.clipboardData.getData("text/plain");
+              if (text) document.execCommand("insertText", false, text);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              minHeight: 220,
+              maxHeight: 520,
+              overflowY: "auto",
+              boxSizing: "border-box",
+              borderRadius: 14,
+              border: "1px solid rgba(56, 189, 248, 0.45)",
+              background: "#020617",
+              color: "#e2e8f0",
+              padding: "14px 15px",
+              fontSize: 15,
+              lineHeight: 1.8,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          />
+        </div>
         <HyperlinkPreview text={diaryText} />
 
         <div className="diary-photo-section" onPaste={handlePhotoPaste} tabIndex={0}>
@@ -4196,12 +4252,13 @@ function MarkDateView() {
     };
   }
 
-  function parsePhotoBookMemo(memo: string): { 
-    keyword: string; 
-    category2: string; 
+  function parsePhotoBookMemo(memo: string): {
+    keyword: string;
+    category2: string;
     memo: string;
     imageMemos: string[];
     additionalImages?: Array<{url: string; storagePath: string}>;
+    isPinned?: boolean;
   } {
     let cleanMemo = memo || "";
 
@@ -4215,7 +4272,8 @@ function MarkDateView() {
             category2: parsed.category2 || "기타",
             memo: parsed.memo || "",
             imageMemos: Array.isArray(parsed.imageMemos) ? parsed.imageMemos : [],
-            additionalImages: parsed.additionalImages || []
+            additionalImages: parsed.additionalImages || [],
+            isPinned: parsed.isPinned || false
           };
         }
       } catch (e) {}
@@ -4890,6 +4948,30 @@ function MarkDateView() {
   }
 
   // CRUD: Edit Photo Book Trigger
+  async function togglePhotoBookPin(item: PhotoItem) {
+    const parsed = parsePhotoBookMemo(item.memo || "");
+    const newIsPinned = !parsed.isPinned;
+    const newCaption = JSON.stringify({
+      type: "photobook",
+      keyword: parsed.keyword,
+      category2: parsed.category2,
+      memo: parsed.memo,
+      imageMemos: parsed.imageMemos,
+      additionalImages: parsed.additionalImages || [],
+      isPinned: newIsPinned
+    });
+
+    // 로컬 상태 즉시 업데이트
+    setAllPhotoBookItems(prev => prev.map(p =>
+      p.id === item.id ? { ...p, memo: newCaption, isPinned: newIsPinned } : p
+    ));
+
+    // Supabase 동기화
+    if (isSupabaseConfigured && supabase && item.id && !item.id.startsWith("temp-")) {
+      await supabase.from("info_photos").update({ caption: newCaption }).eq("id", item.id);
+    }
+  }
+
   function triggerEditPhotoBook(item: PhotoItem) {
     const parsed = parsePhotoBookMemo(item.memo || "");
     setEditingPhotoBookItemId(item.id || `temp-${Date.now()}`);
@@ -5374,7 +5456,8 @@ ${photo.memoText}
         keyword: parsed.keyword,
         category2: parsed.category2,
         memoText: parsed.memo,
-        additionalImages: parsed.additionalImages || []
+        additionalImages: parsed.additionalImages || [],
+        isPinned: parsed.isPinned || photo.isPinned || false
       };
     }).filter(photo => {
       if (!photoSearchKey.trim()) return true;
@@ -5385,6 +5468,10 @@ ${photo.memoText}
         photo.tag.toLowerCase().includes(query) ||
         photo.memoText.toLowerCase().includes(query)
       );
+    }).sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return 0;
     });
 
     const selectedPhotoBookItems = allPhotoBookItems.map(photo => {
@@ -5707,6 +5794,35 @@ ${photo.memoText}
                           >
                             📋 클립보드 붙여넣기
                           </button>
+                        </div>
+
+                        {/* 📱 아이폰 이미지/인스타 붙여넣기 존 */}
+                        <div
+                          className="generalInfoIphonePasteZone"
+                          contentEditable
+                          suppressContentEditableWarning
+                          role="textbox"
+                          tabIndex={0}
+                          onPaste={async (e) => {
+                            e.preventDefault();
+                            const items = Array.from(e.clipboardData.items);
+                            const files: File[] = [];
+                            for (const item of items) {
+                              if (item.kind === "file" && item.type.startsWith("image/")) {
+                                const f = item.getAsFile();
+                                if (f) files.push(f);
+                              }
+                            }
+                            if (files.length > 0) {
+                              await handlePhotoBookImageUpload(files);
+                            } else {
+                              const text = e.clipboardData.getData("text/plain") || e.clipboardData.getData("text/uri-list");
+                              if (text.trim()) alert(`붙여넣기된 텍스트:\n${text.trim().slice(0, 100)}`);
+                            }
+                          }}
+                          style={{ textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", cursor: "pointer", marginTop: "8px" }}
+                        >
+                          <strong>📱 아이폰 이미지 / 인스타 링크 붙여넣기</strong>
                         </div>
 
                         <div className="input-group" style={{ marginTop: "15px" }}>
@@ -6085,6 +6201,35 @@ ${photo.memoText}
                         </button>
                       </div>
 
+                      {/* 📱 아이폰 이미지/인스타 붙여넣기 존 */}
+                      <div
+                        className="generalInfoIphonePasteZone"
+                        contentEditable
+                        suppressContentEditableWarning
+                        role="textbox"
+                        tabIndex={0}
+                        onPaste={async (e) => {
+                          e.preventDefault();
+                          const items = Array.from(e.clipboardData.items);
+                          const files: File[] = [];
+                          for (const item of items) {
+                            if (item.kind === "file" && item.type.startsWith("image/")) {
+                              const f = item.getAsFile();
+                              if (f) files.push(f);
+                            }
+                          }
+                          if (files.length > 0) {
+                            await handlePhotoBookImageUpload(files);
+                          } else {
+                            const text = e.clipboardData.getData("text/plain") || e.clipboardData.getData("text/uri-list");
+                            if (text.trim()) alert(`붙여넣기된 텍스트:\n${text.trim().slice(0, 100)}`);
+                          }
+                        }}
+                        style={{ textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", cursor: "pointer", marginTop: "8px" }}
+                      >
+                        <strong>📱 아이폰 이미지 / 인스타 링크 붙여넣기</strong>
+                      </div>
+
                       <div className="input-group" style={{ marginTop: "15px" }}>
                         <label className="field-label">키워드 (1-2단어):</label>
                         <input
@@ -6234,32 +6379,36 @@ ${photo.memoText}
                     filteredPhotoBookItems.map((photo, idx) => {
                       const isActive = activeItem?.type === "photobook" && activeItem?.id === photo.id;
                       const isSelected = selectedPhotoBookIds.includes(photo.id || "");
+                      const isPinned = photo.isPinned || false;
                       return (
                         <div
                           key={photo.id || idx}
-                          className={`pbIndexCard ${isActive ? "active" : ""}`}
+                          className={`pbIndexCard ${isActive ? "active" : ""} ${isPinned ? "pbIndexCardPinned" : ""}`}
                         >
-                          {/* ── 사진 컬럼 ── */}
+                          {/* ── 이미지 — 2fr (generalInfoCardThumbnail과 동일) ── */}
                           <div
                             className="pbIndexCardPhoto"
                             onClick={() => { setActiveItem({ type: "photobook", id: photo.id || "" }); setPhotoBookTab("register"); }}
                           >
+                            {isPinned && (
+                              <div className="pbIndexCardPinBadge">📌</div>
+                            )}
                             {photo.url ? (
                               <img src={photo.url} alt={photo.keyword} />
                             ) : (
                               <div className="pbIndexCardPlaceholder">📖</div>
                             )}
                           </div>
-                          {/* ── 정보 컬럼 ── */}
+                          {/* ── 키워드/날짜/분류 — 2fr (generalInfoCardContent와 동일) ── */}
                           <div
                             className="pbIndexCardInfo"
                             onClick={() => { setActiveItem({ type: "photobook", id: photo.id || "" }); setPhotoBookTab("register"); }}
                           >
-                            <span className="pbIndexCardKeyword">#{photo.keyword}</span>
-                            <span className="pbIndexCardCategory">{photo.category2}</span>
-                            <span className="pbIndexCardDate">{photo.tag}</span>
+                            <strong className="pbIndexCardKeyword">#{photo.keyword}</strong>
+                            <p className="pbIndexCardDate">{photo.tag}</p>
+                            <p className="pbIndexCardCategory">{photo.category2}</p>
                           </div>
-                          {/* ── 액션 컬럼 ── */}
+                          {/* ── 버튼 — 1fr (generalInfoCardActions와 동일) ── */}
                           <div className="pbIndexCardActions">
                             <div className="pbIndexCardCheckbox">
                               <input
@@ -6276,13 +6425,18 @@ ${photo.memoText}
                               />
                             </div>
                             <button
+                              className={`pbIndexCardBtnPin ${isPinned ? "active" : ""}`}
+                              title={isPinned ? "상단 고정 해제" : "상단 고정"}
+                              onClick={(e) => { e.stopPropagation(); togglePhotoBookPin(photo); }}
+                            >{isPinned ? "📌 고정됨" : "📌 고정"}</button>
+                            <button
                               className="pbIndexCardBtnEdit"
                               onClick={(e) => { e.stopPropagation(); triggerEditPhotoBook(photo); }}
                             >✏️ 수정</button>
                             <button
                               className="pbIndexCardBtnDetail"
                               onClick={(e) => { e.stopPropagation(); setActiveItem({ type: "photobook", id: photo.id || "" }); setPhotoBookTab("register"); }}
-                            >📋 상세</button>
+                            >상세보기</button>
                           </div>
                         </div>
                       );

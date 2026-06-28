@@ -7882,137 +7882,140 @@ body {
 }
 
 /* ==========================================
-   포토북 인덱스 카드 — 2열 그리드 · 세로형 카드
-   (사진 상단 310px → 정보 → 버튼 행)
+   포토북 인덱스 카드 — 일반 저장함 정보 창고와 동일한 가로형 3컬럼
+   (이미지 2fr | 키워드/날짜/분류 2fr | 버튼 1fr)
    ========================================== */
 .pbIndexList {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .pbIndexCard {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 2fr 2fr 1fr;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
   border-radius: 12px;
-  border: 1px solid rgba(30, 41, 59, 0.9);
-  background: rgba(15, 23, 42, 0.75);
-  overflow: hidden;
-  transition: background 0.18s, box-shadow 0.18s, border-color 0.18s;
-  min-width: 0;
+  border: 1px solid #1e293b;
+  background: rgba(15, 23, 42, 0.68);
   cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s, border-color 0.2s;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .pbIndexCard.active {
-  border-color: rgba(98, 177, 155, 0.6);
-  background: rgba(22, 36, 58, 0.92);
-  box-shadow: 0 0 0 2px rgba(98, 177, 155, 0.22);
+  border-color: rgba(98, 177, 155, 0.55);
+  background: rgba(30, 41, 59, 0.88);
+  box-shadow: 0 0 0 2px rgba(98, 177, 155, 0.2);
 }
 
 @media (hover: hover) {
   .pbIndexCard:hover {
-    background: rgba(22, 36, 58, 0.88);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    border-color: rgba(98, 177, 155, 0.3);
+    background: rgba(30, 41, 59, 0.82);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   }
 }
 
-/* ── 사진 영역 (상단) ── */
+/* ── 사진 컬럼 (2fr) — generalInfoCardThumbnail과 동일 ── */
 .pbIndexCardPhoto {
   width: 100%;
-  height: 310px;
-  flex-shrink: 0;
-  overflow: hidden;
-  background: #0d1929;
+  height: 100%;
+  min-height: 80px;
+  background: #1e293b;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   cursor: pointer;
 }
 
 .pbIndexCardPhoto img {
   width: 100%;
-  height: 310px;
-  object-fit: contain;
+  height: 100%;
+  object-fit: cover;
   display: block;
-  transition: opacity 0.15s;
-  background: #0d1929;
-}
-
-.pbIndexCardPhoto:hover img {
-  opacity: 0.88;
 }
 
 .pbIndexCardPlaceholder {
-  font-size: 48px;
-  opacity: 0.4;
+  font-size: 26px;
+  opacity: 0.5;
 }
 
-/* ── 정보 영역 (중단) ── */
+/* ── 정보 컬럼 (2fr) — generalInfoCardContent와 동일 ── */
 .pbIndexCardInfo {
-  padding: 10px 12px 6px;
+  padding: 8px 10px;
   min-width: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  justify-content: center;
 }
 
 .pbIndexCardKeyword {
-  font-size: 14px;
-  font-weight: 700;
-  color: #e2e8f0;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  display: block;
-}
-
-.pbIndexCardCategory {
-  font-size: 12px;
-  color: #62b19b;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 3px;
+  line-height: 1.3;
 }
 
 .pbIndexCardDate {
-  font-size: 11px;
+  font-size: 10px;
   color: #64748b;
+  margin: 0 0 3px 0;
 }
 
-/* ── 액션 영역 (하단 — 버튼 가로 배열) ── */
+.pbIndexCardCategory {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+/* ── 액션 컬럼 (1fr) — generalInfoCardActions와 동일 ── */
 .pbIndexCardActions {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.15);
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  height: 100%;
   box-sizing: border-box;
 }
 
 .pbIndexCardCheckbox {
   display: flex;
-  align-items: center;
-  margin-right: 2px;
+  justify-content: center;
+  margin-bottom: 3px;
 }
 
 .pbIndexCardCheckbox input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   cursor: pointer;
   accent-color: #62b19b;
-  flex-shrink: 0;
 }
 
 .pbIndexCardBtnEdit {
-  flex: 1;
-  padding: 5px 6px;
+  width: 100%;
+  padding: 5px 4px;
   font-size: 11px;
   font-weight: 600;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #fff;
@@ -8023,12 +8026,12 @@ body {
 }
 
 .pbIndexCardBtnDetail {
-  flex: 1;
-  padding: 5px 6px;
+  width: 100%;
+  padding: 5px 4px;
   font-size: 11px;
   font-weight: 600;
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 5px;
   cursor: pointer;
   background: rgba(56, 189, 248, 0.12);
   color: #7dd3fc;
@@ -8039,8 +8042,57 @@ body {
 }
 
 .pbIndexCardBtnEdit:hover,
-.pbIndexCardBtnDetail:hover {
+.pbIndexCardBtnDetail:hover,
+.pbIndexCardBtnPin:hover {
   opacity: 0.82;
+}
+
+/* ── 상단 고정 버튼 ── */
+.pbIndexCardBtnPin {
+  width: 100%;
+  padding: 5px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 6px;
+  background: rgba(251, 191, 36, 0.08);
+  color: #fbbf24;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  white-space: nowrap;
+  margin-bottom: 3px;
+}
+
+.pbIndexCardBtnPin.active {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: rgba(251, 191, 36, 0.55);
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+/* ── 핀 배지 (이미지 위 오버레이) ── */
+.pbIndexCardPhoto {
+  position: relative;
+}
+
+.pbIndexCardPinBadge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 14px;
+  z-index: 2;
+  background: rgba(0,0,0,0.55);
+  border-radius: 4px;
+  padding: 1px 3px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ── 핀된 카드 강조 테두리 ── */
+.pbIndexCardPinned {
+  border-color: rgba(251, 191, 36, 0.5) !important;
+  background: rgba(251, 191, 36, 0.05) !important;
 }
 
 /* ── 구 클래스 — 하위호환 ── */
@@ -10142,28 +10194,29 @@ body {
   
   /* ==========================================
      포토북 인덱스 카드 — 모바일 (아이폰 등)
-     단열 1컬럼, 이미지 높이 축소
+     일반 저장함 정보 창고와 동일한 반응형
      ========================================== */
-  .pbIndexList {
-    grid-template-columns: 1fr !important;
-    gap: 8px !important;
+  .pbIndexCard {
+    grid-template-columns: 2fr 2fr 1fr !important;
   }
   .pbIndexCardPhoto {
-    height: 200px !important;
+    min-height: 70px !important;
   }
-  .pbIndexCardPhoto img {
-    height: 200px !important;
+  .pbIndexCardActions {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 5px !important;
+    padding: 8px !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
   }
-  .pbIndexCardKeyword {
-    font-size: 13px !important;
-  }
-  .pbIndexCardCategory,
-  .pbIndexCardDate {
-    font-size: 11px !important;
-  }
+  .pbIndexCardBtnPin,
   .pbIndexCardBtnEdit,
   .pbIndexCardBtnDetail {
-    font-size: 11px !important;
+    width: 100% !important;
+    white-space: nowrap !important;
+    font-size: 10px !important;
   }
 
   .generalInfoGrid input,
