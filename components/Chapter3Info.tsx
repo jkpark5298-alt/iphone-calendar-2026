@@ -560,7 +560,12 @@ export function Chapter3Info({
               suppressContentEditableWarning
               role="textbox"
               tabIndex={0}
-              onBlur={syncGeneralInfoRichTextToDraft}
+              onBlur={(e) => {
+                // 포커스가 버튼으로 이동할 때는 sync 생략 (버튼 핸들러가 직접 최신 텍스트를 읽음)
+                const rel = e.relatedTarget as HTMLElement | null;
+                if (rel && (rel.tagName === "BUTTON" || rel.closest?.("button"))) return;
+                syncGeneralInfoRichTextToDraft();
+              }}
               onPaste={handleGeneralInfoRichPaste}
               data-placeholder="기사 내용, 보고서 요약, 복사한 텍스트, 메모를 입력하세요."
               style={{

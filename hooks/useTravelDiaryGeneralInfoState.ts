@@ -425,6 +425,13 @@ export function useTravelDiaryGeneralInfoState({
     });
   }, []);
 
+  // DOM ref에서 직접 최신 텍스트를 읽는 헬퍼 (state 업데이트 없이 버튼 핸들러에서 사용)
+  const getCurrentGeneralInfoRichTextPlain = useCallback(() => {
+    return String(generalInfoRichTextRef.current?.innerText || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\n{4,}/g, "\n\n\n");
+  }, []);
+
   const getGeneralInfoToolbarButtonStyle = useCallback((
     color = "#e5e7eb",
     borderColor = "rgba(56, 189, 248, 0.42)",
@@ -871,12 +878,18 @@ export function useTravelDiaryGeneralInfoState({
 
   // --- AI 분석 및 자료 저장/수정 핸들러 ---
   const handleAnalyzeGeneralInfoDraft = useCallback(async () => {
+    // 버튼 클릭 시 onBlur가 스킵될 수 있으므로 DOM ref에서 직접 최신 텍스트를 읽음
+    const latestText = getCurrentGeneralInfoRichTextPlain();
+    const effectiveDraft = latestText !== generalInfoDraft.text
+      ? { ...generalInfoDraft, text: latestText }
+      : generalInfoDraft;
+
     const hasInput =
-      generalInfoDraft.title.trim() ||
-      generalInfoDraft.text.trim() ||
-      generalInfoDraft.sourceUrl.trim() ||
-      generalInfoDraft.filePreview.trim() ||
-      normalizeGeneralInfoMediaItems(generalInfoDraft).length > 0;
+      effectiveDraft.title.trim() ||
+      effectiveDraft.text.trim() ||
+      effectiveDraft.sourceUrl.trim() ||
+      effectiveDraft.filePreview.trim() ||
+      normalizeGeneralInfoMediaItems(effectiveDraft).length > 0;
 
     if (!hasInput) {
       showPasteHint("⚠️ 먼저 Text, URL, 이미지 중 하나 이상 입력하세요.");
@@ -898,12 +911,12 @@ export function useTravelDiaryGeneralInfoState({
           "x-gemini-api-key": customApiKey,
         },
         body: JSON.stringify({
-          title: generalInfoDraft.title,
-          text: generalInfoDraft.text,
-          sourceUrl: generalInfoDraft.sourceUrl,
-          fileName: generalInfoDraft.fileName,
-          fileType: generalInfoDraft.fileType,
-          summary: generalInfoDraft.summary,
+          title: effectiveDraft.title,
+          text: effectiveDraft.text,
+          sourceUrl: effectiveDraft.sourceUrl,
+          fileName: effectiveDraft.fileName,
+          fileType: effectiveDraft.fileType,
+          summary: effectiveDraft.summary,
         }),
         signal: controller.signal,
       });
@@ -947,7 +960,7 @@ export function useTravelDiaryGeneralInfoState({
     } finally {
       setIsAnalyzingGeneralInfo(false);
     }
-  }, [generalInfoDraft, generalInfoKeywordText, showPasteHint]);
+  }, [generalInfoDraft, generalInfoKeywordText, getCurrentGeneralInfoRichTextPlain, showPasteHint]);
 
   const dataUrlToGeneralInfoFile = useCallback(async (dataUrl: string, fileName: string) => {
     const response = await fetch(dataUrl);
@@ -998,14 +1011,20 @@ export function useTravelDiaryGeneralInfoState({
   }, [generalInfoDraft, generalInfoKeywordText, getCurrentGeneralInfoRichTextHtml, generalInfoEditingId, showPasteHint]);
 
   const handleConfirmGeneralInfo = useCallback(async () => {
+    // 버튼 클릭 시 onBlur가 스킵될 수 있으므로 DOM ref에서 직접 최신 텍스트를 읽음
+    const latestText = getCurrentGeneralInfoRichTextPlain();
+    const draftWithLatestText = latestText !== generalInfoDraft.text
+      ? { ...generalInfoDraft, text: latestText }
+      : generalInfoDraft;
+
     const analyzed =
-      generalInfoDraft.primaryCategory ||
-      generalInfoDraft.secondaryCategory ||
-      generalInfoDraft.thirdCategory ||
-      generalInfoDraft.summary ||
-      generalInfoDraft.keywords.length > 0
-        ? generalInfoDraft
-        : mockAnalyzeGeneralInfo(generalInfoDraft);
+      draftWithLatestText.primaryCategory ||
+      draftWithLatestText.secondaryCategory ||
+      draftWithLatestText.thirdCategory ||
+      draftWithLatestText.summary ||
+      draftWithLatestText.keywords.length > 0
+        ? draftWithLatestText
+        : mockAnalyzeGeneralInfo(draftWithLatestText);
 
     const inputTypes: GeneralInfoItem["inputTypes"] = [];
     const draftMediaItems = normalizeGeneralInfoMediaItems(analyzed);
@@ -1137,6 +1156,7 @@ export function useTravelDiaryGeneralInfoState({
     generalInfoEditingId,
     generalInfoItems,
     getCurrentGeneralInfoRichTextHtml,
+    getCurrentGeneralInfoRichTextPlain,
     resetGeneralInfoRichTextEditor,
     showPasteHint,
     syncGeneralInfoItemToSupabase,
