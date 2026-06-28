@@ -476,20 +476,23 @@ export default function HomePage() {
   const [infoSubView, setInfoSubView] = useState<"generalInfo" | "photobook">("generalInfo");
 
   // Chapter 3 General Info hook
+  // useCallback으로 안정화 — inline 함수는 매 렌더마다 새 참조를 만들어 useEffect 무한 루프를 유발함
+  const showGeneralInfoPasteHint = useCallback((msg: string) => {
+    if (
+      msg.startsWith("⚠️") ||
+      msg.startsWith("❌") ||
+      msg.includes("실패") ||
+      msg.includes("오류") ||
+      msg.includes("제한")
+    ) {
+      alert(msg);
+    } else {
+      console.log(msg);
+    }
+  }, []);
+
   const infoState = useTravelDiaryGeneralInfoState({
-    showPasteHint: (msg) => {
-      if (
-        msg.startsWith("⚠️") ||
-        msg.startsWith("❌") ||
-        msg.includes("실패") ||
-        msg.includes("오류") ||
-        msg.includes("제한")
-      ) {
-        alert(msg);
-      } else {
-        console.log(msg);
-      }
-    },
+    showPasteHint: showGeneralInfoPasteHint,
   });
   const [instaLoading, setInstaLoading] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState("");
