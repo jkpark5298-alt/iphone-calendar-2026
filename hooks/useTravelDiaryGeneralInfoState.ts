@@ -45,6 +45,7 @@ export function useTravelDiaryGeneralInfoState({
   const [generalInfoDraft, setGeneralInfoDraft] = useState<GeneralInfoDraft>(initialGeneralInfoDraft);
   const [isGeneralInfoMobileLayout, setIsGeneralInfoMobileLayout] = useState(false);
   const generalInfoRichTextRef = useRef<HTMLDivElement | null>(null);
+  const syncRichTextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [generalInfoRichTextInitialHtml, setGeneralInfoRichTextInitialHtml] = useState("");
   const [generalInfoRichTextEditorKey, setGeneralInfoRichTextEditorKey] = useState(0);
   const [generalInfoKeywordText, setGeneralInfoKeywordText] = useState("");
@@ -415,14 +416,17 @@ export function useTravelDiaryGeneralInfoState({
   }, [generalInfoDraft.text, generalInfoRichTextInitialHtml]);
 
   const syncGeneralInfoRichTextToDraft = useCallback(() => {
-    const plainText = String(generalInfoRichTextRef.current?.innerText || "")
-      .replace(/\u00a0/g, " ")
-      .replace(/\n{4,}/g, "\n\n\n");
+    if (syncRichTextTimerRef.current) clearTimeout(syncRichTextTimerRef.current);
+    syncRichTextTimerRef.current = setTimeout(() => {
+      const plainText = String(generalInfoRichTextRef.current?.innerText || "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\n{4,}/g, "\n\n\n");
 
-    setGeneralInfoDraft((prev) => ({
-      ...prev,
-      text: plainText,
-    }));
+      setGeneralInfoDraft((prev) => ({
+        ...prev,
+        text: plainText,
+      }));
+    }, 300);
   }, []);
 
   const getGeneralInfoToolbarButtonStyle = useCallback((
@@ -568,7 +572,7 @@ export function useTravelDiaryGeneralInfoState({
     const cleanedText = decodeGeneralInfoPastedText(pastedText);
 
     document.execCommand("insertText", false, cleanedText);
-    syncGeneralInfoRichTextToDraft();
+    // onInput event fires automatically after execCommand, so no need to call sync here
     showPasteHint("✅ Text를 편집기에 붙여넣었습니다.");
   }, [decodeGeneralInfoPastedText, syncGeneralInfoRichTextToDraft, showPasteHint, handleGeneralInfoFileUpload]);
 
