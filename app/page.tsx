@@ -5906,70 +5906,102 @@ ${photo.memoText}
                           <span style={{ fontSize: "14px", fontWeight: "normal", color: "#aaa" }}>작성일: {activePhoto.tag}</span>
                         </h3>
 
-                        {activePhoto.url && (
-                          <div className="detail-media-container" style={{ textAlign: "center", margin: "15px 0", background: "rgba(0,0,0,0.15)", borderRadius: "10px", padding: "12px", minHeight: "65vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                            <img 
-                              src={activePreviewPhotoUrl || activePhoto.url} 
-                              alt="포토북 상세 사진" 
-                              style={{ width: "100%", height: "auto", minHeight: "60vh", maxWidth: "100%", borderRadius: "8px", cursor: "zoom-in", objectFit: "contain", display: "block" }} 
-                              onClick={() => {
-                                window.open(activePreviewPhotoUrl || activePhoto.url, "_blank");
-                              }}
-                            />
-                            {activePhoto.additionalImages && activePhoto.additionalImages.length > 0 && (
-                              <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "15px", flexWrap: "wrap" }}>
-                                <div 
-                                  onClick={() => setActivePreviewPhotoUrl(activePhoto.url)}
-                                  style={{
-                                    width: "60px",
-                                    height: "60px",
-                                    borderRadius: "4px",
-                                    overflow: "hidden",
-                                    border: (activePreviewPhotoUrl === null || activePreviewPhotoUrl === activePhoto.url) ? "2px solid #62b19b" : "2px solid transparent",
-                                    cursor: "pointer",
-                                    opacity: (activePreviewPhotoUrl === null || activePreviewPhotoUrl === activePhoto.url) ? 1 : 0.6,
-                                    transition: "all 0.2s"
-                                  }}
-                                >
-                                  <img src={activePhoto.url} alt="Main" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                </div>
-                                {activePhoto.additionalImages.map((img: any, idx: number) => {
-                                  const isActive = activePreviewPhotoUrl === img.url;
-                                  return (
-                                    <div 
-                                      key={idx}
-                                      onClick={() => setActivePreviewPhotoUrl(img.url)}
-                                      style={{
-                                        width: "60px",
-                                        height: "60px",
-                                        borderRadius: "4px",
-                                        overflow: "hidden",
-                                        border: isActive ? "2px solid #62b19b" : "2px solid transparent",
-                                        cursor: "pointer",
-                                        opacity: isActive ? 1 : 0.6,
-                                        transition: "all 0.2s"
-                                      }}
-                                    >
-                                      <img src={img.url} alt={`Additional ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                    </div>
-                                  );
-                                })}
+                        {activePhoto.url && (() => {
+                          const allImgUrls: string[] = [activePhoto.url, ...(activePhoto.additionalImages?.map((img: any) => img.url) || [])];
+                          const curUrl = activePreviewPhotoUrl || activePhoto.url;
+                          const curIdx = allImgUrls.indexOf(curUrl) === -1 ? 0 : allImgUrls.indexOf(curUrl);
+                          const hasPrev = curIdx > 0;
+                          const hasNext = curIdx < allImgUrls.length - 1;
+                          const imgMemo = (activePhoto.imageMemos || [])[curIdx];
+                          const arrowBtnStyle: React.CSSProperties = {
+                            position: "absolute",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            background: "rgba(0,0,0,0.52)",
+                            border: "1px solid rgba(255,255,255,0.18)",
+                            borderRadius: "50%",
+                            width: 44,
+                            height: 44,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#fff",
+                            fontSize: 22,
+                            cursor: "pointer",
+                            zIndex: 10,
+                            userSelect: "none",
+                            lineHeight: 1,
+                            transition: "background 0.15s",
+                            flexShrink: 0,
+                          };
+                          return (
+                            <div className="detail-media-container" style={{ textAlign: "center", margin: "15px 0", background: "rgba(0,0,0,0.15)", borderRadius: "10px", padding: "12px", minHeight: "65vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                              {/* 이미지 + 좌우 화살표 */}
+                              <div style={{ position: "relative", width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                {allImgUrls.length > 1 && (
+                                  <button
+                                    type="button"
+                                    style={{ ...arrowBtnStyle, left: 0, opacity: hasPrev ? 1 : 0.25, pointerEvents: hasPrev ? "auto" : "none" }}
+                                    onClick={() => setActivePreviewPhotoUrl(allImgUrls[curIdx - 1])}
+                                    aria-label="이전 이미지"
+                                  >
+                                    ‹
+                                  </button>
+                                )}
+                                <img
+                                  src={curUrl}
+                                  alt="포토북 상세 사진"
+                                  style={{ width: "100%", height: "auto", minHeight: "60vh", maxWidth: "100%", borderRadius: "8px", cursor: "zoom-in", objectFit: "contain", display: "block" }}
+                                  onClick={() => { window.open(curUrl, "_blank"); }}
+                                />
+                                {allImgUrls.length > 1 && (
+                                  <button
+                                    type="button"
+                                    style={{ ...arrowBtnStyle, right: 0, opacity: hasNext ? 1 : 0.25, pointerEvents: hasNext ? "auto" : "none" }}
+                                    onClick={() => setActivePreviewPhotoUrl(allImgUrls[curIdx + 1])}
+                                    aria-label="다음 이미지"
+                                  >
+                                    ›
+                                  </button>
+                                )}
                               </div>
-                            )}
-                            {/* 현재 선택 이미지 메모 표시 */}
-                            {(() => {
-                              const curUrl = activePreviewPhotoUrl || activePhoto.url;
-                              const allImgUrls = [activePhoto.url, ...(activePhoto.additionalImages?.map((img: any) => img.url) || [])];
-                              const imgMemo = (activePhoto.imageMemos || [])[allImgUrls.indexOf(curUrl)];
-                              return imgMemo ? (
+
+                              {/* 이미지 인덱스 표시 + 썸네일 */}
+                              {allImgUrls.length > 1 && (
+                                <>
+                                  <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "8px" }}>
+                                    {curIdx + 1} / {allImgUrls.length}
+                                  </div>
+                                  <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
+                                    {allImgUrls.map((imgUrl, idx) => (
+                                      <div
+                                        key={idx}
+                                        onClick={() => setActivePreviewPhotoUrl(imgUrl)}
+                                        style={{
+                                          width: "56px", height: "56px", borderRadius: "4px", overflow: "hidden",
+                                          border: idx === curIdx ? "2px solid #62b19b" : "2px solid transparent",
+                                          cursor: "pointer",
+                                          opacity: idx === curIdx ? 1 : 0.55,
+                                          transition: "all 0.2s",
+                                        }}
+                                      >
+                                        <img src={imgUrl} alt={`이미지 ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+
+                              {/* 현재 이미지 메모 */}
+                              {imgMemo && (
                                 <div className="generalInfoDetailMediaMemo" style={{ marginTop: "12px", padding: "12px 16px", borderRadius: "10px", background: "rgba(98,177,155,0.12)", border: "1px solid rgba(98,177,155,0.3)" }}>
                                   <span className="generalInfoDetailMediaMemoIcon" style={{ fontSize: "22px", marginRight: "8px" }}>📝</span>
                                   <span className="generalInfoDetailMediaMemoText" style={{ fontSize: "18px", lineHeight: "1.7", fontWeight: "500" }}>{imgMemo}</span>
                                 </div>
-                              ) : null;
-                            })()}
-                          </div>
-                        )}
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         <div className="detail-meta-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", margin: "15px 0", background: "rgba(255,255,255,0.03)", padding: "10px", borderRadius: "8px" }}>
                           <div>
