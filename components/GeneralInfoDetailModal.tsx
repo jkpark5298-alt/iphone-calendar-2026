@@ -212,6 +212,8 @@ export default function GeneralInfoDetailModal({
   onSavePdf,
   onShareReport,
 }: Props) {
+  if (!item) return null;
+
   const mediaItems = getGeneralInfoDisplayMediaItems(item);
 
   return (

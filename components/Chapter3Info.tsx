@@ -981,10 +981,16 @@ export function Chapter3Info({
                 <article
                   className={`generalInfoCard ${item.isPinned ? "pinned" : ""} ${generalInfoDetailId === item.id ? "active" : ""}`}
                   key={item.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setGeneralInfoDetailId(item.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setGeneralInfoDetailId(item.id); }}
                 >
                   {/* 이미지 — 2/5 */}
-                  <div className="generalInfoCardThumbnail">
+                  <div
+                    className="generalInfoCardThumbnail"
+                    onClick={() => setGeneralInfoDetailId(item.id)}
+                  >
                     {getGeneralInfoDisplayMediaItems(item).length > 0 ? (
                       <img
                         src={getGeneralInfoDisplayMediaItems(item)[0].preview}
@@ -997,7 +1003,10 @@ export function Chapter3Info({
                   </div>
 
                   {/* 제목/날짜/요약 — 2/5 */}
-                  <div className="generalInfoCardContent">
+                  <div
+                    className="generalInfoCardContent"
+                    onClick={() => setGeneralInfoDetailId(item.id)}
+                  >
                     <strong>
                       {item.isPinned && <span className="generalInfoCardPinMark">📌</span>}
                       {item.title}
@@ -1019,7 +1028,15 @@ export function Chapter3Info({
                     >
                       ✏️ 수정
                     </button>
-                    <button className="generalInfoCardDetailButton" type="button" title="상세보기">
+                    <button
+                      className="generalInfoCardDetailButton"
+                      type="button"
+                      title="상세보기"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setGeneralInfoDetailId(item.id);
+                      }}
+                    >
                       상세보기
                     </button>
                     <button
