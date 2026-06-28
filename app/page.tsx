@@ -5871,18 +5871,12 @@ ${photo.memoText}
                         <div className="input-group" style={{ marginTop: "15px" }}>
                           <label className="field-label">메모 내용:</label>
                           <textarea
-                            className="info-text-textarea"
+                            className="info-text-textarea generalInfoFormattedTextView"
                             style={{
                               width: "100%",
-                              height: "40px",
-                              minHeight: "40px",
-                              padding: "10px",
-                              borderRadius: "8px",
-                              border: "1px solid rgba(255,255,255,0.15)",
-                              background: "rgba(0,0,0,0.2)",
-                              color: "#fff",
+                              minHeight: "200px",
+                              maxHeight: "480px",
                               boxSizing: "border-box",
-                              fontSize: "14px",
                               resize: "vertical"
                             }}
                             placeholder="사진에 관련된 메모나 일기 내용을 입력하세요."
@@ -6276,18 +6270,12 @@ ${photo.memoText}
                       <div className="input-group" style={{ marginTop: "15px" }}>
                         <label className="field-label">메모 내용:</label>
                         <textarea
-                          className="info-text-textarea"
+                          className="info-text-textarea generalInfoFormattedTextView"
                           style={{
                             width: "100%",
-                            height: "40px",
-                            minHeight: "40px",
-                            padding: "10px",
-                            borderRadius: "8px",
-                            border: "1px solid rgba(255,255,255,0.15)",
-                            background: "rgba(0,0,0,0.2)",
-                            color: "#fff",
+                            minHeight: "200px",
+                            maxHeight: "480px",
                             boxSizing: "border-box",
-                            fontSize: "14px",
                             resize: "vertical"
                           }}
                           placeholder="사진에 관련된 메모나 일기 내용을 입력하세요."
