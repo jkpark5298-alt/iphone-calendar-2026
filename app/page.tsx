@@ -1461,25 +1461,26 @@ export default function HomePage() {
     const pendingSave = localStorage.getItem("iphone-calendar-schedule-pending") === "true";
 
     if (pendingSave && Object.keys(localSchedules).length > 0) {
-      // 이전 Supabase 저장이 실패한 데이터가 있음 → 로컈 데이터를 먼저 Supabase에 밀어넣음
-      // (아이폰에서 삭제 후 앱 닫힐 경우가 이 코드 실행됨)
-      void saveSchedulesToSupabase(localSchedules).then(() => {
-        localStorage.setItem("iphone-calendar-schedule-pending", "false");
+      // 이전 저장 실패 → 로컬 데이터를 Supabase에 재업로드
+      void saveSchedulesToSupabase(localSchedules).then((success) => {
+        if (success) {
+          localStorage.setItem("iphone-calendar-schedule-pending", "false");
+          localStorage.setItem("iphone-calendar-schedule-saved-at", String(Date.now()));
+        }
       });
-      // 로컈 상태가 이미 정확하므로 Supabase에서 다시 로드하지 않음
     } else {
       void loadCalendarSchedulesFromSupabase().then(remoteSchedules => {
         if (!remoteSchedules) return;
 
         if (Object.keys(remoteSchedules).length > 0) {
+          // Supabase에 데이터 있음 → 다른 기기의 최신 상태로 로컬 업데이트
           setSchedules(remoteSchedules);
           localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(remoteSchedules));
           return;
         }
 
-        if (Object.keys(localSchedules).length > 0) {
-          void saveSchedulesToSupabase(localSchedules);
-        }
+        // Supabase가 비어있으면 → 다른 기기에서 전부 삭제한 것으로 간주, 역업로드 안 함
+        // (과거에는 여기서 localSchedules를 Supabase에 올렸으나, 삭제 동기화를 깨뜨리는 원인이었음)
       });
     }
 
