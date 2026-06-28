@@ -1470,7 +1470,7 @@ export default function HomePage() {
       });
     } else {
       void loadCalendarSchedulesFromSupabase().then(remoteSchedules => {
-        if (!remoteSchedules) return;
+        if (!remoteSchedules) return; // 네트워크 오류 → 로컬 유지
 
         if (Object.keys(remoteSchedules).length > 0) {
           // Supabase에 데이터 있음 → 다른 기기의 최신 상태로 로컬 업데이트
@@ -1479,8 +1479,9 @@ export default function HomePage() {
           return;
         }
 
-        // Supabase가 비어있으면 → 다른 기기에서 전부 삭제한 것으로 간주, 역업로드 안 함
-        // (과거에는 여기서 localSchedules를 Supabase에 올렸으나, 삭제 동기화를 깨뜨리는 원인이었음)
+        // Supabase가 비어있음 = 다른 기기에서 전부 삭제 → 로컬도 비워야 함
+        setSchedules({});
+        localStorage.setItem("iphone-calendar-2026-schedules", "{}");
       });
     }
 
@@ -1494,7 +1495,13 @@ export default function HomePage() {
       if (Date.now() - savedAt < 35000) return;
 
       void loadCalendarSchedulesFromSupabase().then(remoteSchedules => {
-        if (!remoteSchedules || Object.keys(remoteSchedules).length === 0) return;
+        if (!remoteSchedules) return; // 네트워크 오류 → 로컬 유지
+        if (Object.keys(remoteSchedules).length === 0) {
+          // Supabase가 비어있음 = 다른 기기에서 전부 삭제 → 로컬도 비워야 함
+          setSchedules({});
+          localStorage.setItem("iphone-calendar-2026-schedules", "{}");
+          return;
+        }
         setSchedules(remoteSchedules);
         localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(remoteSchedules));
       });
