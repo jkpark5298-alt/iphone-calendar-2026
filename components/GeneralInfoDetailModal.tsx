@@ -187,7 +187,7 @@ function MarkdownViewer({ text }: { text: string }) {
   }
   flushList();
 
-  return <div className="report-markdown-body">{elements}</div>;
+  return <div className="report-markdown-body" style={{ overflowX: "hidden", wordBreak: "break-all", overflowWrap: "anywhere" }}>{elements}</div>;
 }
 
 
@@ -239,8 +239,6 @@ export default function GeneralInfoDetailModal({
         style={{
           margin: "auto",
           maxHeight: "90vh",
-          display: "flex",
-          flexDirection: "column"
         }}
       >
         <div className="modalHeader">
@@ -276,7 +274,17 @@ export default function GeneralInfoDetailModal({
           <section className="generalInfoDetailSection">
             <strong>출처 URL</strong>
             {item.sourceUrl ? (
-              <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">
+              <a 
+                href={item.sourceUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ 
+                  wordBreak: "break-all", 
+                  overflowWrap: "anywhere", 
+                  display: "inline-block", 
+                  maxWidth: "100%" 
+                }}
+              >
                 {item.sourceUrl}
               </a>
             ) : (

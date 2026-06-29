@@ -6746,10 +6746,12 @@ body {
 }
 
 .generalInfoDetailBody {
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
   display: grid;
   gap: 12px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .generalInfoDetailSection {
@@ -6757,6 +6759,8 @@ body {
   border-radius: 14px;
   border: 1px solid #1e293b;
   background: rgba(2, 6, 23, 0.36);
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .generalInfoDetailSection strong {
@@ -6773,6 +6777,7 @@ body {
   font-size: 13px;
   line-height: 1.65;
   word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .generalInfoDetailSection img,
@@ -6788,7 +6793,8 @@ body {
 .generalInfoDetailSection pre {
   margin: 0;
   white-space: pre-wrap;
-  word-break: break-word;
+  word-break: break-all;
+  overflow-wrap: anywhere;
   color: #cbd5e1;
   font-size: 13px;
   line-height: 1.65;
