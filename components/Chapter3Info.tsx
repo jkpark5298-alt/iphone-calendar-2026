@@ -536,20 +536,21 @@ export function Chapter3Info({
               className="generalInfoRichToolbar"
               aria-label="Text 편집 도구"
             >
-              <button type="button" onClick={() => handleGeneralInfoRichCommand("bold")}>B 굵게</button>
-              <button type="button" onClick={() => handleGeneralInfoRichCommand("underline")}>U 밑줄</button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("bold")}>B 굵게</button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("underline")}>U 밑줄</button>
               <button
                 type="button"
                 style={getGeneralInfoToolbarButtonStyle()}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleGeneralInfoRichCommand("removeFormat")}
               >
                 서식 지우기
               </button>
-              <button type="button" className="generalInfoRichColorDefault" onClick={() => handleGeneralInfoRichCommand("foreColor", "#e2e8f0")}>● 기본</button>
-              <button type="button" className="generalInfoRichColorRed" onClick={() => handleGeneralInfoRichCommand("foreColor", "#f87171")}>● 빨강</button>
-              <button type="button" className="generalInfoRichColorYellow" onClick={() => handleGeneralInfoRichCommand("foreColor", "#facc15")}>● 노랑</button>
-              <button type="button" className="generalInfoRichColorBlue" onClick={() => handleGeneralInfoRichCommand("foreColor", "#60a5fa")}>● 파랑</button>
-              <button type="button" className="generalInfoRichColorGreen" onClick={() => handleGeneralInfoRichCommand("foreColor", "#4ade80")}>● 초록</button>
+              <button type="button" className="generalInfoRichColorDefault" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#e2e8f0")}>● 기본</button>
+              <button type="button" className="generalInfoRichColorRed" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#f87171")}>● 빨강</button>
+              <button type="button" className="generalInfoRichColorYellow" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#facc15")}>● 노랑</button>
+              <button type="button" className="generalInfoRichColorBlue" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#60a5fa")}>● 파랑</button>
+              <button type="button" className="generalInfoRichColorGreen" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#4ade80")}>● 초록</button>
             </div>
 
             <div

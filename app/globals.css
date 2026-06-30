@@ -2133,6 +2133,7 @@ textarea {
   grid-column: 1 / -1;
 }
 .diary-gallery-photo {
+  position: relative !important;
   width: 100%;
   border: 0 !important;
   padding: 0 !important;
@@ -2143,6 +2144,49 @@ textarea {
   box-shadow: none !important;
   display: block;
   cursor: zoom-in;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.diary-photo-representative {
+  box-shadow: 0 0 0 4px #38bdf8 !important;
+}
+.diary-photo-rep-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(14, 165, 233, 0.9) !important;
+  color: #ffffff !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  z-index: 10;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.diary-photo-set-rep-btn {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(15, 23, 42, 0.85) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.6) !important;
+  padding: 5px 10px !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  cursor: pointer !important;
+  z-index: 10;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+.diary-photo-set-rep-btn:hover {
+  background: #38bdf8 !important;
+  color: #0f172a !important;
+  border-color: #38bdf8 !important;
+  transform: scale(1.05);
 }
 .diary-gallery-photo img {
   width: 100% !important;
@@ -2468,7 +2512,18 @@ textarea {
   color: #9f3d3d;
   cursor: pointer;
 }
+.original-primary-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 900;
+  background: #e0f2fe;
+  color: #0369a1;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
 .original-delete-btn:active,
+.original-primary-btn:active,
 .original-close-btn:active {
   transform: scale(0.98);
 }
@@ -9197,6 +9252,7 @@ body {
   display: grid !important;
   gap: 10px !important;
   margin-top: 12px !important;
+  position: relative !important;
 }
 
 .generalInfoRichToolbar {
@@ -9304,9 +9360,14 @@ body {
   gap: 8px !important;
   padding: 10px !important;
   border-radius: 14px !important;
-  border: 1px solid rgba(56, 189, 248, 0.2) !important;
-  background: rgba(14, 165, 233, 0.06) !important;
+  border: 1.5px solid rgba(56, 189, 248, 0.35) !important;
+  background: rgba(15, 23, 42, 0.96) !important;
+  backdrop-filter: blur(8px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
   margin: 8px 0 10px !important;
+  position: sticky !important;
+  top: 0px !important;
+  z-index: 50 !important;
 }
 
 .generalInfoRichToolbar button {

@@ -1113,6 +1113,7 @@ export function useTravelDiaryGeneralInfoState({
         extraNote: existingGeneralInfoItem?.extraNote || "",
         filePreview: uploadedMainMedia?.preview || item.filePreview || existingGeneralInfoItem?.filePreview,
         mediaItems: uploadedDraftMediaItems,
+        isPinned: existingGeneralInfoItem?.isPinned || false,
       };
 
       setGeneralInfoItems((prev) => {

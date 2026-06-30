@@ -3726,14 +3726,14 @@ export default function HomePage() {
             <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄 편집 가능</span>
           </div>
           <div className="generalInfoRichToolbar" aria-label="Text 편집 도구">
-            <button type="button" onClick={() => handleDiaryRichCommand("bold")}>B 굵게</button>
-            <button type="button" onClick={() => handleDiaryRichCommand("underline")}>U 밑줄</button>
-            <button type="button" onClick={() => handleDiaryRichCommand("removeFormat")}>서식 지우기</button>
-            <button type="button" className="generalInfoRichColorDefault" onClick={() => handleDiaryRichCommand("foreColor", "#e2e8f0")}>● 기본</button>
-            <button type="button" className="generalInfoRichColorRed" onClick={() => handleDiaryRichCommand("foreColor", "#f87171")}>● 빨강</button>
-            <button type="button" className="generalInfoRichColorYellow" onClick={() => handleDiaryRichCommand("foreColor", "#facc15")}>● 노랑</button>
-            <button type="button" className="generalInfoRichColorBlue" onClick={() => handleDiaryRichCommand("foreColor", "#60a5fa")}>● 파랑</button>
-            <button type="button" className="generalInfoRichColorGreen" onClick={() => handleDiaryRichCommand("foreColor", "#4ade80")}>● 초록</button>
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("bold")}>B 굵게</button>
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("underline")}>U 밑줄</button>
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("removeFormat")}>서식 지우기</button>
+            <button type="button" className="generalInfoRichColorDefault" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#e2e8f0")}>● 기본</button>
+            <button type="button" className="generalInfoRichColorRed" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#f87171")}>● 빨강</button>
+            <button type="button" className="generalInfoRichColorYellow" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#facc15")}>● 노랑</button>
+            <button type="button" className="generalInfoRichColorBlue" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#60a5fa")}>● 파랑</button>
+            <button type="button" className="generalInfoRichColorGreen" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#4ade80")}>● 초록</button>
           </div>
           <div
             key={`diary-rich-${currentYear}-${currentMonth}-${currentDay}`}
@@ -3784,21 +3784,41 @@ export default function HomePage() {
         <div className="diary-photo-section" onPaste={handlePhotoPaste} tabIndex={0}>
           {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
           <div className={`diary-photo-grid-safe diary-photo-gallery ${diaryPhotoCountClass}`}>
-            {dayPhotos.map((photo, index) => (
-              <div
-                className="diary-photo-card-safe diary-gallery-photo diary-photo-item-with-delete"
-                key={`${photo.name}-${index}`}
-              >
-                <button
-                  type="button"
-                  className="diary-photo-open-btn"
-                  onClick={() => openDiaryOriginalPhoto(k, index)}
-                  aria-label="일기 사진 원본 크게 보기"
+            {dayPhotos.map((photo, index) => {
+              const isRepPhoto = calendarPhotoIndexes[k] === index || 
+                (calendarPhotos[k] && (calendarPhotos[k] === photo.url || calendarPhotos[k] === photo.storagePath));
+              return (
+                <div
+                  className={`diary-photo-card-safe diary-gallery-photo diary-photo-item-with-delete ${isRepPhoto ? "diary-photo-representative" : ""}`}
+                  key={`${photo.name}-${index}`}
+                  style={{ position: "relative" }}
                 >
-                  <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
-                </button>
-              </div>
-            ))}
+                  <button
+                    type="button"
+                    className="diary-photo-open-btn"
+                    onClick={() => openDiaryOriginalPhoto(k, index)}
+                    aria-label="일기 사진 원본 크게 보기"
+                  >
+                    <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
+                  </button>
+                  {isRepPhoto ? (
+                    <span className="diary-photo-rep-badge">★ 대표 사진</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="diary-photo-set-rep-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void setCalendarPhoto(k, index);
+                      }}
+                      title="캘린더 대표 사진으로 설정"
+                    >
+                      ★ 대표로 설정
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -4850,16 +4870,20 @@ function MarkDateView() {
       previousData: JSON.stringify(targetPreviousItems),
     });
 
+    let originalItem = allPhotoBookItems.find(p => p.id === editingPhotoBookItemId);
+    const parsedOriginal = originalItem ? parsePhotoBookMemo(originalItem.memo || "") : null;
+    const isPinned = parsedOriginal ? (parsedOriginal.isPinned || false) : false;
+
     const serializedCaption = JSON.stringify({
       type: "photobook",
       keyword: photoBookInputKeyword.trim() || "일반",
       category2: photoBookInputCategory2.trim() || "기타",
       memo: photoBookInputMemo,
       imageMemos: photoBookInputImageMemos,
-      additionalImages
+      additionalImages,
+      isPinned
     });
 
-    let originalItem = allPhotoBookItems.find(p => p.id === editingPhotoBookItemId);
     let originalDate = originalItem ? originalItem.tag : dateStr;
     const originalStoragePath = originalItem?.storagePath || photoBookInputImageStoragePath;
 
@@ -4886,7 +4910,8 @@ function MarkDateView() {
               name: primaryStoragePath.split("/").pop() || "photo.jpg",
               storagePath: primaryStoragePath,
               memo: serializedCaption, 
-              tag: dateStr 
+              tag: dateStr,
+              isPinned
             };
           }
           return item;
@@ -4902,7 +4927,8 @@ function MarkDateView() {
           memoWidth: "360",
           memoHeight: "110",
           storagePath: primaryStoragePath,
-          id: editingPhotoBookItemId
+          id: editingPhotoBookItemId,
+          isPinned
         };
         nextPhotosForDay = [...destinationItems, itemObj];
       }
@@ -6610,9 +6636,29 @@ ${photo.memoText}
           <div className="original-image-panel" onClick={event => event.stopPropagation()}>
             <div className="original-modal-actions">
               {originalImageTarget?.type === "diary" && (
-                <button type="button" className="original-delete-btn" onClick={deleteOriginalDiaryPhoto}>사진 삭제</button>
+                <>
+                  <button
+                    type="button"
+                    className="original-primary-btn"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (originalImageTarget) {
+                        await setCalendarPhoto(originalImageTarget.photoKey, originalImageTarget.index);
+                        closeOriginalImage();
+                      }
+                    }}
+                  >
+                    ★ 캘린더 대표 설정
+                  </button>
+                  <button type="button" className="original-delete-btn" onClick={deleteOriginalDiaryPhoto}>사진 삭제</button>
+                </>
               )}
-              <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
+              {originalImageTarget?.type !== "diary" && (
+                <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
+              )}
+              {originalImageTarget?.type === "diary" && (
+                <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
+              )}
             </div>
             <img src={originalImageUrl} alt="원본 사진" />
           </div>
