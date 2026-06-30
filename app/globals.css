@@ -7317,6 +7317,28 @@ body {
   font-weight: 800;
   z-index: 1;
 }
+.generalInfoDraftMediaBadge.representative {
+  background: #facc15 !important;
+  color: #0f172a !important;
+  font-weight: 900 !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3) !important;
+}
+.generalInfoDraftMediaBadge.select-representative {
+  cursor: pointer !important;
+  background: rgba(15, 23, 42, 0.75) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.6) !important;
+  transition: all 0.2s ease !important;
+}
+.generalInfoDraftMediaBadge.select-representative:hover {
+  background: #38bdf8 !important;
+  color: #0f172a !important;
+  border-color: #38bdf8 !important;
+}
+.generalInfoDraftMediaCard.representative-card {
+  border-color: rgba(250, 204, 21, 0.6) !important;
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.25) !important;
+}
 
 .generalInfoCoverImageBox {
   margin-top: 12px;

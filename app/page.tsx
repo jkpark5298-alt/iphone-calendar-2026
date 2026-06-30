@@ -5005,6 +5005,32 @@ function MarkDateView() {
     setPhotoBookTab("index");
   }
 
+  function makePhotoBookRepresentative(index: number) {
+    if (index <= 0 || index >= photoBookInputImageUrls.length) return;
+    const nextUrls = [...photoBookInputImageUrls];
+    const nextPaths = [...photoBookInputImageStoragePaths];
+    const nextMemos = [...photoBookInputImageMemos];
+    
+    const tempUrl = nextUrls[0];
+    nextUrls[0] = nextUrls[index];
+    nextUrls[index] = tempUrl;
+    
+    const tempPath = nextPaths[0];
+    nextPaths[0] = nextPaths[index];
+    nextPaths[index] = tempPath;
+    
+    const tempMemo = nextMemos[0];
+    nextMemos[0] = nextMemos[index];
+    nextMemos[index] = tempMemo;
+    
+    setPhotoBookInputImageUrls(nextUrls);
+    setPhotoBookInputImageStoragePaths(nextPaths);
+    setPhotoBookInputImageMemos(nextMemos);
+    
+    setPhotoBookInputImageUrl(nextUrls[0] || "");
+    setPhotoBookInputImageStoragePath(nextPaths[0] || "");
+  }
+
   // CRUD: Edit Photo Book Trigger
   async function togglePhotoBookPin(item: PhotoItem) {
     const parsed = parsePhotoBookMemo(item.memo || "");
@@ -5734,7 +5760,7 @@ ${photo.memoText}
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))", gap: "6px", width: "100%" }}>
                               {photoBookInputImageUrls.map((url, idx) => (
                                 <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                                  <div style={{ position: "relative", width: "52px", height: "52px", borderRadius: "5px", overflow: "hidden", border: pbMemoEditIdx === idx ? "2px solid #62b19b" : "1px solid rgba(255,255,255,0.2)" }}>
+                                  <div style={{ position: "relative", width: "52px", height: "52px", borderRadius: "5px", overflow: "hidden", border: idx === 0 ? "2px solid #eab308" : pbMemoEditIdx === idx ? "2px solid #62b19b" : "1px solid rgba(255,255,255,0.2)" }}>
                                     <img
                                       src={url}
                                       alt={`미리보기 ${idx + 1}`}
@@ -5766,6 +5792,27 @@ ${photo.memoText}
                                   <div className="generalInfoDraftMediaHint" onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}>
                                     {photoBookInputImageMemos[idx] ? "📝 메모" : "＋ 메모"}
                                   </div>
+                                  {idx === 0 ? (
+                                    <span style={{ fontSize: "10px", color: "#eab308", fontWeight: "bold", marginTop: "3px" }}>★ 대표</span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => makePhotoBookRepresentative(idx)}
+                                      style={{
+                                        marginTop: "3px",
+                                        background: "rgba(234, 179, 8, 0.15)",
+                                        color: "#facc15",
+                                        border: "1px solid rgba(234, 179, 8, 0.4)",
+                                        borderRadius: "4px",
+                                        fontSize: "9px",
+                                        padding: "1px 4px",
+                                        cursor: "pointer",
+                                        fontWeight: "bold"
+                                      }}
+                                    >
+                                      ★ 대표 설정
+                                    </button>
+                                  )}
                                   {pbMemoEditIdx === idx && (
                                     <div className="generalInfoMediaMemoEdit">
                                       <textarea
@@ -6165,7 +6212,7 @@ ${photo.memoText}
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))", gap: "6px", width: "100%" }}>
                             {photoBookInputImageUrls.map((url, idx) => (
                               <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                                <div style={{ position: "relative", width: "52px", height: "52px", borderRadius: "5px", overflow: "hidden", border: pbMemoEditIdx === idx ? "2px solid #62b19b" : "1px solid rgba(255,255,255,0.2)" }}>
+                                <div style={{ position: "relative", width: "52px", height: "52px", borderRadius: "5px", overflow: "hidden", border: idx === 0 ? "2px solid #eab308" : pbMemoEditIdx === idx ? "2px solid #62b19b" : "1px solid rgba(255,255,255,0.2)" }}>
                                   <img
                                     src={url}
                                     alt={`미리보기 ${idx + 1}`}
@@ -6197,6 +6244,27 @@ ${photo.memoText}
                                 <div className="generalInfoDraftMediaHint" onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}>
                                   {photoBookInputImageMemos[idx] ? "📝 메모" : "＋ 메모"}
                                 </div>
+                                {idx === 0 ? (
+                                  <span style={{ fontSize: "10px", color: "#eab308", fontWeight: "bold", marginTop: "3px" }}>★ 대표</span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => makePhotoBookRepresentative(idx)}
+                                    style={{
+                                      marginTop: "3px",
+                                      background: "rgba(234, 179, 8, 0.15)",
+                                      color: "#facc15",
+                                      border: "1px solid rgba(234, 179, 8, 0.4)",
+                                      borderRadius: "4px",
+                                      fontSize: "9px",
+                                      padding: "1px 4px",
+                                      cursor: "pointer",
+                                      fontWeight: "bold"
+                                    }}
+                                  >
+                                    ★ 대표 설정
+                                  </button>
+                                )}
                                 {pbMemoEditIdx === idx && (
                                   <div className="generalInfoMediaMemoEdit">
                                     <textarea

@@ -148,6 +148,28 @@ export function Chapter3Info({
       };
     });
   }, [normalizeGeneralInfoMediaItems, setGeneralInfoDraft]);
+
+  // 대표 미디어 아이템 설정 (Swap 방식)
+  const handleSetMediaAsRepresentative = React.useCallback((index: number) => {
+    setGeneralInfoDraft(prev => {
+      const items = normalizeGeneralInfoMediaItems(prev);
+      if (index <= 0 || index >= items.length) return prev;
+      
+      const updated = [...items];
+      const temp = updated[0];
+      updated[0] = updated[index];
+      updated[index] = temp;
+      
+      const main = updated[0];
+      return {
+        ...prev,
+        fileName: main?.name || prev.fileName,
+        filePreview: main?.preview || prev.filePreview,
+        fileType: main?.type || prev.fileType,
+        mediaItems: updated,
+      };
+    });
+  }, [normalizeGeneralInfoMediaItems, setGeneralInfoDraft]);
   const [tempApiKey, setTempApiKey] = React.useState(geminiApiKey);
   const [keyValidationStatus, setKeyValidationStatus] = React.useState<"idle" | "validating" | "valid" | "invalid">("idle");
   const [validationError, setValidationError] = React.useState<string | null>(null);
@@ -649,10 +671,20 @@ export function Chapter3Info({
                   const isEditingMemo = memoEditIndex === index;
                   const hasMemo = !!media.memo?.trim();
                   return (
-                    <div className="generalInfoDraftMediaCard" key={media.id || index}>
-                      <div className="generalInfoDraftMediaBadge">
-                        {index === 0 ? "대표" : `추가 ${index}`}
-                      </div>
+                    <div className={`generalInfoDraftMediaCard ${index === 0 ? "representative-card" : ""}`} key={media.id || index}>
+                      {index === 0 ? (
+                        <div className="generalInfoDraftMediaBadge representative">
+                          ★ 대표
+                        </div>
+                      ) : (
+                        <div
+                          className="generalInfoDraftMediaBadge select-representative"
+                          onClick={() => handleSetMediaAsRepresentative(index)}
+                          title="대표 이미지로 설정"
+                        >
+                          ★ 대표 설정
+                        </div>
+                      )}
                       {/* 이미지/동영상 — 클릭 시 메모 입력 토글 */}
                       <div
                         className="generalInfoDraftMediaThumb"
