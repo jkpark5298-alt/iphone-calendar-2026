@@ -8,6 +8,7 @@ import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralIn
 import { ChangeEvent, ClipboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateApi";
+import { extractPhotoExif, formatPhotoBookExifDisplay, type PhotoBookImageExif } from "../lib/photoExif";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
@@ -29,7 +30,7 @@ type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orang
 type OriginalImageTarget = 
   | { type: "diary"; photoKey: string; index: number } 
   | { type: "insta"; id: string }
-  | { type: "photobook"; id: string }
+  | { type: "photobook"; id: string; url: string; fileName?: string }
   | null;
 type ScheduleItem = {
   id: string;
@@ -522,6 +523,7 @@ export default function HomePage() {
   const [editingPhotoBookItemId, setEditingPhotoBookItemId] = useState<string | null>(null);
   const [photoBookInputImage, setPhotoBookInputImage] = useState<File | null>(null);
   const [photoBookInputImageMemos, setPhotoBookInputImageMemos] = useState<string[]>([]);
+  const [photoBookInputImageExifs, setPhotoBookInputImageExifs] = useState<PhotoBookImageExif[]>([]);
   const [pbMemoEditIdx, setPbMemoEditIdx] = useState<number | null>(null);
   const [photoBookTab, setPhotoBookTab] = useState<"index" | "register">("index");
 
@@ -1789,10 +1791,21 @@ export default function HomePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function openInfo(month: number, day: number, year: number = currentYear) {
+  function openInfo(
+    month: number,
+    day: number,
+    year: number = currentYear,
+    subView: "generalInfo" | "photobook" = "generalInfo"
+  ) {
     setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);
+    setInfoSubView(subView);
+    setActiveItem(null);
+    if (subView === "photobook") {
+      setPhotoBookTab("index");
+      setEditingPhotoBookItemId(null);
+    }
     setView("info");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -3248,6 +3261,36 @@ export default function HomePage() {
     setOriginalImageTarget(null);
   }
 
+  function openPhotoBookIndexImage(photo: { url?: string; id?: string; keyword?: string; tag?: string }) {
+    if (!photo.url) return;
+    setOriginalImageUrl(photo.url);
+    setOriginalImageTarget({
+      type: "photobook",
+      id: photo.id || "",
+      url: photo.url,
+      fileName: `photobook_${photo.keyword || "photo"}_${photo.tag || Date.now()}.jpg`,
+    });
+  }
+
+  async function downloadOriginalPhotoBookImage() {
+    if (!originalImageTarget || originalImageTarget.type !== "photobook" || !originalImageUrl) return;
+    const fileName = originalImageTarget.fileName || `photobook_${Date.now()}.jpg`;
+    try {
+      const response = await fetch(originalImageUrl);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(originalImageUrl, "_blank");
+    }
+  }
+
   async function deleteOriginalDiaryPhoto() {
     if (!originalImageTarget || originalImageTarget.type !== "diary") return;
     const itemNumber = originalImageTarget.index + 1;
@@ -3600,7 +3643,8 @@ export default function HomePage() {
           </h1>
           <div className="head-actions calendar-top-actions calendar-top-actions-redesign">
             <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("diary")}>일기장</button>
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfo(currentMonth, currentDay)}>정보보관소</button>
+            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfo(currentMonth, currentDay, currentYear, "photobook")}>포토</button>
+            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfo(currentMonth, currentDay, currentYear, "generalInfo")}>일반</button>
             <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
@@ -4309,6 +4353,7 @@ function MarkDateView() {
     category2: string;
     memo: string;
     imageMemos: string[];
+    imageExifs?: PhotoBookImageExif[];
     additionalImages?: Array<{url: string; storagePath: string}>;
     isPinned?: boolean;
   } {
@@ -4324,6 +4369,7 @@ function MarkDateView() {
             category2: parsed.category2 || "기타",
             memo: parsed.memo || "",
             imageMemos: Array.isArray(parsed.imageMemos) ? parsed.imageMemos : [],
+            imageExifs: Array.isArray(parsed.imageExifs) ? parsed.imageExifs : [],
             additionalImages: parsed.additionalImages || [],
             isPinned: parsed.isPinned || false
           };
@@ -4344,6 +4390,7 @@ function MarkDateView() {
               category2: parsed.category2 || "기타",
               memo: parsed.memo || cleanMemo.replace(subStr, "").replace(/^[#\s]+|[#\s]+$/g, ""),
               imageMemos: Array.isArray(parsed.imageMemos) ? parsed.imageMemos : [],
+              imageExifs: Array.isArray(parsed.imageExifs) ? parsed.imageExifs : [],
               additionalImages: parsed.additionalImages || []
             };
           } catch (e) {}
@@ -4371,7 +4418,7 @@ function MarkDateView() {
         }
       }
     }
-    return { keyword, category2, memo: cleanMemo, imageMemos: [], additionalImages: [] };
+    return { keyword, category2, memo: cleanMemo, imageMemos: [], imageExifs: [], additionalImages: [] };
   }
 
   // API Call: AI OCR & Classification for Image Upload
@@ -4880,6 +4927,7 @@ function MarkDateView() {
       category2: photoBookInputCategory2.trim() || "기타",
       memo: photoBookInputMemo,
       imageMemos: photoBookInputImageMemos,
+      imageExifs: photoBookInputImageExifs,
       additionalImages,
       isPinned
     });
@@ -5000,6 +5048,7 @@ function MarkDateView() {
     setPhotoBookInputImage(null);
     setPhotoBookInputDate(entryDate(currentMonth, currentDay));
     setPhotoBookInputImageMemos([]);
+    setPhotoBookInputImageExifs([]);
     setPbMemoEditIdx(null);
     setActiveItem(null);
     setPhotoBookTab("index");
@@ -5010,6 +5059,7 @@ function MarkDateView() {
     const nextUrls = [...photoBookInputImageUrls];
     const nextPaths = [...photoBookInputImageStoragePaths];
     const nextMemos = [...photoBookInputImageMemos];
+    const nextExifs = [...photoBookInputImageExifs];
     
     const tempUrl = nextUrls[0];
     nextUrls[0] = nextUrls[index];
@@ -5022,10 +5072,15 @@ function MarkDateView() {
     const tempMemo = nextMemos[0];
     nextMemos[0] = nextMemos[index];
     nextMemos[index] = tempMemo;
+
+    const tempExif = nextExifs[0];
+    nextExifs[0] = nextExifs[index];
+    nextExifs[index] = tempExif;
     
     setPhotoBookInputImageUrls(nextUrls);
     setPhotoBookInputImageStoragePaths(nextPaths);
     setPhotoBookInputImageMemos(nextMemos);
+    setPhotoBookInputImageExifs(nextExifs);
     
     setPhotoBookInputImageUrl(nextUrls[0] || "");
     setPhotoBookInputImageStoragePath(nextPaths[0] || "");
@@ -5041,6 +5096,7 @@ function MarkDateView() {
       category2: parsed.category2,
       memo: parsed.memo,
       imageMemos: parsed.imageMemos,
+      imageExifs: parsed.imageExifs || [],
       additionalImages: parsed.additionalImages || [],
       isPinned: newIsPinned
     });
@@ -5075,6 +5131,7 @@ function MarkDateView() {
     setPhotoBookInputMemo(parsed.memo);
     setPhotoBookInputDate(item.tag);
     setPhotoBookInputImageMemos(parsed.imageMemos || []);
+    setPhotoBookInputImageExifs(parsed.imageExifs || []);
     setPbMemoEditIdx(null);
     setPhotoBookTab("register");
   }
@@ -5092,6 +5149,7 @@ function MarkDateView() {
     setPhotoBookInputImage(null);
     setPhotoBookInputDate(entryDate(currentMonth, currentDay));
     setPhotoBookInputImageMemos([]);
+    setPhotoBookInputImageExifs([]);
     setPbMemoEditIdx(null);
     setPhotoBookTab("index");
   }
@@ -5152,7 +5210,10 @@ function MarkDateView() {
       if (fileList.length === 0) return;
 
       const uploadedItems: PhotoItem[] = [];
+      const extractedExifs: PhotoBookImageExif[] = [];
       for (const file of fileList) {
+        const exif = await extractPhotoExif(file);
+        extractedExifs.push(exif);
         const item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999, currentYear);
         if (item) {
           uploadedItems.push(item);
@@ -5169,6 +5230,8 @@ function MarkDateView() {
           const next = [...prev, ...uploadedItems.map(item => item.storagePath || "")];
           return next;
         });
+
+        setPhotoBookInputImageExifs(prev => [...prev, ...extractedExifs.slice(0, uploadedItems.length)]);
 
         // Set primary fallback images if not already set
         setPhotoBookInputImageUrl(prev => prev || uploadedItems[0].url);
@@ -5703,6 +5766,8 @@ ${photo.memoText}
                     setPhotoBookInputImageStoragePath("");
                     setPhotoBookInputImageUrls([]);
                     setPhotoBookInputImageStoragePaths([]);
+                    setPhotoBookInputImageMemos([]);
+                    setPhotoBookInputImageExifs([]);
                     setPhotoBookInputDate(entryDate(currentMonth, currentDay));
                     setPhotoBookTab("register");
                   }}
@@ -5776,12 +5841,15 @@ ${photo.memoText}
                                         const nextUrls = [...photoBookInputImageUrls];
                                         const nextPaths = [...photoBookInputImageStoragePaths];
                                         const nextMemos = [...photoBookInputImageMemos];
+                                        const nextExifs = [...photoBookInputImageExifs];
                                         nextUrls.splice(idx, 1);
                                         nextPaths.splice(idx, 1);
                                         nextMemos.splice(idx, 1);
+                                        nextExifs.splice(idx, 1);
                                         setPhotoBookInputImageUrls(nextUrls);
                                         setPhotoBookInputImageStoragePaths(nextPaths);
                                         setPhotoBookInputImageMemos(nextMemos);
+                                        setPhotoBookInputImageExifs(nextExifs);
                                         setPhotoBookInputImageUrl(nextUrls[0] || "");
                                         setPhotoBookInputImageStoragePath(nextPaths[0] || "");
                                         if (pbMemoEditIdx === idx) setPbMemoEditIdx(null);
@@ -5812,6 +5880,9 @@ ${photo.memoText}
                                     >
                                       ★ 대표 설정
                                     </button>
+                                  )}
+                                  {formatPhotoBookExifDisplay(photoBookInputImageExifs[idx]) && (
+                                    <p className="pbPhotoExifCaption">{formatPhotoBookExifDisplay(photoBookInputImageExifs[idx])}</p>
                                   )}
                                   {pbMemoEditIdx === idx && (
                                     <div className="generalInfoMediaMemoEdit">
@@ -6228,12 +6299,15 @@ ${photo.memoText}
                                       const nextUrls = [...photoBookInputImageUrls];
                                       const nextPaths = [...photoBookInputImageStoragePaths];
                                       const nextMemos = [...photoBookInputImageMemos];
+                                      const nextExifs = [...photoBookInputImageExifs];
                                       nextUrls.splice(idx, 1);
                                       nextPaths.splice(idx, 1);
                                       nextMemos.splice(idx, 1);
+                                      nextExifs.splice(idx, 1);
                                       setPhotoBookInputImageUrls(nextUrls);
                                       setPhotoBookInputImageStoragePaths(nextPaths);
                                       setPhotoBookInputImageMemos(nextMemos);
+                                      setPhotoBookInputImageExifs(nextExifs);
                                       setPhotoBookInputImageUrl(nextUrls[0] || "");
                                       setPhotoBookInputImageStoragePath(nextPaths[0] || "");
                                       if (pbMemoEditIdx === idx) setPbMemoEditIdx(null);
@@ -6264,6 +6338,9 @@ ${photo.memoText}
                                   >
                                     ★ 대표 설정
                                   </button>
+                                )}
+                                {formatPhotoBookExifDisplay(photoBookInputImageExifs[idx]) && (
+                                  <p className="pbPhotoExifCaption">{formatPhotoBookExifDisplay(photoBookInputImageExifs[idx])}</p>
                                 )}
                                 {pbMemoEditIdx === idx && (
                                   <div className="generalInfoMediaMemoEdit">
@@ -6534,7 +6611,10 @@ ${photo.memoText}
                           {/* ── 이미지 — 2fr (generalInfoCardThumbnail과 동일) ── */}
                           <div
                             className="pbIndexCardPhoto"
-                            onClick={() => { setActiveItem({ type: "photobook", id: photo.id || "" }); setPhotoBookTab("register"); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openPhotoBookIndexImage(photo);
+                            }}
                           >
                             {isPinned && (
                               <div className="pbIndexCardPinBadge">📌</div>
@@ -6721,7 +6801,22 @@ ${photo.memoText}
                   <button type="button" className="original-delete-btn" onClick={deleteOriginalDiaryPhoto}>사진 삭제</button>
                 </>
               )}
-              {originalImageTarget?.type !== "diary" && (
+              {originalImageTarget?.type === "photobook" && (
+                <>
+                  <button
+                    type="button"
+                    className="original-primary-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void downloadOriginalPhotoBookImage();
+                    }}
+                  >
+                    📥 사진 저장
+                  </button>
+                  <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
+                </>
+              )}
+              {originalImageTarget?.type !== "diary" && originalImageTarget?.type !== "photobook" && (
                 <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
               )}
               {originalImageTarget?.type === "diary" && (

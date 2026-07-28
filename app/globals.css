@@ -8002,6 +8002,17 @@ body {
   }
 }
 
+.pbPhotoExifCaption {
+  margin: 4px 0 0;
+  padding: 0 2px;
+  font-size: 9px;
+  line-height: 1.35;
+  color: #94a3b8;
+  text-align: center;
+  word-break: break-word;
+  max-width: 72px;
+}
+
 /* ── 사진 컬럼 (2fr) — generalInfoCardThumbnail과 동일 ── */
 .pbIndexCardPhoto {
   width: 100%;
@@ -8012,7 +8023,7 @@ body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  cursor: pointer;
+  cursor: zoom-in;
 }
 
 .pbIndexCardPhoto img {
