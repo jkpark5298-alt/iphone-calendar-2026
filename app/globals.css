@@ -8013,6 +8013,30 @@ body {
   max-width: 72px;
 }
 
+.pasted-image-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.pasted-image-preview-count {
+  width: 100%;
+  margin: 0;
+  text-align: center;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.pasted-image-preview-panel img {
+  width: 100%;
+  max-height: calc(94vh - 110px);
+  object-fit: contain;
+  background: #111;
+  border-radius: 10px;
+}
+
 /* ── 사진 컬럼 (2fr) — generalInfoCardThumbnail과 동일 ── */
 .pbIndexCardPhoto {
   width: 100%;
@@ -8023,7 +8047,7 @@ body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  cursor: zoom-in;
+  cursor: pointer;
 }
 
 .pbIndexCardPhoto img {

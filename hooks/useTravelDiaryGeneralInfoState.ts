@@ -35,10 +35,12 @@ const uploadFileToSupabaseStorage = async (file: File): Promise<{ storagePath: s
 
 export interface UseTravelDiaryGeneralInfoStateProps {
   showPasteHint: (msg: string) => void;
+  onPastedImagePreview?: (files: File[]) => void;
 }
 
 export function useTravelDiaryGeneralInfoState({
-  showPasteHint
+  showPasteHint,
+  onPastedImagePreview,
 }: UseTravelDiaryGeneralInfoStateProps) {
   
 
@@ -537,6 +539,15 @@ export function useTravelDiaryGeneralInfoState({
     });
   }, [showPasteHint]);
 
+  const routePastedImagePreview = useCallback((files: File[]) => {
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length > 0 && onPastedImagePreview) {
+      onPastedImagePreview(imageFiles);
+      return true;
+    }
+    return false;
+  }, [onPastedImagePreview]);
+
   const handleGeneralInfoRichPaste = useCallback((
     event: React.ClipboardEvent<HTMLDivElement>,
   ) => {
@@ -553,6 +564,7 @@ export function useTravelDiaryGeneralInfoState({
 
     if (pastedFiles.length > 0) {
       event.preventDefault();
+      if (routePastedImagePreview(pastedFiles)) return;
       const transfer = new DataTransfer();
       pastedFiles.forEach((file) => transfer.items.add(file));
       handleGeneralInfoFileUpload(transfer.files);
@@ -597,7 +609,7 @@ export function useTravelDiaryGeneralInfoState({
     // Sync state after paste (onInput is not attached, so call explicitly)
     syncGeneralInfoRichTextToDraft();
     showPasteHint("✅ Text를 편집기에 붙여넣었습니다.");
-  }, [decodeGeneralInfoPastedText, syncGeneralInfoRichTextToDraft, showPasteHint, handleGeneralInfoFileUpload, generalInfoRichTextRef]);
+  }, [decodeGeneralInfoPastedText, syncGeneralInfoRichTextToDraft, showPasteHint, handleGeneralInfoFileUpload, generalInfoRichTextRef, routePastedImagePreview]);
 
   const handleExtractGeneralInfoUrl = useCallback(async () => {
     const targetUrl = generalInfoDraft.sourceUrl.trim();
@@ -702,6 +714,13 @@ export function useTravelDiaryGeneralInfoState({
 
             if (imageType) {
               const blob = await clipboardItem.getType(imageType);
+              const file = new File([blob], `clipboard-image-${Date.now()}.png`, { type: imageType });
+              if (routePastedImagePreview([file])) {
+                handled = true;
+                showPasteHint("🖼️ 붙여넣은 사진을 확인한 뒤 저장 위치를 선택하세요.");
+                break;
+              }
+
               const reader = new FileReader();
 
               await new Promise<void>((resolve, reject) => {
@@ -799,7 +818,7 @@ export function useTravelDiaryGeneralInfoState({
     } finally {
       setIsCollectingGeneralInfoClipboard(false);
     }
-  }, [generalInfoDraft.text, backupCurrentGeneralInfoDraft, extractGeneralInfoUrl, resetGeneralInfoRichTextEditor, showPasteHint]);
+  }, [generalInfoDraft.text, backupCurrentGeneralInfoDraft, extractGeneralInfoUrl, resetGeneralInfoRichTextEditor, showPasteHint, routePastedImagePreview]);
 
   const handleClearGeneralInfoCoverImage = useCallback(() => {
     setGeneralInfoImageLoadFailed(false);
@@ -856,9 +875,20 @@ export function useTravelDiaryGeneralInfoState({
     }
 
     if (pastedFiles.length > 0) {
-      const transfer = new DataTransfer();
-      pastedFiles.forEach((file) => transfer.items.add(file));
-      handleGeneralInfoFileUpload(transfer.files);
+      const imageFiles = pastedFiles.filter((file) => file.type.startsWith("image/"));
+      const videoFiles = pastedFiles.filter((file) => file.type.startsWith("video/"));
+
+      if (imageFiles.length > 0 && routePastedImagePreview(imageFiles)) {
+        if (videoFiles.length > 0) {
+          const transfer = new DataTransfer();
+          videoFiles.forEach((file) => transfer.items.add(file));
+          handleGeneralInfoFileUpload(transfer.files);
+        }
+      } else {
+        const transfer = new DataTransfer();
+        pastedFiles.forEach((file) => transfer.items.add(file));
+        handleGeneralInfoFileUpload(transfer.files);
+      }
     }
 
     const pastedText =
@@ -874,7 +904,7 @@ export function useTravelDiaryGeneralInfoState({
     if (pastedFiles.length === 0 && !pastedText.trim()) {
       showPasteHint("⚠️ 이미지/동영상을 복사해 다시 시도하세요.");
     }
-  }, [handleGeneralInfoFileUpload, applyGeneralInfoPastedText, showPasteHint]);
+  }, [handleGeneralInfoFileUpload, applyGeneralInfoPastedText, showPasteHint, routePastedImagePreview]);
 
   // --- AI 분석 및 자료 저장/수정 핸들러 ---
   const handleAnalyzeGeneralInfoDraft = useCallback(async () => {

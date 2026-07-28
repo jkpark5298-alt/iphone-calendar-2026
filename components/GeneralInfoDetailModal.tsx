@@ -200,6 +200,7 @@ interface Props {
   onDelete?: (item: GeneralInfoItem) => void;
   onSavePdf?: (item: GeneralInfoItem) => void;
   onShareReport?: (item: GeneralInfoItem) => void;
+  onOpenStorageImage?: (url: string, fileName?: string) => void;
 }
 
 export default function GeneralInfoDetailModal({
@@ -211,6 +212,7 @@ export default function GeneralInfoDetailModal({
   onDelete,
   onSavePdf,
   onShareReport,
+  onOpenStorageImage,
 }: Props) {
   if (!item) return null;
 
@@ -304,7 +306,11 @@ export default function GeneralInfoDetailModal({
                       <img
                         src={media.preview}
                         alt={media.name || item.title || `자료 이미지 ${index + 1}`}
-                        style={{ width: "100%", maxHeight: "500px", objectFit: "contain", borderRadius: "10px", background: "rgba(2, 6, 23, 0.55)", display: "block" }}
+                        style={{ width: "100%", maxHeight: "500px", objectFit: "contain", borderRadius: "10px", background: "rgba(2, 6, 23, 0.55)", display: "block", cursor: onOpenStorageImage ? "zoom-in" : "default" }}
+                        onClick={() => {
+                          if (!onOpenStorageImage) return;
+                          onOpenStorageImage(media.preview, media.name || `${item.title || "general_info"}_${index + 1}.jpg`);
+                        }}
                       />
                     )}
                     <p className="mutedText" style={{ margin: "8px 0 4px", wordBreak: "break-all" }}>

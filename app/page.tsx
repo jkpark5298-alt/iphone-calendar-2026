@@ -30,8 +30,12 @@ type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orang
 type OriginalImageTarget = 
   | { type: "diary"; photoKey: string; index: number } 
   | { type: "insta"; id: string }
-  | { type: "photobook"; id: string; url: string; fileName?: string }
+  | { type: "storage-image"; url: string; fileName?: string }
   | null;
+type PastedImagePreview = {
+  files: File[];
+  previewUrl: string;
+} | null;
 type ScheduleItem = {
   id: string;
   title: string;
@@ -463,6 +467,7 @@ export default function HomePage() {
   const [weatherSource, setWeatherSource] = useState("기상청 연결 대기");
   const [originalImageUrl, setOriginalImageUrl] = useState("");
   const [originalImageTarget, setOriginalImageTarget] = useState<OriginalImageTarget>(null);
+  const [pastedImagePreview, setPastedImagePreview] = useState<PastedImagePreview>(null);
   const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
   const [datePickerValue, setDatePickerValue] = useState(`${todayDefault.year ?? 2026}-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
@@ -492,8 +497,28 @@ export default function HomePage() {
     }
   }, []);
 
+  const closePastedImagePreview = useCallback(() => {
+    setPastedImagePreview((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+  }, []);
+
+  const openPastedImagePreview = useCallback((files: File[]) => {
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) return;
+    setPastedImagePreview((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return {
+        files: imageFiles,
+        previewUrl: URL.createObjectURL(imageFiles[0]),
+      };
+    });
+  }, []);
+
   const infoState = useTravelDiaryGeneralInfoState({
     showPasteHint: showGeneralInfoPasteHint,
+    onPastedImagePreview: openPastedImagePreview,
   });
   const [instaLoading, setInstaLoading] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState("");
@@ -3261,21 +3286,25 @@ export default function HomePage() {
     setOriginalImageTarget(null);
   }
 
-  function openPhotoBookIndexImage(photo: { url?: string; id?: string; keyword?: string; tag?: string }) {
-    if (!photo.url) return;
-    setOriginalImageUrl(photo.url);
-    setOriginalImageTarget({
-      type: "photobook",
-      id: photo.id || "",
-      url: photo.url,
-      fileName: `photobook_${photo.keyword || "photo"}_${photo.tag || Date.now()}.jpg`,
-    });
+  function openStorageImage(url: string, fileName?: string) {
+    if (!url) return;
+    setOriginalImageUrl(url);
+    setOriginalImageTarget({ type: "storage-image", url, fileName });
   }
 
-  async function downloadOriginalPhotoBookImage() {
-    if (!originalImageTarget || originalImageTarget.type !== "photobook" || !originalImageUrl) return;
-    const fileName = originalImageTarget.fileName || `photobook_${Date.now()}.jpg`;
+  async function downloadStorageImage() {
+    if (!originalImageTarget || originalImageTarget.type !== "storage-image" || !originalImageUrl) return;
+    const fileName = originalImageTarget.fileName || `saved_image_${Date.now()}.jpg`;
     try {
+      if (originalImageUrl.startsWith("data:")) {
+        const link = document.createElement("a");
+        link.href = originalImageUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        return;
+      }
       const response = await fetch(originalImageUrl);
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
@@ -3289,6 +3318,29 @@ export default function HomePage() {
     } catch {
       window.open(originalImageUrl, "_blank");
     }
+  }
+
+  async function savePastedImageToPhotoBook() {
+    if (!pastedImagePreview) return;
+    const files = pastedImagePreview.files;
+    closePastedImagePreview();
+    setView("info");
+    setInfoSubView("photobook");
+    setPhotoBookTab("register");
+    setActiveItem(null);
+    setEditingPhotoBookItemId(null);
+    await handlePhotoBookImageUpload(files);
+  }
+
+  function savePastedImageToGeneralInfo() {
+    if (!pastedImagePreview) return;
+    const files = pastedImagePreview.files;
+    closePastedImagePreview();
+    setView("info");
+    setInfoSubView("generalInfo");
+    const transfer = new DataTransfer();
+    files.forEach((file) => transfer.items.add(file));
+    infoState.handleGeneralInfoFileUpload(transfer.files);
   }
 
   async function deleteOriginalDiaryPhoto() {
@@ -5275,7 +5327,7 @@ function MarkDateView() {
 
     if (pastedFiles.length > 0) {
       event.preventDefault();
-      await handlePhotoBookImageUpload(pastedFiles);
+      openPastedImagePreview(pastedFiles);
     }
   }
 
@@ -5356,7 +5408,7 @@ function MarkDateView() {
         return;
       }
 
-      await handlePhotoBookImageUpload(file);
+      openPastedImagePreview([file]);
     } catch (e) {
       console.error(e);
       alert("클립보드 접근 권한이 없거나 지원되지 않는 브라우저입니다. 복사한 이미지를 입력 창에 직접 붙여넣거나(Ctrl+V) '사진 가져오기'를 사용해 주세요.");
@@ -5744,6 +5796,7 @@ ${photo.memoText}
               normalizeGeneralInfoMediaItems={infoState.normalizeGeneralInfoMediaItems}
               getGeneralInfoDisplayMediaItems={infoState.getGeneralInfoDisplayMediaItems}
               handleSaveTemporaryGeneralInfoDraft={infoState.handleSaveTemporaryGeneralInfoDraft}
+              onOpenStorageImage={openStorageImage}
             />
           ) : (
             /* Photo Book Tab-based Layout */
@@ -5829,8 +5882,11 @@ ${photo.memoText}
                                     <img
                                       src={url}
                                       alt={`미리보기 ${idx + 1}`}
-                                      style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
-                                      onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}
+                                      style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openStorageImage(url, `photobook_preview_${idx + 1}.jpg`);
+                                      }}
                                     />
                                     <button 
                                       type="button" 
@@ -5990,7 +6046,7 @@ ${photo.memoText}
                               }
                             }
                             if (files.length > 0) {
-                              await handlePhotoBookImageUpload(files);
+                              openPastedImagePreview(files);
                             } else {
                               const text = e.clipboardData.getData("text/plain") || e.clipboardData.getData("text/uri-list");
                               if (text.trim()) alert(`붙여넣기된 텍스트:\n${text.trim().slice(0, 100)}`);
@@ -6125,7 +6181,7 @@ ${photo.memoText}
                                   src={curUrl}
                                   alt="포토북 상세 사진"
                                   style={{ width: "100%", height: "auto", minHeight: "60vh", maxWidth: "100%", borderRadius: "8px", cursor: "zoom-in", objectFit: "contain", display: "block" }}
-                                  onClick={() => { window.open(curUrl, "_blank"); }}
+                                  onClick={() => openStorageImage(curUrl, `photobook_${activePhoto.keyword || "photo"}_${curIdx + 1}.jpg`)}
                                 />
                                 {allImgUrls.length > 1 && (
                                   <button
@@ -6158,7 +6214,7 @@ ${photo.memoText}
                                           transition: "all 0.2s",
                                         }}
                                       >
-                                        <img src={imgUrl} alt={`이미지 ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                        <img src={imgUrl} alt={`이미지 ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }} onClick={(e) => { e.stopPropagation(); openStorageImage(imgUrl, `photobook_${activePhoto.keyword || "photo"}_${idx + 1}.jpg`); }} />
                                       </div>
                                     ))}
                                   </div>
@@ -6287,8 +6343,11 @@ ${photo.memoText}
                                   <img
                                     src={url}
                                     alt={`미리보기 ${idx + 1}`}
-                                    style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
-                                    onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}
+                                    style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openStorageImage(url, `photobook_preview_${idx + 1}.jpg`);
+                                    }}
                                   />
                                   <button 
                                     type="button" 
@@ -6448,7 +6507,7 @@ ${photo.memoText}
                             }
                           }
                           if (files.length > 0) {
-                            await handlePhotoBookImageUpload(files);
+                            openPastedImagePreview(files);
                           } else {
                             const text = e.clipboardData.getData("text/plain") || e.clipboardData.getData("text/uri-list");
                             if (text.trim()) alert(`붙여넣기된 텍스트:\n${text.trim().slice(0, 100)}`);
@@ -6611,10 +6670,7 @@ ${photo.memoText}
                           {/* ── 이미지 — 2fr (generalInfoCardThumbnail과 동일) ── */}
                           <div
                             className="pbIndexCardPhoto"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openPhotoBookIndexImage(photo);
-                            }}
+                            onClick={() => { setActiveItem({ type: "photobook", id: photo.id || "" }); setPhotoBookTab("register"); }}
                           >
                             {isPinned && (
                               <div className="pbIndexCardPinBadge">📌</div>
@@ -6801,14 +6857,14 @@ ${photo.memoText}
                   <button type="button" className="original-delete-btn" onClick={deleteOriginalDiaryPhoto}>사진 삭제</button>
                 </>
               )}
-              {originalImageTarget?.type === "photobook" && (
+              {originalImageTarget?.type === "storage-image" && (
                 <>
                   <button
                     type="button"
                     className="original-primary-btn"
                     onClick={(e) => {
                       e.stopPropagation();
-                      void downloadOriginalPhotoBookImage();
+                      void downloadStorageImage();
                     }}
                   >
                     📥 사진 저장
@@ -6816,7 +6872,7 @@ ${photo.memoText}
                   <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
                 </>
               )}
-              {originalImageTarget?.type !== "diary" && originalImageTarget?.type !== "photobook" && (
+              {originalImageTarget?.type !== "diary" && originalImageTarget?.type !== "storage-image" && (
                 <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
               )}
               {originalImageTarget?.type === "diary" && (
@@ -6824,6 +6880,39 @@ ${photo.memoText}
               )}
             </div>
             <img src={originalImageUrl} alt="원본 사진" />
+          </div>
+        </div>
+      )}
+      {pastedImagePreview && (
+        <div className="original-image-modal pasted-image-preview-modal" role="dialog" aria-modal="true" onClick={closePastedImagePreview}>
+          <div className="original-image-panel pasted-image-preview-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="original-modal-actions pasted-image-preview-actions">
+              <button
+                type="button"
+                className="original-primary-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void savePastedImageToPhotoBook();
+                }}
+              >
+                📖 포토북에 저장
+              </button>
+              <button
+                type="button"
+                className="original-primary-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  savePastedImageToGeneralInfo();
+                }}
+              >
+                📂 일반 저장함에 저장
+              </button>
+              <button type="button" className="original-close-btn" onClick={closePastedImagePreview}>취소</button>
+            </div>
+            {pastedImagePreview.files.length > 1 && (
+              <p className="pasted-image-preview-count">총 {pastedImagePreview.files.length}장의 사진이 선택되었습니다.</p>
+            )}
+            <img src={pastedImagePreview.previewUrl} alt="붙여넣은 사진 미리보기" />
           </div>
         </div>
       )}
@@ -6840,6 +6929,7 @@ ${photo.memoText}
             window.print();
           }}
           onShareReport={infoState.handleShareGeneralInfoReport}
+          onOpenStorageImage={openStorageImage}
         />
       )}
   

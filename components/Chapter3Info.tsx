@@ -75,6 +75,7 @@ export interface Chapter3InfoProps {
   generalInfoCategories: string[];
   normalizeGeneralInfoMediaItems: (draft: GeneralInfoDraft) => GeneralInfoMediaItem[];
   getGeneralInfoDisplayMediaItems: (item: GeneralInfoItem) => GeneralInfoMediaItem[];
+  onOpenStorageImage?: (url: string, fileName?: string) => void;
 }
 
 export function Chapter3Info({
@@ -127,6 +128,7 @@ export function Chapter3Info({
   generalInfoCategories,
   normalizeGeneralInfoMediaItems,
   getGeneralInfoDisplayMediaItems,
+  onOpenStorageImage,
 }: Chapter3InfoProps) {
   const activeTab = generalInfoActiveTab;
   const setActiveTab = setGeneralInfoActiveTab;
@@ -703,6 +705,12 @@ export function Chapter3Info({
                             src={media.preview}
                             alt={media.name || `자료 이미지 ${index + 1}`}
                             onError={() => { if (index === 0) setGeneralInfoImageLoadFailed(true); }}
+                            onClick={(e) => {
+                              if (!onOpenStorageImage || media.type === "video") return;
+                              e.stopPropagation();
+                              onOpenStorageImage(media.preview, media.name || `general_info_${index + 1}.jpg`);
+                            }}
+                            style={{ cursor: onOpenStorageImage ? "zoom-in" : undefined }}
                           />
                         )}
                         <div className="generalInfoDraftMediaHint">
@@ -1034,6 +1042,14 @@ export function Chapter3Info({
                         src={getGeneralInfoDisplayMediaItems(item)[0].preview}
                         alt={item.title}
                         onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
+                        onClick={(e) => {
+                          if (!onOpenStorageImage) return;
+                          const media = getGeneralInfoDisplayMediaItems(item)[0];
+                          if (!media?.preview || media.type === "video") return;
+                          e.stopPropagation();
+                          onOpenStorageImage(media.preview, media.name || `${item.title || "general_info"}.jpg`);
+                        }}
+                        style={{ cursor: onOpenStorageImage ? "zoom-in" : undefined }}
                       />
                     ) : (
                       <div className="generalInfoCardPlaceholder">📄</div>
