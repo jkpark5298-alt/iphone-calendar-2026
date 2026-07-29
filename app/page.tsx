@@ -521,10 +521,22 @@ export default function HomePage() {
       try {
         const buffer = await file.arrayBuffer();
         if (!buffer.byteLength) continue;
-        const type = file.type?.startsWith("image/") ? file.type : "image/png";
-        const ext = type.includes("jpeg") || type.includes("jpg") ? "jpg" : type.includes("webp") ? "webp" : "png";
-        const name = file.name?.trim() || `pasted_${Date.now()}_${durable.length + 1}.${ext}`;
-        durable.push(new File([buffer], name, { type, lastModified: Date.now() }));
+        const name = file.name?.trim() || `pasted_${Date.now()}_${durable.length + 1}.jpg`;
+        const lower = name.toLowerCase();
+        let type = file.type || "";
+        if (!type.startsWith("image/")) {
+          if (lower.endsWith(".heic")) type = "image/heic";
+          else if (lower.endsWith(".heif")) type = "image/heif";
+          else if (lower.endsWith(".png")) type = "image/png";
+          else if (lower.endsWith(".webp")) type = "image/webp";
+          else type = "image/jpeg";
+        }
+        durable.push(
+          new File([buffer], name, {
+            type,
+            lastModified: file.lastModified || Date.now(),
+          })
+        );
       } catch (error) {
         console.warn("pasted image clone failed", error);
       }
@@ -4187,11 +4199,11 @@ export default function HomePage() {
             <div className="button-row diary-photo-import-row diary-photo-row-primary">
               <label className="soft-btn compact-photo-btn">
                 📷 사진찍기
-                <input className="hidden-input" type="file" accept="image/*,.heic,.heif,image/heic,image/heif" capture="environment" multiple onChange={addPhotos} />
+                <input className="hidden-input" type="file" accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png" capture="environment" multiple onChange={addPhotos} />
               </label>
               <label className="soft-btn compact-photo-btn">
                 🖼 사진 가져오기
-                <input className="hidden-input" type="file" accept="image/*,.heic,.heif,image/heic,image/heif" multiple onChange={addPhotos} />
+                <input className="hidden-input" type="file" accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png" multiple onChange={addPhotos} />
               </label>
               <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
             </div>
@@ -5645,17 +5657,20 @@ function MarkDateView() {
   async function handlePhotoBookImageUpload(files: File | File[]) {
     setInstaLoading(true);
     try {
-      const rawList = Array.isArray(files) ? files : [files];
-      const fileList = await makeDurableImageFiles(rawList);
-      if (fileList.length === 0) {
+      const rawList = (Array.isArray(files) ? files : [files]).filter(Boolean) as File[];
+      if (rawList.length === 0) {
         alert("업로드할 이미지를 읽을 수 없습니다.");
         return;
       }
 
       const uploadedItems: PhotoItem[] = [];
       const extractedExifs: PhotoBookImageExif[] = [];
-      for (const file of fileList) {
-        const exif = await extractPhotoExif(file);
+      for (const original of rawList) {
+        // iOS가 복제/변환하기 전 원본에서 EXIF(특히 GPS)를 먼저 읽습니다.
+        const exif = await extractPhotoExif(original);
+        const durableList = await makeDurableImageFiles([original]);
+        const file = durableList[0] || original;
+
         let item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999, currentYear);
         if (!item) {
           // Supabase 실패 시에도 등록 화면에 표시되도록 로컬 미리보기 사용
@@ -5664,7 +5679,7 @@ function MarkDateView() {
             if (dataUrl) {
               item = {
                 url: dataUrl,
-                name: file.name || "photo.jpg",
+                name: file.name || original.name || "photo.jpg",
                 tag: tag(currentMonth, currentDay, currentYear),
                 extraTag: "",
                 memo: "",
@@ -5703,7 +5718,7 @@ function MarkDateView() {
         setPhotoBookInputImageStoragePath(prev => prev || uploadedItems[0].storagePath || "");
 
         // Auto classify photo book using AI!
-        await runPhotoBookAIClassification(fileList[0]);
+        await runPhotoBookAIClassification(rawList[0]);
       } else {
         alert("이미지 업로드에 실패했습니다.");
       }
@@ -6510,7 +6525,7 @@ ${photo.memoText}
                                 <span>➕ 추가</span>
                                 <input
                                   type="file"
-                                  accept="image/*,.heic,.heif,image/heic,image/heif"
+                                  accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png"
                                   multiple
                                   className="hidden-input"
                                   style={{ display: "none" }}
@@ -6534,7 +6549,7 @@ ${photo.memoText}
                             📸 사진 가져오기
                             <input
                               type="file"
-                              accept="image/*,.heic,.heif,image/heic,image/heif"
+                              accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png"
                               multiple
                               className="hidden-input"
                               onChange={async e => {
@@ -7051,7 +7066,7 @@ ${photo.memoText}
                               <span>➕ 추가</span>
                               <input
                                 type="file"
-                                accept="image/*,.heic,.heif,image/heic,image/heif"
+                                accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png"
                                 multiple
                                 className="hidden-input"
                                 style={{ display: "none" }}
@@ -7075,7 +7090,7 @@ ${photo.memoText}
                           📸 사진 가져오기
                           <input
                             type="file"
-                            accept="image/*,.heic,.heif,image/heic,image/heif"
+                            accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png"
                             multiple
                             className="hidden-input"
                             onChange={async e => {
