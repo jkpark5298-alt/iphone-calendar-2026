@@ -582,6 +582,7 @@ export default function HomePage() {
     photoBookId: string;
     keyword: string;
     urls: string[];
+    memos: string[];
     index: number;
   } | null>(null);
   const [selectedInstaCardIds, setSelectedInstaCardIds] = useState<string[]>([]);
@@ -5694,6 +5695,7 @@ function MarkDateView() {
         });
 
         setPhotoBookInputImageExifs(prev => [...prev, ...extractedExifs]);
+        setPhotoBookInputImageMemos(prev => [...prev, ...uploadedItems.map(() => "")]);
 
         // Set primary fallback images if not already set
         setPhotoBookInputImageUrl(prev => prev || uploadedItems[0].url);
@@ -5922,13 +5924,33 @@ ${photo.memoText}
 
   function getPhotoBookImageUrls(photo: PhotoItem | { url?: string; memo?: string; additionalImages?: Array<{ url: string }> }) {
     const parsed = "additionalImages" in photo && Array.isArray(photo.additionalImages)
-      ? { additionalImages: photo.additionalImages }
+      ? { additionalImages: photo.additionalImages, imageMemos: (photo as { imageMemos?: string[] }).imageMemos }
       : parsePhotoBookMemo(photo.memo || "");
-    const urls = [photo.url || "", ...(parsed.additionalImages?.map((img) => img.url) || [])].filter(Boolean);
-    return Array.from(new Set(urls));
+    return [photo.url || "", ...(parsed.additionalImages?.map((img) => img.url) || [])].filter(Boolean);
   }
 
-  function openPhotoAlbumViewer(photo: PhotoItem & { keyword?: string; additionalImages?: Array<{ url: string }> }, startIndex = 0) {
+  function getPhotoBookImageMemos(
+    photo: PhotoItem | { url?: string; memo?: string; imageMemos?: string[]; additionalImages?: Array<{ url: string }> },
+    urlCount?: number
+  ) {
+    const directMemos = "imageMemos" in photo && Array.isArray(photo.imageMemos) ? photo.imageMemos : null;
+    const parsed = directMemos
+      ? { imageMemos: directMemos }
+      : parsePhotoBookMemo(photo.memo || "");
+    const count = urlCount ?? getPhotoBookImageUrls(photo).length;
+    return Array.from({ length: count }, (_, i) => String(parsed.imageMemos?.[i] || ""));
+  }
+
+  function updatePhotoBookImageMemoAt(idx: number, value: string) {
+    setPhotoBookInputImageMemos((prev) => {
+      const next = [...prev];
+      while (next.length <= idx) next.push("");
+      next[idx] = value;
+      return next;
+    });
+  }
+
+  function openPhotoAlbumViewer(photo: PhotoItem & { keyword?: string; additionalImages?: Array<{ url: string }>; imageMemos?: string[] }, startIndex = 0) {
     const urls = getPhotoBookImageUrls(photo);
     if (urls.length === 0) {
       alert("사진첩에 표시할 이미지가 없습니다.");
@@ -5938,6 +5960,7 @@ ${photo.memoText}
       photoBookId: photo.id || "",
       keyword: photo.keyword || parsePhotoBookMemo(photo.memo || "").keyword || "포토북",
       urls,
+      memos: getPhotoBookImageMemos(photo, urls.length),
       index: Math.max(0, Math.min(startIndex, urls.length - 1)),
     });
   }
@@ -6100,6 +6123,7 @@ ${photo.memoText}
         category2: parsed.category2,
         memoText: parsed.memo,
         additionalImages: parsed.additionalImages || [],
+        imageMemos: parsed.imageMemos || [],
         isPinned: parsed.isPinned || photo.isPinned || false
       };
     }).filter(photo => {
@@ -6319,10 +6343,10 @@ ${photo.memoText}
                           style={{ minHeight: "120px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", border: "2px dashed rgba(255,255,255,0.15)", borderRadius: "10px", padding: "15px", background: "rgba(0,0,0,0.15)", outline: "none" }}
                         >
                           {photoBookInputImageUrls.length > 0 ? (
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))", gap: "6px", width: "100%" }}>
+                            <div className="pbRegImageGrid">
                               {photoBookInputImageUrls.map((url, idx) => (
-                                <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                                  <div style={{ position: "relative", width: "52px", height: "52px", borderRadius: "5px", overflow: "hidden", border: idx === 0 ? "2px solid #eab308" : pbMemoEditIdx === idx ? "2px solid #62b19b" : "1px solid rgba(255,255,255,0.2)" }}>
+                                <div key={idx} className="pbRegImageCell">
+                                  <div className={`pbRegImageThumb ${idx === 0 ? "is-primary" : ""} ${pbMemoEditIdx === idx ? "is-editing" : ""}`}>
                                     <img
                                       src={url}
                                       alt={`미리보기 ${idx + 1}`}
@@ -6342,6 +6366,9 @@ ${photo.memoText}
                                         }
                                       }}
                                     />
+                                    {photoBookInputImageMemos[idx] && pbMemoEditIdx !== idx && (
+                                      <span className="pbRegThumbMemoBadge">{photoBookInputImageMemos[idx]}</span>
+                                    )}
                                     <button 
                                       type="button" 
                                       className="remove-preview-btn" 
@@ -6367,18 +6394,28 @@ ${photo.memoText}
                                       style={{ position: "absolute", top: "2px", right: "2px", background: "rgba(239, 68, 68, 0.8)", color: "#fff", border: "none", borderRadius: "50%", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", cursor: "pointer" }}
                                     >×</button>
                                   </div>
-                                  <div className="generalInfoDraftMediaHint" onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}>
+                                  <button
+                                    type="button"
+                                    className="pbRegMemoToggle"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx);
+                                    }}
+                                  >
                                     {photoBookInputImageMemos[idx] ? "📝 메모" : "＋ 메모"}
-                                  </div>
+                                  </button>
                                   {idx === 0 ? (
                                     <span style={{ fontSize: "10px", color: "#eab308", fontWeight: "bold", marginTop: "3px" }}>★ 대표</span>
                                   ) : (
                                     <button
                                       type="button"
-                                      onClick={() => makePhotoBookRepresentative(idx)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        makePhotoBookRepresentative(idx);
+                                      }}
                                       style={{
                                         marginTop: "3px",
-                                        background: "rgba(234, 179, 8, 0.15)",
+                                        background: "rgba(234, 179, 8,.15)",
                                         color: "#facc15",
                                         border: "1px solid rgba(234, 179, 8, 0.4)",
                                         borderRadius: "4px",
@@ -6395,47 +6432,50 @@ ${photo.memoText}
                                     <p className="pbPhotoExifCaption">{formatPhotoBookExifDisplay(photoBookInputImageExifs[idx])}</p>
                                   )}
                                   {pbMemoEditIdx === idx && (
-                                    <div className="generalInfoMediaMemoEdit">
-                                      <textarea
-                                        className="generalInfoMediaMemoTextarea"
+                                    <div
+                                      className="pbRegMemoEditor"
+                                      onClick={(e) => e.stopPropagation()}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onPaste={(e) => e.stopPropagation()}
+                                    >
+                                      <input
+                                        type="text"
+                                        className="pbRegMemoInput"
                                         value={photoBookInputImageMemos[idx] || ""}
-                                        onChange={e => {
-                                          const next = [...photoBookInputImageMemos];
-                                          next[idx] = e.target.value;
-                                          setPhotoBookInputImageMemos(next);
-                                        }}
-                                        placeholder="이미지 메모 입력..."
+                                        onChange={(e) => updatePhotoBookImageMemoAt(idx, e.target.value)}
+                                        placeholder="개별 사진 메모 (최대 약 15자)"
+                                        maxLength={40}
                                         autoFocus
                                       />
-                                      <div className="generalInfoMediaMemoEditActions">
-                                        <button className="generalInfoMediaMemoBtnOk" onClick={() => setPbMemoEditIdx(null)}>✓ 완료</button>
+                                      <div className="pbRegMemoEditorActions">
+                                        <button type="button" className="generalInfoMediaMemoBtnOk" onClick={() => setPbMemoEditIdx(null)}>✓ 완료</button>
                                         {photoBookInputImageMemos[idx] && (
-                                          <button className="generalInfoMediaMemoBtnDelete" onClick={() => {
-                                            const next = [...photoBookInputImageMemos];
-                                            next[idx] = "";
-                                            setPhotoBookInputImageMemos(next);
-                                            setPbMemoEditIdx(null);
-                                          }}>✕ 삭제</button>
+                                          <button
+                                            type="button"
+                                            className="generalInfoMediaMemoBtnDelete"
+                                            onClick={() => {
+                                              updatePhotoBookImageMemoAt(idx, "");
+                                              setPbMemoEditIdx(null);
+                                            }}
+                                          >✕ 삭제</button>
                                         )}
                                       </div>
                                     </div>
                                   )}
                                   {pbMemoEditIdx !== idx && photoBookInputImageMemos[idx] && (
-                                    <div className="generalInfoMediaMemoDisplay">
-                                      <p className="generalInfoMediaMemoText">{photoBookInputImageMemos[idx]}</p>
-                                      <div className="generalInfoMediaMemoActions">
-                                        <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnEdit" onClick={() => setPbMemoEditIdx(idx)}>(0)</button>
-                                        <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnDel" onClick={() => {
-                                          const next = [...photoBookInputImageMemos];
-                                          next[idx] = "";
-                                          setPhotoBookInputImageMemos(next);
-                                        }}>(-)</button>
-                                      </div>
+                                    <div
+                                      className="pbRegMemoDisplay"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPbMemoEditIdx(idx);
+                                      }}
+                                    >
+                                      {photoBookInputImageMemos[idx]}
                                     </div>
                                   )}
                                 </div>
                               ))}
-                              <label style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "52px", height: "52px", borderRadius: "5px", border: "1px dashed rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.05)", cursor: "pointer", fontSize: "11px", color: "#ccc" }}>
+                              <label className="pbRegAddTile">
                                 <span>➕ 추가</span>
                                 <input
                                   type="file"
@@ -6827,10 +6867,10 @@ ${photo.memoText}
                         style={{ minHeight: "120px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", border: "2px dashed rgba(255,255,255,0.15)", borderRadius: "10px", padding: "15px", background: "rgba(0,0,0,0.15)", outline: "none" }}
                       >
                         {photoBookInputImageUrls.length > 0 ? (
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))", gap: "6px", width: "100%" }}>
+                          <div className="pbRegImageGrid">
                             {photoBookInputImageUrls.map((url, idx) => (
-                              <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                                <div style={{ position: "relative", width: "52px", height: "52px", borderRadius: "5px", overflow: "hidden", border: idx === 0 ? "2px solid #eab308" : pbMemoEditIdx === idx ? "2px solid #62b19b" : "1px solid rgba(255,255,255,0.2)" }}>
+                              <div key={idx} className="pbRegImageCell">
+                                <div className={`pbRegImageThumb ${idx === 0 ? "is-primary" : ""} ${pbMemoEditIdx === idx ? "is-editing" : ""}`}>
                                   <img
                                     src={url}
                                     alt={`미리보기 ${idx + 1}`}
@@ -6850,6 +6890,9 @@ ${photo.memoText}
                                       }
                                     }}
                                   />
+                                  {photoBookInputImageMemos[idx] && pbMemoEditIdx !== idx && (
+                                    <span className="pbRegThumbMemoBadge">{photoBookInputImageMemos[idx]}</span>
+                                  )}
                                   <button 
                                     type="button" 
                                     className="remove-preview-btn" 
@@ -6875,15 +6918,25 @@ ${photo.memoText}
                                     style={{ position: "absolute", top: "2px", right: "2px", background: "rgba(239, 68, 68, 0.8)", color: "#fff", border: "none", borderRadius: "50%", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", cursor: "pointer" }}
                                   >×</button>
                                 </div>
-                                <div className="generalInfoDraftMediaHint" onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}>
+                                <button
+                                  type="button"
+                                  className="pbRegMemoToggle"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx);
+                                  }}
+                                >
                                   {photoBookInputImageMemos[idx] ? "📝 메모" : "＋ 메모"}
-                                </div>
+                                </button>
                                 {idx === 0 ? (
                                   <span style={{ fontSize: "10px", color: "#eab308", fontWeight: "bold", marginTop: "3px" }}>★ 대표</span>
                                 ) : (
                                   <button
                                     type="button"
-                                    onClick={() => makePhotoBookRepresentative(idx)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      makePhotoBookRepresentative(idx);
+                                    }}
                                     style={{
                                       marginTop: "3px",
                                       background: "rgba(234, 179, 8, 0.15)",
@@ -6903,47 +6956,50 @@ ${photo.memoText}
                                   <p className="pbPhotoExifCaption">{formatPhotoBookExifDisplay(photoBookInputImageExifs[idx])}</p>
                                 )}
                                 {pbMemoEditIdx === idx && (
-                                  <div className="generalInfoMediaMemoEdit">
-                                    <textarea
-                                      className="generalInfoMediaMemoTextarea"
+                                  <div
+                                    className="pbRegMemoEditor"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onPaste={(e) => e.stopPropagation()}
+                                  >
+                                    <input
+                                      type="text"
+                                      className="pbRegMemoInput"
                                       value={photoBookInputImageMemos[idx] || ""}
-                                      onChange={e => {
-                                        const next = [...photoBookInputImageMemos];
-                                        next[idx] = e.target.value;
-                                        setPhotoBookInputImageMemos(next);
-                                      }}
-                                      placeholder="이미지 메모 입력..."
+                                      onChange={(e) => updatePhotoBookImageMemoAt(idx, e.target.value)}
+                                      placeholder="개별 사진 메모 (최대 약 15자)"
+                                      maxLength={40}
                                       autoFocus
                                     />
-                                    <div className="generalInfoMediaMemoEditActions">
-                                      <button className="generalInfoMediaMemoBtnOk" onClick={() => setPbMemoEditIdx(null)}>✓ 완료</button>
+                                    <div className="pbRegMemoEditorActions">
+                                      <button type="button" className="generalInfoMediaMemoBtnOk" onClick={() => setPbMemoEditIdx(null)}>✓ 완료</button>
                                       {photoBookInputImageMemos[idx] && (
-                                        <button className="generalInfoMediaMemoBtnDelete" onClick={() => {
-                                          const next = [...photoBookInputImageMemos];
-                                          next[idx] = "";
-                                          setPhotoBookInputImageMemos(next);
-                                          setPbMemoEditIdx(null);
-                                        }}>✕ 삭제</button>
+                                        <button
+                                          type="button"
+                                          className="generalInfoMediaMemoBtnDelete"
+                                          onClick={() => {
+                                            updatePhotoBookImageMemoAt(idx, "");
+                                            setPbMemoEditIdx(null);
+                                          }}
+                                        >✕ 삭제</button>
                                       )}
                                     </div>
                                   </div>
                                 )}
                                 {pbMemoEditIdx !== idx && photoBookInputImageMemos[idx] && (
-                                  <div className="generalInfoMediaMemoDisplay">
-                                    <p className="generalInfoMediaMemoText">{photoBookInputImageMemos[idx]}</p>
-                                    <div className="generalInfoMediaMemoActions">
-                                      <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnEdit" onClick={() => setPbMemoEditIdx(idx)}>(0)</button>
-                                      <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnDel" onClick={() => {
-                                        const next = [...photoBookInputImageMemos];
-                                        next[idx] = "";
-                                        setPhotoBookInputImageMemos(next);
-                                      }}>(-)</button>
-                                    </div>
+                                  <div
+                                    className="pbRegMemoDisplay"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPbMemoEditIdx(idx);
+                                    }}
+                                  >
+                                    {photoBookInputImageMemos[idx]}
                                   </div>
                                 )}
                               </div>
                             ))}
-                            <label style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "52px", height: "52px", borderRadius: "5px", border: "1px dashed rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.05)", cursor: "pointer", fontSize: "11px", color: "#ccc" }}>
+                            <label className="pbRegAddTile">
                               <span>➕ 추가</span>
                               <input
                                 type="file"
@@ -7420,6 +7476,10 @@ ${photo.memoText}
               )}
             </div>
 
+            {photoAlbumViewer.memos[photoAlbumViewer.index] ? (
+              <p className="photo-album-viewer-memo">📝 {photoAlbumViewer.memos[photoAlbumViewer.index]}</p>
+            ) : null}
+
             <p className="photo-album-viewer-hint">사진을 클릭하면 확대하여 볼 수 있습니다 · ← → 키로 이동</p>
 
             {photoAlbumViewer.urls.length > 1 && (
@@ -7433,6 +7493,9 @@ ${photo.memoText}
                     aria-label={`${idx + 1}번째 사진`}
                   >
                     <img src={url} alt={`썸네일 ${idx + 1}`} />
+                    {photoAlbumViewer.memos[idx] ? (
+                      <span className="photo-album-thumb-memo">{photoAlbumViewer.memos[idx]}</span>
+                    ) : null}
                   </button>
                 ))}
               </div>

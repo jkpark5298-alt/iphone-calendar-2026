@@ -8412,6 +8412,175 @@ body {
   font-size: 12px;
 }
 
+.photo-album-viewer-memo {
+  margin: 0;
+  text-align: center;
+  color: #e2e8f0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(98, 177, 155, 0.14);
+  border: 1px solid rgba(98, 177, 155, 0.28);
+  word-break: break-word;
+}
+
+.photo-album-thumb-memo {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  padding: 2px 3px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.pbRegImageGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15em, 1fr));
+  gap: 12px;
+  width: 100%;
+  align-items: start;
+}
+
+.pbRegImageCell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 15em;
+  gap: 4px;
+}
+
+.pbRegImageThumb {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #0f172a;
+  flex-shrink: 0;
+}
+
+.pbRegImageThumb.is-primary {
+  border: 2px solid #eab308;
+}
+
+.pbRegImageThumb.is-editing {
+  border: 2px solid #62b19b;
+}
+
+.pbRegThumbMemoBadge {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: 3px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  pointer-events: none;
+}
+
+.pbRegMemoToggle {
+  margin-top: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(15, 23, 42, 0.85);
+  color: #cbd5e1;
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.pbRegMemoEditor {
+  width: 15em;
+  min-width: 15em;
+  max-width: 100%;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 5;
+}
+
+.pbRegMemoInput {
+  width: 15em;
+  min-width: 15em;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: rgba(2, 6, 23, 0.92);
+  border: 1px solid rgba(98, 177, 155, 0.55);
+  border-radius: 8px;
+  color: #e2e8f0;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 1.4;
+  outline: none;
+}
+
+.pbRegMemoInput:focus {
+  border-color: #62b19b;
+  box-shadow: 0 0 0 2px rgba(98, 177, 155, 0.2);
+}
+
+.pbRegMemoEditorActions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.pbRegMemoDisplay {
+  width: 15em;
+  min-width: 15em;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-top: 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: normal;
+  writing-mode: horizontal-tb;
+  word-break: break-word;
+  text-align: center;
+  cursor: pointer;
+}
+
+.pbRegAddTile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  font-size: 11px;
+  color: #ccc;
+  justify-self: center;
+}
+
 .photo-album-viewer-thumbs {
   display: flex;
   gap: 8px;
@@ -8420,6 +8589,7 @@ body {
 }
 
 .photo-album-thumb {
+  position: relative;
   flex: 0 0 auto;
   width: 64px;
   height: 64px;
