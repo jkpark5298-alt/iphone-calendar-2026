@@ -8,7 +8,7 @@ import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralIn
 import { ChangeEvent, ClipboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateApi";
-import { extractPhotoExif, formatPhotoBookExifDisplay, type PhotoBookImageExif } from "../lib/photoExif";
+import { extractPhotoExif, hasPhotoBookExif, type PhotoBookImageExif } from "../lib/photoExif";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
@@ -583,6 +583,7 @@ export default function HomePage() {
     keyword: string;
     urls: string[];
     memos: string[];
+    exifs: PhotoBookImageExif[];
     index: number;
   } | null>(null);
   const [selectedInstaCardIds, setSelectedInstaCardIds] = useState<string[]>([]);
@@ -4186,11 +4187,11 @@ export default function HomePage() {
             <div className="button-row diary-photo-import-row diary-photo-row-primary">
               <label className="soft-btn compact-photo-btn">
                 📷 사진찍기
-                <input className="hidden-input" type="file" accept="image/*" capture="environment" multiple onChange={addPhotos} />
+                <input className="hidden-input" type="file" accept="image/*,.heic,.heif,image/heic,image/heif" capture="environment" multiple onChange={addPhotos} />
               </label>
               <label className="soft-btn compact-photo-btn">
                 🖼 사진 가져오기
-                <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
+                <input className="hidden-input" type="file" accept="image/*,.heic,.heif,image/heic,image/heif" multiple onChange={addPhotos} />
               </label>
               <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
             </div>
@@ -5941,6 +5942,18 @@ ${photo.memoText}
     return Array.from({ length: count }, (_, i) => String(parsed.imageMemos?.[i] || ""));
   }
 
+  function getPhotoBookImageExifs(
+    photo: PhotoItem | { url?: string; memo?: string; imageExifs?: PhotoBookImageExif[]; additionalImages?: Array<{ url: string }> },
+    urlCount?: number
+  ): PhotoBookImageExif[] {
+    const directExifs = "imageExifs" in photo && Array.isArray(photo.imageExifs) ? photo.imageExifs : null;
+    const parsed = directExifs
+      ? { imageExifs: directExifs }
+      : parsePhotoBookMemo(photo.memo || "");
+    const count = urlCount ?? getPhotoBookImageUrls(photo).length;
+    return Array.from({ length: count }, (_, i) => parsed.imageExifs?.[i] || {});
+  }
+
   function updatePhotoBookImageMemoAt(idx: number, value: string) {
     setPhotoBookInputImageMemos((prev) => {
       const next = [...prev];
@@ -5950,7 +5963,15 @@ ${photo.memoText}
     });
   }
 
-  function openPhotoAlbumViewer(photo: PhotoItem & { keyword?: string; additionalImages?: Array<{ url: string }>; imageMemos?: string[] }, startIndex = 0) {
+  function openPhotoAlbumViewer(
+    photo: PhotoItem & {
+      keyword?: string;
+      additionalImages?: Array<{ url: string }>;
+      imageMemos?: string[];
+      imageExifs?: PhotoBookImageExif[];
+    },
+    startIndex = 0
+  ) {
     const urls = getPhotoBookImageUrls(photo);
     if (urls.length === 0) {
       alert("사진첩에 표시할 이미지가 없습니다.");
@@ -5961,6 +5982,7 @@ ${photo.memoText}
       keyword: photo.keyword || parsePhotoBookMemo(photo.memo || "").keyword || "포토북",
       urls,
       memos: getPhotoBookImageMemos(photo, urls.length),
+      exifs: getPhotoBookImageExifs(photo, urls.length),
       index: Math.max(0, Math.min(startIndex, urls.length - 1)),
     });
   }
@@ -6124,6 +6146,7 @@ ${photo.memoText}
         memoText: parsed.memo,
         additionalImages: parsed.additionalImages || [],
         imageMemos: parsed.imageMemos || [],
+        imageExifs: parsed.imageExifs || [],
         isPinned: parsed.isPinned || photo.isPinned || false
       };
     }).filter(photo => {
@@ -6164,6 +6187,7 @@ ${photo.memoText}
           category2: parsed.category2,
           memoText: parsed.memo,
           imageMemos: parsed.imageMemos || [],
+          imageExifs: parsed.imageExifs || [],
           additionalImages: parsed.additionalImages || []
         };
       }
@@ -6428,8 +6452,15 @@ ${photo.memoText}
                                       ★ 대표 설정
                                     </button>
                                   )}
-                                  {formatPhotoBookExifDisplay(photoBookInputImageExifs[idx]) && (
-                                    <p className="pbPhotoExifCaption">{formatPhotoBookExifDisplay(photoBookInputImageExifs[idx])}</p>
+                                  {hasPhotoBookExif(photoBookInputImageExifs[idx]) && (
+                                    <div className="pbPhotoExifCaption">
+                                      {photoBookInputImageExifs[idx]?.takenAt ? (
+                                        <span>📅 {photoBookInputImageExifs[idx].takenAt}</span>
+                                      ) : null}
+                                      {photoBookInputImageExifs[idx]?.location ? (
+                                        <span>📍 {photoBookInputImageExifs[idx].location}</span>
+                                      ) : null}
+                                    </div>
                                   )}
                                   {pbMemoEditIdx === idx && (
                                     <div
@@ -6479,7 +6510,7 @@ ${photo.memoText}
                                 <span>➕ 추가</span>
                                 <input
                                   type="file"
-                                  accept="image/*"
+                                  accept="image/*,.heic,.heif,image/heic,image/heif"
                                   multiple
                                   className="hidden-input"
                                   style={{ display: "none" }}
@@ -6503,7 +6534,7 @@ ${photo.memoText}
                             📸 사진 가져오기
                             <input
                               type="file"
-                              accept="image/*"
+                              accept="image/*,.heic,.heif,image/heic,image/heif"
                               multiple
                               className="hidden-input"
                               onChange={async e => {
@@ -6743,11 +6774,21 @@ ${photo.memoText}
                                 </>
                               )}
 
-                              {/* 현재 이미지 메모 */}
+                              {/* 현재 이미지 메모 + EXIF */}
                               {imgMemo && (
                                 <div className="generalInfoDetailMediaMemo" style={{ marginTop: "12px", padding: "12px 16px", borderRadius: "10px", background: "rgba(98,177,155,0.12)", border: "1px solid rgba(98,177,155,0.3)" }}>
                                   <span className="generalInfoDetailMediaMemoIcon" style={{ fontSize: "22px", marginRight: "8px" }}>📝</span>
                                   <span className="generalInfoDetailMediaMemoText" style={{ fontSize: "18px", lineHeight: "1.7", fontWeight: "500" }}>{imgMemo}</span>
+                                </div>
+                              )}
+                              {hasPhotoBookExif((activePhoto.imageExifs || [])[curIdx]) && (
+                                <div className="pbDetailExifInfo">
+                                  {(activePhoto.imageExifs || [])[curIdx]?.takenAt ? (
+                                    <span>📅 촬영 {(activePhoto.imageExifs || [])[curIdx].takenAt}</span>
+                                  ) : null}
+                                  {(activePhoto.imageExifs || [])[curIdx]?.location ? (
+                                    <span>📍 {(activePhoto.imageExifs || [])[curIdx].location}</span>
+                                  ) : null}
                                 </div>
                               )}
                             </div>
@@ -6952,8 +6993,15 @@ ${photo.memoText}
                                     ★ 대표 설정
                                   </button>
                                 )}
-                                {formatPhotoBookExifDisplay(photoBookInputImageExifs[idx]) && (
-                                  <p className="pbPhotoExifCaption">{formatPhotoBookExifDisplay(photoBookInputImageExifs[idx])}</p>
+                                {hasPhotoBookExif(photoBookInputImageExifs[idx]) && (
+                                  <div className="pbPhotoExifCaption">
+                                    {photoBookInputImageExifs[idx]?.takenAt ? (
+                                      <span>📅 {photoBookInputImageExifs[idx].takenAt}</span>
+                                    ) : null}
+                                    {photoBookInputImageExifs[idx]?.location ? (
+                                      <span>📍 {photoBookInputImageExifs[idx].location}</span>
+                                    ) : null}
+                                  </div>
                                 )}
                                 {pbMemoEditIdx === idx && (
                                   <div
@@ -7003,7 +7051,7 @@ ${photo.memoText}
                               <span>➕ 추가</span>
                               <input
                                 type="file"
-                                accept="image/*"
+                                accept="image/*,.heic,.heif,image/heic,image/heif"
                                 multiple
                                 className="hidden-input"
                                 style={{ display: "none" }}
@@ -7027,7 +7075,7 @@ ${photo.memoText}
                           📸 사진 가져오기
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,.heic,.heif,image/heic,image/heif"
                             multiple
                             className="hidden-input"
                             onChange={async e => {
@@ -7479,6 +7527,17 @@ ${photo.memoText}
             {photoAlbumViewer.memos[photoAlbumViewer.index] ? (
               <p className="photo-album-viewer-memo">📝 {photoAlbumViewer.memos[photoAlbumViewer.index]}</p>
             ) : null}
+
+            {hasPhotoBookExif(photoAlbumViewer.exifs[photoAlbumViewer.index]) && (
+              <div className="photo-album-viewer-exif">
+                {photoAlbumViewer.exifs[photoAlbumViewer.index]?.takenAt ? (
+                  <span>📅 {photoAlbumViewer.exifs[photoAlbumViewer.index].takenAt}</span>
+                ) : null}
+                {photoAlbumViewer.exifs[photoAlbumViewer.index]?.location ? (
+                  <span>📍 {photoAlbumViewer.exifs[photoAlbumViewer.index].location}</span>
+                ) : null}
+              </div>
+            )}
 
             <p className="photo-album-viewer-hint">사진을 클릭하면 확대하여 볼 수 있습니다 · ← → 키로 이동</p>
 
