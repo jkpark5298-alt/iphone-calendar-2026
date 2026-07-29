@@ -468,6 +468,17 @@ export default function HomePage() {
   const [photoResizeBusy, setPhotoResizeBusy] = useState(false);
   const [photoResizePreviewUrl, setPhotoResizePreviewUrl] = useState("");
   const [photoResizeInfo, setPhotoResizeInfo] = useState("");
+  const [photoCropMode, setPhotoCropMode] = useState(false);
+  const [photoCropRect, setPhotoCropRect] = useState({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+  const [photoCropAspect, setPhotoCropAspect] = useState<"free" | "1:1" | "4:3" | "16:9">("free");
+  const [photoCropFrame, setPhotoCropFrame] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const photoCropImageRef = useRef<HTMLImageElement | null>(null);
+  const photoCropDragRef = useRef<{
+    type: "move" | "nw" | "ne" | "sw" | "se";
+    startX: number;
+    startY: number;
+    startRect: { x: number; y: number; w: number; h: number };
+  } | null>(null);
   const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
   const [datePickerValue, setDatePickerValue] = useState(`${todayDefault.year ?? 2026}-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
@@ -1777,6 +1788,62 @@ export default function HomePage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [photoAlbumViewer]);
+
+  useEffect(() => {
+    if (!photoCropMode) return;
+
+    const onPointerMove = (event: PointerEvent) => {
+      const drag = photoCropDragRef.current;
+      if (!drag || photoCropFrame.width <= 0 || photoCropFrame.height <= 0) return;
+      const dx = (event.clientX - drag.startX) / photoCropFrame.width;
+      const dy = (event.clientY - drag.startY) / photoCropFrame.height;
+      const start = drag.startRect;
+      let next = { ...start };
+
+      if (drag.type === "move") {
+        next = { ...start, x: start.x + dx, y: start.y + dy };
+      } else if (drag.type === "nw") {
+        next = { x: start.x + dx, y: start.y + dy, w: start.w - dx, h: start.h - dy };
+      } else if (drag.type === "ne") {
+        next = { x: start.x, y: start.y + dy, w: start.w + dx, h: start.h - dy };
+      } else if (drag.type === "sw") {
+        next = { x: start.x + dx, y: start.y, w: start.w - dx, h: start.h + dy };
+      } else if (drag.type === "se") {
+        next = { x: start.x, y: start.y, w: start.w + dx, h: start.h + dy };
+      }
+
+      if (photoCropAspect !== "free") {
+        const ratioMap = { "1:1": 1, "4:3": 4 / 3, "16:9": 16 / 9 } as const;
+        const target = ratioMap[photoCropAspect];
+        const imageAspect = photoCropFrame.width / photoCropFrame.height;
+        const desired = target / imageAspect;
+        if (drag.type === "move") {
+          // keep size
+        } else if (drag.type === "se" || drag.type === "ne") {
+          next.h = next.w / desired;
+        } else {
+          next.w = next.h * desired;
+        }
+      }
+
+      setPhotoCropRect(clampPhotoCropRect(next));
+    };
+
+    const onPointerUp = () => {
+      photoCropDragRef.current = null;
+    };
+
+    const onResize = () => updatePhotoCropFrameFromImage();
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [photoCropMode, photoCropFrame.width, photoCropFrame.height, photoCropAspect]);
 
   async function fetchWeatherFromKma() {
     if (!isSelectedDiaryDateToday(currentMonth, currentDay, currentYear)) {
@@ -3318,12 +3385,18 @@ export default function HomePage() {
     setPhotoResizePreviewUrl("");
     setPhotoResizeInfo("");
     setPhotoResizeBusy(false);
+    setPhotoCropMode(false);
+    setPhotoCropAspect("free");
+    setPhotoCropRect({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+    setPhotoCropFrame({ left: 0, top: 0, width: 0, height: 0 });
+    photoCropDragRef.current = null;
   }
 
   function openStorageImage(url: string, fileName?: string) {
     if (!url) return;
     setPhotoResizePreviewUrl("");
     setPhotoResizeInfo("");
+    setPhotoCropMode(false);
     setOriginalImageUrl(url);
     setOriginalImageTarget({ type: "storage-image", url, fileName });
   }
@@ -3338,6 +3411,9 @@ export default function HomePage() {
     setPhotoResizeMaxSide(1200);
     setPhotoResizePreviewUrl("");
     setPhotoResizeInfo("");
+    setPhotoCropMode(false);
+    setPhotoCropAspect("free");
+    setPhotoCropRect({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
     setOriginalImageUrl(params.url);
     setOriginalImageTarget({
       type: "photobook-resize",
@@ -3346,6 +3422,86 @@ export default function HomePage() {
       imageIndex: params.imageIndex,
       fileName: params.fileName,
     });
+  }
+
+  function updatePhotoCropFrameFromImage() {
+    const img = photoCropImageRef.current;
+    if (!img || !img.naturalWidth || !img.naturalHeight) return;
+    const scale = Math.min(img.clientWidth / img.naturalWidth, img.clientHeight / img.naturalHeight);
+    const width = img.naturalWidth * scale;
+    const height = img.naturalHeight * scale;
+    const left = (img.clientWidth - width) / 2;
+    const top = (img.clientHeight - height) / 2;
+    setPhotoCropFrame({ left, top, width, height });
+  }
+
+  function clampPhotoCropRect(rect: { x: number; y: number; w: number; h: number }) {
+    let { x, y, w, h } = rect;
+    w = Math.max(0.08, Math.min(1, w));
+    h = Math.max(0.08, Math.min(1, h));
+    x = Math.max(0, Math.min(1 - w, x));
+    y = Math.max(0, Math.min(1 - h, y));
+    return { x, y, w, h };
+  }
+
+  function applyPhotoCropAspect(aspect: "free" | "1:1" | "4:3" | "16:9") {
+    setPhotoCropAspect(aspect);
+    if (aspect === "free") return;
+    const ratioMap = { "1:1": 1, "4:3": 4 / 3, "16:9": 16 / 9 } as const;
+    const target = ratioMap[aspect];
+    const frameRatio = photoCropFrame.width > 0 && photoCropFrame.height > 0
+      ? photoCropFrame.width / photoCropFrame.height
+      : 1;
+    // crop rect is in image natural space (normalized), so use image aspect via frame
+    const imageAspect = frameRatio || 1;
+    let w = 0.8;
+    let h = w * (imageAspect / target);
+    if (h > 0.8) {
+      h = 0.8;
+      w = h * (target / imageAspect);
+    }
+    setPhotoCropRect(clampPhotoCropRect({ x: (1 - w) / 2, y: (1 - h) / 2, w, h }));
+  }
+
+  function startPhotoCropDrag(
+    type: "move" | "nw" | "ne" | "sw" | "se",
+    event: React.PointerEvent
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    photoCropDragRef.current = {
+      type,
+      startX: event.clientX,
+      startY: event.clientY,
+      startRect: { ...photoCropRect },
+    };
+  }
+
+  function beginPhotoCropMode() {
+    setPhotoCropMode(true);
+    setPhotoCropAspect("free");
+    setPhotoCropRect({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+    setPhotoResizePreviewUrl("");
+    setPhotoResizeInfo("영역을 드래그해 잘라낼 범위를 선택한 뒤 저장하세요.");
+    requestAnimationFrame(() => updatePhotoCropFrameFromImage());
+  }
+
+  async function buildCroppedPhotoDataUrl() {
+    if (!originalImageUrl) throw new Error("원본 이미지가 없습니다.");
+    const source = await loadSourceDataUrl(originalImageUrl);
+    const image = await loadImage(source);
+    const sx = Math.max(0, Math.round(photoCropRect.x * image.width));
+    const sy = Math.max(0, Math.round(photoCropRect.y * image.height));
+    const sw = Math.max(1, Math.min(image.width - sx, Math.round(photoCropRect.w * image.width)));
+    const sh = Math.max(1, Math.min(image.height - sy, Math.round(photoCropRect.h * image.height)));
+    const canvas = document.createElement("canvas");
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("캔버스를 사용할 수 없습니다.");
+    ctx.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
+    const cropped = canvas.toDataURL("image/jpeg", 0.92);
+    return makeImageDataUrl(cropped, photoResizeMaxSide, 0.9, true);
   }
 
   async function loadSourceDataUrl(url: string) {
@@ -3407,28 +3563,30 @@ export default function HomePage() {
     }
   }
 
-  async function resizeAndResavePhotoBookImage() {
-    if (!originalImageTarget || originalImageTarget.type !== "photobook-resize") return;
+  async function replacePhotoBookImageWithDataUrl(dataUrl: string, undoLabel: string) {
+    if (!originalImageTarget || originalImageTarget.type !== "photobook-resize") {
+      setPhotoResizeBusy(false);
+      return;
+    }
     const { photoBookId, imageIndex } = originalImageTarget;
     const targetItem = allPhotoBookItems.find((item) => item.id === photoBookId);
     if (!targetItem) {
       alert("포토북 항목을 찾을 수 없습니다.");
+      setPhotoResizeBusy(false);
       return;
     }
 
     setPhotoResizeBusy(true);
     try {
-      const source = await loadSourceDataUrl(originalImageUrl);
-      const resizedDataUrl = photoResizePreviewUrl || await makeImageDataUrl(source, photoResizeMaxSide, 0.85, true);
-      const blob = dataUrlToBlob(resizedDataUrl);
-      const file = new File([blob], originalImageTarget.fileName || `photobook_resized_${Date.now()}.jpg`, {
+      const blob = dataUrlToBlob(dataUrl);
+      const file = new File([blob], originalImageTarget.fileName || `photobook_edited_${Date.now()}.jpg`, {
         type: "image/jpeg",
       });
 
       const dateStr = targetItem.tag || entryDate(currentMonth, currentDay, currentYear);
       const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
       const uploaded = await uploadPhotoToSupabase(file, "info-photos", tMonth, tDay, imageIndex, tYear);
-      const nextUrl = uploaded?.url || resizedDataUrl;
+      const nextUrl = uploaded?.url || dataUrl;
       const nextPath = uploaded?.storagePath || "";
 
       const parsed = parsePhotoBookMemo(targetItem.memo || "");
@@ -3462,7 +3620,7 @@ export default function HomePage() {
       const photoKey = key(tMonth, tDay, tYear);
       const previousItems = infoPhotos[photoKey] || [];
       registerUndo({
-        label: "포토북 사진 크기 변경",
+        label: undoLabel,
         target: "infoPhotos",
         photoKey,
         year: tYear,
@@ -3494,7 +3652,6 @@ export default function HomePage() {
           .eq("id", photoBookId);
       }
 
-      // 수정 화면이 열려 있으면 미리보기도 동기화
       if (editingPhotoBookItemId === photoBookId) {
         setPhotoBookInputImageUrls(urls);
         setPhotoBookInputImageStoragePaths(paths);
@@ -3519,15 +3676,54 @@ export default function HomePage() {
         setActivePreviewPhotoUrl(nextUrl);
       }
 
+      setPhotoAlbumViewer((prev) => {
+        if (!prev || prev.photoBookId !== photoBookId) return prev;
+        const nextUrls = [...prev.urls];
+        if (imageIndex < nextUrls.length) nextUrls[imageIndex] = nextUrl;
+        else nextUrls.push(nextUrl);
+        return { ...prev, urls: nextUrls };
+      });
+
       setOriginalImageUrl(nextUrl);
       setPhotoResizePreviewUrl("");
-      setPhotoResizeInfo(`저장 완료 · 최대 ${photoResizeMaxSide}px`);
-      alert("크기를 변경한 사진을 포토북에 다시 저장했습니다.");
+      setPhotoCropMode(false);
+      setPhotoResizeInfo(`저장 완료 · ${undoLabel}`);
+      alert(`${undoLabel}을(를) 완료하고 같은 포토북에 다시 저장했습니다.`);
       await refreshAllInfoData();
     } catch (error) {
       console.error(error);
-      alert("포토북 사진 크기 변경 저장에 실패했습니다.");
+      alert(`${undoLabel} 저장에 실패했습니다.`);
     } finally {
+      setPhotoResizeBusy(false);
+    }
+  }
+
+  async function resizeAndResavePhotoBookImage() {
+    if (!originalImageTarget || originalImageTarget.type !== "photobook-resize") return;
+    setPhotoResizeBusy(true);
+    try {
+      const source = await loadSourceDataUrl(originalImageUrl);
+      const resizedDataUrl = photoResizePreviewUrl || await makeImageDataUrl(source, photoResizeMaxSide, 0.85, true);
+      await replacePhotoBookImageWithDataUrl(resizedDataUrl, "크기 변경");
+    } catch (error) {
+      console.error(error);
+      alert("포토북 사진 크기 변경 저장에 실패했습니다.");
+      setPhotoResizeBusy(false);
+    }
+  }
+
+  async function cropAndResavePhotoBookImage() {
+    if (!originalImageTarget || originalImageTarget.type !== "photobook-resize") return;
+    setPhotoResizeBusy(true);
+    try {
+      const croppedDataUrl = await buildCroppedPhotoDataUrl();
+      const previewImage = await loadImage(croppedDataUrl);
+      setPhotoResizePreviewUrl(croppedDataUrl);
+      setPhotoResizeInfo(`잘라내기 ${previewImage.width}×${previewImage.height}`);
+      await replacePhotoBookImageWithDataUrl(croppedDataUrl, "잘라내기");
+    } catch (error) {
+      console.error(error);
+      alert("포토북 사진 잘라내기 저장에 실패했습니다.");
       setPhotoResizeBusy(false);
     }
   }
@@ -7284,44 +7480,105 @@ ${photo.memoText}
               )}
               {originalImageTarget?.type === "photobook-resize" && (
                 <>
-                  <div className="photo-resize-controls" onClick={(e) => e.stopPropagation()}>
-                    <span className="photo-resize-label">크기 선택</span>
-                    {([800, 1200, 1600, 2400] as const).map((size) => (
+                  {!photoCropMode ? (
+                    <>
+                      <div className="photo-resize-controls" onClick={(e) => e.stopPropagation()}>
+                        <span className="photo-resize-label">크기 선택</span>
+                        {([800, 1200, 1600, 2400] as const).map((size) => (
+                          <button
+                            key={size}
+                            type="button"
+                            className={`photo-resize-size-btn ${photoResizeMaxSide === size ? "active" : ""}`}
+                            disabled={photoResizeBusy}
+                            onClick={() => void previewPhotoBookResize(size)}
+                          >
+                            {size === 800 ? "작게" : size === 1200 ? "보통" : size === 1600 ? "크게" : "원본급"} ({size})
+                          </button>
+                        ))}
+                      </div>
+                      {photoResizeInfo && <p className="photo-resize-info">{photoResizeInfo}</p>}
                       <button
-                        key={size}
                         type="button"
-                        className={`photo-resize-size-btn ${photoResizeMaxSide === size ? "active" : ""}`}
+                        className="original-primary-btn"
                         disabled={photoResizeBusy}
-                        onClick={() => void previewPhotoBookResize(size)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          beginPhotoCropMode();
+                        }}
                       >
-                        {size === 800 ? "작게" : size === 1200 ? "보통" : size === 1600 ? "크게" : "원본급"} ({size})
+                        ✂️ 잘라내기
                       </button>
-                    ))}
-                  </div>
-                  {photoResizeInfo && <p className="photo-resize-info">{photoResizeInfo}</p>}
-                  <button
-                    type="button"
-                    className="original-primary-btn"
-                    disabled={photoResizeBusy}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void resizeAndResavePhotoBookImage();
-                    }}
-                  >
-                    {photoResizeBusy ? "처리 중..." : "📖 크기 변경 후 포토북 저장"}
-                  </button>
-                  <button
-                    type="button"
-                    className="original-primary-btn"
-                    disabled={photoResizeBusy}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void downloadStorageImage();
-                    }}
-                  >
-                    📥 사진 저장
-                  </button>
-                  <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
+                      <button
+                        type="button"
+                        className="original-primary-btn"
+                        disabled={photoResizeBusy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void resizeAndResavePhotoBookImage();
+                        }}
+                      >
+                        {photoResizeBusy ? "처리 중..." : "📖 크기 변경 후 포토북 저장"}
+                      </button>
+                      <button
+                        type="button"
+                        className="original-primary-btn"
+                        disabled={photoResizeBusy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void downloadStorageImage();
+                        }}
+                      >
+                        📥 사진 저장
+                      </button>
+                      <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="photo-resize-controls" onClick={(e) => e.stopPropagation()}>
+                        <span className="photo-resize-label">비율</span>
+                        {([
+                          ["free", "자유"],
+                          ["1:1", "1:1"],
+                          ["4:3", "4:3"],
+                          ["16:9", "16:9"],
+                        ] as const).map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            className={`photo-resize-size-btn ${photoCropAspect === value ? "active" : ""}`}
+                            disabled={photoResizeBusy}
+                            onClick={() => applyPhotoCropAspect(value)}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      {photoResizeInfo && <p className="photo-resize-info">{photoResizeInfo}</p>}
+                      <button
+                        type="button"
+                        className="original-primary-btn"
+                        disabled={photoResizeBusy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void cropAndResavePhotoBookImage();
+                        }}
+                      >
+                        {photoResizeBusy ? "처리 중..." : "✂️ 잘라낸 후 포토북 저장"}
+                      </button>
+                      <button
+                        type="button"
+                        className="original-close-btn"
+                        disabled={photoResizeBusy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPhotoCropMode(false);
+                          setPhotoResizeInfo("");
+                        }}
+                      >
+                        잘라내기 취소
+                      </button>
+                    </>
+                  )}
                 </>
               )}
               {originalImageTarget?.type !== "diary" && originalImageTarget?.type !== "storage-image" && originalImageTarget?.type !== "photobook-resize" && (
@@ -7331,7 +7588,59 @@ ${photo.memoText}
                 <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
               )}
             </div>
-            <img src={photoResizePreviewUrl || originalImageUrl} alt="원본 사진" />
+            {photoCropMode && originalImageTarget?.type === "photobook-resize" ? (
+              <div className="photo-crop-stage" onClick={(e) => e.stopPropagation()}>
+                <img
+                  ref={photoCropImageRef}
+                  src={originalImageUrl}
+                  alt="잘라내기 원본"
+                  className="photo-crop-source"
+                  draggable={false}
+                  onLoad={updatePhotoCropFrameFromImage}
+                />
+                {photoCropFrame.width > 0 && (
+                  <div
+                    className="photo-crop-layer"
+                    style={{
+                      left: photoCropFrame.left,
+                      top: photoCropFrame.top,
+                      width: photoCropFrame.width,
+                      height: photoCropFrame.height,
+                    }}
+                  >
+                    <div
+                      className="photo-crop-box"
+                      style={{
+                        left: `${photoCropRect.x * 100}%`,
+                        top: `${photoCropRect.y * 100}%`,
+                        width: `${photoCropRect.w * 100}%`,
+                        height: `${photoCropRect.h * 100}%`,
+                      }}
+                      onPointerDown={(e) => startPhotoCropDrag("move", e)}
+                    >
+                      <span
+                        className="photo-crop-handle nw"
+                        onPointerDown={(e) => startPhotoCropDrag("nw", e)}
+                      />
+                      <span
+                        className="photo-crop-handle ne"
+                        onPointerDown={(e) => startPhotoCropDrag("ne", e)}
+                      />
+                      <span
+                        className="photo-crop-handle sw"
+                        onPointerDown={(e) => startPhotoCropDrag("sw", e)}
+                      />
+                      <span
+                        className="photo-crop-handle se"
+                        onPointerDown={(e) => startPhotoCropDrag("se", e)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <img src={photoResizePreviewUrl || originalImageUrl} alt="원본 사진" />
+            )}
           </div>
         </div>
       )}

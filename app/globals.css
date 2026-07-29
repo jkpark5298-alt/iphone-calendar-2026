@@ -973,6 +973,74 @@ textarea {
   font-size: 12px;
 }
 
+.photo-crop-stage {
+  position: relative;
+  width: 100%;
+  max-height: calc(94vh - 96px);
+  background: #111;
+  border-radius: 10px;
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+}
+
+.photo-crop-source {
+  width: 100% !important;
+  max-height: calc(94vh - 96px) !important;
+  object-fit: contain !important;
+  display: block;
+  pointer-events: none;
+}
+
+.photo-crop-layer {
+  position: absolute;
+  z-index: 2;
+}
+
+.photo-crop-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #62b19b;
+  background: transparent;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  cursor: move;
+  touch-action: none;
+}
+
+.photo-crop-handle {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: #62b19b;
+  border: 2px solid #0f172a;
+  z-index: 3;
+}
+
+.photo-crop-handle.nw {
+  left: -9px;
+  top: -9px;
+  cursor: nwse-resize;
+}
+
+.photo-crop-handle.ne {
+  right: -9px;
+  top: -9px;
+  cursor: nesw-resize;
+}
+
+.photo-crop-handle.sw {
+  left: -9px;
+  bottom: -9px;
+  cursor: nesw-resize;
+}
+
+.photo-crop-handle.se {
+  right: -9px;
+  bottom: -9px;
+  cursor: nwse-resize;
+}
+
 .original-close-btn {
   border: 0;
   border-radius: 999px;
