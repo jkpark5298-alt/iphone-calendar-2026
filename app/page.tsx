@@ -31,11 +31,8 @@ type OriginalImageTarget =
   | { type: "diary"; photoKey: string; index: number } 
   | { type: "insta"; id: string }
   | { type: "storage-image"; url: string; fileName?: string }
+  | { type: "photobook-resize"; url: string; photoBookId: string; imageIndex: number; fileName?: string }
   | null;
-type PastedImagePreview = {
-  files: File[];
-  previewUrl: string;
-} | null;
 type ScheduleItem = {
   id: string;
   title: string;
@@ -467,7 +464,10 @@ export default function HomePage() {
   const [weatherSource, setWeatherSource] = useState("기상청 연결 대기");
   const [originalImageUrl, setOriginalImageUrl] = useState("");
   const [originalImageTarget, setOriginalImageTarget] = useState<OriginalImageTarget>(null);
-  const [pastedImagePreview, setPastedImagePreview] = useState<PastedImagePreview>(null);
+  const [photoResizeMaxSide, setPhotoResizeMaxSide] = useState<800 | 1200 | 1600 | 2400>(1200);
+  const [photoResizeBusy, setPhotoResizeBusy] = useState(false);
+  const [photoResizePreviewUrl, setPhotoResizePreviewUrl] = useState("");
+  const [photoResizeInfo, setPhotoResizeInfo] = useState("");
   const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
   const [datePickerValue, setDatePickerValue] = useState(`${todayDefault.year ?? 2026}-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
@@ -497,28 +497,32 @@ export default function HomePage() {
     }
   }, []);
 
-  const closePastedImagePreview = useCallback(() => {
-    setPastedImagePreview((prev) => {
-      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
-      return null;
-    });
-  }, []);
-
-  const openPastedImagePreview = useCallback((files: File[]) => {
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-    if (imageFiles.length === 0) return;
-    setPastedImagePreview((prev) => {
-      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
-      return {
-        files: imageFiles,
-        previewUrl: URL.createObjectURL(imageFiles[0]),
-      };
-    });
+  const makeDurableImageFiles = useCallback(async (files: File[]) => {
+    const durable: File[] = [];
+    for (const file of files) {
+      if (!file) continue;
+      const isImage =
+        !file.type ||
+        file.type.startsWith("image/") ||
+        file.type === "application/octet-stream" ||
+        /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || "");
+      if (!isImage) continue;
+      try {
+        const buffer = await file.arrayBuffer();
+        if (!buffer.byteLength) continue;
+        const type = file.type?.startsWith("image/") ? file.type : "image/png";
+        const ext = type.includes("jpeg") || type.includes("jpg") ? "jpg" : type.includes("webp") ? "webp" : "png";
+        const name = file.name?.trim() || `pasted_${Date.now()}_${durable.length + 1}.${ext}`;
+        durable.push(new File([buffer], name, { type, lastModified: Date.now() }));
+      } catch (error) {
+        console.warn("pasted image clone failed", error);
+      }
+    }
+    return durable;
   }, []);
 
   const infoState = useTravelDiaryGeneralInfoState({
     showPasteHint: showGeneralInfoPasteHint,
-    onPastedImagePreview: openPastedImagePreview,
   });
   const [instaLoading, setInstaLoading] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState("");
@@ -563,6 +567,12 @@ export default function HomePage() {
   const [selectedPhotoBookIds, setSelectedPhotoBookIds] = useState<string[]>([]);
   const [isPhotoAlbumModalOpen, setIsPhotoAlbumModalOpen] = useState(false);
   const [albumSearchQuery, setAlbumSearchQuery] = useState("");
+  const [photoAlbumViewer, setPhotoAlbumViewer] = useState<{
+    photoBookId: string;
+    keyword: string;
+    urls: string[];
+    index: number;
+  } | null>(null);
   const [selectedInstaCardIds, setSelectedInstaCardIds] = useState<string[]>([]);
   const [isInfoBookModalOpen, setIsInfoBookModalOpen] = useState(false);
   const [infoBookSearchQuery, setInfoBookSearchQuery] = useState("");
@@ -1748,6 +1758,26 @@ export default function HomePage() {
     setIsPhotoMemoExpanded(false);
   }, [activeItem]);
 
+  useEffect(() => {
+    if (!photoAlbumViewer) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closePhotoAlbumViewer();
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        movePhotoAlbumViewer(-1);
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        movePhotoAlbumViewer(1);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [photoAlbumViewer]);
+
   async function fetchWeatherFromKma() {
     if (!isSelectedDiaryDateToday(currentMonth, currentDay, currentYear)) {
       return;
@@ -2152,7 +2182,7 @@ export default function HomePage() {
     });
   }
 
-  async function makeImageDataUrl(dataUrl: string, maxSide = 1000, quality = 0.68) {
+  async function makeImageDataUrl(dataUrl: string, maxSide = 1000, quality = 0.68, force = false) {
     try {
       const image = await loadImage(dataUrl);
       const ratio = Math.min(1, maxSide / Math.max(image.width, image.height));
@@ -2167,6 +2197,7 @@ export default function HomePage() {
       ctx.drawImage(image, 0, 0, width, height);
 
       const optimized = canvas.toDataURL("image/jpeg", quality);
+      if (force) return optimized;
       return optimized.length < dataUrl.length ? optimized : dataUrl;
     } catch {
       return dataUrl;
@@ -3284,28 +3315,84 @@ export default function HomePage() {
   function closeOriginalImage() {
     setOriginalImageUrl("");
     setOriginalImageTarget(null);
+    setPhotoResizePreviewUrl("");
+    setPhotoResizeInfo("");
+    setPhotoResizeBusy(false);
   }
 
   function openStorageImage(url: string, fileName?: string) {
     if (!url) return;
+    setPhotoResizePreviewUrl("");
+    setPhotoResizeInfo("");
     setOriginalImageUrl(url);
     setOriginalImageTarget({ type: "storage-image", url, fileName });
   }
 
-  async function downloadStorageImage() {
-    if (!originalImageTarget || originalImageTarget.type !== "storage-image" || !originalImageUrl) return;
-    const fileName = originalImageTarget.fileName || `saved_image_${Date.now()}.jpg`;
+  function openPhotoBookImageResize(params: {
+    url: string;
+    photoBookId: string;
+    imageIndex: number;
+    fileName?: string;
+  }) {
+    if (!params.url || !params.photoBookId) return;
+    setPhotoResizeMaxSide(1200);
+    setPhotoResizePreviewUrl("");
+    setPhotoResizeInfo("");
+    setOriginalImageUrl(params.url);
+    setOriginalImageTarget({
+      type: "photobook-resize",
+      url: params.url,
+      photoBookId: params.photoBookId,
+      imageIndex: params.imageIndex,
+      fileName: params.fileName,
+    });
+  }
+
+  async function loadSourceDataUrl(url: string) {
+    if (url.startsWith("data:")) return url;
+    const base64 = await imageUrlToBase64(url);
+    if (!base64) throw new Error("이미지를 불러오지 못했습니다.");
+    return `data:image/jpeg;base64,${base64}`;
+  }
+
+  async function previewPhotoBookResize(maxSide: 800 | 1200 | 1600 | 2400) {
+    if (!originalImageUrl) return;
+    setPhotoResizeMaxSide(maxSide);
+    setPhotoResizeBusy(true);
     try {
-      if (originalImageUrl.startsWith("data:")) {
+      const source = await loadSourceDataUrl(originalImageUrl);
+      const image = await loadImage(source);
+      const resized = await makeImageDataUrl(source, maxSide, 0.85, true);
+      const previewImage = await loadImage(resized);
+      setPhotoResizePreviewUrl(resized);
+      setPhotoResizeInfo(
+        `원본 ${image.width}×${image.height} → ${previewImage.width}×${previewImage.height} (최대 ${maxSide}px)`
+      );
+    } catch (error) {
+      console.warn(error);
+      alert("크기 미리보기에 실패했습니다. 다시 시도해 주세요.");
+    } finally {
+      setPhotoResizeBusy(false);
+    }
+  }
+
+  async function downloadStorageImage() {
+    if (!originalImageTarget) return;
+    if (originalImageTarget.type !== "storage-image" && originalImageTarget.type !== "photobook-resize") return;
+    const fileName = originalImageTarget.fileName || `saved_image_${Date.now()}.jpg`;
+    const sourceUrl = photoResizePreviewUrl || originalImageUrl;
+    if (!sourceUrl) return;
+    try {
+      if (sourceUrl.startsWith("data:")) {
         const link = document.createElement("a");
-        link.href = originalImageUrl;
+        link.href = sourceUrl;
         link.download = fileName;
         document.body.appendChild(link);
         link.click();
         link.remove();
         return;
       }
-      const response = await fetch(originalImageUrl);
+      const response = await fetch(sourceUrl);
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -3316,31 +3403,133 @@ export default function HomePage() {
       link.remove();
       URL.revokeObjectURL(blobUrl);
     } catch {
-      window.open(originalImageUrl, "_blank");
+      window.open(sourceUrl, "_blank");
     }
   }
 
-  async function savePastedImageToPhotoBook() {
-    if (!pastedImagePreview) return;
-    const files = pastedImagePreview.files;
-    closePastedImagePreview();
-    setView("info");
-    setInfoSubView("photobook");
-    setPhotoBookTab("register");
-    setActiveItem(null);
-    setEditingPhotoBookItemId(null);
-    await handlePhotoBookImageUpload(files);
-  }
+  async function resizeAndResavePhotoBookImage() {
+    if (!originalImageTarget || originalImageTarget.type !== "photobook-resize") return;
+    const { photoBookId, imageIndex } = originalImageTarget;
+    const targetItem = allPhotoBookItems.find((item) => item.id === photoBookId);
+    if (!targetItem) {
+      alert("포토북 항목을 찾을 수 없습니다.");
+      return;
+    }
 
-  function savePastedImageToGeneralInfo() {
-    if (!pastedImagePreview) return;
-    const files = pastedImagePreview.files;
-    closePastedImagePreview();
-    setView("info");
-    setInfoSubView("generalInfo");
-    const transfer = new DataTransfer();
-    files.forEach((file) => transfer.items.add(file));
-    infoState.handleGeneralInfoFileUpload(transfer.files);
+    setPhotoResizeBusy(true);
+    try {
+      const source = await loadSourceDataUrl(originalImageUrl);
+      const resizedDataUrl = photoResizePreviewUrl || await makeImageDataUrl(source, photoResizeMaxSide, 0.85, true);
+      const blob = dataUrlToBlob(resizedDataUrl);
+      const file = new File([blob], originalImageTarget.fileName || `photobook_resized_${Date.now()}.jpg`, {
+        type: "image/jpeg",
+      });
+
+      const dateStr = targetItem.tag || entryDate(currentMonth, currentDay, currentYear);
+      const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
+      const uploaded = await uploadPhotoToSupabase(file, "info-photos", tMonth, tDay, imageIndex, tYear);
+      const nextUrl = uploaded?.url || resizedDataUrl;
+      const nextPath = uploaded?.storagePath || "";
+
+      const parsed = parsePhotoBookMemo(targetItem.memo || "");
+      const urls = [targetItem.url, ...(parsed.additionalImages?.map((img) => img.url) || [])].filter(Boolean);
+      const paths = [
+        targetItem.storagePath || "",
+        ...(parsed.additionalImages?.map((img) => img.storagePath || "") || []),
+      ];
+      while (urls.length <= imageIndex) urls.push("");
+      while (paths.length <= imageIndex) paths.push("");
+      urls[imageIndex] = nextUrl;
+      paths[imageIndex] = nextPath;
+
+      const primaryUrl = urls[0] || nextUrl;
+      const primaryPath = paths[0] || nextPath;
+      const additionalImages = urls.slice(1).map((url, i) => ({
+        url,
+        storagePath: paths[i + 1] || "",
+      }));
+      const serializedCaption = JSON.stringify({
+        type: "photobook",
+        keyword: parsed.keyword || "일반",
+        category2: parsed.category2 || "기타",
+        memo: parsed.memo || "",
+        imageMemos: parsed.imageMemos || [],
+        imageExifs: parsed.imageExifs || [],
+        additionalImages,
+        isPinned: parsed.isPinned || targetItem.isPinned || false,
+      });
+
+      const photoKey = key(tMonth, tDay, tYear);
+      const previousItems = infoPhotos[photoKey] || [];
+      registerUndo({
+        label: "포토북 사진 크기 변경",
+        target: "infoPhotos",
+        photoKey,
+        year: tYear,
+        previousData: JSON.stringify(previousItems),
+      });
+
+      const nextPhotosForDay = previousItems.map((item) => {
+        if (item.id !== photoBookId) return item;
+        return {
+          ...item,
+          url: primaryUrl,
+          name: primaryPath.split("/").pop() || item.name || "photo.jpg",
+          storagePath: primaryPath,
+          memo: serializedCaption,
+        };
+      });
+
+      setInfoPhotos((prev) => ({ ...prev, [photoKey]: nextPhotosForDay }));
+      saveInfoPhotos(tMonth, tDay, nextPhotosForDay, tYear);
+
+      if (isSupabaseConfigured && supabase && photoBookId && !photoBookId.startsWith("temp-")) {
+        await supabase
+          .from("info_photos")
+          .update({
+            caption: serializedCaption,
+            public_url: primaryUrl,
+            storage_path: primaryPath,
+          })
+          .eq("id", photoBookId);
+      }
+
+      // 수정 화면이 열려 있으면 미리보기도 동기화
+      if (editingPhotoBookItemId === photoBookId) {
+        setPhotoBookInputImageUrls(urls);
+        setPhotoBookInputImageStoragePaths(paths);
+        setPhotoBookInputImageUrl(primaryUrl);
+        setPhotoBookInputImageStoragePath(primaryPath);
+      }
+
+      setAllPhotoBookItems((prev) =>
+        prev.map((item) =>
+          item.id === photoBookId
+            ? {
+                ...item,
+                url: primaryUrl,
+                storagePath: primaryPath,
+                memo: serializedCaption,
+              }
+            : item
+        )
+      );
+
+      if (activeItem?.type === "photobook" && activeItem.id === photoBookId) {
+        setActivePreviewPhotoUrl(nextUrl);
+      }
+
+      setOriginalImageUrl(nextUrl);
+      setPhotoResizePreviewUrl("");
+      setPhotoResizeInfo(`저장 완료 · 최대 ${photoResizeMaxSide}px`);
+      alert("크기를 변경한 사진을 포토북에 다시 저장했습니다.");
+      await refreshAllInfoData();
+    } catch (error) {
+      console.error(error);
+      alert("포토북 사진 크기 변경 저장에 실패했습니다.");
+    } finally {
+      setPhotoResizeBusy(false);
+    }
   }
 
   async function deleteOriginalDiaryPhoto() {
@@ -5258,17 +5447,42 @@ function MarkDateView() {
   async function handlePhotoBookImageUpload(files: File | File[]) {
     setInstaLoading(true);
     try {
-      const fileList = Array.isArray(files) ? files : [files];
-      if (fileList.length === 0) return;
+      const rawList = Array.isArray(files) ? files : [files];
+      const fileList = await makeDurableImageFiles(rawList);
+      if (fileList.length === 0) {
+        alert("업로드할 이미지를 읽을 수 없습니다.");
+        return;
+      }
 
       const uploadedItems: PhotoItem[] = [];
       const extractedExifs: PhotoBookImageExif[] = [];
       for (const file of fileList) {
         const exif = await extractPhotoExif(file);
-        extractedExifs.push(exif);
-        const item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999, currentYear);
+        let item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999, currentYear);
+        if (!item) {
+          // Supabase 실패 시에도 등록 화면에 표시되도록 로컬 미리보기 사용
+          try {
+            const dataUrl = await readImageFileAsDataUrl(file);
+            if (dataUrl) {
+              item = {
+                url: dataUrl,
+                name: file.name || "photo.jpg",
+                tag: tag(currentMonth, currentDay, currentYear),
+                extraTag: "",
+                memo: "",
+                size: "360",
+                memoWidth: "360",
+                memoHeight: "110",
+                storagePath: "",
+              };
+            }
+          } catch (error) {
+            console.warn("local photobook preview fallback failed", error);
+          }
+        }
         if (item) {
           uploadedItems.push(item);
+          extractedExifs.push(exif);
         }
       }
 
@@ -5283,7 +5497,7 @@ function MarkDateView() {
           return next;
         });
 
-        setPhotoBookInputImageExifs(prev => [...prev, ...extractedExifs.slice(0, uploadedItems.length)]);
+        setPhotoBookInputImageExifs(prev => [...prev, ...extractedExifs]);
 
         // Set primary fallback images if not already set
         setPhotoBookInputImageUrl(prev => prev || uploadedItems[0].url);
@@ -5327,7 +5541,7 @@ function MarkDateView() {
 
     if (pastedFiles.length > 0) {
       event.preventDefault();
-      openPastedImagePreview(pastedFiles);
+      await handlePhotoBookImageUpload(pastedFiles);
     }
   }
 
@@ -5408,7 +5622,7 @@ function MarkDateView() {
         return;
       }
 
-      openPastedImagePreview([file]);
+      await handlePhotoBookImageUpload(file);
     } catch (e) {
       console.error(e);
       alert("클립보드 접근 권한이 없거나 지원되지 않는 브라우저입니다. 복사한 이미지를 입력 창에 직접 붙여넣거나(Ctrl+V) '사진 가져오기'를 사용해 주세요.");
@@ -5508,6 +5722,40 @@ ${photo.memoText}
       console.error("복사 실패:", err);
       alert("복사 실패했습니다.");
     });
+  }
+
+  function getPhotoBookImageUrls(photo: PhotoItem | { url?: string; memo?: string; additionalImages?: Array<{ url: string }> }) {
+    const parsed = "additionalImages" in photo && Array.isArray(photo.additionalImages)
+      ? { additionalImages: photo.additionalImages }
+      : parsePhotoBookMemo(photo.memo || "");
+    const urls = [photo.url || "", ...(parsed.additionalImages?.map((img) => img.url) || [])].filter(Boolean);
+    return Array.from(new Set(urls));
+  }
+
+  function openPhotoAlbumViewer(photo: PhotoItem & { keyword?: string; additionalImages?: Array<{ url: string }> }, startIndex = 0) {
+    const urls = getPhotoBookImageUrls(photo);
+    if (urls.length === 0) {
+      alert("사진첩에 표시할 이미지가 없습니다.");
+      return;
+    }
+    setPhotoAlbumViewer({
+      photoBookId: photo.id || "",
+      keyword: photo.keyword || parsePhotoBookMemo(photo.memo || "").keyword || "포토북",
+      urls,
+      index: Math.max(0, Math.min(startIndex, urls.length - 1)),
+    });
+  }
+
+  function movePhotoAlbumViewer(direction: -1 | 1) {
+    setPhotoAlbumViewer((prev) => {
+      if (!prev || prev.urls.length === 0) return prev;
+      const nextIndex = (prev.index + direction + prev.urls.length) % prev.urls.length;
+      return { ...prev, index: nextIndex };
+    });
+  }
+
+  function closePhotoAlbumViewer() {
+    setPhotoAlbumViewer(null);
   }
 
   // PhotoBook batch sharing helper
@@ -5885,7 +6133,17 @@ ${photo.memoText}
                                       style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        openStorageImage(url, `photobook_preview_${idx + 1}.jpg`);
+                                        const pbId = editingPhotoBookItemId || activePhoto?.id || "";
+                                        if (pbId) {
+                                          openPhotoBookImageResize({
+                                            url,
+                                            photoBookId: pbId,
+                                            imageIndex: idx,
+                                            fileName: `photobook_preview_${idx + 1}.jpg`,
+                                          });
+                                        } else {
+                                          openStorageImage(url, `photobook_preview_${idx + 1}.jpg`);
+                                        }
                                       }}
                                     />
                                     <button 
@@ -6046,7 +6304,7 @@ ${photo.memoText}
                               }
                             }
                             if (files.length > 0) {
-                              openPastedImagePreview(files);
+                              await handlePhotoBookImageUpload(files);
                             } else {
                               const text = e.clipboardData.getData("text/plain") || e.clipboardData.getData("text/uri-list");
                               if (text.trim()) alert(`붙여넣기된 텍스트:\n${text.trim().slice(0, 100)}`);
@@ -6181,7 +6439,18 @@ ${photo.memoText}
                                   src={curUrl}
                                   alt="포토북 상세 사진"
                                   style={{ width: "100%", height: "auto", minHeight: "60vh", maxWidth: "100%", borderRadius: "8px", cursor: "zoom-in", objectFit: "contain", display: "block" }}
-                                  onClick={() => openStorageImage(curUrl, `photobook_${activePhoto.keyword || "photo"}_${curIdx + 1}.jpg`)}
+                                  onClick={() => {
+                                    if (activePhoto.id) {
+                                      openPhotoBookImageResize({
+                                        url: curUrl,
+                                        photoBookId: activePhoto.id,
+                                        imageIndex: curIdx,
+                                        fileName: `photobook_${activePhoto.keyword || "photo"}_${curIdx + 1}.jpg`,
+                                      });
+                                    } else {
+                                      openStorageImage(curUrl, `photobook_${activePhoto.keyword || "photo"}_${curIdx + 1}.jpg`);
+                                    }
+                                  }}
                                 />
                                 {allImgUrls.length > 1 && (
                                   <button
@@ -6214,7 +6483,24 @@ ${photo.memoText}
                                           transition: "all 0.2s",
                                         }}
                                       >
-                                        <img src={imgUrl} alt={`이미지 ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }} onClick={(e) => { e.stopPropagation(); openStorageImage(imgUrl, `photobook_${activePhoto.keyword || "photo"}_${idx + 1}.jpg`); }} />
+                                        <img
+                                          src={imgUrl}
+                                          alt={`이미지 ${idx + 1}`}
+                                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (activePhoto.id) {
+                                              openPhotoBookImageResize({
+                                                url: imgUrl,
+                                                photoBookId: activePhoto.id,
+                                                imageIndex: idx,
+                                                fileName: `photobook_${activePhoto.keyword || "photo"}_${idx + 1}.jpg`,
+                                              });
+                                            } else {
+                                              openStorageImage(imgUrl, `photobook_${activePhoto.keyword || "photo"}_${idx + 1}.jpg`);
+                                            }
+                                          }}
+                                        />
                                       </div>
                                     ))}
                                   </div>
@@ -6297,6 +6583,15 @@ ${photo.memoText}
 
                         <div className="info-detail-actions no-print">
                           <button type="button" className="action-btn" onClick={() => { setActiveItem(null); setPhotoBookTab("index"); }} style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>🏠 목록으로</button>
+                          {(activePhoto.additionalImages?.length || 0) > 0 && (
+                            <button
+                              type="button"
+                              className="action-btn"
+                              onClick={() => openPhotoAlbumViewer(activePhoto, Math.max(0, [activePhoto.url, ...(activePhoto.additionalImages?.map((img: any) => img.url) || [])].indexOf(activePreviewPhotoUrl || activePhoto.url)))}
+                            >
+                              🖼️ 사진첩 보기
+                            </button>
+                          )}
                           <button type="button" className="action-btn" onClick={() => triggerEditPhotoBook(activePhoto!)}>✏️ 수정</button>
                           <button type="button" className="action-btn delete-btn" onClick={() => deletePhotoBookItem(activePhoto!.id!)}>🗑️ 삭제</button>
                           <button type="button" className="action-btn" onClick={() => copyPhotoBookToClipboard(activePhoto!)}>📋 복사</button>
@@ -6346,7 +6641,17 @@ ${photo.memoText}
                                     style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      openStorageImage(url, `photobook_preview_${idx + 1}.jpg`);
+                                      const pbId = editingPhotoBookItemId || "";
+                                      if (pbId) {
+                                        openPhotoBookImageResize({
+                                          url,
+                                          photoBookId: pbId,
+                                          imageIndex: idx,
+                                          fileName: `photobook_preview_${idx + 1}.jpg`,
+                                        });
+                                      } else {
+                                        openStorageImage(url, `photobook_preview_${idx + 1}.jpg`);
+                                      }
                                     }}
                                   />
                                   <button 
@@ -6507,7 +6812,7 @@ ${photo.memoText}
                             }
                           }
                           if (files.length > 0) {
-                            openPastedImagePreview(files);
+                            await handlePhotoBookImageUpload(files);
                           } else {
                             const text = e.clipboardData.getData("text/plain") || e.clipboardData.getData("text/uri-list");
                             if (text.trim()) alert(`붙여넣기된 텍스트:\n${text.trim().slice(0, 100)}`);
@@ -6662,6 +6967,7 @@ ${photo.memoText}
                       const isActive = activeItem?.type === "photobook" && activeItem?.id === photo.id;
                       const isSelected = selectedPhotoBookIds.includes(photo.id || "");
                       const isPinned = photo.isPinned || false;
+                      const albumCount = 1 + (photo.additionalImages?.length || 0);
                       return (
                         <div
                           key={photo.id || idx}
@@ -6670,10 +6976,20 @@ ${photo.memoText}
                           {/* ── 이미지 — 2fr (generalInfoCardThumbnail과 동일) ── */}
                           <div
                             className="pbIndexCardPhoto"
-                            onClick={() => { setActiveItem({ type: "photobook", id: photo.id || "" }); setPhotoBookTab("register"); }}
+                            onClick={() => {
+                              if (albumCount > 1) {
+                                openPhotoAlbumViewer(photo, 0);
+                              } else {
+                                setActiveItem({ type: "photobook", id: photo.id || "" });
+                                setPhotoBookTab("register");
+                              }
+                            }}
                           >
                             {isPinned && (
                               <div className="pbIndexCardPinBadge">📌</div>
+                            )}
+                            {albumCount > 1 && (
+                              <div className="pbIndexCardAlbumBadge">🖼️ {albumCount}</div>
                             )}
                             {photo.url ? (
                               <img src={photo.url} alt={photo.keyword} />
@@ -6706,6 +7022,16 @@ ${photo.memoText}
                                 }}
                               />
                             </div>
+                            {albumCount > 1 && (
+                              <button
+                                className="pbIndexCardBtnAlbum"
+                                title="사진첩 보기"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openPhotoAlbumViewer(photo, 0);
+                                }}
+                              >🖼️ 사진첩 보기</button>
+                            )}
                             <button
                               className={`pbIndexCardBtnPin ${isPinned ? "active" : ""}`}
                               title={isPinned ? "상단 고정 해제" : "상단 고정"}
@@ -6835,6 +7161,90 @@ ${photo.memoText}
           </div>
         </div>
       )}
+      {photoAlbumViewer && (
+        <div
+          className="photo-album-viewer-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="사진첩 보기"
+          onClick={closePhotoAlbumViewer}
+        >
+          <div className="photo-album-viewer-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="photo-album-viewer-header">
+              <div>
+                <strong>🖼️ 사진첩 보기</strong>
+                <span>#{photoAlbumViewer.keyword}</span>
+              </div>
+              <div className="photo-album-viewer-header-actions">
+                <span className="photo-album-viewer-counter">
+                  {photoAlbumViewer.index + 1} / {photoAlbumViewer.urls.length}
+                </span>
+                <button type="button" className="original-close-btn" onClick={closePhotoAlbumViewer}>닫기</button>
+              </div>
+            </div>
+
+            <div className="photo-album-viewer-stage">
+              {photoAlbumViewer.urls.length > 1 && (
+                <button
+                  type="button"
+                  className="photo-album-nav-btn left"
+                  onClick={() => movePhotoAlbumViewer(-1)}
+                  aria-label="이전 사진"
+                >
+                  ‹
+                </button>
+              )}
+              <img
+                src={photoAlbumViewer.urls[photoAlbumViewer.index]}
+                alt={`사진첩 ${photoAlbumViewer.index + 1}`}
+                className="photo-album-viewer-image"
+                onClick={() => {
+                  const url = photoAlbumViewer.urls[photoAlbumViewer.index];
+                  if (photoAlbumViewer.photoBookId) {
+                    openPhotoBookImageResize({
+                      url,
+                      photoBookId: photoAlbumViewer.photoBookId,
+                      imageIndex: photoAlbumViewer.index,
+                      fileName: `photobook_${photoAlbumViewer.keyword}_${photoAlbumViewer.index + 1}.jpg`,
+                    });
+                  } else {
+                    openStorageImage(url, `photobook_${photoAlbumViewer.keyword}_${photoAlbumViewer.index + 1}.jpg`);
+                  }
+                }}
+              />
+              {photoAlbumViewer.urls.length > 1 && (
+                <button
+                  type="button"
+                  className="photo-album-nav-btn right"
+                  onClick={() => movePhotoAlbumViewer(1)}
+                  aria-label="다음 사진"
+                >
+                  ›
+                </button>
+              )}
+            </div>
+
+            <p className="photo-album-viewer-hint">사진을 클릭하면 확대하여 볼 수 있습니다 · ← → 키로 이동</p>
+
+            {photoAlbumViewer.urls.length > 1 && (
+              <div className="photo-album-viewer-thumbs">
+                {photoAlbumViewer.urls.map((url, idx) => (
+                  <button
+                    key={`${url}-${idx}`}
+                    type="button"
+                    className={`photo-album-thumb ${idx === photoAlbumViewer.index ? "active" : ""}`}
+                    onClick={() => setPhotoAlbumViewer((prev) => (prev ? { ...prev, index: idx } : prev))}
+                    aria-label={`${idx + 1}번째 사진`}
+                  >
+                    <img src={url} alt={`썸네일 ${idx + 1}`} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {originalImageUrl && (
         <div className="original-image-modal" role="dialog" aria-modal="true" onClick={closeOriginalImage}>
           <div className="original-image-panel" onClick={event => event.stopPropagation()}>
@@ -6872,47 +7282,56 @@ ${photo.memoText}
                   <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
                 </>
               )}
-              {originalImageTarget?.type !== "diary" && originalImageTarget?.type !== "storage-image" && (
+              {originalImageTarget?.type === "photobook-resize" && (
+                <>
+                  <div className="photo-resize-controls" onClick={(e) => e.stopPropagation()}>
+                    <span className="photo-resize-label">크기 선택</span>
+                    {([800, 1200, 1600, 2400] as const).map((size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        className={`photo-resize-size-btn ${photoResizeMaxSide === size ? "active" : ""}`}
+                        disabled={photoResizeBusy}
+                        onClick={() => void previewPhotoBookResize(size)}
+                      >
+                        {size === 800 ? "작게" : size === 1200 ? "보통" : size === 1600 ? "크게" : "원본급"} ({size})
+                      </button>
+                    ))}
+                  </div>
+                  {photoResizeInfo && <p className="photo-resize-info">{photoResizeInfo}</p>}
+                  <button
+                    type="button"
+                    className="original-primary-btn"
+                    disabled={photoResizeBusy}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void resizeAndResavePhotoBookImage();
+                    }}
+                  >
+                    {photoResizeBusy ? "처리 중..." : "📖 크기 변경 후 포토북 저장"}
+                  </button>
+                  <button
+                    type="button"
+                    className="original-primary-btn"
+                    disabled={photoResizeBusy}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void downloadStorageImage();
+                    }}
+                  >
+                    📥 사진 저장
+                  </button>
+                  <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
+                </>
+              )}
+              {originalImageTarget?.type !== "diary" && originalImageTarget?.type !== "storage-image" && originalImageTarget?.type !== "photobook-resize" && (
                 <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
               )}
               {originalImageTarget?.type === "diary" && (
                 <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
               )}
             </div>
-            <img src={originalImageUrl} alt="원본 사진" />
-          </div>
-        </div>
-      )}
-      {pastedImagePreview && (
-        <div className="original-image-modal pasted-image-preview-modal" role="dialog" aria-modal="true" onClick={closePastedImagePreview}>
-          <div className="original-image-panel pasted-image-preview-panel" onClick={(event) => event.stopPropagation()}>
-            <div className="original-modal-actions pasted-image-preview-actions">
-              <button
-                type="button"
-                className="original-primary-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void savePastedImageToPhotoBook();
-                }}
-              >
-                📖 포토북에 저장
-              </button>
-              <button
-                type="button"
-                className="original-primary-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  savePastedImageToGeneralInfo();
-                }}
-              >
-                📂 일반 저장함에 저장
-              </button>
-              <button type="button" className="original-close-btn" onClick={closePastedImagePreview}>취소</button>
-            </div>
-            {pastedImagePreview.files.length > 1 && (
-              <p className="pasted-image-preview-count">총 {pastedImagePreview.files.length}장의 사진이 선택되었습니다.</p>
-            )}
-            <img src={pastedImagePreview.previewUrl} alt="붙여넣은 사진 미리보기" />
+            <img src={photoResizePreviewUrl || originalImageUrl} alt="원본 사진" />
           </div>
         </div>
       )}

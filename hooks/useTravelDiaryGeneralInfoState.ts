@@ -35,12 +35,10 @@ const uploadFileToSupabaseStorage = async (file: File): Promise<{ storagePath: s
 
 export interface UseTravelDiaryGeneralInfoStateProps {
   showPasteHint: (msg: string) => void;
-  onPastedImagePreview?: (files: File[]) => void;
 }
 
 export function useTravelDiaryGeneralInfoState({
   showPasteHint,
-  onPastedImagePreview,
 }: UseTravelDiaryGeneralInfoStateProps) {
   
 
@@ -490,63 +488,65 @@ export function useTravelDiaryGeneralInfoState({
     if (fileList.length === 0) return;
 
     let loadedCount = 0;
-    const loadedItems: Array<{
-      id: number;
-      name: string;
-      type: "none" | "image" | "video";
-      preview: string;
-    }> = [];
+    const loadedItems: ReturnType<typeof makeGeneralInfoMediaItem>[] = [];
 
     fileList.forEach((file) => {
       const fileType = file.type.startsWith("video/") ? "video" : "image";
       const reader = new FileReader();
 
+      const finishOne = () => {
+        loadedCount += 1;
+        if (loadedCount !== fileList.length) return;
+
+        if (loadedItems.length === 0) {
+          showPasteHint("⚠️ 이미지/동영상 파일을 읽지 못했습니다. 다시 붙여넣어 주세요.");
+          return;
+        }
+
+        setGeneralInfoImageLoadFailed(false);
+        setGeneralInfoDraft((prev) => {
+          const previousItems = normalizeGeneralInfoMediaItems(prev);
+          const nextMediaItems = [...previousItems, ...loadedItems];
+          const mainMedia = nextMediaItems[0];
+
+          return {
+            ...prev,
+            fileName: mainMedia?.name || "",
+            fileType: mainMedia?.type || "none",
+            filePreview: mainMedia?.preview || "",
+            mediaItems: nextMediaItems,
+          };
+        });
+
+        showPasteHint(
+          fileList.length > 1
+            ? `✅ 이미지/동영상 자료 ${loadedItems.length}개 추가`
+            : loadedItems[0]?.type === "video"
+              ? "✅ 동영상 자료 추가"
+              : "✅ 이미지 자료 추가",
+        );
+      };
+
       reader.onload = (event) => {
         const preview = String(event.target?.result || "");
         if (preview) {
-          loadedItems.push(makeGeneralInfoMediaItem(file.name, fileType, preview));
+          loadedItems.push(makeGeneralInfoMediaItem(file.name || `upload-${Date.now()}`, fileType, preview));
         }
-
-        loadedCount += 1;
-
-        if (loadedCount === fileList.length) {
-          setGeneralInfoImageLoadFailed(false);
-          setGeneralInfoDraft((prev) => {
-            const previousItems = normalizeGeneralInfoMediaItems(prev);
-            const nextMediaItems = [...previousItems, ...loadedItems];
-            const mainMedia = nextMediaItems[0];
-
-            return {
-              ...prev,
-              fileName: mainMedia?.name || "",
-              fileType: mainMedia?.type || "none",
-              filePreview: mainMedia?.preview || "",
-              mediaItems: nextMediaItems,
-            };
-          });
-
-          showPasteHint(
-            fileList.length > 1
-              ? `✅ 이미지/동영상 자료 ${fileList.length}개 추가`
-              : loadedItems[0]?.type === "video"
-                ? "✅ 동영상 자료 추가"
-                : "✅ 이미지 자료 추가",
-          );
-        }
+        finishOne();
+      };
+      reader.onerror = () => {
+        console.warn("general info file read failed", file.name);
+        finishOne();
       };
 
-      reader.readAsDataURL(file);
+      try {
+        reader.readAsDataURL(file);
+      } catch (error) {
+        console.warn("general info file read threw", error);
+        finishOne();
+      }
     });
   }, [showPasteHint]);
-
-  const routePastedImagePreview = useCallback((files: File[]) => {
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-    if (imageFiles.length > 0 && onPastedImagePreview) {
-      onPastedImagePreview(imageFiles);
-      return true;
-    }
-    return false;
-  }, [onPastedImagePreview]);
 
   const handleGeneralInfoRichPaste = useCallback((
     event: React.ClipboardEvent<HTMLDivElement>,
@@ -564,7 +564,6 @@ export function useTravelDiaryGeneralInfoState({
 
     if (pastedFiles.length > 0) {
       event.preventDefault();
-      if (routePastedImagePreview(pastedFiles)) return;
       const transfer = new DataTransfer();
       pastedFiles.forEach((file) => transfer.items.add(file));
       handleGeneralInfoFileUpload(transfer.files);
@@ -609,7 +608,7 @@ export function useTravelDiaryGeneralInfoState({
     // Sync state after paste (onInput is not attached, so call explicitly)
     syncGeneralInfoRichTextToDraft();
     showPasteHint("✅ Text를 편집기에 붙여넣었습니다.");
-  }, [decodeGeneralInfoPastedText, syncGeneralInfoRichTextToDraft, showPasteHint, handleGeneralInfoFileUpload, generalInfoRichTextRef, routePastedImagePreview]);
+  }, [decodeGeneralInfoPastedText, syncGeneralInfoRichTextToDraft, showPasteHint, handleGeneralInfoFileUpload, generalInfoRichTextRef]);
 
   const handleExtractGeneralInfoUrl = useCallback(async () => {
     const targetUrl = generalInfoDraft.sourceUrl.trim();
@@ -714,13 +713,6 @@ export function useTravelDiaryGeneralInfoState({
 
             if (imageType) {
               const blob = await clipboardItem.getType(imageType);
-              const file = new File([blob], `clipboard-image-${Date.now()}.png`, { type: imageType });
-              if (routePastedImagePreview([file])) {
-                handled = true;
-                showPasteHint("🖼️ 붙여넣은 사진을 확인한 뒤 저장 위치를 선택하세요.");
-                break;
-              }
-
               const reader = new FileReader();
 
               await new Promise<void>((resolve, reject) => {
@@ -818,7 +810,7 @@ export function useTravelDiaryGeneralInfoState({
     } finally {
       setIsCollectingGeneralInfoClipboard(false);
     }
-  }, [generalInfoDraft.text, backupCurrentGeneralInfoDraft, extractGeneralInfoUrl, resetGeneralInfoRichTextEditor, showPasteHint, routePastedImagePreview]);
+  }, [generalInfoDraft.text, backupCurrentGeneralInfoDraft, extractGeneralInfoUrl, resetGeneralInfoRichTextEditor, showPasteHint]);
 
   const handleClearGeneralInfoCoverImage = useCallback(() => {
     setGeneralInfoImageLoadFailed(false);
@@ -875,20 +867,9 @@ export function useTravelDiaryGeneralInfoState({
     }
 
     if (pastedFiles.length > 0) {
-      const imageFiles = pastedFiles.filter((file) => file.type.startsWith("image/"));
-      const videoFiles = pastedFiles.filter((file) => file.type.startsWith("video/"));
-
-      if (imageFiles.length > 0 && routePastedImagePreview(imageFiles)) {
-        if (videoFiles.length > 0) {
-          const transfer = new DataTransfer();
-          videoFiles.forEach((file) => transfer.items.add(file));
-          handleGeneralInfoFileUpload(transfer.files);
-        }
-      } else {
-        const transfer = new DataTransfer();
-        pastedFiles.forEach((file) => transfer.items.add(file));
-        handleGeneralInfoFileUpload(transfer.files);
-      }
+      const transfer = new DataTransfer();
+      pastedFiles.forEach((file) => transfer.items.add(file));
+      handleGeneralInfoFileUpload(transfer.files);
     }
 
     const pastedText =
@@ -904,7 +885,7 @@ export function useTravelDiaryGeneralInfoState({
     if (pastedFiles.length === 0 && !pastedText.trim()) {
       showPasteHint("⚠️ 이미지/동영상을 복사해 다시 시도하세요.");
     }
-  }, [handleGeneralInfoFileUpload, applyGeneralInfoPastedText, showPasteHint, routePastedImagePreview]);
+  }, [handleGeneralInfoFileUpload, applyGeneralInfoPastedText, showPasteHint]);
 
   // --- AI 분석 및 자료 저장/수정 핸들러 ---
   const handleAnalyzeGeneralInfoDraft = useCallback(async () => {

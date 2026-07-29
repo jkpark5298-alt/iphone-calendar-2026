@@ -923,6 +923,56 @@ textarea {
   background: #111;
   border-radius: 10px;
 }
+.original-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%;
+}
+
+.photo-resize-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.photo-resize-label {
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.photo-resize-size-btn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(15, 23, 42, 0.75);
+  color: #cbd5e1;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.photo-resize-size-btn.active {
+  background: #62b19b;
+  color: #0f172a;
+  border-color: #62b19b;
+  font-weight: 800;
+}
+
+.photo-resize-info {
+  width: 100%;
+  margin: 0;
+  text-align: right;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
 .original-close-btn {
   border: 0;
   border-radius: 999px;
@@ -8013,30 +8063,6 @@ body {
   max-width: 72px;
 }
 
-.pasted-image-preview-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-  width: 100%;
-}
-
-.pasted-image-preview-count {
-  width: 100%;
-  margin: 0;
-  text-align: center;
-  color: #cbd5e1;
-  font-size: 13px;
-}
-
-.pasted-image-preview-panel img {
-  width: 100%;
-  max-height: calc(94vh - 110px);
-  object-fit: contain;
-  background: #111;
-  border-radius: 10px;
-}
-
 /* ── 사진 컬럼 (2fr) — generalInfoCardThumbnail과 동일 ── */
 .pbIndexCardPhoto {
   width: 100%;
@@ -8192,6 +8218,162 @@ body {
 /* ── 핀 배지 (이미지 위 오버레이) ── */
 .pbIndexCardPhoto {
   position: relative;
+}
+
+.pbIndexCardAlbumBadge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  background: rgba(15, 23, 42, 0.78);
+  color: #7dd3c0;
+  border: 1px solid rgba(98, 177, 155, 0.45);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+}
+
+.pbIndexCardBtnAlbum {
+  width: 100%;
+  border: 1px solid rgba(98, 177, 155, 0.35);
+  background: rgba(98, 177, 155, 0.12);
+  color: #7dd3c0;
+  border-radius: 6px;
+  padding: 5px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.photo-album-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(2, 6, 23, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.photo-album-viewer-panel {
+  width: min(96vw, 1100px);
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.photo-album-viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  color: #e2e8f0;
+}
+
+.photo-album-viewer-header strong {
+  display: block;
+  font-size: 16px;
+}
+
+.photo-album-viewer-header span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.photo-album-viewer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.photo-album-viewer-counter {
+  color: #7dd3c0;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.photo-album-viewer-stage {
+  position: relative;
+  min-height: 55vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 23, 0.55);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.photo-album-viewer-image {
+  max-width: 100%;
+  max-height: 62vh;
+  object-fit: contain;
+  cursor: zoom-in;
+  border-radius: 8px;
+}
+
+.photo-album-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.photo-album-nav-btn.left { left: 10px; }
+.photo-album-nav-btn.right { right: 10px; }
+
+.photo-album-viewer-hint {
+  margin: 0;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.photo-album-viewer-thumbs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.photo-album-thumb {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  background: #1e293b;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.photo-album-thumb.active {
+  border-color: #62b19b;
+  opacity: 1;
+}
+
+.photo-album-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .pbIndexCardPinBadge {
