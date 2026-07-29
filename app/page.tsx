@@ -8,7 +8,7 @@ import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralIn
 import { ChangeEvent, ClipboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateApi";
-import { extractPhotoExif, hasPhotoBookExif, type PhotoBookImageExif } from "../lib/photoExif";
+import { extractPhotoExif, getPhotoBookExifViewLines, hasPhotoBookExif, type PhotoBookImageExif } from "../lib/photoExif";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
@@ -6469,12 +6469,9 @@ ${photo.memoText}
                                   )}
                                   {hasPhotoBookExif(photoBookInputImageExifs[idx]) && (
                                     <div className="pbPhotoExifCaption">
-                                      {photoBookInputImageExifs[idx]?.takenAt ? (
-                                        <span>📅 {photoBookInputImageExifs[idx].takenAt}</span>
-                                      ) : null}
-                                      {photoBookInputImageExifs[idx]?.location ? (
-                                        <span>📍 {photoBookInputImageExifs[idx].location}</span>
-                                      ) : null}
+                                      {getPhotoBookExifViewLines(photoBookInputImageExifs[idx]).map((line) => (
+                                        <span key={line}>{line}</span>
+                                      ))}
                                     </div>
                                   )}
                                   {pbMemoEditIdx === idx && (
@@ -6798,12 +6795,9 @@ ${photo.memoText}
                               )}
                               {hasPhotoBookExif((activePhoto.imageExifs || [])[curIdx]) && (
                                 <div className="pbDetailExifInfo">
-                                  {(activePhoto.imageExifs || [])[curIdx]?.takenAt ? (
-                                    <span>📅 촬영 {(activePhoto.imageExifs || [])[curIdx].takenAt}</span>
-                                  ) : null}
-                                  {(activePhoto.imageExifs || [])[curIdx]?.location ? (
-                                    <span>📍 {(activePhoto.imageExifs || [])[curIdx].location}</span>
-                                  ) : null}
+                                  {getPhotoBookExifViewLines((activePhoto.imageExifs || [])[curIdx]).map((line) => (
+                                    <span key={line}>{line}</span>
+                                  ))}
                                 </div>
                               )}
                             </div>
@@ -7010,12 +7004,9 @@ ${photo.memoText}
                                 )}
                                 {hasPhotoBookExif(photoBookInputImageExifs[idx]) && (
                                   <div className="pbPhotoExifCaption">
-                                    {photoBookInputImageExifs[idx]?.takenAt ? (
-                                      <span>📅 {photoBookInputImageExifs[idx].takenAt}</span>
-                                    ) : null}
-                                    {photoBookInputImageExifs[idx]?.location ? (
-                                      <span>📍 {photoBookInputImageExifs[idx].location}</span>
-                                    ) : null}
+                                    {getPhotoBookExifViewLines(photoBookInputImageExifs[idx]).map((line) => (
+                                      <span key={line}>{line}</span>
+                                    ))}
                                   </div>
                                 )}
                                 {pbMemoEditIdx === idx && (
@@ -7545,12 +7536,9 @@ ${photo.memoText}
 
             {hasPhotoBookExif(photoAlbumViewer.exifs[photoAlbumViewer.index]) && (
               <div className="photo-album-viewer-exif">
-                {photoAlbumViewer.exifs[photoAlbumViewer.index]?.takenAt ? (
-                  <span>📅 {photoAlbumViewer.exifs[photoAlbumViewer.index].takenAt}</span>
-                ) : null}
-                {photoAlbumViewer.exifs[photoAlbumViewer.index]?.location ? (
-                  <span>📍 {photoAlbumViewer.exifs[photoAlbumViewer.index].location}</span>
-                ) : null}
+                {getPhotoBookExifViewLines(photoAlbumViewer.exifs[photoAlbumViewer.index]).map((line) => (
+                  <span key={line}>{line}</span>
+                ))}
               </div>
             )}
 

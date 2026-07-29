@@ -3,6 +3,8 @@ import exifr from "exifr";
 export type PhotoBookImageExif = {
   takenAt?: string;
   location?: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 function formatExifDate(value: unknown): string {
@@ -14,7 +16,6 @@ function formatExifDate(value: unknown): string {
     const normalized = value.trim().replace(/^(\d{4}):(\d{2}):(\d{2})/, "$1-$2-$3");
     const date = new Date(normalized);
     if (!Number.isNaN(date.getTime())) return formatDateParts(date);
-    // EXIF 원문 형식: 2026:07:29 14:28:00
     const m = value.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
     if (m) return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}`;
   }
@@ -46,7 +47,6 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
-/** GPSLatitude/GPSLongitude DMS 배열 → 십진수 */
 function dmsToDecimal(value: unknown, ref?: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     const refText = String(ref || "").toUpperCase();
@@ -88,7 +88,12 @@ function readNestedText(value: unknown): string {
   return "";
 }
 
-function pickLocationText(data: Record<string, unknown>, lat?: number | null, lng?: number | null): string {
+function isCoordinateText(text?: string): boolean {
+  if (!text) return false;
+  return /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(text.trim());
+}
+
+function pickEmbeddedPlaceName(data: Record<string, unknown>): string {
   const candidates = [
     data.GPSAreaInformation,
     data.Location,
@@ -96,27 +101,20 @@ function pickLocationText(data: Record<string, unknown>, lat?: number | null, ln
     data.LocationShown,
     data.Landmark,
     data.SubLocation,
-    data.ImageDescription,
   ];
   for (const value of candidates) {
     const text = readNestedText(value);
-    if (text) return text;
+    if (text && !isCoordinateText(text)) return text;
   }
 
   const placeParts = [
     data.City,
     data.ProvinceState ?? data.State,
-    data.Country,
-    data.CountryDestination,
   ]
     .map(readNestedText)
     .filter(Boolean);
-  if (placeParts.length > 0) return placeParts.join(", ");
-
-  if (typeof lat === "number" && typeof lng === "number" && Number.isFinite(lat) && Number.isFinite(lng)) {
-    if (Math.abs(lat) < 0.00001 && Math.abs(lng) < 0.00001) return "";
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  }
+  if (placeParts.length >= 2) return `${placeParts[0]} - ${placeParts[1]}`;
+  if (placeParts.length === 1) return placeParts[0];
   return "";
 }
 
@@ -144,6 +142,9 @@ function resolveLatLng(data: Record<string, unknown>, gps?: { latitude?: number;
 
   if (lat != null && (!Number.isFinite(lat) || Number.isNaN(lat))) lat = null;
   if (lng != null && (!Number.isFinite(lng) || Number.isNaN(lng))) lng = null;
+  if (lat != null && lng != null && Math.abs(lat) < 0.00001 && Math.abs(lng) < 0.00001) {
+    return { lat: null, lng: null };
+  }
   return { lat, lng };
 }
 
@@ -153,7 +154,6 @@ async function extractWithExifr(file: File): Promise<PhotoBookImageExif> {
       gps: true,
       xmp: true,
       iptc: true,
-      // pick를 쓰지 않음: 아이폰 GPS 변환(latitude/longitude)에 필요한 Ref 태그까지 포함하려면 전체 파싱이 안전
       mergeOutput: true,
     }).catch(() => null),
     exifr.gps(file).catch(() => null),
@@ -170,11 +170,13 @@ async function extractWithExifr(file: File): Promise<PhotoBookImageExif> {
     formatExifDate(merged.DateTimeDigitized) ||
     formatExifDate(merged.ModifyDate);
 
-  const location = pickLocationText(merged, lat, lng);
+  const location = pickEmbeddedPlaceName(merged) || undefined;
 
   return {
     takenAt: takenAt || undefined,
-    location: location || undefined,
+    location,
+    latitude: lat ?? undefined,
+    longitude: lng ?? undefined,
   };
 }
 
@@ -213,54 +215,100 @@ async function extractWithExifReader(file: File): Promise<PhotoBookImageExif> {
       lng = dmsToDecimal(lngTag?.value ?? lngTag?.description, lngRef?.value ?? lngRef?.description) ?? lng;
     }
 
+    if (lat != null && lng != null && Math.abs(lat) < 0.00001 && Math.abs(lng) < 0.00001) {
+      lat = null;
+      lng = null;
+    }
+
     const place =
       readNestedText(tags.xmp?.LocationCreated) ||
       readNestedText(tags.xmp?.LocationShown) ||
       readNestedText((tags as Record<string, { description?: string }>).Location?.description) ||
-      readNestedText(tags.iptc?.["City"]?.description) ||
-      readNestedText(tags.iptc?.["Country/Primary Location Name"]?.description) ||
       "";
-
-    let location = place;
-    if (!location && typeof lat === "number" && typeof lng === "number") {
-      if (!(Math.abs(lat) < 0.00001 && Math.abs(lng) < 0.00001)) {
-        location = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-      }
-    }
 
     return {
       takenAt: takenAt || undefined,
-      location: location || undefined,
+      location: place && !isCoordinateText(place) ? place : undefined,
+      latitude: lat ?? undefined,
+      longitude: lng ?? undefined,
     };
   } catch {
     return {};
   }
+}
+
+/** GPS → "파주시 - 기산리" 형태 장소명으로 보강 */
+export async function resolvePhotoExifPlaceName(exif: PhotoBookImageExif): Promise<PhotoBookImageExif> {
+  if (exif.location && !isCoordinateText(exif.location)) {
+    return exif;
+  }
+
+  const lat = exif.latitude;
+  const lng = exif.longitude;
+  if (typeof lat !== "number" || typeof lng !== "number") {
+    return { ...exif, location: undefined };
+  }
+
+  try {
+    const response = await fetch(`/api/reverse-geocode?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}`);
+    if (!response.ok) return { ...exif, location: undefined };
+    const data = (await response.json()) as { place?: string };
+    const place = String(data.place || "").trim();
+    if (place) {
+      return { ...exif, location: place };
+    }
+  } catch (error) {
+    console.warn("resolvePhotoExifPlaceName failed", error);
+  }
+
+  // 장소명 변환 실패 시에는 좌표 대신 일자만 보이도록 location을 비웁니다.
+  return { ...exif, location: undefined };
 }
 
 export async function extractPhotoExif(file: File): Promise<PhotoBookImageExif> {
   try {
     const primary = await extractWithExifr(file);
-    if (primary.location) return primary;
+    const fallback = primary.latitude == null || primary.longitude == null || !primary.takenAt
+      ? await extractWithExifReader(file)
+      : {};
 
-    // 아이폰 HEIC 등에서 촬영일만 나오고 GPS를 못 읽는 경우 ExifReader로 재시도
-    const fallback = await extractWithExifReader(file);
-    return {
+    const merged: PhotoBookImageExif = {
       takenAt: primary.takenAt || fallback.takenAt,
       location: primary.location || fallback.location,
+      latitude: primary.latitude ?? fallback.latitude,
+      longitude: primary.longitude ?? fallback.longitude,
     };
+
+    return resolvePhotoExifPlaceName(merged);
   } catch {
     return {};
   }
 }
 
+/**
+ * 표시 규칙:
+ * 1) 위치가 있으면 위치 표시 (일자도 있으면 함께)
+ * 2) 위치가 없고 일자가 있으면 일자만 표시
+ */
+export function getPhotoBookExifViewLines(exif?: PhotoBookImageExif | null): string[] {
+  if (!exif) return [];
+  const lines: string[] = [];
+  if (exif.location) {
+    lines.push(`📍 ${exif.location}`);
+    if (exif.takenAt) lines.push(`📅 ${exif.takenAt}`);
+    return lines;
+  }
+  if (exif.takenAt) {
+    lines.push(`📅 ${exif.takenAt}`);
+  }
+  return lines;
+}
+
 export function formatPhotoBookExifDisplay(exif?: PhotoBookImageExif | null): string | null {
-  if (!exif) return null;
-  const parts: string[] = [];
-  if (exif.takenAt) parts.push(`📅 ${exif.takenAt}`);
-  if (exif.location) parts.push(`📍 ${exif.location}`);
-  return parts.length > 0 ? parts.join(" · ") : null;
+  const lines = getPhotoBookExifViewLines(exif);
+  return lines.length > 0 ? lines.join(" · ") : null;
 }
 
 export function hasPhotoBookExif(exif?: PhotoBookImageExif | null): boolean {
-  return Boolean(exif?.takenAt || exif?.location);
+  return getPhotoBookExifViewLines(exif).length > 0;
 }
