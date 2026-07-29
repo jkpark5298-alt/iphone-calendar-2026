@@ -88,9 +88,21 @@ function readNestedText(value: unknown): string {
   return "";
 }
 
-function isCoordinateText(text?: string): boolean {
+export function isCoordinateText(text?: string | null): boolean {
   if (!text) return false;
-  return /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(text.trim());
+  const normalized = text.trim().replace(/\s+/g, " ");
+  return /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(normalized);
+}
+
+export function parseCoordinatePair(text?: string | null): { lat: number; lng: number } | null {
+  if (!text) return null;
+  const m = text.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lng = Number(m[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) < 0.00001 && Math.abs(lng) < 0.00001) return null;
+  return { lat, lng };
 }
 
 function pickEmbeddedPlaceName(data: Record<string, unknown>): string {
@@ -107,12 +119,7 @@ function pickEmbeddedPlaceName(data: Record<string, unknown>): string {
     if (text && !isCoordinateText(text)) return text;
   }
 
-  const placeParts = [
-    data.City,
-    data.ProvinceState ?? data.State,
-  ]
-    .map(readNestedText)
-    .filter(Boolean);
+  const placeParts = [data.City, data.ProvinceState ?? data.State].map(readNestedText).filter(Boolean);
   if (placeParts.length >= 2) return `${placeParts[0]} - ${placeParts[1]}`;
   if (placeParts.length === 1) return placeParts[0];
   return "";
@@ -132,11 +139,10 @@ function resolveLatLng(data: Record<string, unknown>, gps?: { latitude?: number;
   }
 
   if ((lat == null || lng == null) && data.GPSPosition) {
-    const text = String(data.GPSPosition);
-    const m = text.match(/(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)/);
-    if (m) {
-      lat = Number(m[1]);
-      lng = Number(m[2]);
+    const parsed = parseCoordinatePair(String(data.GPSPosition).replace(/\s+/g, " ").replace(" ", ", "));
+    if (parsed) {
+      lat = parsed.lat;
+      lng = parsed.lng;
     }
   }
 
@@ -170,11 +176,9 @@ async function extractWithExifr(file: File): Promise<PhotoBookImageExif> {
     formatExifDate(merged.DateTimeDigitized) ||
     formatExifDate(merged.ModifyDate);
 
-  const location = pickEmbeddedPlaceName(merged) || undefined;
-
   return {
     takenAt: takenAt || undefined,
-    location,
+    location: pickEmbeddedPlaceName(merged) || undefined,
     latitude: lat ?? undefined,
     longitude: lng ?? undefined,
   };
@@ -237,44 +241,102 @@ async function extractWithExifReader(file: File): Promise<PhotoBookImageExif> {
   }
 }
 
-/** GPS → "파주시 - 기산리" 형태 장소명으로 보강 */
+function getAbsoluteReverseGeocodeUrl(lat: number, lng: number) {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/api/reverse-geocode?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}`;
+  }
+  return `/api/reverse-geocode?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}`;
+}
+
+/** GPS → "파주시 - 기산리" 형태 장소명으로 보강. 좌표 문자열은 절대 최종 location으로 두지 않음. */
 export async function resolvePhotoExifPlaceName(exif: PhotoBookImageExif): Promise<PhotoBookImageExif> {
   if (exif.location && !isCoordinateText(exif.location)) {
-    return exif;
+    return {
+      ...exif,
+      location: exif.location,
+    };
   }
 
-  const lat = exif.latitude;
-  const lng = exif.longitude;
+  let lat = exif.latitude;
+  let lng = exif.longitude;
+  if ((typeof lat !== "number" || typeof lng !== "number") && isCoordinateText(exif.location)) {
+    const parsed = parseCoordinatePair(exif.location);
+    if (parsed) {
+      lat = parsed.lat;
+      lng = parsed.lng;
+    }
+  }
+
   if (typeof lat !== "number" || typeof lng !== "number") {
     return { ...exif, location: undefined };
   }
 
   try {
-    const response = await fetch(`/api/reverse-geocode?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}`);
-    if (!response.ok) return { ...exif, location: undefined };
-    const data = (await response.json()) as { place?: string };
-    const place = String(data.place || "").trim();
-    if (place) {
-      return { ...exif, location: place };
+    const response = await fetch(getAbsoluteReverseGeocodeUrl(lat, lng), {
+      cache: "no-store",
+    });
+    if (response.ok) {
+      const data = (await response.json()) as { place?: string };
+      const place = String(data.place || "").trim();
+      if (place && !isCoordinateText(place)) {
+        return {
+          ...exif,
+          location: place,
+          latitude: lat,
+          longitude: lng,
+        };
+      }
     }
   } catch (error) {
     console.warn("resolvePhotoExifPlaceName failed", error);
   }
 
-  // 장소명 변환 실패 시에는 좌표 대신 일자만 보이도록 location을 비웁니다.
-  return { ...exif, location: undefined };
+  // 좌표는 사용자에게 보이지 않게 하고, 일자만 남깁니다.
+  return {
+    ...exif,
+    location: undefined,
+    latitude: lat,
+    longitude: lng,
+  };
+}
+
+export async function enrichPhotoBookImageExifs(
+  exifs: Array<PhotoBookImageExif | undefined | null>
+): Promise<PhotoBookImageExif[]> {
+  const result: PhotoBookImageExif[] = [];
+  for (const item of exifs) {
+    const base = item || {};
+    if (base.location && !isCoordinateText(base.location)) {
+      result.push(base);
+      continue;
+    }
+    if (
+      typeof base.latitude === "number" ||
+      typeof base.longitude === "number" ||
+      isCoordinateText(base.location)
+    ) {
+      result.push(await resolvePhotoExifPlaceName(base));
+    } else {
+      result.push({ ...base, location: undefined });
+    }
+  }
+  return result;
 }
 
 export async function extractPhotoExif(file: File): Promise<PhotoBookImageExif> {
   try {
     const primary = await extractWithExifr(file);
-    const fallback = primary.latitude == null || primary.longitude == null || !primary.takenAt
-      ? await extractWithExifReader(file)
-      : {};
+    const fallback =
+      primary.latitude == null || primary.longitude == null || !primary.takenAt
+        ? await extractWithExifReader(file)
+        : {};
 
     const merged: PhotoBookImageExif = {
       takenAt: primary.takenAt || fallback.takenAt,
-      location: primary.location || fallback.location,
+      // 좌표 문자열은 location으로 쓰지 않음
+      location:
+        (primary.location && !isCoordinateText(primary.location) ? primary.location : undefined) ||
+        (fallback.location && !isCoordinateText(fallback.location) ? fallback.location : undefined),
       latitude: primary.latitude ?? fallback.latitude,
       longitude: primary.longitude ?? fallback.longitude,
     };
@@ -287,14 +349,16 @@ export async function extractPhotoExif(file: File): Promise<PhotoBookImageExif> 
 
 /**
  * 표시 규칙:
- * 1) 위치가 있으면 위치 표시 (일자도 있으면 함께)
- * 2) 위치가 없고 일자가 있으면 일자만 표시
+ * 1) 장소명이 있으면 장소 표시 (일자도 있으면 함께)
+ * 2) 장소명이 없고 일자가 있으면 일자만 표시
+ * ※ GPS 좌표 문자열은 절대 표시하지 않음
  */
 export function getPhotoBookExifViewLines(exif?: PhotoBookImageExif | null): string[] {
   if (!exif) return [];
   const lines: string[] = [];
-  if (exif.location) {
-    lines.push(`📍 ${exif.location}`);
+  const place = exif.location && !isCoordinateText(exif.location) ? exif.location : "";
+  if (place) {
+    lines.push(`📍 ${place}`);
     if (exif.takenAt) lines.push(`📅 ${exif.takenAt}`);
     return lines;
   }

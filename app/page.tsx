@@ -8,7 +8,13 @@ import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralIn
 import { ChangeEvent, ClipboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateApi";
-import { extractPhotoExif, getPhotoBookExifViewLines, hasPhotoBookExif, type PhotoBookImageExif } from "../lib/photoExif";
+import {
+  enrichPhotoBookImageExifs,
+  extractPhotoExif,
+  getPhotoBookExifViewLines,
+  hasPhotoBookExif,
+  type PhotoBookImageExif,
+} from "../lib/photoExif";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
@@ -598,6 +604,7 @@ export default function HomePage() {
     exifs: PhotoBookImageExif[];
     index: number;
   } | null>(null);
+  const [activePhotoResolvedExifs, setActivePhotoResolvedExifs] = useState<PhotoBookImageExif[] | null>(null);
   const [selectedInstaCardIds, setSelectedInstaCardIds] = useState<string[]>([]);
   const [isInfoBookModalOpen, setIsInfoBookModalOpen] = useState(false);
   const [infoBookSearchQuery, setInfoBookSearchQuery] = useState("");
@@ -1802,6 +1809,27 @@ export default function HomePage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [photoAlbumViewer]);
+
+  useEffect(() => {
+    if (!activeItem || activeItem.type !== "photobook" || !activeItem.id) {
+      setActivePhotoResolvedExifs(null);
+      return;
+    }
+    const photoId = activeItem.id;
+    const raw = allPhotoBookItems.find((item) => item.id === photoId);
+    if (!raw) {
+      setActivePhotoResolvedExifs(null);
+      return;
+    }
+    const parsed = parsePhotoBookMemo(raw.memo || "");
+    let cancelled = false;
+    void enrichPhotoBookImageExifs(parsed.imageExifs || []).then((exifs) => {
+      if (!cancelled) setActivePhotoResolvedExifs(exifs);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeItem, allPhotoBookItems]);
 
   useEffect(() => {
     if (!photoCropMode) return;
@@ -5585,6 +5613,11 @@ function MarkDateView() {
     setPhotoBookInputImageExifs(parsed.imageExifs || []);
     setPbMemoEditIdx(null);
     setPhotoBookTab("register");
+
+    // 기존에 좌표만 저장된 EXIF는 장소명으로 변환
+    void enrichPhotoBookImageExifs(parsed.imageExifs || []).then((exifs) => {
+      setPhotoBookInputImageExifs(exifs);
+    });
   }
 
   // CRUD: Cancel Edit Photo Book
@@ -5992,13 +6025,18 @@ ${photo.memoText}
       alert("사진첩에 표시할 이미지가 없습니다.");
       return;
     }
+    const memos = getPhotoBookImageMemos(photo, urls.length);
+    const rawExifs = getPhotoBookImageExifs(photo, urls.length);
     setPhotoAlbumViewer({
       photoBookId: photo.id || "",
       keyword: photo.keyword || parsePhotoBookMemo(photo.memo || "").keyword || "포토북",
       urls,
-      memos: getPhotoBookImageMemos(photo, urls.length),
-      exifs: getPhotoBookImageExifs(photo, urls.length),
+      memos,
+      exifs: rawExifs,
       index: Math.max(0, Math.min(startIndex, urls.length - 1)),
+    });
+    void enrichPhotoBookImageExifs(rawExifs).then((exifs) => {
+      setPhotoAlbumViewer((prev) => (prev && prev.photoBookId === (photo.id || "") ? { ...prev, exifs } : prev));
     });
   }
 
@@ -6793,9 +6831,9 @@ ${photo.memoText}
                                   <span className="generalInfoDetailMediaMemoText" style={{ fontSize: "18px", lineHeight: "1.7", fontWeight: "500" }}>{imgMemo}</span>
                                 </div>
                               )}
-                              {hasPhotoBookExif((activePhoto.imageExifs || [])[curIdx]) && (
+                              {hasPhotoBookExif((activePhotoResolvedExifs || activePhoto.imageExifs || [])[curIdx]) && (
                                 <div className="pbDetailExifInfo">
-                                  {getPhotoBookExifViewLines((activePhoto.imageExifs || [])[curIdx]).map((line) => (
+                                  {getPhotoBookExifViewLines((activePhotoResolvedExifs || activePhoto.imageExifs || [])[curIdx]).map((line) => (
                                     <span key={line}>{line}</span>
                                   ))}
                                 </div>
