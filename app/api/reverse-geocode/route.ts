@@ -28,7 +28,7 @@ function looksLikeCoordinateText(text?: string) {
 }
 
 /** 아이폰 사진앱 스타일: "파주시 - 기산리" */
-export function formatKoreanPlaceName(
+function formatKoreanPlaceName(
   parts: { city?: string; detail?: string; state?: string },
   displayName?: string
 ): string {
