@@ -498,7 +498,9 @@ export default function HomePage() {
   const photoCropPanRef = useRef({ x: 0, y: 0 });
   const photoCropScaleRef = useRef(1);
   const photoCropRectRef = useRef({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
-  const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
+  const photoCropStageSizeRef = useRef({ w: 0, h: 0 });
+  const photoCropNaturalRef = useRef({ w: 0, h: 0 });
+  const photoCropAspectRef = useRef<"free" | "1:1" | "4:3" | "16:9">("free");  const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
   const [datePickerValue, setDatePickerValue] = useState(`${todayDefault.year ?? 2026}-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -1857,6 +1859,18 @@ export default function HomePage() {
   }, [photoCropRect]);
 
   useEffect(() => {
+    photoCropStageSizeRef.current = photoCropStageSize;
+  }, [photoCropStageSize]);
+
+  useEffect(() => {
+    photoCropNaturalRef.current = photoCropNatural;
+  }, [photoCropNatural]);
+
+  useEffect(() => {
+    photoCropAspectRef.current = photoCropAspect;
+  }, [photoCropAspect]);
+
+  useEffect(() => {
     if (!photoCropMode) return;
     const id = requestAnimationFrame(() => {
       const img = photoCropImageRef.current;
@@ -1872,123 +1886,240 @@ export default function HomePage() {
   useEffect(() => {
     if (!photoCropMode) return;
 
-    const onPointerMove = (event: PointerEvent) => {
-      const pointers = photoCropPointersRef.current;
-      if (pointers.has(event.pointerId)) {
-        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      }
+    const getTouchPoint = (touch: Touch) => ({ x: touch.clientX, y: touch.clientY });
 
+    const beginPan = (x: number, y: number) => {
+      photoCropGestureRef.current = {
+        mode: "pan",
+        startX: x,
+        startY: y,
+        startPan: { ...photoCropPanRef.current },
+        startScale: photoCropScaleRef.current,
+        startDist: 0,
+        startRect: { ...photoCropRectRef.current },
+        pinchOriginX: 0,
+        pinchOriginY: 0,
+      };
+    };
+
+    const beginPinch = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+      const stage = photoCropStageRef.current;
+      if (!stage) return;
+      const bounds = stage.getBoundingClientRect();
+      const midX = (a.x + b.x) / 2 - bounds.left;
+      const midY = (a.y + b.y) / 2 - bounds.top;
+      photoCropGestureRef.current = {
+        mode: "pinch",
+        startX: midX,
+        startY: midY,
+        startPan: { ...photoCropPanRef.current },
+        startScale: photoCropScaleRef.current,
+        startDist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+        startRect: { ...photoCropRectRef.current },
+        pinchOriginX: midX,
+        pinchOriginY: midY,
+      };
+    };
+
+    const applyPan = (x: number, y: number) => {
       const gesture = photoCropGestureRef.current;
-      if (!gesture || photoCropStageSize.w <= 0 || photoCropStageSize.h <= 0) return;
+      if (!gesture || gesture.mode !== "pan") return;
+      const stageSize = photoCropStageSizeRef.current;
+      const natural = photoCropNaturalRef.current;
+      if (stageSize.w <= 0 || stageSize.h <= 0) return;
+      const next = clampPhotoCropPan(
+        { x: gesture.startPan.x + (x - gesture.startX), y: gesture.startPan.y + (y - gesture.startY) },
+        photoCropScaleRef.current,
+        stageSize,
+        natural,
+        photoCropRectRef.current
+      );
+      setPhotoCropPan(next);
+    };
 
-      if (gesture.mode === "pinch" && pointers.size >= 2) {
-        const pts = Array.from(pointers.values());
-        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-        if (gesture.startDist <= 0) return;
-        const nextScale = clampPhotoCropScale(
-          gesture.startScale * (dist / gesture.startDist),
-          photoCropStageSize,
-          photoCropNatural,
-          photoCropRectRef.current
-        );
-        const stageEl = photoCropStageRef.current;
-        if (!stageEl) return;
-        const bounds = stageEl.getBoundingClientRect();
-        const localX = (pts[0].x + pts[1].x) / 2 - bounds.left;
-        const localY = (pts[0].y + pts[1].y) / 2 - bounds.top;
-        const offsetX = (gesture.pinchOriginX - photoCropStageSize.w / 2 - gesture.startPan.x) / gesture.startScale;
-        const offsetY = (gesture.pinchOriginY - photoCropStageSize.h / 2 - gesture.startPan.y) / gesture.startScale;
-        const pan = {
-          x: localX - photoCropStageSize.w / 2 - offsetX * nextScale,
-          y: localY - photoCropStageSize.h / 2 - offsetY * nextScale,
-        };
-        const clamped = clampPhotoCropPan(pan, nextScale, photoCropStageSize, photoCropNatural, photoCropRectRef.current);
-        setPhotoCropScale(nextScale);
-        setPhotoCropPan(clamped);
-        return;
-      }
+    const applyPinch = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+      const gesture = photoCropGestureRef.current;
+      if (!gesture || gesture.mode !== "pinch" || gesture.startDist <= 0) return;
+      const stageSize = photoCropStageSizeRef.current;
+      const natural = photoCropNaturalRef.current;
+      if (stageSize.w <= 0 || stageSize.h <= 0) return;
+      const stage = photoCropStageRef.current;
+      if (!stage) return;
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const nextScale = clampPhotoCropScale(
+        gesture.startScale * (dist / gesture.startDist),
+        stageSize,
+        natural,
+        photoCropRectRef.current
+      );
+      const bounds = stage.getBoundingClientRect();
+      const localX = (a.x + b.x) / 2 - bounds.left;
+      const localY = (a.y + b.y) / 2 - bounds.top;
+      const offsetX = (gesture.pinchOriginX - stageSize.w / 2 - gesture.startPan.x) / gesture.startScale;
+      const offsetY = (gesture.pinchOriginY - stageSize.h / 2 - gesture.startPan.y) / gesture.startScale;
+      const pan = {
+        x: localX - stageSize.w / 2 - offsetX * nextScale,
+        y: localY - stageSize.h / 2 - offsetY * nextScale,
+      };
+      setPhotoCropScale(nextScale);
+      setPhotoCropPan(clampPhotoCropPan(pan, nextScale, stageSize, natural, photoCropRectRef.current));
+    };
 
-      if (gesture.mode === "pan") {
-        const dx = event.clientX - gesture.startX;
-        const dy = event.clientY - gesture.startY;
-        const next = clampPhotoCropPan(
-          { x: gesture.startPan.x + dx, y: gesture.startPan.y + dy },
-          photoCropScaleRef.current,
-          photoCropStageSize,
-          photoCropNatural,
-          photoCropRectRef.current
-        );
-        setPhotoCropPan(next);
-        return;
-      }
-
+    const applyCropDrag = (x: number, y: number) => {
+      const gesture = photoCropGestureRef.current;
       if (
-        gesture.mode === "crop-move" ||
-        gesture.mode === "nw" ||
-        gesture.mode === "ne" ||
-        gesture.mode === "sw" ||
-        gesture.mode === "se"
+        !gesture ||
+        (gesture.mode !== "crop-move" &&
+          gesture.mode !== "nw" &&
+          gesture.mode !== "ne" &&
+          gesture.mode !== "sw" &&
+          gesture.mode !== "se")
       ) {
-        const dx = (event.clientX - gesture.startX) / photoCropStageSize.w;
-        const dy = (event.clientY - gesture.startY) / photoCropStageSize.h;
-        const start = gesture.startRect;
-        let next = { ...start };
+        return;
+      }
+      const stageSize = photoCropStageSizeRef.current;
+      const natural = photoCropNaturalRef.current;
+      if (stageSize.w <= 0 || stageSize.h <= 0) return;
+      const dx = (x - gesture.startX) / stageSize.w;
+      const dy = (y - gesture.startY) / stageSize.h;
+      const start = gesture.startRect;
+      let next = { ...start };
 
-        if (gesture.mode === "crop-move") {
-          next = { ...start, x: start.x + dx, y: start.y + dy };
-        } else if (gesture.mode === "nw") {
-          next = { x: start.x + dx, y: start.y + dy, w: start.w - dx, h: start.h - dy };
-        } else if (gesture.mode === "ne") {
-          next = { x: start.x, y: start.y + dy, w: start.w + dx, h: start.h - dy };
-        } else if (gesture.mode === "sw") {
-          next = { x: start.x + dx, y: start.y, w: start.w - dx, h: start.h + dy };
-        } else if (gesture.mode === "se") {
-          next = { x: start.x, y: start.y, w: start.w + dx, h: start.h + dy };
+      if (gesture.mode === "crop-move") {
+        next = { ...start, x: start.x + dx, y: start.y + dy };
+      } else if (gesture.mode === "nw") {
+        next = { x: start.x + dx, y: start.y + dy, w: start.w - dx, h: start.h - dy };
+      } else if (gesture.mode === "ne") {
+        next = { x: start.x, y: start.y + dy, w: start.w + dx, h: start.h - dy };
+      } else if (gesture.mode === "sw") {
+        next = { x: start.x + dx, y: start.y, w: start.w - dx, h: start.h + dy };
+      } else if (gesture.mode === "se") {
+        next = { x: start.x, y: start.y, w: start.w + dx, h: start.h + dy };
+      }
+
+      const aspect = photoCropAspectRef.current;
+      if (aspect !== "free") {
+        const ratioMap = { "1:1": 1, "4:3": 4 / 3, "16:9": 16 / 9 } as const;
+        const target = ratioMap[aspect];
+        const stageAspect = stageSize.w / stageSize.h;
+        const desired = target / stageAspect;
+        if (gesture.mode === "se" || gesture.mode === "ne") {
+          next.h = next.w / desired;
+        } else if (gesture.mode === "nw" || gesture.mode === "sw") {
+          next.w = next.h * desired;
         }
+      }
 
-        if (photoCropAspect !== "free") {
-          const ratioMap = { "1:1": 1, "4:3": 4 / 3, "16:9": 16 / 9 } as const;
-          const target = ratioMap[photoCropAspect];
-          const stageAspect = photoCropStageSize.w / photoCropStageSize.h;
-          const desired = target / stageAspect;
-          if (gesture.mode === "se" || gesture.mode === "ne") {
-            next.h = next.w / desired;
-          } else if (gesture.mode === "nw" || gesture.mode === "sw") {
-            next.w = next.h * desired;
-          }
+      const clampedRect = clampPhotoCropRect(next);
+      setPhotoCropRect(clampedRect);
+      setPhotoCropPan((prev) =>
+        clampPhotoCropPan(prev, photoCropScaleRef.current, stageSize, natural, clampedRect)
+      );
+    };
+
+    const onTouchStart = (event: TouchEvent) => {
+      const stage = photoCropStageRef.current;
+      if (!stage || !stage.contains(event.target as Node)) return;
+      // Don't steal handle interactions
+      if ((event.target as HTMLElement)?.classList?.contains("photo-crop-handle")) return;
+      if ((event.target as HTMLElement)?.closest?.(".photo-crop-handle")) return;
+
+      event.preventDefault();
+      const touches = Array.from(event.touches).map(getTouchPoint);
+      photoCropPointersRef.current.clear();
+      touches.forEach((pt, idx) => photoCropPointersRef.current.set(idx, pt));
+
+      if (touches.length >= 2) {
+        beginPinch(touches[0], touches[1]);
+      } else if (touches.length === 1) {
+        // Drag inside crop box moves the frame; outside pans the photo.
+        const target = event.target as HTMLElement | null;
+        if (target?.closest?.(".photo-crop-box") && !target.classList.contains("photo-crop-handle")) {
+          photoCropGestureRef.current = {
+            mode: "crop-move",
+            startX: touches[0].x,
+            startY: touches[0].y,
+            startPan: { ...photoCropPanRef.current },
+            startScale: photoCropScaleRef.current,
+            startDist: 0,
+            startRect: { ...photoCropRectRef.current },
+            pinchOriginX: 0,
+            pinchOriginY: 0,
+          };
+        } else {
+          beginPan(touches[0].x, touches[0].y);
         }
+      }
+    };
 
-        const clampedRect = clampPhotoCropRect(next);
-        setPhotoCropRect(clampedRect);
-        setPhotoCropPan((prev) =>
-          clampPhotoCropPan(prev, photoCropScaleRef.current, photoCropStageSize, photoCropNatural, clampedRect)
-        );
+    const onTouchMove = (event: TouchEvent) => {
+      const gesture = photoCropGestureRef.current;
+      if (!gesture) return;
+      event.preventDefault();
+      const touches = Array.from(event.touches).map(getTouchPoint);
+      if (gesture.mode === "pinch" && touches.length >= 2) {
+        applyPinch(touches[0], touches[1]);
+      } else if (gesture.mode === "pan" && touches.length >= 1) {
+        applyPan(touches[0].x, touches[0].y);
+      } else if (touches.length >= 1) {
+        applyCropDrag(touches[0].x, touches[0].y);
+      }
+    };
+
+    const onTouchEnd = (event: TouchEvent) => {
+      const touches = Array.from(event.touches).map(getTouchPoint);
+      if (touches.length >= 2) {
+        beginPinch(touches[0], touches[1]);
+        return;
+      }
+      if (touches.length === 1) {
+        beginPan(touches[0].x, touches[0].y);
+        return;
+      }
+      photoCropGestureRef.current = null;
+      photoCropPointersRef.current.clear();
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      // Mouse / stylus fallback (touch uses touch handlers above)
+      if (event.pointerType === "touch") return;
+      const gesture = photoCropGestureRef.current;
+      if (!gesture) return;
+      if (gesture.mode === "pan") {
+        applyPan(event.clientX, event.clientY);
+      } else {
+        applyCropDrag(event.clientX, event.clientY);
       }
     };
 
     const onPointerUp = (event: PointerEvent) => {
-      photoCropPointersRef.current.delete(event.pointerId);
-      if (photoCropPointersRef.current.size < 2 && photoCropGestureRef.current?.mode === "pinch") {
-        photoCropGestureRef.current = null;
-      }
-      if (photoCropPointersRef.current.size === 0) {
-        photoCropGestureRef.current = null;
-      }
+      if (event.pointerType === "touch") return;
+      photoCropGestureRef.current = null;
     };
 
     const onResize = () => updatePhotoCropStageSize();
 
+    // Listen on document so attachment does not depend on stage mount timing.
+    // non-passive touchstart/move so iOS can prevent page scroll while cropping.
+    document.addEventListener("touchstart", onTouchStart, { passive: false });
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onTouchEnd);
+    document.addEventListener("touchcancel", onTouchEnd);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerUp);
     window.addEventListener("resize", onResize);
     return () => {
+      document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+      document.removeEventListener("touchcancel", onTouchEnd);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
       window.removeEventListener("resize", onResize);
     };
-  }, [photoCropMode, photoCropStageSize.w, photoCropStageSize.h, photoCropNatural.w, photoCropNatural.h, photoCropAspect]);
+  }, [photoCropMode]);
 
   async function fetchWeatherFromKma() {
     if (!isSelectedDiaryDateToday(currentMonth, currentDay, currentYear)) {
@@ -3611,14 +3742,14 @@ export default function HomePage() {
     scale: number,
     stage: { w: number; h: number },
     natural: { w: number; h: number },
-    cropRect: { x: number; y: number; w: number; h: number }
+    _cropRect: { x: number; y: number; w: number; h: number }
   ) {
     const { displayW, displayH } = getPhotoCropBaseFit(stage, natural);
     if (displayW <= 0 || displayH <= 0) return 1;
-    const cropW = cropRect.w * stage.w;
-    const cropH = cropRect.h * stage.h;
-    const minScale = Math.max(cropW / displayW, cropH / displayH, 1);
-    return Math.max(minScale, Math.min(8, scale));
+    // Allow zooming from fit(1) up to 8x. Covering the crop window is preferred but
+    // not forced as a floor — otherwise one-finger pan has zero room at open.
+    void _cropRect;
+    return Math.max(1, Math.min(8, scale));
   }
 
   function clampPhotoCropPan(
@@ -3635,17 +3766,22 @@ export default function HomePage() {
     const cropBottom = (cropRect.y + cropRect.h) * stage.h;
     const centerOffsetX = (stage.w - img.width) / 2;
     const centerOffsetY = (stage.h - img.height) / 2;
+    const cropW = cropRight - cropLeft;
+    const cropH = cropBottom - cropTop;
 
     let x = pan.x;
     let y = pan.y;
-    if (img.width <= cropRight - cropLeft) {
+
+    // Keep as much of the image under the crop as possible, but always allow
+    // some movement so finger drag never feels "stuck".
+    if (img.width <= cropW) {
       x = (cropLeft + cropRight) / 2 - stage.w / 2;
     } else {
       const minX = cropRight - centerOffsetX - img.width;
       const maxX = cropLeft - centerOffsetX;
       x = Math.min(maxX, Math.max(minX, x));
     }
-    if (img.height <= cropBottom - cropTop) {
+    if (img.height <= cropH) {
       y = (cropTop + cropBottom) / 2 - stage.h / 2;
     } else {
       const minY = cropBottom - centerOffsetY - img.height;
@@ -3741,31 +3877,16 @@ export default function HomePage() {
   }
 
   function onPhotoCropStagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0 && event.pointerType === "mouse") return;
-    const stage = photoCropStageRef.current;
-    if (!stage) return;
-    stage.setPointerCapture?.(event.pointerId);
-    photoCropPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-
-    if (photoCropPointersRef.current.size >= 2) {
-      const pts = Array.from(photoCropPointersRef.current.values());
-      const bounds = stage.getBoundingClientRect();
-      const midX = (pts[0].x + pts[1].x) / 2 - bounds.left;
-      const midY = (pts[0].y + pts[1].y) / 2 - bounds.top;
-      photoCropGestureRef.current = {
-        mode: "pinch",
-        startX: midX,
-        startY: midY,
-        startPan: { ...photoCropPanRef.current },
-        startScale: photoCropScaleRef.current,
-        startDist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
-        startRect: { ...photoCropRectRef.current },
-        pinchOriginX: midX,
-        pinchOriginY: midY,
-      };
+    // Touch is handled by native touch listeners for reliable multi-touch on iOS.
+    if (event.pointerType === "touch") return;
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest?.(".photo-crop-handle")) return;
+    if (target?.closest?.(".photo-crop-box")) {
+      startPhotoCropBoxDrag("crop-move", event);
       return;
     }
-
+    photoCropPointersRef.current.clear();
     photoCropGestureRef.current = {
       mode: "pan",
       startX: event.clientX,
@@ -3777,6 +3898,26 @@ export default function HomePage() {
       pinchOriginX: 0,
       pinchOriginY: 0,
     };
+  }
+
+  function nudgePhotoCropZoom(direction: 1 | -1) {
+    if (photoCropStageSize.w <= 0 || photoCropNatural.w <= 0) return;
+    const prevScale = photoCropScaleRef.current;
+    const nextScale = clampPhotoCropScale(
+      prevScale * (direction > 0 ? 1.2 : 1 / 1.2),
+      photoCropStageSize,
+      photoCropNatural,
+      photoCropRectRef.current
+    );
+    const pan = clampPhotoCropPan(
+      photoCropPanRef.current,
+      nextScale,
+      photoCropStageSize,
+      photoCropNatural,
+      photoCropRectRef.current
+    );
+    setPhotoCropScale(nextScale);
+    setPhotoCropPan(pan);
   }
 
   function onPhotoCropWheel(event: React.WheelEvent<HTMLDivElement>) {
@@ -3812,7 +3953,7 @@ export default function HomePage() {
     setPhotoCropScale(1);
     setPhotoCropPan({ x: 0, y: 0 });
     setPhotoResizePreviewUrl("");
-    setPhotoResizeInfo("두 손가락으로 확대·축소하고, 한 손가락으로 이동한 뒤 저장하세요.");
+    setPhotoResizeInfo("초록 틀을 드래그하거나, 사진을 확대·이동한 뒤 저장하세요.");
   }
 
   async function buildCroppedPhotoDataUrl() {
@@ -3826,15 +3967,31 @@ export default function HomePage() {
       ? photoCropNatural
       : { w: image.width, h: image.height };
     const imgRect = getPhotoCropImageRect(photoCropScale, photoCropPan, stage, natural);
+    if (imgRect.width <= 0 || imgRect.height <= 0) {
+      throw new Error("잘라낼 이미지 영역을 계산하지 못했습니다.");
+    }
+
     const cropLeft = photoCropRect.x * stage.w;
     const cropTop = photoCropRect.y * stage.h;
-    const cropW = photoCropRect.w * stage.w;
-    const cropH = photoCropRect.h * stage.h;
+    const cropRight = (photoCropRect.x + photoCropRect.w) * stage.w;
+    const cropBottom = (photoCropRect.y + photoCropRect.h) * stage.h;
 
-    const sx = Math.max(0, Math.round(((cropLeft - imgRect.left) / imgRect.width) * image.width));
-    const sy = Math.max(0, Math.round(((cropTop - imgRect.top) / imgRect.height) * image.height));
-    const sw = Math.max(1, Math.min(image.width - sx, Math.round((cropW / imgRect.width) * image.width)));
-    const sh = Math.max(1, Math.min(image.height - sy, Math.round((cropH / imgRect.height) * image.height)));
+    // Intersect crop window with the visible image so letterboxed areas are excluded.
+    const left = Math.max(cropLeft, imgRect.left);
+    const top = Math.max(cropTop, imgRect.top);
+    const right = Math.min(cropRight, imgRect.left + imgRect.width);
+    const bottom = Math.min(cropBottom, imgRect.top + imgRect.height);
+    const cropW = Math.max(1, right - left);
+    const cropH = Math.max(1, bottom - top);
+
+    let sx = Math.round(((left - imgRect.left) / imgRect.width) * image.width);
+    let sy = Math.round(((top - imgRect.top) / imgRect.height) * image.height);
+    let sw = Math.round((cropW / imgRect.width) * image.width);
+    let sh = Math.round((cropH / imgRect.height) * image.height);
+    sx = Math.max(0, Math.min(image.width - 1, sx));
+    sy = Math.max(0, Math.min(image.height - 1, sy));
+    sw = Math.max(1, Math.min(image.width - sx, sw));
+    sh = Math.max(1, Math.min(image.height - sy, sh));
 
     const canvas = document.createElement("canvas");
     canvas.width = sw;
@@ -8015,6 +8172,23 @@ ${photo.memoText}
                             {label}
                           </button>
                         ))}
+                        <span className="photo-resize-label">확대</span>
+                        <button
+                          type="button"
+                          className="photo-resize-size-btn"
+                          disabled={photoResizeBusy}
+                          onClick={() => nudgePhotoCropZoom(-1)}
+                        >
+                          −
+                        </button>
+                        <button
+                          type="button"
+                          className="photo-resize-size-btn"
+                          disabled={photoResizeBusy}
+                          onClick={() => nudgePhotoCropZoom(1)}
+                        >
+                          +
+                        </button>
                       </div>
                       {photoResizeInfo && <p className="photo-resize-info">{photoResizeInfo}</p>}
                       <button
@@ -8090,6 +8264,10 @@ ${photo.memoText}
                         width: `${photoCropRect.w * 100}%`,
                         height: `${photoCropRect.h * 100}%`,
                       }}
+                      onPointerDown={(e) => {
+                        if (e.pointerType === "touch") return;
+                        startPhotoCropBoxDrag("crop-move", e);
+                      }}
                     >
                       <span
                         className="photo-crop-handle nw"
@@ -8110,7 +8288,7 @@ ${photo.memoText}
                     </div>
                   </div>
                 )}
-                <p className="photo-crop-hint">핀치로 확대 · 드래그로 이동 · 모서리로 영역 조절</p>
+                <p className="photo-crop-hint">틀 드래그 · 바깥은 사진 이동 · 핀치/+− 로 확대</p>
               </div>
             ) : (
               <img src={photoResizePreviewUrl || originalImageUrl} alt="원본 사진" />

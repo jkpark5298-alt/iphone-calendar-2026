@@ -1020,15 +1020,16 @@ textarea {
   border: 2px solid #62b19b;
   background: transparent;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
-  pointer-events: none;
+  pointer-events: auto;
   touch-action: none;
+  cursor: move;
 }
 
 .photo-crop-handle {
   position: absolute;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   background: #62b19b;
   border: 2px solid #0f172a;
   z-index: 3;
@@ -1037,26 +1038,26 @@ textarea {
 }
 
 .photo-crop-handle.nw {
-  left: -11px;
-  top: -11px;
+  left: -14px;
+  top: -14px;
   cursor: nwse-resize;
 }
 
 .photo-crop-handle.ne {
-  right: -11px;
-  top: -11px;
+  right: -14px;
+  top: -14px;
   cursor: nesw-resize;
 }
 
 .photo-crop-handle.sw {
-  left: -11px;
-  bottom: -11px;
+  left: -14px;
+  bottom: -14px;
   cursor: nesw-resize;
 }
 
 .photo-crop-handle.se {
-  right: -11px;
-  bottom: -11px;
+  right: -14px;
+  bottom: -14px;
   cursor: nwse-resize;
 }
 
