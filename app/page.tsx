@@ -475,17 +475,32 @@ export default function HomePage() {
   const [photoResizePreviewUrl, setPhotoResizePreviewUrl] = useState("");
   const [photoResizeInfo, setPhotoResizeInfo] = useState("");
   const [photoCropMode, setPhotoCropMode] = useState(false);
-  const [photoCropRect, setPhotoCropRect] = useState({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+  const [photoCropRect, setPhotoCropRect] = useState({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
   const [photoCropAspect, setPhotoCropAspect] = useState<"free" | "1:1" | "4:3" | "16:9">("free");
-  const [photoCropFrame, setPhotoCropFrame] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const [photoCropStageSize, setPhotoCropStageSize] = useState({ w: 0, h: 0 });
+  const [photoCropNatural, setPhotoCropNatural] = useState({ w: 0, h: 0 });
+  const [photoCropScale, setPhotoCropScale] = useState(1);
+  const [photoCropPan, setPhotoCropPan] = useState({ x: 0, y: 0 });
+  const photoCropStageRef = useRef<HTMLDivElement | null>(null);
   const photoCropImageRef = useRef<HTMLImageElement | null>(null);
-  const photoCropDragRef = useRef<{
-    type: "move" | "nw" | "ne" | "sw" | "se";
+  const photoCropPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const photoCropGestureRef = useRef<{
+    mode: "pan" | "pinch" | "crop-move" | "nw" | "ne" | "sw" | "se" | null;
     startX: number;
     startY: number;
+    startPan: { x: number; y: number };
+    startScale: number;
+    startDist: number;
     startRect: { x: number; y: number; w: number; h: number };
+    pinchOriginX: number;
+    pinchOriginY: number;
   } | null>(null);
-  const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
+  const photoCropPanRef = useRef({ x: 0, y: 0 });
+  const photoCropScaleRef = useRef(1);
+  const photoCropRectRef = useRef({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
+  const photoCropStageSizeRef = useRef({ w: 0, h: 0 });
+  const photoCropNaturalRef = useRef({ w: 0, h: 0 });
+  const photoCropAspectRef = useRef<"free" | "1:1" | "4:3" | "16:9">("free");  const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
   const [datePickerValue, setDatePickerValue] = useState(`${todayDefault.year ?? 2026}-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -1832,60 +1847,279 @@ export default function HomePage() {
   }, [activeItem, allPhotoBookItems]);
 
   useEffect(() => {
+    photoCropPanRef.current = photoCropPan;
+  }, [photoCropPan]);
+
+  useEffect(() => {
+    photoCropScaleRef.current = photoCropScale;
+  }, [photoCropScale]);
+
+  useEffect(() => {
+    photoCropRectRef.current = photoCropRect;
+  }, [photoCropRect]);
+
+  useEffect(() => {
+    photoCropStageSizeRef.current = photoCropStageSize;
+  }, [photoCropStageSize]);
+
+  useEffect(() => {
+    photoCropNaturalRef.current = photoCropNatural;
+  }, [photoCropNatural]);
+
+  useEffect(() => {
+    photoCropAspectRef.current = photoCropAspect;
+  }, [photoCropAspect]);
+
+  useEffect(() => {
+    if (!photoCropMode) return;
+    const id = requestAnimationFrame(() => {
+      const img = photoCropImageRef.current;
+      if (img?.naturalWidth) {
+        onPhotoCropImageLoad();
+      } else {
+        updatePhotoCropStageSize();
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [photoCropMode, originalImageUrl]);
+
+  useEffect(() => {
     if (!photoCropMode) return;
 
-    const onPointerMove = (event: PointerEvent) => {
-      const drag = photoCropDragRef.current;
-      if (!drag || photoCropFrame.width <= 0 || photoCropFrame.height <= 0) return;
-      const dx = (event.clientX - drag.startX) / photoCropFrame.width;
-      const dy = (event.clientY - drag.startY) / photoCropFrame.height;
-      const start = drag.startRect;
+    const getTouchPoint = (touch: Touch) => ({ x: touch.clientX, y: touch.clientY });
+
+    const beginPan = (x: number, y: number) => {
+      photoCropGestureRef.current = {
+        mode: "pan",
+        startX: x,
+        startY: y,
+        startPan: { ...photoCropPanRef.current },
+        startScale: photoCropScaleRef.current,
+        startDist: 0,
+        startRect: { ...photoCropRectRef.current },
+        pinchOriginX: 0,
+        pinchOriginY: 0,
+      };
+    };
+
+    const beginPinch = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+      const stage = photoCropStageRef.current;
+      if (!stage) return;
+      const bounds = stage.getBoundingClientRect();
+      const midX = (a.x + b.x) / 2 - bounds.left;
+      const midY = (a.y + b.y) / 2 - bounds.top;
+      photoCropGestureRef.current = {
+        mode: "pinch",
+        startX: midX,
+        startY: midY,
+        startPan: { ...photoCropPanRef.current },
+        startScale: photoCropScaleRef.current,
+        startDist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+        startRect: { ...photoCropRectRef.current },
+        pinchOriginX: midX,
+        pinchOriginY: midY,
+      };
+    };
+
+    const applyPan = (x: number, y: number) => {
+      const gesture = photoCropGestureRef.current;
+      if (!gesture || gesture.mode !== "pan") return;
+      const stageSize = photoCropStageSizeRef.current;
+      const natural = photoCropNaturalRef.current;
+      if (stageSize.w <= 0 || stageSize.h <= 0) return;
+      const next = clampPhotoCropPan(
+        { x: gesture.startPan.x + (x - gesture.startX), y: gesture.startPan.y + (y - gesture.startY) },
+        photoCropScaleRef.current,
+        stageSize,
+        natural,
+        photoCropRectRef.current
+      );
+      setPhotoCropPan(next);
+    };
+
+    const applyPinch = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+      const gesture = photoCropGestureRef.current;
+      if (!gesture || gesture.mode !== "pinch" || gesture.startDist <= 0) return;
+      const stageSize = photoCropStageSizeRef.current;
+      const natural = photoCropNaturalRef.current;
+      if (stageSize.w <= 0 || stageSize.h <= 0) return;
+      const stage = photoCropStageRef.current;
+      if (!stage) return;
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const nextScale = clampPhotoCropScale(
+        gesture.startScale * (dist / gesture.startDist),
+        stageSize,
+        natural,
+        photoCropRectRef.current
+      );
+      const bounds = stage.getBoundingClientRect();
+      const localX = (a.x + b.x) / 2 - bounds.left;
+      const localY = (a.y + b.y) / 2 - bounds.top;
+      const offsetX = (gesture.pinchOriginX - stageSize.w / 2 - gesture.startPan.x) / gesture.startScale;
+      const offsetY = (gesture.pinchOriginY - stageSize.h / 2 - gesture.startPan.y) / gesture.startScale;
+      const pan = {
+        x: localX - stageSize.w / 2 - offsetX * nextScale,
+        y: localY - stageSize.h / 2 - offsetY * nextScale,
+      };
+      setPhotoCropScale(nextScale);
+      setPhotoCropPan(clampPhotoCropPan(pan, nextScale, stageSize, natural, photoCropRectRef.current));
+    };
+
+    const applyCropDrag = (x: number, y: number) => {
+      const gesture = photoCropGestureRef.current;
+      if (
+        !gesture ||
+        (gesture.mode !== "crop-move" &&
+          gesture.mode !== "nw" &&
+          gesture.mode !== "ne" &&
+          gesture.mode !== "sw" &&
+          gesture.mode !== "se")
+      ) {
+        return;
+      }
+      const stageSize = photoCropStageSizeRef.current;
+      const natural = photoCropNaturalRef.current;
+      if (stageSize.w <= 0 || stageSize.h <= 0) return;
+      const dx = (x - gesture.startX) / stageSize.w;
+      const dy = (y - gesture.startY) / stageSize.h;
+      const start = gesture.startRect;
       let next = { ...start };
 
-      if (drag.type === "move") {
+      if (gesture.mode === "crop-move") {
         next = { ...start, x: start.x + dx, y: start.y + dy };
-      } else if (drag.type === "nw") {
+      } else if (gesture.mode === "nw") {
         next = { x: start.x + dx, y: start.y + dy, w: start.w - dx, h: start.h - dy };
-      } else if (drag.type === "ne") {
+      } else if (gesture.mode === "ne") {
         next = { x: start.x, y: start.y + dy, w: start.w + dx, h: start.h - dy };
-      } else if (drag.type === "sw") {
+      } else if (gesture.mode === "sw") {
         next = { x: start.x + dx, y: start.y, w: start.w - dx, h: start.h + dy };
-      } else if (drag.type === "se") {
+      } else if (gesture.mode === "se") {
         next = { x: start.x, y: start.y, w: start.w + dx, h: start.h + dy };
       }
 
-      if (photoCropAspect !== "free") {
+      const aspect = photoCropAspectRef.current;
+      if (aspect !== "free") {
         const ratioMap = { "1:1": 1, "4:3": 4 / 3, "16:9": 16 / 9 } as const;
-        const target = ratioMap[photoCropAspect];
-        const imageAspect = photoCropFrame.width / photoCropFrame.height;
-        const desired = target / imageAspect;
-        if (drag.type === "move") {
-          // keep size
-        } else if (drag.type === "se" || drag.type === "ne") {
+        const target = ratioMap[aspect];
+        const stageAspect = stageSize.w / stageSize.h;
+        const desired = target / stageAspect;
+        if (gesture.mode === "se" || gesture.mode === "ne") {
           next.h = next.w / desired;
-        } else {
+        } else if (gesture.mode === "nw" || gesture.mode === "sw") {
           next.w = next.h * desired;
         }
       }
 
-      setPhotoCropRect(clampPhotoCropRect(next));
+      const clampedRect = clampPhotoCropRect(next);
+      setPhotoCropRect(clampedRect);
+      setPhotoCropPan((prev) =>
+        clampPhotoCropPan(prev, photoCropScaleRef.current, stageSize, natural, clampedRect)
+      );
     };
 
-    const onPointerUp = () => {
-      photoCropDragRef.current = null;
+    const onTouchStart = (event: TouchEvent) => {
+      const stage = photoCropStageRef.current;
+      if (!stage || !stage.contains(event.target as Node)) return;
+      // Don't steal handle interactions
+      if ((event.target as HTMLElement)?.classList?.contains("photo-crop-handle")) return;
+      if ((event.target as HTMLElement)?.closest?.(".photo-crop-handle")) return;
+
+      event.preventDefault();
+      const touches = Array.from(event.touches).map(getTouchPoint);
+      photoCropPointersRef.current.clear();
+      touches.forEach((pt, idx) => photoCropPointersRef.current.set(idx, pt));
+
+      if (touches.length >= 2) {
+        beginPinch(touches[0], touches[1]);
+      } else if (touches.length === 1) {
+        // Drag inside crop box moves the frame; outside pans the photo.
+        const target = event.target as HTMLElement | null;
+        if (target?.closest?.(".photo-crop-box") && !target.classList.contains("photo-crop-handle")) {
+          photoCropGestureRef.current = {
+            mode: "crop-move",
+            startX: touches[0].x,
+            startY: touches[0].y,
+            startPan: { ...photoCropPanRef.current },
+            startScale: photoCropScaleRef.current,
+            startDist: 0,
+            startRect: { ...photoCropRectRef.current },
+            pinchOriginX: 0,
+            pinchOriginY: 0,
+          };
+        } else {
+          beginPan(touches[0].x, touches[0].y);
+        }
+      }
     };
 
-    const onResize = () => updatePhotoCropFrameFromImage();
+    const onTouchMove = (event: TouchEvent) => {
+      const gesture = photoCropGestureRef.current;
+      if (!gesture) return;
+      event.preventDefault();
+      const touches = Array.from(event.touches).map(getTouchPoint);
+      if (gesture.mode === "pinch" && touches.length >= 2) {
+        applyPinch(touches[0], touches[1]);
+      } else if (gesture.mode === "pan" && touches.length >= 1) {
+        applyPan(touches[0].x, touches[0].y);
+      } else if (touches.length >= 1) {
+        applyCropDrag(touches[0].x, touches[0].y);
+      }
+    };
 
+    const onTouchEnd = (event: TouchEvent) => {
+      const touches = Array.from(event.touches).map(getTouchPoint);
+      if (touches.length >= 2) {
+        beginPinch(touches[0], touches[1]);
+        return;
+      }
+      if (touches.length === 1) {
+        beginPan(touches[0].x, touches[0].y);
+        return;
+      }
+      photoCropGestureRef.current = null;
+      photoCropPointersRef.current.clear();
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      // Mouse / stylus fallback (touch uses touch handlers above)
+      if (event.pointerType === "touch") return;
+      const gesture = photoCropGestureRef.current;
+      if (!gesture) return;
+      if (gesture.mode === "pan") {
+        applyPan(event.clientX, event.clientY);
+      } else {
+        applyCropDrag(event.clientX, event.clientY);
+      }
+    };
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      photoCropGestureRef.current = null;
+    };
+
+    const onResize = () => updatePhotoCropStageSize();
+
+    // Listen on document so attachment does not depend on stage mount timing.
+    // non-passive touchstart/move so iOS can prevent page scroll while cropping.
+    document.addEventListener("touchstart", onTouchStart, { passive: false });
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onTouchEnd);
+    document.addEventListener("touchcancel", onTouchEnd);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
     window.addEventListener("resize", onResize);
     return () => {
+      document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+      document.removeEventListener("touchcancel", onTouchEnd);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
       window.removeEventListener("resize", onResize);
     };
-  }, [photoCropMode, photoCropFrame.width, photoCropFrame.height, photoCropAspect]);
+  }, [photoCropMode]);
 
   async function fetchWeatherFromKma() {
     if (!isSelectedDiaryDateToday(currentMonth, currentDay, currentYear)) {
@@ -3429,9 +3663,13 @@ export default function HomePage() {
     setPhotoResizeBusy(false);
     setPhotoCropMode(false);
     setPhotoCropAspect("free");
-    setPhotoCropRect({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
-    setPhotoCropFrame({ left: 0, top: 0, width: 0, height: 0 });
-    photoCropDragRef.current = null;
+    setPhotoCropRect({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
+    setPhotoCropStageSize({ w: 0, h: 0 });
+    setPhotoCropNatural({ w: 0, h: 0 });
+    setPhotoCropScale(1);
+    setPhotoCropPan({ x: 0, y: 0 });
+    photoCropPointersRef.current.clear();
+    photoCropGestureRef.current = null;
   }
 
   function openStorageImage(url: string, fileName?: string) {
@@ -3455,7 +3693,9 @@ export default function HomePage() {
     setPhotoResizeInfo("");
     setPhotoCropMode(false);
     setPhotoCropAspect("free");
-    setPhotoCropRect({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+    setPhotoCropRect({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
+    setPhotoCropScale(1);
+    setPhotoCropPan({ x: 0, y: 0 });
     setOriginalImageUrl(params.url);
     setOriginalImageTarget({
       type: "photobook-resize",
@@ -3466,21 +3706,128 @@ export default function HomePage() {
     });
   }
 
-  function updatePhotoCropFrameFromImage() {
+  function getPhotoCropBaseFit(
+    stage: { w: number; h: number },
+    natural: { w: number; h: number }
+  ) {
+    if (stage.w <= 0 || stage.h <= 0 || natural.w <= 0 || natural.h <= 0) {
+      return { baseScale: 1, displayW: 0, displayH: 0 };
+    }
+    const baseScale = Math.min(stage.w / natural.w, stage.h / natural.h);
+    return {
+      baseScale,
+      displayW: natural.w * baseScale,
+      displayH: natural.h * baseScale,
+    };
+  }
+
+  function getPhotoCropImageRect(
+    scale: number,
+    pan: { x: number; y: number },
+    stage: { w: number; h: number },
+    natural: { w: number; h: number }
+  ) {
+    const { displayW, displayH } = getPhotoCropBaseFit(stage, natural);
+    const imgW = displayW * scale;
+    const imgH = displayH * scale;
+    return {
+      left: (stage.w - imgW) / 2 + pan.x,
+      top: (stage.h - imgH) / 2 + pan.y,
+      width: imgW,
+      height: imgH,
+    };
+  }
+
+  function clampPhotoCropScale(
+    scale: number,
+    stage: { w: number; h: number },
+    natural: { w: number; h: number },
+    _cropRect: { x: number; y: number; w: number; h: number }
+  ) {
+    const { displayW, displayH } = getPhotoCropBaseFit(stage, natural);
+    if (displayW <= 0 || displayH <= 0) return 1;
+    // Allow zooming from fit(1) up to 8x. Covering the crop window is preferred but
+    // not forced as a floor — otherwise one-finger pan has zero room at open.
+    void _cropRect;
+    return Math.max(1, Math.min(8, scale));
+  }
+
+  function clampPhotoCropPan(
+    pan: { x: number; y: number },
+    scale: number,
+    stage: { w: number; h: number },
+    natural: { w: number; h: number },
+    cropRect: { x: number; y: number; w: number; h: number }
+  ) {
+    const img = getPhotoCropImageRect(scale, { x: 0, y: 0 }, stage, natural);
+    const cropLeft = cropRect.x * stage.w;
+    const cropTop = cropRect.y * stage.h;
+    const cropRight = (cropRect.x + cropRect.w) * stage.w;
+    const cropBottom = (cropRect.y + cropRect.h) * stage.h;
+    const centerOffsetX = (stage.w - img.width) / 2;
+    const centerOffsetY = (stage.h - img.height) / 2;
+    const cropW = cropRight - cropLeft;
+    const cropH = cropBottom - cropTop;
+
+    let x = pan.x;
+    let y = pan.y;
+
+    // Keep as much of the image under the crop as possible, but always allow
+    // some movement so finger drag never feels "stuck".
+    if (img.width <= cropW) {
+      x = (cropLeft + cropRight) / 2 - stage.w / 2;
+    } else {
+      const minX = cropRight - centerOffsetX - img.width;
+      const maxX = cropLeft - centerOffsetX;
+      x = Math.min(maxX, Math.max(minX, x));
+    }
+    if (img.height <= cropH) {
+      y = (cropTop + cropBottom) / 2 - stage.h / 2;
+    } else {
+      const minY = cropBottom - centerOffsetY - img.height;
+      const maxY = cropTop - centerOffsetY;
+      y = Math.min(maxY, Math.max(minY, y));
+    }
+    return { x, y };
+  }
+
+  function updatePhotoCropStageSize() {
+    const stage = photoCropStageRef.current;
+    if (!stage) return;
+    const w = stage.clientWidth;
+    const h = stage.clientHeight;
+    if (w <= 0 || h <= 0) return;
+    setPhotoCropStageSize({ w, h });
+    setPhotoCropScale((prev) => {
+      const next = clampPhotoCropScale(prev, { w, h }, photoCropNatural, photoCropRectRef.current);
+      setPhotoCropPan((pan) => clampPhotoCropPan(pan, next, { w, h }, photoCropNatural, photoCropRectRef.current));
+      return next;
+    });
+  }
+
+  function onPhotoCropImageLoad() {
     const img = photoCropImageRef.current;
     if (!img || !img.naturalWidth || !img.naturalHeight) return;
-    const scale = Math.min(img.clientWidth / img.naturalWidth, img.clientHeight / img.naturalHeight);
-    const width = img.naturalWidth * scale;
-    const height = img.naturalHeight * scale;
-    const left = (img.clientWidth - width) / 2;
-    const top = (img.clientHeight - height) / 2;
-    setPhotoCropFrame({ left, top, width, height });
+    const natural = { w: img.naturalWidth, h: img.naturalHeight };
+    setPhotoCropNatural(natural);
+    requestAnimationFrame(() => {
+      const stage = photoCropStageRef.current;
+      if (!stage) return;
+      const w = stage.clientWidth;
+      const h = stage.clientHeight;
+      if (w <= 0 || h <= 0) return;
+      const stageSize = { w, h };
+      setPhotoCropStageSize(stageSize);
+      const scale = clampPhotoCropScale(1, stageSize, natural, photoCropRectRef.current);
+      setPhotoCropScale(scale);
+      setPhotoCropPan(clampPhotoCropPan({ x: 0, y: 0 }, scale, stageSize, natural, photoCropRectRef.current));
+    });
   }
 
   function clampPhotoCropRect(rect: { x: number; y: number; w: number; h: number }) {
     let { x, y, w, h } = rect;
-    w = Math.max(0.08, Math.min(1, w));
-    h = Math.max(0.08, Math.min(1, h));
+    w = Math.max(0.12, Math.min(1, w));
+    h = Math.max(0.12, Math.min(1, h));
     x = Math.max(0, Math.min(1 - w, x));
     y = Math.max(0, Math.min(1 - h, y));
     return { x, y, w, h };
@@ -3491,51 +3838,161 @@ export default function HomePage() {
     if (aspect === "free") return;
     const ratioMap = { "1:1": 1, "4:3": 4 / 3, "16:9": 16 / 9 } as const;
     const target = ratioMap[aspect];
-    const frameRatio = photoCropFrame.width > 0 && photoCropFrame.height > 0
-      ? photoCropFrame.width / photoCropFrame.height
+    const stageAspect = photoCropStageSize.w > 0 && photoCropStageSize.h > 0
+      ? photoCropStageSize.w / photoCropStageSize.h
       : 1;
-    // crop rect is in image natural space (normalized), so use image aspect via frame
-    const imageAspect = frameRatio || 1;
-    let w = 0.8;
-    let h = w * (imageAspect / target);
-    if (h > 0.8) {
-      h = 0.8;
-      w = h * (target / imageAspect);
+    let w = 0.84;
+    let h = w * (stageAspect / target);
+    if (h > 0.84) {
+      h = 0.84;
+      w = h * (target / stageAspect);
     }
-    setPhotoCropRect(clampPhotoCropRect({ x: (1 - w) / 2, y: (1 - h) / 2, w, h }));
+    const nextRect = clampPhotoCropRect({ x: (1 - w) / 2, y: (1 - h) / 2, w, h });
+    setPhotoCropRect(nextRect);
+    setPhotoCropScale((prev) => {
+      const next = clampPhotoCropScale(prev, photoCropStageSize, photoCropNatural, nextRect);
+      setPhotoCropPan((pan) => clampPhotoCropPan(pan, next, photoCropStageSize, photoCropNatural, nextRect));
+      return next;
+    });
   }
 
-  function startPhotoCropDrag(
-    type: "move" | "nw" | "ne" | "sw" | "se",
+  function startPhotoCropBoxDrag(
+    type: "crop-move" | "nw" | "ne" | "sw" | "se",
     event: React.PointerEvent
   ) {
     event.preventDefault();
     event.stopPropagation();
-    photoCropDragRef.current = {
-      type,
+    photoCropPointersRef.current.clear();
+    photoCropGestureRef.current = {
+      mode: type,
       startX: event.clientX,
       startY: event.clientY,
-      startRect: { ...photoCropRect },
+      startPan: { ...photoCropPanRef.current },
+      startScale: photoCropScaleRef.current,
+      startDist: 0,
+      startRect: { ...photoCropRectRef.current },
+      pinchOriginX: 0,
+      pinchOriginY: 0,
     };
+  }
+
+  function onPhotoCropStagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    // Touch is handled by native touch listeners for reliable multi-touch on iOS.
+    if (event.pointerType === "touch") return;
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest?.(".photo-crop-handle")) return;
+    if (target?.closest?.(".photo-crop-box")) {
+      startPhotoCropBoxDrag("crop-move", event);
+      return;
+    }
+    photoCropPointersRef.current.clear();
+    photoCropGestureRef.current = {
+      mode: "pan",
+      startX: event.clientX,
+      startY: event.clientY,
+      startPan: { ...photoCropPanRef.current },
+      startScale: photoCropScaleRef.current,
+      startDist: 0,
+      startRect: { ...photoCropRectRef.current },
+      pinchOriginX: 0,
+      pinchOriginY: 0,
+    };
+  }
+
+  function nudgePhotoCropZoom(direction: 1 | -1) {
+    if (photoCropStageSize.w <= 0 || photoCropNatural.w <= 0) return;
+    const prevScale = photoCropScaleRef.current;
+    const nextScale = clampPhotoCropScale(
+      prevScale * (direction > 0 ? 1.2 : 1 / 1.2),
+      photoCropStageSize,
+      photoCropNatural,
+      photoCropRectRef.current
+    );
+    const pan = clampPhotoCropPan(
+      photoCropPanRef.current,
+      nextScale,
+      photoCropStageSize,
+      photoCropNatural,
+      photoCropRectRef.current
+    );
+    setPhotoCropScale(nextScale);
+    setPhotoCropPan(pan);
+  }
+
+  function onPhotoCropWheel(event: React.WheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (photoCropStageSize.w <= 0 || photoCropNatural.w <= 0) return;
+    const stage = photoCropStageRef.current;
+    if (!stage) return;
+    const bounds = stage.getBoundingClientRect();
+    const localX = event.clientX - bounds.left;
+    const localY = event.clientY - bounds.top;
+    const prevScale = photoCropScaleRef.current;
+    const nextScale = clampPhotoCropScale(
+      prevScale * (event.deltaY < 0 ? 1.08 : 1 / 1.08),
+      photoCropStageSize,
+      photoCropNatural,
+      photoCropRectRef.current
+    );
+    const offsetX = (localX - photoCropStageSize.w / 2 - photoCropPanRef.current.x) / prevScale;
+    const offsetY = (localY - photoCropStageSize.h / 2 - photoCropPanRef.current.y) / prevScale;
+    const pan = {
+      x: localX - photoCropStageSize.w / 2 - offsetX * nextScale,
+      y: localY - photoCropStageSize.h / 2 - offsetY * nextScale,
+    };
+    setPhotoCropScale(nextScale);
+    setPhotoCropPan(clampPhotoCropPan(pan, nextScale, photoCropStageSize, photoCropNatural, photoCropRectRef.current));
   }
 
   function beginPhotoCropMode() {
     setPhotoCropMode(true);
     setPhotoCropAspect("free");
-    setPhotoCropRect({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+    setPhotoCropRect({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
+    setPhotoCropScale(1);
+    setPhotoCropPan({ x: 0, y: 0 });
     setPhotoResizePreviewUrl("");
-    setPhotoResizeInfo("영역을 드래그해 잘라낼 범위를 선택한 뒤 저장하세요.");
-    requestAnimationFrame(() => updatePhotoCropFrameFromImage());
+    setPhotoResizeInfo("초록 틀을 드래그하거나, 사진을 확대·이동한 뒤 저장하세요.");
   }
 
   async function buildCroppedPhotoDataUrl() {
     if (!originalImageUrl) throw new Error("원본 이미지가 없습니다.");
     const source = await loadSourceDataUrl(originalImageUrl);
     const image = await loadImage(source);
-    const sx = Math.max(0, Math.round(photoCropRect.x * image.width));
-    const sy = Math.max(0, Math.round(photoCropRect.y * image.height));
-    const sw = Math.max(1, Math.min(image.width - sx, Math.round(photoCropRect.w * image.width)));
-    const sh = Math.max(1, Math.min(image.height - sy, Math.round(photoCropRect.h * image.height)));
+    const stage = photoCropStageSize.w > 0
+      ? photoCropStageSize
+      : { w: photoCropStageRef.current?.clientWidth || 1, h: photoCropStageRef.current?.clientHeight || 1 };
+    const natural = photoCropNatural.w > 0
+      ? photoCropNatural
+      : { w: image.width, h: image.height };
+    const imgRect = getPhotoCropImageRect(photoCropScale, photoCropPan, stage, natural);
+    if (imgRect.width <= 0 || imgRect.height <= 0) {
+      throw new Error("잘라낼 이미지 영역을 계산하지 못했습니다.");
+    }
+
+    const cropLeft = photoCropRect.x * stage.w;
+    const cropTop = photoCropRect.y * stage.h;
+    const cropRight = (photoCropRect.x + photoCropRect.w) * stage.w;
+    const cropBottom = (photoCropRect.y + photoCropRect.h) * stage.h;
+
+    // Intersect crop window with the visible image so letterboxed areas are excluded.
+    const left = Math.max(cropLeft, imgRect.left);
+    const top = Math.max(cropTop, imgRect.top);
+    const right = Math.min(cropRight, imgRect.left + imgRect.width);
+    const bottom = Math.min(cropBottom, imgRect.top + imgRect.height);
+    const cropW = Math.max(1, right - left);
+    const cropH = Math.max(1, bottom - top);
+
+    let sx = Math.round(((left - imgRect.left) / imgRect.width) * image.width);
+    let sy = Math.round(((top - imgRect.top) / imgRect.height) * image.height);
+    let sw = Math.round((cropW / imgRect.width) * image.width);
+    let sh = Math.round((cropH / imgRect.height) * image.height);
+    sx = Math.max(0, Math.min(image.width - 1, sx));
+    sy = Math.max(0, Math.min(image.height - 1, sy));
+    sw = Math.max(1, Math.min(image.width - sx, sw));
+    sh = Math.max(1, Math.min(image.height - sy, sh));
+
     const canvas = document.createElement("canvas");
     canvas.width = sw;
     canvas.height = sh;
@@ -7715,6 +8172,23 @@ ${photo.memoText}
                             {label}
                           </button>
                         ))}
+                        <span className="photo-resize-label">확대</span>
+                        <button
+                          type="button"
+                          className="photo-resize-size-btn"
+                          disabled={photoResizeBusy}
+                          onClick={() => nudgePhotoCropZoom(-1)}
+                        >
+                          −
+                        </button>
+                        <button
+                          type="button"
+                          className="photo-resize-size-btn"
+                          disabled={photoResizeBusy}
+                          onClick={() => nudgePhotoCropZoom(1)}
+                        >
+                          +
+                        </button>
                       </div>
                       {photoResizeInfo && <p className="photo-resize-info">{photoResizeInfo}</p>}
                       <button
@@ -7735,6 +8209,8 @@ ${photo.memoText}
                         onClick={(e) => {
                           e.stopPropagation();
                           setPhotoCropMode(false);
+                          setPhotoCropScale(1);
+                          setPhotoCropPan({ x: 0, y: 0 });
                           setPhotoResizeInfo("");
                         }}
                       >
@@ -7752,25 +8228,34 @@ ${photo.memoText}
               )}
             </div>
             {photoCropMode && originalImageTarget?.type === "photobook-resize" ? (
-              <div className="photo-crop-stage" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="photo-crop-stage"
+                ref={photoCropStageRef}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={onPhotoCropStagePointerDown}
+                onWheel={onPhotoCropWheel}
+              >
                 <img
                   ref={photoCropImageRef}
                   src={originalImageUrl}
                   alt="잘라내기 원본"
                   className="photo-crop-source"
                   draggable={false}
-                  onLoad={updatePhotoCropFrameFromImage}
+                  onLoad={onPhotoCropImageLoad}
+                  style={(() => {
+                    const fit = getPhotoCropBaseFit(
+                      photoCropStageSize.w > 0 ? photoCropStageSize : { w: 1, h: 1 },
+                      photoCropNatural.w > 0 ? photoCropNatural : { w: 1, h: 1 }
+                    );
+                    return {
+                      width: photoCropNatural.w > 0 ? fit.displayW : undefined,
+                      height: photoCropNatural.w > 0 ? fit.displayH : undefined,
+                      transform: `translate(-50%, -50%) translate(${photoCropPan.x}px, ${photoCropPan.y}px) scale(${photoCropScale})`,
+                    };
+                  })()}
                 />
-                {photoCropFrame.width > 0 && (
-                  <div
-                    className="photo-crop-layer"
-                    style={{
-                      left: photoCropFrame.left,
-                      top: photoCropFrame.top,
-                      width: photoCropFrame.width,
-                      height: photoCropFrame.height,
-                    }}
-                  >
+                {photoCropStageSize.w > 0 && (
+                  <div className="photo-crop-layer">
                     <div
                       className="photo-crop-box"
                       style={{
@@ -7779,27 +8264,31 @@ ${photo.memoText}
                         width: `${photoCropRect.w * 100}%`,
                         height: `${photoCropRect.h * 100}%`,
                       }}
-                      onPointerDown={(e) => startPhotoCropDrag("move", e)}
+                      onPointerDown={(e) => {
+                        if (e.pointerType === "touch") return;
+                        startPhotoCropBoxDrag("crop-move", e);
+                      }}
                     >
                       <span
                         className="photo-crop-handle nw"
-                        onPointerDown={(e) => startPhotoCropDrag("nw", e)}
+                        onPointerDown={(e) => startPhotoCropBoxDrag("nw", e)}
                       />
                       <span
                         className="photo-crop-handle ne"
-                        onPointerDown={(e) => startPhotoCropDrag("ne", e)}
+                        onPointerDown={(e) => startPhotoCropBoxDrag("ne", e)}
                       />
                       <span
                         className="photo-crop-handle sw"
-                        onPointerDown={(e) => startPhotoCropDrag("sw", e)}
+                        onPointerDown={(e) => startPhotoCropBoxDrag("sw", e)}
                       />
                       <span
                         className="photo-crop-handle se"
-                        onPointerDown={(e) => startPhotoCropDrag("se", e)}
+                        onPointerDown={(e) => startPhotoCropBoxDrag("se", e)}
                       />
                     </div>
                   </div>
                 )}
+                <p className="photo-crop-hint">틀 드래그 · 바깥은 사진 이동 · 핀치/+− 로 확대</p>
               </div>
             ) : (
               <img src={photoResizePreviewUrl || originalImageUrl} alt="원본 사진" />
