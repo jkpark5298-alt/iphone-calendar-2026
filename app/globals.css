@@ -976,25 +976,42 @@ textarea {
 .photo-crop-stage {
   position: relative;
   width: 100%;
-  max-height: calc(94vh - 96px);
-  background: #111;
+  height: min(72vh, 720px);
+  max-height: calc(94vh - 120px);
+  background: #0a0a0a;
   border-radius: 10px;
   overflow: hidden;
   user-select: none;
   touch-action: none;
+  cursor: grab;
+}
+
+.photo-crop-stage:active {
+  cursor: grabbing;
 }
 
 .photo-crop-source {
-  width: 100% !important;
-  max-height: calc(94vh - 96px) !important;
-  object-fit: contain !important;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none !important;
+  max-height: none !important;
+  width: auto;
+  height: auto;
+  object-fit: fill !important;
   display: block;
   pointer-events: none;
+  transform-origin: center center;
+  will-change: transform;
+  border-radius: 0 !important;
+  background: transparent !important;
 }
 
 .photo-crop-layer {
   position: absolute;
+  inset: 0;
   z-index: 2;
+  pointer-events: none;
 }
 
 .photo-crop-box {
@@ -1003,42 +1020,59 @@ textarea {
   border: 2px solid #62b19b;
   background: transparent;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
-  cursor: move;
+  pointer-events: none;
   touch-action: none;
 }
 
 .photo-crop-handle {
   position: absolute;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
   background: #62b19b;
   border: 2px solid #0f172a;
   z-index: 3;
+  pointer-events: auto;
+  touch-action: none;
 }
 
 .photo-crop-handle.nw {
-  left: -9px;
-  top: -9px;
+  left: -11px;
+  top: -11px;
   cursor: nwse-resize;
 }
 
 .photo-crop-handle.ne {
-  right: -9px;
-  top: -9px;
+  right: -11px;
+  top: -11px;
   cursor: nesw-resize;
 }
 
 .photo-crop-handle.sw {
-  left: -9px;
-  bottom: -9px;
+  left: -11px;
+  bottom: -11px;
   cursor: nesw-resize;
 }
 
 .photo-crop-handle.se {
-  right: -9px;
-  bottom: -9px;
+  right: -11px;
+  bottom: -11px;
   cursor: nwse-resize;
+}
+
+.photo-crop-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  z-index: 4;
+  margin: 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
 .original-close-btn {
