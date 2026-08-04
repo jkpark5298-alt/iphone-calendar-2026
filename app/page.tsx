@@ -2,7 +2,11 @@
 
 import { Chapter3Info } from "../components/Chapter3Info";
 import GeneralInfoDetailModal from "../components/GeneralInfoDetailModal";
+import NewsAlertModal from "../components/NewsAlertModal";
 import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralInfoState";
+import { persistGeneralInfoItemsToLocalStorage } from "../lib/generalInfoStorage";
+import type { GeneralInfoItem } from "../types/generalInfo";
+import type { NewsItem } from "../types/news";
 
 
 import { ChangeEvent, ClipboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -500,7 +504,8 @@ export default function HomePage() {
   const photoCropRectRef = useRef({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
   const photoCropStageSizeRef = useRef({ w: 0, h: 0 });
   const photoCropNaturalRef = useRef({ w: 0, h: 0 });
-  const photoCropAspectRef = useRef<"free" | "1:1" | "4:3" | "16:9">("free");  const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
+  const photoCropAspectRef = useRef<"free" | "1:1" | "4:3" | "16:9">("free");
+  const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
   const [datePickerValue, setDatePickerValue] = useState(`${todayDefault.year ?? 2026}-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -509,6 +514,7 @@ export default function HomePage() {
   const [googleSchedules, setGoogleSchedules] = useState<GoogleScheduleItem[]>([]);
   const [googleScheduleStatus, setGoogleScheduleStatus] = useState("구글 일정 대기");
   const [undoHistory, setUndoHistory] = useState<UndoState[]>([]);
+  const [newsAlertOpen, setNewsAlertOpen] = useState(false);
 
   // New states for 개편된 정보보관소 (인스타 주요 정보 관리 및 포토북)
   const [infoSubView, setInfoSubView] = useState<"generalInfo" | "photobook">("generalInfo");
@@ -2206,6 +2212,49 @@ export default function HomePage() {
     }
     setView("info");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function saveSelectedNewsToGeneralInfo(items: NewsItem[]) {
+    if (!items.length) return;
+    const baseId = Date.now();
+    const created: GeneralInfoItem[] = items.map((item, index) => ({
+      id: baseId + index,
+      title: item.title,
+      inputTypes: item.url ? ["url", "text"] : ["text"],
+      text: `${item.summary}\n\n출처: ${item.source}${item.url ? `\n${item.url}` : ""}`,
+      sourceUrl: item.url || "",
+      mediaItems: [],
+      primaryCategory: item.category || "사회",
+      secondaryCategory: "뉴스",
+      thirdCategory: "알림",
+      keywords: [item.category, item.source, "뉴스"].filter(Boolean),
+      factCheckStatus: "확인 전",
+      factCheckSummary: "",
+      summary: item.summary,
+      confirmed: true,
+      createdAt: new Date().toLocaleString("ko-KR"),
+      isPinned: false,
+    }));
+
+    infoState.setGeneralInfoItems((prev) => {
+      const next = [...created, ...prev];
+      persistGeneralInfoItemsToLocalStorage(next);
+      return next;
+    });
+
+    await Promise.allSettled(
+      created.map((item) =>
+        fetch("/api/general-info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(item),
+        })
+      )
+    );
+
+    alert(`${created.length}건의 뉴스를 일반정보에 저장했습니다.`);
+    setNewsAlertOpen(false);
+    openInfo(currentMonth, currentDay, currentYear, "generalInfo");
   }
 
   function getAdjacentDate(year: number, month: number, day: number, direction: -1 | 1) {
@@ -4581,6 +4630,7 @@ export default function HomePage() {
             <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("diary")}>일기장</button>
             <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfo(currentMonth, currentDay, currentYear, "photobook")}>포토</button>
             <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfo(currentMonth, currentDay, currentYear, "generalInfo")}>일반</button>
+            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => setNewsAlertOpen(true)}>알림</button>
             <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
@@ -8312,6 +8362,12 @@ ${photo.memoText}
           onOpenStorageImage={openStorageImage}
         />
       )}
+
+      <NewsAlertModal
+        open={newsAlertOpen}
+        onClose={() => setNewsAlertOpen(false)}
+        onSaveSelected={saveSelectedNewsToGeneralInfo}
+      />
   
 </main>
   );
