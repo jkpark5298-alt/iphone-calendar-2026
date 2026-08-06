@@ -8,6 +8,7 @@
 
 import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
+import { insertInlineMediaIntoEditor, readFilesAsDataUrls } from "../lib/generalInfoHelpers";
 import { Card, EmptyState } from "./SharedComponents";
 
 export interface Chapter3InfoProps {
@@ -293,14 +294,48 @@ export function Chapter3Info({
   const insertImageFilesFromTextTrigger = React.useCallback((files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     removeTrailingImageTrigger();
-    const list = files instanceof FileList ? files : (() => {
-      const transfer = new DataTransfer();
-      files.forEach((file) => transfer.items.add(file));
-      return transfer.files;
+
+    const list = files instanceof FileList ? Array.from(files) : files;
+    const mediaFiles = list.filter(
+      (file) =>
+        file.type.startsWith("image/") ||
+        file.type.startsWith("video/") ||
+        /\.(jpe?g|png|gif|webp|heic|heif|mp4|mov|webm)$/i.test(file.name || ""),
+    );
+    if (!mediaFiles.length) {
+      alert("이미지/동영상 파일을 선택해 주세요.");
+      return;
+    }
+
+    void (async () => {
+      try {
+        const loaded = await readFilesAsDataUrls(mediaFiles);
+        const editor = generalInfoRichTextRef.current;
+        if (editor) {
+          insertInlineMediaIntoEditor(
+            editor,
+            loaded
+              .filter((item) => item.dataUrl)
+              .map(({ file, dataUrl }) => ({
+                src: dataUrl,
+                name: file.name,
+                type: file.type.startsWith("video/") ? "video" : "image",
+              })),
+          );
+          syncGeneralInfoRichTextToDraft();
+        }
+
+        const transfer = new DataTransfer();
+        mediaFiles.forEach((file) => transfer.items.add(file));
+        handleGeneralInfoFileUpload(transfer.files);
+      } catch (error) {
+        console.error("inline image insert failed", error);
+        alert("이미지를 본문 TEXT에 넣지 못했습니다. 다시 시도해 주세요.");
+      } finally {
+        setShowTextImageInsert(false);
+      }
     })();
-    handleGeneralInfoFileUpload(list);
-    setShowTextImageInsert(false);
-  }, [handleGeneralInfoFileUpload, removeTrailingImageTrigger]);
+  }, [generalInfoRichTextRef, handleGeneralInfoFileUpload, removeTrailingImageTrigger, syncGeneralInfoRichTextToDraft]);
 
   const handleTextImageInsertPaste = React.useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -693,7 +728,7 @@ export function Chapter3Info({
               <div className="generalInfoTextImageInsertPanel">
                 <div className="generalInfoTextImageInsertHead">
                   <strong>이미지 붙여넣기</strong>
-                  <span>문자 끝 S 감지 · 사진첩 / 복사 붙여넣기 / 파일 선택</span>
+                  <span>문자 끝 S 감지 · 본문 TEXT 안에 이미지가 들어갑니다</span>
                   <button
                     type="button"
                     className="secondaryButton smallActionButton"
@@ -735,7 +770,7 @@ export function Chapter3Info({
 
             <p className="generalInfoRichTextNote">
               AI 분석에는 서식을 제외한 순수 Text가 사용되고, 저장함에는 편집된 색상/강조가 함께 표시됩니다.
-              문장 끝에 <strong>S</strong>를 붙이면 이미지 붙여넣기(사진첩·복사 붙여넣기·파일 선택)가 열립니다.
+              문장 끝에 <strong>S</strong>를 붙이면 이미지 붙여넣기가 열리고, 선택한 이미지는 본문 TEXT 안에 들어갑니다.
             </p>
           </div>
 

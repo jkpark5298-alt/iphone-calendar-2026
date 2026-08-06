@@ -26,14 +26,27 @@ const normalizeGeneralInfoItemsForLocalStorage = (items: GeneralInfoItem[]) =>
         .sort((a, b) => b.id - a.id)
     : [];
 
-const stripLargeClientStorageValue = (value: unknown): unknown => {
+/** Keep long body/report text; only strip oversized binary data: URLs from media fields. */
+const PRESERVE_LONG_TEXT_KEYS = new Set([
+  "text",
+  "summary",
+  "factchecksummary",
+  "extranote",
+  "formattedtexthtml",
+  "title",
+]);
+
+const stripLargeClientStorageValue = (value: unknown, keyHint = ""): unknown => {
+  const lowerHint = keyHint.toLowerCase();
+
   if (typeof value === "string") {
+    if (PRESERVE_LONG_TEXT_KEYS.has(lowerHint)) return value;
     if (value.startsWith("data:") || value.length > 5000) return "";
     return value;
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => stripLargeClientStorageValue(item));
+    return value.map((item) => stripLargeClientStorageValue(item, keyHint));
   }
 
   if (value && typeof value === "object") {
@@ -42,6 +55,11 @@ const stripLargeClientStorageValue = (value: unknown): unknown => {
 
     Object.entries(source).forEach(([key, itemValue]) => {
       const lowerKey = key.toLowerCase();
+
+      if (PRESERVE_LONG_TEXT_KEYS.has(lowerKey)) {
+        next[key] = itemValue;
+        return;
+      }
 
       if (
         lowerKey.includes("base64") ||
@@ -56,7 +74,7 @@ const stripLargeClientStorageValue = (value: unknown): unknown => {
         return;
       }
 
-      next[key] = stripLargeClientStorageValue(itemValue);
+      next[key] = stripLargeClientStorageValue(itemValue, key);
     });
 
     return next;

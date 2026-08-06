@@ -32,6 +32,7 @@ export const initialGeneralInfoDraft: GeneralInfoDraft = {
   summary: "",
   factCheckStatus: "확인 전",
   factCheckSummary: "",
+  formattedTextHtml: "",
   isPinned: false,
 };
 

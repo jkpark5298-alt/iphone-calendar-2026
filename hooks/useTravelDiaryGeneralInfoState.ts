@@ -6,7 +6,7 @@ import { persistGeneralInfoItemsToLocalStorage, readGeneralInfoItemsFromLocalSto
 import { supabase } from "../lib/supabaseClient";
 
 
-import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport } from "../lib/generalInfoHelpers";
+import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources } from "../lib/generalInfoHelpers";
 
 
 const TRAVEL_DIARY_BUCKET = "info-photos";
@@ -111,6 +111,8 @@ export function useTravelDiaryGeneralInfoState({
               return {
                 ...data.item,
                 mediaItems: mergedMediaItems,
+                formattedTextHtml:
+                  data.item.formattedTextHtml || prevItem.formattedTextHtml || "",
                 isPinned: prevItem.isPinned || data.item.isPinned
               };
             }
@@ -234,6 +236,8 @@ export function useTravelDiaryGeneralInfoState({
                 isPinned,
                 mediaItems,
                 filePreview: remoteItem.filePreview || localItem.filePreview,
+                formattedTextHtml:
+                  remoteItem.formattedTextHtml || localItem.formattedTextHtml || "",
               });
             } else {
               map.set(remoteItem.id, remoteItem);
@@ -418,10 +422,11 @@ export function useTravelDiaryGeneralInfoState({
     const plainText = String(generalInfoRichTextRef.current?.innerText || "")
       .replace(/\u00a0/g, " ")
       .replace(/\n{4,}/g, "\n\n\n");
+    const html = String(generalInfoRichTextRef.current?.innerHTML || "").trim();
 
     setGeneralInfoDraft((prev) => {
-      if (prev.text === plainText) return prev; // 변경 없으면 리렌더 스킵
-      return { ...prev, text: plainText };
+      if (prev.text === plainText && (prev.formattedTextHtml || "") === html) return prev;
+      return { ...prev, text: plainText, formattedTextHtml: html };
     });
   }, []);
 
@@ -1045,7 +1050,7 @@ export function useTravelDiaryGeneralInfoState({
 
     let uploadedDraftMediaItems = draftMediaItems;
 
-    if (hasDraftImage) {
+    if (hasDraftImage || hasDraftVideo) {
       showPasteHint("⏳ 일반 정보 이미지 Supabase Storage 업로드 중");
       uploadedDraftMediaItems = await uploadGeneralInfoMediaItemsToSupabaseStorage(draftMediaItems);
       showPasteHint("✅ 일반 정보 이미지 Supabase Storage 업로드 완료");
@@ -1090,12 +1095,29 @@ export function useTravelDiaryGeneralInfoState({
       return analyzed.title || analyzed.summary || analyzed.sourceUrl || analyzed.fileName || "일반 정보 자료";
     })();
 
+    const richHtmlBefore = getCurrentGeneralInfoRichTextHtml();
+    const htmlReplacements = draftMediaItems
+      .map((before, index) => ({
+        from: String(before.preview || ""),
+        to: String(
+          uploadedDraftMediaItems[index]?.preview ||
+            uploadedDraftMediaItems[index]?.fileUrl ||
+            before.preview ||
+            "",
+        ),
+      }))
+      .filter((item) => item.from && item.to && item.from !== item.to);
+    const richHtml = replaceHtmlMediaSources(richHtmlBefore, htmlReplacements);
+    if (generalInfoRichTextRef.current && richHtml !== richHtmlBefore) {
+      generalInfoRichTextRef.current.innerHTML = richHtml;
+    }
+
     const item: GeneralInfoItem = {
       id: Date.now(),
       title: finalTitle,
       inputTypes,
       text: analyzed.text,
-      formattedTextHtml: getCurrentGeneralInfoRichTextHtml(),
+      formattedTextHtml: richHtml,
       sourceUrl: analyzed.sourceUrl || undefined,
       fileName: analyzed.fileName || uploadedMainMedia?.name || undefined,
       filePreview: uploadedMainMedia?.preview || analyzed.filePreview || undefined,
@@ -1202,6 +1224,7 @@ export function useTravelDiaryGeneralInfoState({
         : item.inputTypes.includes("image")
           ? "image"
           : "none",
+      formattedTextHtml: String(item.formattedTextHtml || ""),
       primaryCategory: item.primaryCategory || "",
       secondaryCategory: item.secondaryCategory || "",
       thirdCategory: item.thirdCategory || "",
@@ -1275,10 +1298,26 @@ export function useTravelDiaryGeneralInfoState({
 
   // --- AI 보고서 및 Fact Check 작성 핸들러 ---
   const buildGeneralInfoFactCheckPayload = useCallback((item: GeneralInfoItem) => {
-    const mediaItems = normalizeGeneralInfoMediaItems(item);
+    const mediaItems = normalizeGeneralInfoMediaItems(item).map((media) => ({
+      ...media,
+      // Prefer durable URL; keep data URL only when reasonably small for Gemini inline
+      preview:
+        media.fileUrl ||
+        (String(media.preview || "").startsWith("data:") && String(media.preview || "").length > 900_000
+          ? ""
+          : media.preview),
+      fileUrl: media.fileUrl || undefined,
+    }));
+
+    let formattedTextHtml = String(item.formattedTextHtml || "");
+    if (formattedTextHtml.length > 250_000) {
+      formattedTextHtml = formattedTextHtml.replace(/src=["']data:[^"']+["']/gi, 'src=""');
+    }
+
     return {
       title: item.title,
       text: item.text,
+      formattedTextHtml,
       sourceUrl: item.sourceUrl,
       summary: item.summary,
       factCheckSummary: item.factCheckSummary,

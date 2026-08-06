@@ -28,6 +28,7 @@ type GeneralInfoPayload = {
   factCheckStatus: string;
   factCheckSummary: string;
   extraNote?: string;
+  formattedTextHtml?: string;
   confirmed: boolean;
   createdAt: string;
 };
@@ -108,8 +109,9 @@ const normalizePayload = (value: unknown): GeneralInfoPayload | null => {
     inputTypes: normalizeStringArray(source.inputTypes, MAX_INPUT_TYPES),
     summary: normalizeString(source.summary, 4000),
     factCheckStatus: normalizeString(source.factCheckStatus, 80) || "확인 전",
-    factCheckSummary: normalizeString(source.factCheckSummary, 4000),
+    factCheckSummary: normalizeString(source.factCheckSummary, MAX_TEXT_LENGTH),
     extraNote: normalizeString(source.extraNote, 4000) || undefined,
+    formattedTextHtml: normalizeString(source.formattedTextHtml, MAX_TEXT_LENGTH) || undefined,
     confirmed: source.confirmed !== false,
     createdAt: normalizeString(source.createdAt, 80),
   };
@@ -191,7 +193,7 @@ const getSupabaseAdmin = () => {
   });
 };
 
-const toDbRow = (item: GeneralInfoPayload) => ({
+const toDbRow = (item: GeneralInfoPayload, includeFormattedHtml = true) => ({
   id: item.id,
   title: item.title || "",
   text: item.text || "",
@@ -213,9 +215,34 @@ const toDbRow = (item: GeneralInfoPayload) => ({
   fact_check_summary: item.factCheckSummary || "",
 
   extra_note: item.extraNote || "",
+  ...(includeFormattedHtml ? { formatted_text_html: item.formattedTextHtml || "" } : {}),
   confirmed: item.confirmed !== false,
   created_at_text: item.createdAt || "",
 });
+
+const upsertGeneralInfoRow = async (
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  item: GeneralInfoPayload,
+) => {
+  const first = await supabase
+    .from("general_info_items")
+    .upsert(toDbRow(item, true))
+    .select("*")
+    .single();
+
+  if (!first.error) return first;
+
+  const message = String(first.error.message || "");
+  if (/formatted_text_html/i.test(message)) {
+    return supabase
+      .from("general_info_items")
+      .upsert(toDbRow(item, false))
+      .select("*")
+      .single();
+  }
+
+  return first;
+};
 
 const fromDbRow = (row: Record<string, unknown>): GeneralInfoPayload => {
   // media_items에서 storagePath로 공개 URL 복원
@@ -252,9 +279,10 @@ const fromDbRow = (row: Record<string, unknown>): GeneralInfoPayload => {
 
     summary: normalizeString(row.summary, 4000),
     factCheckStatus: normalizeString(row.fact_check_status, 80) || "확인 전",
-    factCheckSummary: normalizeString(row.fact_check_summary, 4000),
+    factCheckSummary: normalizeString(row.fact_check_summary, MAX_TEXT_LENGTH),
 
     extraNote: normalizeString(row.extra_note, 4000),
+    formattedTextHtml: normalizeString(row.formatted_text_html, MAX_TEXT_LENGTH) || undefined,
     confirmed: row.confirmed !== false,
     createdAt:
       normalizeString(row.created_at_text, 80) ||
@@ -317,11 +345,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    const { data, error } = await supabase
-      .from("general_info_items")
-      .upsert(toDbRow(item))
-      .select("*")
-      .single();
+    const { data, error } = await upsertGeneralInfoRow(supabase, item);
 
     if (error) {
       return NextResponse.json(
@@ -368,11 +392,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
-      .from("general_info_items")
-      .upsert(toDbRow(item))
-      .select("*")
-      .single();
+    const { data, error } = await upsertGeneralInfoRow(supabase, item);
 
     if (error) {
       return NextResponse.json(

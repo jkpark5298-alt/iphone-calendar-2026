@@ -179,6 +179,88 @@ export const getGeneralInfoFormattedHtml = (item: GeneralInfoItem) => {
   return makeGeneralInfoHtmlFromText(item.text || "");
 };
 
+/** Replace data: image sources in rich HTML after Storage upload. */
+export const replaceHtmlMediaSources = (
+  html: string,
+  replacements: Array<{ from: string; to: string }>,
+) => {
+  let next = String(html || "");
+  replacements.forEach(({ from, to }) => {
+    if (!from || !to || from === to) return;
+    if (!next.includes(from)) return;
+    next = next.split(from).join(to);
+  });
+  return next;
+};
+
+/** Collect image/video src values from rich HTML (data: or http). */
+export const extractMediaSrcFromHtml = (html: string): string[] => {
+  const raw = String(html || "");
+  const found: string[] = [];
+  const re = /<(?:img|video)[^>]+src=["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(raw))) {
+    const src = String(match[1] || "").trim();
+    if (src && !found.includes(src)) found.push(src);
+  }
+  return found;
+};
+
+export const insertInlineMediaIntoEditor = (
+  editor: HTMLElement,
+  items: Array<{ src: string; name?: string; type?: "image" | "video" }>,
+) => {
+  if (!editor || !items.length) return;
+
+  items.forEach((item) => {
+    const block = document.createElement("div");
+    block.className = "generalInfoInlineImageBlock";
+
+    if (item.type === "video") {
+      const video = document.createElement("video");
+      video.src = item.src;
+      video.controls = true;
+      video.className = "generalInfoInlineImage generalInfoInlineVideo";
+      video.setAttribute("playsinline", "true");
+      block.appendChild(video);
+    } else {
+      const img = document.createElement("img");
+      img.src = item.src;
+      img.alt = item.name || "본문 이미지";
+      img.className = "generalInfoInlineImage";
+      block.appendChild(img);
+    }
+
+    editor.appendChild(block);
+  });
+
+  const spacer = document.createElement("div");
+  spacer.innerHTML = "<br>";
+  editor.appendChild(spacer);
+
+  const selection = window.getSelection();
+  if (selection) {
+    const range = document.createRange();
+    range.selectNodeContents(spacer);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+};
+
+export const readFilesAsDataUrls = (files: File[]): Promise<Array<{ file: File; dataUrl: string }>> =>
+  Promise.all(
+    files.map(
+      (file) =>
+        new Promise<{ file: File; dataUrl: string }>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve({ file, dataUrl: String(reader.result || "") });
+          reader.onerror = () => reject(reader.error || new Error("file read failed"));
+          reader.readAsDataURL(file);
+        }),
+    ),
+  );
+
 const makePublicUrlFromStoragePath = (storagePath: unknown) => {
   const pathValue = String(storagePath || "").trim();
   if (!pathValue) return "";

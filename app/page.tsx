@@ -637,6 +637,8 @@ export default function HomePage() {
   const audioChunksRef = useRef<BlobPart[]>([]);
   const diaryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const diaryRichTextRef = useRef<HTMLDivElement | null>(null);
+  const diaryTextImageFileRef = useRef<HTMLInputElement | null>(null);
+  const [showDiaryTextImageInsert, setShowDiaryTextImageInsert] = useState(false);
   const infoTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const diaryEditStartRef = useRef<{ key: string; diaryText: string; voiceText: string } | null>(null);
   const infoEditStartRef = useRef<{ key: string; infoText: string } | null>(null);
@@ -644,6 +646,97 @@ export default function HomePage() {
   function handleDiaryRichCommand(command: string, value?: string) {
     diaryRichTextRef.current?.focus();
     document.execCommand(command, false, value);
+  }
+
+  function diaryTextEndsWithImageTrigger(raw: string) {
+    const text = String(raw || "").replace(/\u00a0/g, " ").replace(/\r/g, "");
+    const trimmedEnd = text.replace(/[ \t\n]+$/g, "");
+    return /S$/.test(trimmedEnd);
+  }
+
+  function checkDiaryTextImageTrigger() {
+    const plain = String(diaryRichTextRef.current?.innerText || "");
+    setShowDiaryTextImageInsert(diaryTextEndsWithImageTrigger(plain));
+  }
+
+  function removeDiaryTrailingImageTrigger() {
+    const editor = diaryRichTextRef.current;
+    if (!editor) return;
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let last: Text | null = null;
+    while (walker.nextNode()) last = walker.currentNode as Text;
+    if (!last?.nodeValue) return;
+    const next = last.nodeValue.replace(/[ \t]*S[ \t]*$/, "");
+    if (next === last.nodeValue) return;
+    last.nodeValue = next;
+    saveDiary(editor.innerHTML || "", voiceText);
+  }
+
+  function insertDiaryImageFilesFromTextTrigger(files: FileList | File[] | null) {
+    if (!files || files.length === 0) return;
+    removeDiaryTrailingImageTrigger();
+    const list =
+      files instanceof FileList
+        ? Array.from(files)
+        : files;
+    const imageFiles = list.filter(
+      (file) => file.type.startsWith("image/") || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || ""),
+    );
+    if (!imageFiles.length) {
+      alert("이미지 파일을 선택해 주세요.");
+      return;
+    }
+
+    void (async () => {
+      try {
+        const { insertInlineMediaIntoEditor, readFilesAsDataUrls } = await import("../lib/generalInfoHelpers");
+        const loaded = await readFilesAsDataUrls(imageFiles);
+        const editor = diaryRichTextRef.current;
+        if (editor) {
+          insertInlineMediaIntoEditor(
+            editor,
+            loaded
+              .filter((item) => item.dataUrl)
+              .map(({ file, dataUrl }) => ({
+                src: dataUrl,
+                name: file.name,
+                type: "image" as const,
+              })),
+          );
+          saveDiary(editor.innerHTML || "", voiceText);
+        }
+      } catch (error) {
+        console.error("diary inline image insert failed", error);
+        alert("이미지를 본문 TEXT에 넣지 못했습니다. 다시 시도해 주세요.");
+      } finally {
+        setShowDiaryTextImageInsert(false);
+      }
+    })();
+  }
+
+  function handleDiaryTextImageInsertPaste(event: ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const clipboardData = event.clipboardData;
+    const pastedFiles: File[] = [];
+    if (clipboardData?.files?.length) {
+      Array.from(clipboardData.files).forEach((file) => {
+        if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+          pastedFiles.push(file);
+        }
+      });
+    }
+    if (clipboardData?.items) {
+      Array.from(clipboardData.items).forEach((item) => {
+        if (item.kind === "file" && (item.type.startsWith("image/") || item.type.startsWith("video/"))) {
+          const file = item.getAsFile();
+          if (file) pastedFiles.push(file);
+        }
+      });
+    }
+    if (pastedFiles.length > 0) {
+      insertDiaryImageFilesFromTextTrigger(pastedFiles);
+    }
   }
 
   function resizeTextareaToContent(element: HTMLTextAreaElement | null) {
@@ -2193,6 +2286,7 @@ export default function HomePage() {
     setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);
+    setShowDiaryTextImageInsert(false);
     setView("diary");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -2311,7 +2405,7 @@ export default function HomePage() {
     localStorage.setItem("iphone-calendar-2026-marks", JSON.stringify(nextMarks));
   }
 
-  function addCalendarMarks() {
+  async function addCalendarMarks() {
     const parsedDays = (markDateInput.match(/\d+/g) || [])
       .map(value => Number(value))
       .filter(value => Number.isInteger(value) && value >= 1 && value <= getDaysInMonth(currentYear, currentMonth));
@@ -2343,11 +2437,11 @@ export default function HomePage() {
 
     const supabaseClient = supabase;
     if (isSupabaseConfigured && supabaseClient) {
-      uniqueDays.forEach(day => {
-        const dbMonth = currentYear === 2026 ? currentMonth : currentYear * 100 + currentMonth;
-        void supabaseClient
-          .from("calendar_marks")
-          .upsert(
+      const saveErrors: string[] = [];
+      await Promise.all(
+        uniqueDays.map(async (day) => {
+          const dbMonth = currentYear === 2026 ? currentMonth : currentYear * 100 + currentMonth;
+          const { error } = await supabaseClient.from("calendar_marks").upsert(
             {
               month: dbMonth,
               day,
@@ -2355,12 +2449,29 @@ export default function HomePage() {
               plus: nextPlus,
               updated_at: new Date().toISOString(),
             },
-            { onConflict: "month,day,mark_type,plus" }
-          )
-          .then(({ error }) => {
-            if (error) console.warn("Supabase calendar mark save error:", error.message);
-          });
-      });
+            { onConflict: "month,day,mark_type,plus" },
+          );
+          if (error) {
+            console.warn("Supabase calendar mark save error:", error.message);
+            saveErrors.push(error.message);
+          }
+        }),
+      );
+
+      if (saveErrors.length) {
+        const isCheckConstraint = saveErrors.some((msg) => /mark_type_check|23514/i.test(msg));
+        if (isCheckConstraint && markType === "休") {
+          alert(
+            "休 표시는 이 기기에는 저장됐지만, 서버(DB) 제약 때문에 PC·아이폰 공유에 실패했습니다.\n\n" +
+              "Supabase SQL Editor에서 아래를 한 번 실행해 주세요.\n\n" +
+              "ALTER TABLE public.calendar_marks DROP CONSTRAINT IF EXISTS calendar_marks_mark_type_check;\n" +
+              "ALTER TABLE public.calendar_marks ADD CONSTRAINT calendar_marks_mark_type_check CHECK (mark_type = ANY (ARRAY['C'::text, 'A'::text, '심야'::text, '노조'::text, '休'::text]));",
+          );
+        } else {
+          alert(`근무 표시 서버 저장 실패: ${saveErrors[0]}`);
+        }
+        return;
+      }
     }
 
     setMarkDateInput(uniqueDays.join(", "));
@@ -4712,7 +4823,7 @@ export default function HomePage() {
         <div className="generalInfoTextBox generalInfoRichTextBox" style={{ margin: "10px 0" }}>
           <div className="generalInfoRichTextHeader">
             <strong>Text 입력 / 편집</strong>
-            <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄 편집 가능</span>
+            <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄 편집 가능 · 문자 끝에 S를 붙이면 이미지 붙여넣기</span>
           </div>
           <div className="generalInfoRichToolbar" aria-label="Text 편집 도구">
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("bold")}>B 굵게</button>
@@ -4739,15 +4850,29 @@ export default function HomePage() {
             onInput={() => {
               const html = diaryRichTextRef.current?.innerHTML || "";
               saveDiary(html, voiceText);
+              checkDiaryTextImageTrigger();
             }}
+            onKeyUp={checkDiaryTextImageTrigger}
             onBlur={() => {
               const html = diaryRichTextRef.current?.innerHTML || "";
               saveDiary(html, voiceText);
+              checkDiaryTextImageTrigger();
             }}
             onPaste={(e) => {
+              const items = Array.from(e.clipboardData?.items || []);
+              const imageFiles = items
+                .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+                .map((item) => item.getAsFile())
+                .filter((file): file is File => Boolean(file));
+              if (imageFiles.length > 0 && showDiaryTextImageInsert) {
+                e.preventDefault();
+                insertDiaryImageFilesFromTextTrigger(imageFiles);
+                return;
+              }
               e.preventDefault();
-              const text = e.clipboardData.getData("text/plain");
-              if (text) document.execCommand("insertText", false, text);
+              const pastedText = e.clipboardData.getData("text/plain");
+              if (pastedText) document.execCommand("insertText", false, pastedText);
+              requestAnimationFrame(checkDiaryTextImageTrigger);
             }}
             style={{
               display: "block",
@@ -4767,6 +4892,55 @@ export default function HomePage() {
               wordBreak: "break-word",
             }}
           />
+
+          {showDiaryTextImageInsert && (
+            <div className="generalInfoTextImageInsertPanel">
+              <div className="generalInfoTextImageInsertHead">
+                <strong>이미지 붙여넣기</strong>
+                <span>문자 끝 S 감지 · 본문 TEXT 안에 이미지가 들어갑니다</span>
+                <button
+                  type="button"
+                  className="secondaryButton smallActionButton"
+                  onClick={() => {
+                    removeDiaryTrailingImageTrigger();
+                    setShowDiaryTextImageInsert(false);
+                  }}
+                >
+                  닫기
+                </button>
+              </div>
+              <div className="generalInfoTextImageInsertActions">
+                <label className="primaryLabel generalInfoTextImageFileLabel soft-btn compact-photo-btn" style={{ margin: 0, cursor: "pointer" }}>
+                  🖼 사진첩 · 파일 선택
+                  <input
+                    ref={diaryTextImageFileRef}
+                    className="hidden-input"
+                    type="file"
+                    accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png,image/*"
+                    multiple
+                    onChange={(e) => {
+                      insertDiaryImageFilesFromTextTrigger(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <div
+                  className="generalInfoTextImagePasteZone"
+                  contentEditable
+                  suppressContentEditableWarning
+                  role="textbox"
+                  tabIndex={0}
+                  onPaste={handleDiaryTextImageInsertPaste}
+                >
+                  📋 아이폰·PC 이미지 여기 붙여넣기 (Ctrl+V / ⌘V)
+                </div>
+              </div>
+            </div>
+          )}
+
+          <p className="generalInfoRichTextNote">
+            문장 끝에 <strong>S</strong>를 붙이면 이미지 붙여넣기(사진첩·복사 붙여넣기·파일 선택)가 열리고, 선택한 사진은 본문 TEXT 안에 들어갑니다.
+          </p>
         </div>
         <HyperlinkPreview text={diaryText} />
 

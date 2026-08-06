@@ -365,7 +365,7 @@ export default function GeneralInfoDetailModal({
                 {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
               </button>
             </div>
-            {item.text ? (
+            {item.text || item.formattedTextHtml ? (
               <div
                 className="generalInfoFormattedTextView"
                 dangerouslySetInnerHTML={{
