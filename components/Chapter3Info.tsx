@@ -16,8 +16,8 @@ export interface Chapter3InfoProps {
   setGeminiApiKey: React.Dispatch<React.SetStateAction<string>>;
 
   // 탭
-  generalInfoActiveTab: "storage" | "collect" | "factory";
-  setGeneralInfoActiveTab: React.Dispatch<React.SetStateAction<"storage" | "collect" | "factory">>;
+  generalInfoActiveTab: "storage" | "collect";
+  setGeneralInfoActiveTab: React.Dispatch<React.SetStateAction<"storage" | "collect">>;
 
   // 레이아웃
   isGeneralInfoMobileLayout: boolean;
@@ -533,58 +533,7 @@ export function Chapter3Info({
         >
           ✍️ 일반 정보 수집
         </button>
-        <button
-          type="button"
-          className={`ch3TabBtn ${activeTab === "factory" ? "active" : ""}`}
-          onClick={() => {
-            setShowTextImageInsert(false);
-            setActiveTab("factory");
-          }}
-        >
-          일반 정보 공장
-        </button>
       </div>
-
-      {/* ===== 일반 정보 공장 탭 ===== */}
-      {activeTab === "factory" && (
-      <section className="leftColumn generalInfoLeftColumn" style={{ position: "relative", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
-        <button
-          type="button"
-          className="scroll-to-top-btn"
-          onClick={(e) => {
-            if (window.innerWidth <= 1100) {
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            } else {
-              e.currentTarget.parentElement?.scrollTo({ top: 0, behavior: "smooth" });
-            }
-          }}
-          title="맨위로"
-        >맨 위로 ↑</button>
-        <div className="chapterTitleBox" style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0, fontWeight: "inherit" }}>일반 정보 공장</h2>
-            {renderGeminiKeyButton()}
-          </div>
-          <p style={{ margin: "4px 0 0 0" }}>
-            일반 정보 수집하고 AI 분류, Fact Check, 검색 기능 수행
-          </p>
-        </div>
-        {renderGeminiConfigBox()}
-        <div className="generalInfoFactoryHint">
-          <p>
-            AI 분류·Fact Check·검색을 쓰려면 위에서 Gemini API Key를 등록하세요.
-            자료 입력은 <strong>✍️ 일반 정보 수집</strong> 탭에서 진행합니다.
-          </p>
-          <button
-            type="button"
-            className="primaryButton"
-            onClick={() => setActiveTab("collect")}
-          >
-            일반 정보 수집으로 이동
-          </button>
-        </div>
-      </section>
-      )}
 
       {/* ===== 정보 수집 탭 (입력 + AI 분류) ===== */}
       {activeTab === "collect" && (
@@ -602,6 +551,16 @@ export function Chapter3Info({
           }}
           title="맨위로"
         >맨 위로 ↑</button>
+
+        <div className="chapterTitleBox" style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            {renderGeminiKeyButton()}
+          </div>
+          <p style={{ margin: "4px 0 0 0" }}>
+            일반 정보 수집하고 AI 분류, Fact Check, 검색 기능 수행
+          </p>
+        </div>
+        {renderGeminiConfigBox()}
 
         <Card
           number="1"
