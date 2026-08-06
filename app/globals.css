@@ -1020,16 +1020,15 @@ textarea {
   border: 2px solid #62b19b;
   background: transparent;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
-  pointer-events: auto;
+  pointer-events: none;
   touch-action: none;
-  cursor: move;
 }
 
 .photo-crop-handle {
   position: absolute;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #62b19b;
   border: 2px solid #0f172a;
   z-index: 3;
@@ -2965,6 +2964,7 @@ textarea {
 .calendar-mark-a { background: #2f80ed; color: #fff; }
 .calendar-mark-night { background: #f2c94c; color: #2b2412; }
 .calendar-mark-union { background: #f2a7c8; color: #402030; }
+.calendar-mark-rest { background: #e53935; color: #fff; }
 
 .mark-date-page {
   max-width: 760px;
@@ -2973,7 +2973,7 @@ textarea {
 
 .mark-type-options {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 9px;
   margin-bottom: 12px;
 }
@@ -2996,6 +2996,7 @@ textarea {
 .mark-type-a { background: #2f80ed; color: #fff; }
 .mark-type-night { background: #f2c94c; color: #2b2412; }
 .mark-type-union { background: #f2a7c8; color: #402030; }
+.mark-type-rest { background: #e53935; color: #fff; }
 
 .mark-plus-option {
   display: flex;
@@ -7609,9 +7610,26 @@ body {
 
 .generalInfoActionRow {
   display: flex;
-  gap: 10px;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 14px;
   margin-top: 14px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.generalInfoActionRow > button {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  min-height: 54px;
+  white-space: nowrap;
+  letter-spacing: 0.06em;
+  padding: 16px 14px !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  border-radius: 14px !important;
+  box-sizing: border-box;
 }
 
 .generalInfoEditableTextarea {
@@ -7666,6 +7684,27 @@ body {
   display: block;
   margin-bottom: 7px;
   color: #7dd3fc;
+}
+
+.generalInfoSectionTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.generalInfoSectionTitleRow strong {
+  display: inline;
+  margin-bottom: 0;
+}
+
+.generalInfoCopyAllBtn {
+  flex-shrink: 0;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  white-space: nowrap;
 }
 
 .generalInfoResultBox p {
@@ -7865,9 +7904,41 @@ body {
 .cardHeader {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.cardHeaderMain {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cardHeaderTitleRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cardHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cardHeaderActionBtn {
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  border-radius: 8px !important;
+  white-space: nowrap;
 }
 
 .cardHeader > div {
@@ -8738,7 +8809,7 @@ body {
 
   .generalInfoActionRow .primaryButton,
   .generalInfoActionRow .gradientButton {
-    width: 100%;
+    width: auto;
   }
 }
 
@@ -8853,15 +8924,34 @@ body {
   }
 
   .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
   }
 
-  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow button,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow button {
+    width: auto !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    min-height: 52px !important;
+    white-space: nowrap !important;
+    letter-spacing: 0.05em !important;
+    padding: 15px 12px !important;
+    font-size: 14px !important;
+    border-radius: 14px !important;
+  }
+
   .layoutGrid.generalInfoLayoutGrid .urlExtractButton,
   .layoutGrid.generalInfoLayoutGrid .primaryButton,
   .layoutGrid.generalInfoLayoutGrid .gradientButton {
     width: 100% !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow .primaryButton,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow .gradientButton,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow .secondaryButton {
+    width: auto !important;
   }
 
   .layoutGrid.generalInfoLayoutGrid .generalInfoCard,
@@ -9227,11 +9317,17 @@ body {
   }
 
   .layoutGrid.generalInfoLayoutGrid .generalInfoActionButtons,
-  .layoutGrid.generalInfoLayoutGrid .generalInfoCardActions,
-  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow {
+  .layoutGrid.generalInfoLayoutGrid .generalInfoCardActions {
     display: flex !important;
     flex-wrap: wrap !important;
     gap: 8px !important;
+  }
+
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
   }
 
   .layoutGrid.generalInfoLayoutGrid button {
@@ -9578,17 +9674,35 @@ body {
     overflow-wrap: break-word !important;
   }
 
-  .generalInfoActionButtons,
-  .generalInfoActionRow {
+  .generalInfoActionButtons {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) !important;
     width: 100% !important;
   }
 
-  .generalInfoActionButtons button,
-  .generalInfoActionRow button {
+  .generalInfoActionRow {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+
+  .generalInfoActionButtons button {
     width: 100% !important;
     white-space: normal !important;
+  }
+
+  .generalInfoActionRow button {
+    width: auto !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    min-height: 52px !important;
+    white-space: nowrap !important;
+    letter-spacing: 0.05em !important;
+    font-size: 14px !important;
+    padding: 15px 10px !important;
+    border-radius: 14px !important;
   }
 
   /* 카드 내 버튼 영역 — 가로 그리드 유지 */
@@ -9676,6 +9790,10 @@ body {
 .generalInfoRichTextHeader {
   display: grid !important;
   gap: 4px !important;
+}
+
+.generalInfoRichTextHeader .generalInfoSectionTitleRow {
+  margin-bottom: 0;
 }
 
 .generalInfoRichTextHeader strong {
@@ -10158,7 +10276,6 @@ body {
   .generalInfoGrid,
   .generalInfoManualGrid,
   .generalInfoUploadBox,
-  .generalInfoActionRow,
   .generalInfoActionButtons,
   .generalInfoCardActions,
   .generalInfoCardHeader,
@@ -10168,6 +10285,15 @@ body {
     width: 100% !important;
     max-width: 100% !important;
     gap: 10px !important;
+  }
+
+  .generalInfoActionRow {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   .generalInfoGrid input,
@@ -10186,7 +10312,19 @@ body {
     box-sizing: border-box !important;
   }
 
-  .generalInfoActionRow button,
+  .generalInfoActionRow button {
+    width: auto !important;
+    max-width: none !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    white-space: nowrap !important;
+    letter-spacing: 0.05em !important;
+    font-size: 13px !important;
+    padding: 14px 8px !important;
+    border-radius: 12px !important;
+  }
+
   .generalInfoActionButtons button,
   .generalInfoCardActions button {
     width: 100% !important;
@@ -10639,9 +10777,25 @@ body {
 .layoutGrid.generalInfoLayoutGrid .cardHeader {
   display: flex !important;
   flex-direction: row !important;
-  align-items: center !important;
+  align-items: flex-start !important;
   gap: 10px !important;
   margin-bottom: 12px !important;
+}
+
+.layoutGrid.generalInfoLayoutGrid .cardHeaderMain {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+  flex: 1 !important;
+}
+
+.layoutGrid.generalInfoLayoutGrid .cardHeaderTitleRow {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
 }
 
 .layoutGrid.generalInfoLayoutGrid .cardHeader > div {
@@ -10855,5 +11009,159 @@ body {
   .searchBox input,
   .geminiKeyBox input {
     font-size: 16px !important;
+  }
+}
+
+/* ===== 일반 정보 수집 개편 (공장 탭 / S 이미지 / URL 설명) ===== */
+.generalInfoFactoryHint {
+  margin-top: 8px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: rgba(14, 165, 233, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.generalInfoFactoryHint p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.generalInfoFieldLabel {
+  display: grid;
+  gap: 7px;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.generalInfoFieldLabel input,
+.generalInfoSourceUrlBlock input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  color: #e2e8f0;
+  padding: 11px 12px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.generalInfoSourceUrlBlock {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.generalInfoSourceUrlLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.generalInfoSourceUrlLabelRow .generalInfoFieldLabel {
+  margin-bottom: 0;
+}
+
+.activeHelpBtn {
+  border-color: rgba(56, 189, 248, 0.45) !important;
+  background: rgba(56, 189, 248, 0.12) !important;
+  color: #7dd3fc !important;
+}
+
+.generalInfoTextImageInsertPanel {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  background: rgba(74, 222, 128, 0.08);
+  display: grid;
+  gap: 10px;
+}
+
+.generalInfoTextImageInsertHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.generalInfoTextImageInsertHead strong {
+  color: #86efac;
+  font-size: 13px;
+}
+
+.generalInfoTextImageInsertHead span {
+  color: #94a3b8;
+  font-size: 11px;
+  flex: 1;
+  min-width: 140px;
+}
+
+.generalInfoTextImageInsertActions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 10px;
+}
+
+.generalInfoTextImageFileLabel {
+  margin: 0 !important;
+  min-height: 72px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.generalInfoTextImagePasteZone {
+  min-height: 72px;
+  border-radius: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  background: rgba(2, 6, 23, 0.7);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 10px;
+  outline: none;
+}
+
+.generalInfoTextImagePasteZone:focus {
+  border-color: rgba(74, 222, 128, 0.7);
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
+}
+
+@media (max-width: 760px) {
+  .ch3TabBar {
+    flex-wrap: wrap;
+  }
+
+  .ch3TabBtn {
+    flex: 1 1 calc(50% - 5px);
+    font-size: 12px;
+    padding: 10px 8px;
+  }
+
+  .generalInfoTextImageInsertActions {
+    grid-template-columns: 1fr;
+  }
+
+  .cardHeaderActionBtn {
+    padding: 5px 8px !important;
+    font-size: 11px !important;
+  }
+
+  .generalInfoFieldLabel input,
+  .generalInfoSourceUrlBlock input {
+    font-size: 16px;
   }
 }

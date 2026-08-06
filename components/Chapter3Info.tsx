@@ -16,8 +16,8 @@ export interface Chapter3InfoProps {
   setGeminiApiKey: React.Dispatch<React.SetStateAction<string>>;
 
   // 탭
-  generalInfoActiveTab: "storage" | "collect";
-  setGeneralInfoActiveTab: React.Dispatch<React.SetStateAction<"storage" | "collect">>;
+  generalInfoActiveTab: "storage" | "collect" | "factory";
+  setGeneralInfoActiveTab: React.Dispatch<React.SetStateAction<"storage" | "collect" | "factory">>;
 
   // 레이아웃
   isGeneralInfoMobileLayout: boolean;
@@ -175,6 +175,10 @@ export function Chapter3Info({
   const [tempApiKey, setTempApiKey] = React.useState(geminiApiKey);
   const [keyValidationStatus, setKeyValidationStatus] = React.useState<"idle" | "validating" | "valid" | "invalid">("idle");
   const [validationError, setValidationError] = React.useState<string | null>(null);
+  const [showSourceUrlHelp, setShowSourceUrlHelp] = React.useState(false);
+  const [showTextImageInsert, setShowTextImageInsert] = React.useState(false);
+  const [copyFeedback, setCopyFeedback] = React.useState<"text" | "fact" | null>(null);
+  const textImageFileRef = React.useRef<HTMLInputElement | null>(null);
 
   // Sync tempApiKey and validate on mount if geminiApiKey exists
   React.useEffect(() => {
@@ -261,6 +265,253 @@ export function Chapter3Info({
     }
   }, [generalInfoRichTextEditorKey, generalInfoRichTextInitialHtml, generalInfoRichTextRef]);
 
+  const textEndsWithImageTrigger = React.useCallback((raw: string) => {
+    const text = String(raw || "").replace(/\u00a0/g, " ").replace(/\r/g, "");
+    const trimmedEnd = text.replace(/[ \t\n]+$/g, "");
+    // 문자 끝에 S를 붙이면 이미지 붙여넣기 패널 표시
+    return /S$/.test(trimmedEnd);
+  }, []);
+
+  const removeTrailingImageTrigger = React.useCallback(() => {
+    const editor = generalInfoRichTextRef.current;
+    if (!editor) return;
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let last: Text | null = null;
+    while (walker.nextNode()) last = walker.currentNode as Text;
+    if (!last?.nodeValue) return;
+    const next = last.nodeValue.replace(/[ \t]*S[ \t]*$/, "");
+    if (next === last.nodeValue) return;
+    last.nodeValue = next;
+    syncGeneralInfoRichTextToDraft();
+  }, [generalInfoRichTextRef, syncGeneralInfoRichTextToDraft]);
+
+  const checkTextImageTrigger = React.useCallback(() => {
+    const plain = String(generalInfoRichTextRef.current?.innerText || "");
+    setShowTextImageInsert(textEndsWithImageTrigger(plain));
+  }, [generalInfoRichTextRef, textEndsWithImageTrigger]);
+
+  const insertImageFilesFromTextTrigger = React.useCallback((files: FileList | File[] | null) => {
+    if (!files || files.length === 0) return;
+    removeTrailingImageTrigger();
+    const list = files instanceof FileList ? files : (() => {
+      const transfer = new DataTransfer();
+      files.forEach((file) => transfer.items.add(file));
+      return transfer.files;
+    })();
+    handleGeneralInfoFileUpload(list);
+    setShowTextImageInsert(false);
+  }, [handleGeneralInfoFileUpload, removeTrailingImageTrigger]);
+
+  const handleTextImageInsertPaste = React.useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const clipboardData = event.clipboardData;
+    const pastedFiles: File[] = [];
+    if (clipboardData?.files?.length) {
+      Array.from(clipboardData.files).forEach((file) => {
+        if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+          pastedFiles.push(file);
+        }
+      });
+    }
+    if (clipboardData?.items) {
+      Array.from(clipboardData.items).forEach((item) => {
+        if (item.kind === "file" && (item.type.startsWith("image/") || item.type.startsWith("video/"))) {
+          const file = item.getAsFile();
+          if (file) pastedFiles.push(file);
+        }
+      });
+    }
+    if (pastedFiles.length > 0) {
+      insertImageFilesFromTextTrigger(pastedFiles);
+    }
+  }, [insertImageFilesFromTextTrigger]);
+
+  const copyPlainTextToClipboard = React.useCallback(async (text: string, kind: "text" | "fact") => {
+    const value = String(text || "").replace(/\u00a0/g, " ").trim();
+    if (!value) {
+      alert(kind === "text" ? "복사할 Text가 없습니다." : "복사할 Fact Check 결과가 없습니다.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyFeedback(kind);
+      window.setTimeout(() => {
+        setCopyFeedback((prev) => (prev === kind ? null : prev));
+      }, 1800);
+    } catch {
+      alert("클립보드 복사에 실패했습니다.");
+    }
+  }, []);
+
+  const handleCopyGeneralInfoText = React.useCallback(() => {
+    syncGeneralInfoRichTextToDraft();
+    const fromEditor = String(generalInfoRichTextRef.current?.innerText || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\n{4,}/g, "\n\n\n");
+    void copyPlainTextToClipboard(fromEditor || generalInfoDraft.text || "", "text");
+  }, [copyPlainTextToClipboard, generalInfoDraft.text, generalInfoRichTextRef, syncGeneralInfoRichTextToDraft]);
+
+  const handleCopyFactCheckResult = React.useCallback(() => {
+    const status = String(generalInfoDraft.factCheckStatus || "확인 전").trim();
+    const summary = String(generalInfoDraft.factCheckSummary || "").trim();
+    const combined = [`[Fact Check 상태] ${status}`, summary].filter(Boolean).join("\n\n");
+    void copyPlainTextToClipboard(combined, "fact");
+  }, [copyPlainTextToClipboard, generalInfoDraft.factCheckStatus, generalInfoDraft.factCheckSummary]);
+
+  const renderGeminiKeyButton = () => {
+    if (keyValidationStatus === "valid") {
+      return (
+        <button
+          type="button"
+          onClick={() => setIsConfigOpen(!isConfigOpen)}
+          style={{
+            padding: "4px 10px",
+            fontSize: "12px",
+            borderRadius: "6px",
+            background: "rgba(74, 222, 128, 0.15)",
+            color: "#4ade80",
+            border: "1px solid rgba(74, 222, 128, 0.3)",
+            cursor: "pointer",
+            fontWeight: "bold",
+          }}
+        >
+          ● Gemini API Key 등록 완료
+        </button>
+      );
+    }
+    if (keyValidationStatus === "invalid") {
+      return (
+        <button
+          type="button"
+          onClick={() => setIsConfigOpen(!isConfigOpen)}
+          style={{
+            padding: "4px 10px",
+            fontSize: "12px",
+            borderRadius: "6px",
+            background: "rgba(248, 113, 113, 0.15)",
+            color: "#f87171",
+            border: "1px solid rgba(248, 113, 113, 0.3)",
+            cursor: "pointer",
+            fontWeight: "bold",
+          }}
+        >
+          ● Gemini API Key 불일치 (재등록)
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => setIsConfigOpen(!isConfigOpen)}
+        style={{
+          padding: "4px 10px",
+          fontSize: "12px",
+          borderRadius: "6px",
+          background: "rgba(56, 189, 248, 0.15)",
+          color: "#38bdf8",
+          border: "1px solid rgba(56, 189, 248, 0.3)",
+          cursor: "pointer",
+          fontWeight: "bold",
+        }}
+      >
+        🔑 Gemini API Key 등록
+      </button>
+    );
+  };
+
+  const renderGeminiConfigBox = () => (
+    isConfigOpen ? (
+      <div
+        className="geminiKeyBox"
+        style={{
+          marginBottom: "20px",
+          padding: "15px 18px",
+          borderRadius: "14px",
+          border: keyValidationStatus === "invalid" ? "1px solid rgba(248, 113, 113, 0.4)" : "1px solid rgba(56, 189, 248, 0.3)",
+          background: keyValidationStatus === "invalid" ? "rgba(248, 113, 113, 0.04)" : "rgba(14, 165, 233, 0.04)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+          <strong style={{ color: "#38bdf8", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
+            🤖 Google Gemini API Key 설정
+          </strong>
+          <span style={{ fontSize: "11px", color: keyValidationStatus === "valid" ? "#4ade80" : keyValidationStatus === "invalid" ? "#f87171" : keyValidationStatus === "validating" ? "#38bdf8" : "#94a3b8", fontWeight: "bold" }}>
+            {keyValidationStatus === "valid" && "● API 키 등록 완료"}
+            {keyValidationStatus === "invalid" && "● API 키 오류 (불일치)"}
+            {keyValidationStatus === "validating" && "● 검증 중..."}
+            {keyValidationStatus === "idle" && "○ API 키 등록 필요"}
+          </span>
+        </div>
+        <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0, lineHeight: 1.5 }}>
+          AI 이미지 텍스트 추출(OCR), 자동 분류, 요약, Fact Check 기능은 Gemini API Key를 통해 동작합니다.
+        </p>
+        <div style={{ display: "flex", gap: "8px", width: "100%", flexDirection: "column" }}>
+          <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+            <input
+              type="password"
+              value={tempApiKey}
+              onChange={(e) => setTempApiKey(e.target.value)}
+              placeholder="AI 기능을 사용하려면 여기에 Gemini API Key를 입력하세요"
+              style={{
+                flex: 1,
+                borderRadius: "10px",
+                border: keyValidationStatus === "invalid" ? "1px solid rgba(248, 113, 113, 0.4)" : "1px solid rgba(56, 189, 248, 0.2)",
+                background: "#020617",
+                color: "#e2e8f0",
+                padding: "8px 12px",
+                fontSize: "13px",
+              }}
+            />
+            <button
+              type="button"
+              className="primaryButton"
+              onClick={handleVerifyAndSaveKey}
+              disabled={keyValidationStatus === "validating"}
+              style={{
+                padding: "0 14px",
+                fontSize: "13px",
+                fontWeight: 700,
+                borderRadius: "10px",
+                cursor: "pointer",
+              }}
+            >
+              {keyValidationStatus === "validating" ? "검증 중..." : "확인"}
+            </button>
+            {geminiApiKey && (
+              <button
+                type="button"
+                className="secondaryButton"
+                onClick={handleClearKey}
+                style={{
+                  padding: "0 12px",
+                  fontSize: "12px",
+                  fontWeight: 800,
+                  whiteSpace: "nowrap",
+                  borderRadius: "10px",
+                  borderColor: "rgba(248, 113, 113, 0.3)",
+                  background: "rgba(248, 113, 113, 0.1)",
+                  color: "#f87171",
+                  cursor: "pointer",
+                }}
+              >
+                삭제
+              </button>
+            )}
+          </div>
+          {validationError && (
+            <div style={{ fontSize: "12px", color: "#f87171", marginTop: "4px" }}>
+              ⚠️ {validationError}
+            </div>
+          )}
+        </div>
+      </div>
+    ) : null
+  );
+
   return (
     <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" }}>
       {/* ===== 탭 버튼 ===== */}
@@ -268,7 +519,10 @@ export function Chapter3Info({
         <button
           type="button"
           className={`ch3TabBtn ${activeTab === "storage" ? "active" : ""}`}
-          onClick={() => setActiveTab("storage")}
+          onClick={() => {
+            setShowTextImageInsert(false);
+            setActiveTab("storage");
+          }}
         >
           🗂️ 정보 창고
         </button>
@@ -279,7 +533,58 @@ export function Chapter3Info({
         >
           ✍️ 일반 정보 수집
         </button>
+        <button
+          type="button"
+          className={`ch3TabBtn ${activeTab === "factory" ? "active" : ""}`}
+          onClick={() => {
+            setShowTextImageInsert(false);
+            setActiveTab("factory");
+          }}
+        >
+          일반 정보 공장
+        </button>
       </div>
+
+      {/* ===== 일반 정보 공장 탭 ===== */}
+      {activeTab === "factory" && (
+      <section className="leftColumn generalInfoLeftColumn" style={{ position: "relative", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
+        <button
+          type="button"
+          className="scroll-to-top-btn"
+          onClick={(e) => {
+            if (window.innerWidth <= 1100) {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            } else {
+              e.currentTarget.parentElement?.scrollTo({ top: 0, behavior: "smooth" });
+            }
+          }}
+          title="맨위로"
+        >맨 위로 ↑</button>
+        <div className="chapterTitleBox" style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <h2 style={{ margin: 0, fontWeight: "inherit" }}>일반 정보 공장</h2>
+            {renderGeminiKeyButton()}
+          </div>
+          <p style={{ margin: "4px 0 0 0" }}>
+            일반 정보 수집하고 AI 분류, Fact Check, 검색 기능 수행
+          </p>
+        </div>
+        {renderGeminiConfigBox()}
+        <div className="generalInfoFactoryHint">
+          <p>
+            AI 분류·Fact Check·검색을 쓰려면 위에서 Gemini API Key를 등록하세요.
+            자료 입력은 <strong>✍️ 일반 정보 수집</strong> 탭에서 진행합니다.
+          </p>
+          <button
+            type="button"
+            className="primaryButton"
+            onClick={() => setActiveTab("collect")}
+          >
+            일반 정보 수집으로 이동
+          </button>
+        </div>
+      </section>
+      )}
 
       {/* ===== 정보 수집 탭 (입력 + AI 분류) ===== */}
       {activeTab === "collect" && (
@@ -297,171 +602,15 @@ export function Chapter3Info({
           }}
           title="맨위로"
         >맨 위로 ↑</button>
-        <div className="chapterTitleBox" style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0, fontWeight: "inherit" }}>일반 정보 공장</h2>
-            {keyValidationStatus === "valid" ? (
-              <button
-                type="button"
-                onClick={() => setIsConfigOpen(!isConfigOpen)}
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "12px",
-                  borderRadius: "6px",
-                  background: "rgba(74, 222, 128, 0.15)",
-                  color: "#4ade80",
-                  border: "1px solid rgba(74, 222, 128, 0.3)",
-                  cursor: "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                ● Gemini API Key 등록 완료
-              </button>
-            ) : keyValidationStatus === "invalid" ? (
-              <button
-                type="button"
-                onClick={() => setIsConfigOpen(!isConfigOpen)}
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "12px",
-                  borderRadius: "6px",
-                  background: "rgba(248, 113, 113, 0.15)",
-                  color: "#f87171",
-                  border: "1px solid rgba(248, 113, 113, 0.3)",
-                  cursor: "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                ● Gemini API Key 불일치 (재등록)
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setIsConfigOpen(!isConfigOpen)}
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "12px",
-                  borderRadius: "6px",
-                  background: "rgba(56, 189, 248, 0.15)",
-                  color: "#38bdf8",
-                  border: "1px solid rgba(56, 189, 248, 0.3)",
-                  cursor: "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                🔑 Gemini API Key 등록
-              </button>
-            )}
-          </div>
-          <p style={{ margin: "4px 0 0 0" }}>
-            일반 정보 수집하고 AI 분류, Fact Check, 검색 기능 수행
-          </p>
-        </div>
-
-        {/* Google Gemini API Key Config Box */}
-        {isConfigOpen && (
-          <div
-            className="geminiKeyBox"
-            style={{
-              marginBottom: "20px",
-              padding: "15px 18px",
-              borderRadius: "14px",
-              border: keyValidationStatus === "invalid" ? "1px solid rgba(248, 113, 113, 0.4)" : "1px solid rgba(56, 189, 248, 0.3)",
-              background: keyValidationStatus === "invalid" ? "rgba(248, 113, 113, 0.04)" : "rgba(14, 165, 233, 0.04)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-              <strong style={{ color: "#38bdf8", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-                🤖 Google Gemini API Key 설정
-              </strong>
-              <span style={{ fontSize: "11px", color: keyValidationStatus === "valid" ? "#4ade80" : keyValidationStatus === "invalid" ? "#f87171" : keyValidationStatus === "validating" ? "#38bdf8" : "#94a3b8", fontWeight: "bold" }}>
-                {keyValidationStatus === "valid" && "● API 키 등록 완료"}
-                {keyValidationStatus === "invalid" && "● API 키 오류 (불일치)"}
-                {keyValidationStatus === "validating" && "● 검증 중..."}
-                {keyValidationStatus === "idle" && "○ API 키 등록 필요"}
-              </span>
-            </div>
-            <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0, lineHeight: 1.5 }}>
-              AI 이미지 텍스트 추출(OCR), 자동 분류, 요약, Fact Check 기능은 Gemini API Key를 통해 동작합니다.
-            </p>
-            <div style={{ display: "flex", gap: "8px", width: "100%", flexDirection: "column" }}>
-              <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-                <input
-                  type="password"
-                  value={tempApiKey}
-                  onChange={(e) => setTempApiKey(e.target.value)}
-                  placeholder="AI 기능을 사용하려면 여기에 Gemini API Key를 입력하세요"
-                  style={{
-                    flex: 1,
-                    borderRadius: "10px",
-                    border: keyValidationStatus === "invalid" ? "1px solid rgba(248, 113, 113, 0.4)" : "1px solid rgba(56, 189, 248, 0.2)",
-                    background: "#020617",
-                    color: "#e2e8f0",
-                    padding: "8px 12px",
-                    fontSize: "13px",
-                  }}
-                />
-                <button
-                  type="button"
-                  className="primaryButton"
-                  onClick={handleVerifyAndSaveKey}
-                  disabled={keyValidationStatus === "validating"}
-                  style={{
-                    padding: "0 14px",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    borderRadius: "10px",
-                    cursor: "pointer",
-                  }}
-                >
-                  {keyValidationStatus === "validating" ? "검증 중..." : "확인"}
-                </button>
-                {geminiApiKey && (
-                  <button
-                    type="button"
-                    className="secondaryButton"
-                    onClick={handleClearKey}
-                    style={{
-                      padding: "0 12px",
-                      fontSize: "12px",
-                      fontWeight: 800,
-                      whiteSpace: "nowrap",
-                      borderRadius: "10px",
-                      borderColor: "rgba(248, 113, 113, 0.3)",
-                      background: "rgba(248, 113, 113, 0.1)",
-                      color: "#f87171",
-                      cursor: "pointer",
-                    }}
-                  >
-                    삭제
-                  </button>
-                )}
-              </div>
-              {validationError && (
-                <div style={{ fontSize: "12px", color: "#f87171", marginTop: "4px" }}>
-                  ⚠️ {validationError}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         <Card
           number="1"
           title="일반 정보 수집"
           subtitle="Text / 이미지 / 동영상 / URL을 단독 또는 복수로 입력합니다."
-        >
-          <div className="generalInfoInputRecoveryBar">
-            <div>
-              <strong>입력 오류 대응</strong>
-              <p>이미지/Text/URL 입력이 잘못되었을 때 현재 입력을 삭제하거나 직전 상태로 되돌립니다.</p>
-            </div>
-            <div className="generalInfoInputRecoveryActions">
+          actions={
+            <>
               <button
-                className="secondaryButton"
+                className="secondaryButton cardHeaderActionBtn"
                 type="button"
                 onClick={handleUndoGeneralInfoDraft}
                 disabled={!generalInfoDraftBackup}
@@ -469,35 +618,21 @@ export function Chapter3Info({
                   borderColor: generalInfoDraftBackup ? "rgba(234, 179, 8, 0.4)" : "rgba(148, 163, 184, 0.2)",
                   background: generalInfoDraftBackup ? "rgba(234, 179, 8, 0.15)" : "rgba(148, 163, 184, 0.05)",
                   color: generalInfoDraftBackup ? "#facc15" : "#64748b",
-                  cursor: generalInfoDraftBackup ? "pointer" : "not-allowed"
+                  cursor: generalInfoDraftBackup ? "pointer" : "not-allowed",
                 }}
               >
-                ↩️ 직전 입력 되돌리기
+                되돌리기
               </button>
-              <button className="dangerButton" type="button" onClick={handleResetGeneralInfoDraft}>
-                🧹 현재 입력 삭제
+              <button
+                className="dangerButton cardHeaderActionBtn"
+                type="button"
+                onClick={handleResetGeneralInfoDraft}
+              >
+                삭제
               </button>
-            </div>
-          </div>
-
-          <div className="generalInfoClipboardBox">
-            <div>
-              <strong>복사 붙여넣기 자동 수집</strong>
-              <p>
-                외부 앱이나 웹페이지에서 복사한 Text, URL, 이미지를 자동으로
-                일반 정보 입력칸에 반영합니다.
-              </p>
-            </div>
-            <button
-              className="secondaryButton"
-              type="button"
-              onClick={handleCollectGeneralInfoFromClipboard}
-              disabled={isCollectingGeneralInfoClipboard}
-            >
-              {isCollectingGeneralInfoClipboard ? "클립보드 확인 중..." : "📋 클립보드에서 일반 정보 붙여넣기"}
-            </button>
-          </div>
-
+            </>
+          }
+        >
           {generalInfoEditingId && (
             <div className="generalInfoEditNotice">
               <strong>수정 모드</strong>
@@ -508,51 +643,28 @@ export function Chapter3Info({
             </div>
           )}
 
-          <div className="generalInfoGrid">
-            <label>
-              정보 제목
-              <input
-                value={generalInfoDraft.title}
-                onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, title: e.target.value }))}
-                placeholder="예: 반도체 공급망 정책 자료"
-              />
-            </label>
-            <label>
-              출처 URL
-              <input
-                value={generalInfoDraft.sourceUrl}
-                onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, sourceUrl: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleExtractGeneralInfoUrl();
-                  }
-                }}
-                placeholder="https://..."
-              />
-              <button
-                className="secondaryButton urlExtractButton"
-                type="button"
-                onClick={handleExtractGeneralInfoUrl}
-                disabled={isExtractingGeneralInfoUrl}
-              >
-                {isExtractingGeneralInfoUrl ? "URL 가져오는 중..." : "URL 내용 자동 가져오기"}
-              </button>
-            </label>
-          </div>
-
-          <div className="generalInfoAutoGuide">
-            <strong>자동 입력 안내</strong>
-            <p>
-              URL을 입력한 뒤 [URL 내용 자동 가져오기]를 누르면 제목, 본문 Text,
-              대표 이미지가 자동 입력됩니다. 이후 [AI 자동분류]로 분류와 키워드를 생성하세요.
-            </p>
-          </div>
+          <label className="generalInfoFieldLabel">
+            정보 제목
+            <input
+              value={generalInfoDraft.title}
+              onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, title: e.target.value }))}
+              placeholder="예: 반도체 공급망 정책 자료"
+            />
+          </label>
 
           {/* Rich Text Editor */}
           <div className="generalInfoTextBox generalInfoRichTextBox">
             <div className="generalInfoRichTextHeader">
-              <strong>Text 입력 / 편집</strong>
+              <div className="generalInfoSectionTitleRow">
+                <strong>Text 입력 / 편집</strong>
+                <button
+                  type="button"
+                  className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                  onClick={handleCopyGeneralInfoText}
+                >
+                  {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
+                </button>
+              </div>
               <span>아래 큰 입력칸에 내용을 입력하세요. 줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄 편집 가능</span>
             </div>
 
@@ -585,13 +697,19 @@ export function Chapter3Info({
               suppressContentEditableWarning
               role="textbox"
               tabIndex={0}
+              onInput={checkTextImageTrigger}
+              onKeyUp={checkTextImageTrigger}
               onBlur={(e) => {
                 // 포커스가 버튼으로 이동할 때는 sync 생략 (버튼 핸들러가 직접 최신 텍스트를 읽음)
                 const rel = e.relatedTarget as HTMLElement | null;
                 if (rel && (rel.tagName === "BUTTON" || rel.closest?.("button"))) return;
                 syncGeneralInfoRichTextToDraft();
+                checkTextImageTrigger();
               }}
-              onPaste={handleGeneralInfoRichPaste}
+              onPaste={(event) => {
+                handleGeneralInfoRichPaste(event);
+                requestAnimationFrame(checkTextImageTrigger);
+              }}
               data-placeholder="기사 내용, 보고서 요약, 복사한 텍스트, 메모를 입력하세요."
               style={{
                 display: "block",
@@ -612,9 +730,116 @@ export function Chapter3Info({
               }}
             />
 
+            {showTextImageInsert && (
+              <div className="generalInfoTextImageInsertPanel">
+                <div className="generalInfoTextImageInsertHead">
+                  <strong>이미지 붙여넣기</strong>
+                  <span>문자 끝 S 감지 · 사진첩 / 복사 붙여넣기 / 파일 선택</span>
+                  <button
+                    type="button"
+                    className="secondaryButton smallActionButton"
+                    onClick={() => {
+                      removeTrailingImageTrigger();
+                      setShowTextImageInsert(false);
+                    }}
+                  >
+                    닫기
+                  </button>
+                </div>
+                <div className="generalInfoTextImageInsertActions">
+                  <label className="primaryLabel generalInfoTextImageFileLabel">
+                    🖼 사진첩 · 파일 선택
+                    <input
+                      ref={textImageFileRef}
+                      type="file"
+                      accept="image/*,video/*"
+                      multiple
+                      onChange={(e) => {
+                        insertImageFilesFromTextTrigger(e.target.files);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <div
+                    className="generalInfoTextImagePasteZone"
+                    contentEditable
+                    suppressContentEditableWarning
+                    role="textbox"
+                    tabIndex={0}
+                    onPaste={handleTextImageInsertPaste}
+                  >
+                    📋 아이폰·PC 이미지 여기 붙여넣기 (Ctrl+V / ⌘V)
+                  </div>
+                </div>
+              </div>
+            )}
+
             <p className="generalInfoRichTextNote">
               AI 분석에는 서식을 제외한 순수 Text가 사용되고, 저장함에는 편집된 색상/강조가 함께 표시됩니다.
+              문장 끝에 <strong>S</strong>를 붙이면 이미지 붙여넣기(사진첩·복사 붙여넣기·파일 선택)가 열립니다.
             </p>
+          </div>
+
+          <div className="generalInfoSourceUrlBlock">
+            <div className="generalInfoSourceUrlLabelRow">
+              <label className="generalInfoFieldLabel" style={{ flex: 1, marginBottom: 0 }}>
+                출처 URL
+              </label>
+              <button
+                type="button"
+                className={`secondaryButton smallActionButton ${showSourceUrlHelp ? "activeHelpBtn" : ""}`}
+                onClick={() => setShowSourceUrlHelp((prev) => !prev)}
+                aria-expanded={showSourceUrlHelp}
+              >
+                {showSourceUrlHelp ? "설명 닫기" : "설명"}
+              </button>
+            </div>
+            {showSourceUrlHelp && (
+              <div className="generalInfoAutoGuide">
+                <strong>자동 입력 안내</strong>
+                <p>
+                  URL을 입력한 뒤 [URL 내용 자동 가져오기]를 누르면 제목, 본문 Text,
+                  대표 이미지가 자동 입력됩니다. 이후 [AI 자동분류]로 분류와 키워드를 생성하세요.
+                </p>
+              </div>
+            )}
+            <input
+              value={generalInfoDraft.sourceUrl}
+              onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, sourceUrl: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleExtractGeneralInfoUrl();
+                }
+              }}
+              placeholder="https://..."
+            />
+            <button
+              className="secondaryButton urlExtractButton"
+              type="button"
+              onClick={handleExtractGeneralInfoUrl}
+              disabled={isExtractingGeneralInfoUrl}
+            >
+              {isExtractingGeneralInfoUrl ? "URL 가져오는 중..." : "URL 내용 자동 가져오기"}
+            </button>
+          </div>
+
+          <div className="generalInfoClipboardBox">
+            <div>
+              <strong>복사 붙여넣기 자동 수집</strong>
+              <p>
+                외부 앱이나 웹페이지에서 복사한 Text, URL, 이미지를 자동으로
+                일반 정보 입력칸에 반영합니다.
+              </p>
+            </div>
+            <button
+              className="secondaryButton"
+              type="button"
+              onClick={handleCollectGeneralInfoFromClipboard}
+              disabled={isCollectingGeneralInfoClipboard}
+            >
+              {isCollectingGeneralInfoClipboard ? "클립보드 확인 중..." : "📋 클립보드에서 일반 정보 붙여넣기"}
+            </button>
           </div>
 
           {/* 이미지/동영상 업로드 */}
@@ -918,7 +1143,16 @@ export function Chapter3Info({
           </div>
 
           <div className="generalInfoResultBox generalInfoEditableResultBox">
-            <strong>Fact Check</strong>
+            <div className="generalInfoSectionTitleRow">
+              <strong>Fact Check</strong>
+              <button
+                type="button"
+                className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                onClick={handleCopyFactCheckResult}
+              >
+                {copyFeedback === "fact" ? "✅ 복사됨" : "📋 전체 복사"}
+              </button>
+            </div>
             <div className="generalInfoFactEditGrid">
               <label>
                 상태

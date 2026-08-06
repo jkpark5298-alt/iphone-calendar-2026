@@ -214,9 +214,28 @@ export default function GeneralInfoDetailModal({
   onShareReport,
   onOpenStorageImage,
 }: Props) {
+  const [copyFeedback, setCopyFeedback] = React.useState<"text" | "fact" | null>(null);
+
   if (!item) return null;
 
   const mediaItems = getGeneralInfoDisplayMediaItems(item);
+
+  const copyPlainText = async (text: string, kind: "text" | "fact") => {
+    const value = String(text || "").trim();
+    if (!value) {
+      alert(kind === "text" ? "복사할 Text가 없습니다." : "복사할 Fact Check 결과가 없습니다.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyFeedback(kind);
+      window.setTimeout(() => {
+        setCopyFeedback((prev) => (prev === kind ? null : prev));
+      }, 1800);
+    } catch {
+      alert("클립보드 복사에 실패했습니다.");
+    }
+  };
 
   return (
     <div 
@@ -336,7 +355,16 @@ export default function GeneralInfoDetailModal({
           </section>
 
           <section className="generalInfoDetailSection">
-            <strong>본문 Text</strong>
+            <div className="generalInfoSectionTitleRow">
+              <strong>본문 Text</strong>
+              <button
+                type="button"
+                className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                onClick={() => void copyPlainText(item.text || "", "text")}
+              >
+                {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
+              </button>
+            </div>
             {item.text ? (
               <div
                 className="generalInfoFormattedTextView"
@@ -350,7 +378,20 @@ export default function GeneralInfoDetailModal({
           </section>
 
           <section className="generalInfoDetailSection">
-            <strong>Fact Check 및 AI 보고서</strong>
+            <div className="generalInfoSectionTitleRow">
+              <strong>Fact Check 및 AI 보고서</strong>
+              <button
+                type="button"
+                className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                onClick={() => {
+                  const status = String(item.factCheckStatus || "확인 전").trim();
+                  const summary = String(item.factCheckSummary || "").trim();
+                  void copyPlainText([`[Fact Check 상태] ${status}`, summary].filter(Boolean).join("\n\n"), "fact");
+                }}
+              >
+                {copyFeedback === "fact" ? "✅ 복사됨" : "📋 전체 복사"}
+              </button>
+            </div>
             {item.factCheckSummary ? (() => {
               const { status: parsedStatus, summary: parsedSummary, result: parsedResult } = parseReportText(item.factCheckSummary);
               const sections = parseMarkdownSections(parsedResult);

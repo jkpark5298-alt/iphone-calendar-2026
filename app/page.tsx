@@ -54,7 +54,7 @@ type InfoTextCard = {
   content: string;
   createdAt: string;
 };
-type CalendarMarkType = "C" | "A" | "심야" | "노조";
+type CalendarMarkType = "C" | "A" | "심야" | "노조" | "休";
 type CalendarMarkItem = {
   id: string;
   type: CalendarMarkType;
@@ -95,7 +95,15 @@ const calendarMarkLabels: Record<CalendarMarkType, string> = {
   A: "A",
   심야: "심야",
   노조: "노조",
+  休: "休",
 };
+
+function calendarMarkClassSuffix(type: CalendarMarkType) {
+  if (type === "심야") return "night";
+  if (type === "노조") return "union";
+  if (type === "休") return "rest";
+  return type.toLowerCase();
+}
 
 const holidays: Record<string, string> = {
   "5-5": "어린이날",
@@ -947,7 +955,7 @@ export default function HomePage() {
       const type = row.mark_type as CalendarMarkType;
       const maxDay = getDaysInMonth(year, month);
       if (day < 1 || day > maxDay) return;
-      if (!["C", "A", "심야", "노조"].includes(type)) return;
+      if (!["C", "A", "심야", "노조", "休"].includes(type)) return;
 
       const markKey = key(month, day, year);
       nextMarks[markKey] = [
@@ -4504,7 +4512,7 @@ export default function HomePage() {
                 {dayMarks.slice(0, 4).map(mark => (
                   <span
                     key={`${mark.type}-${mark.plus}`}
-                    className={`calendar-mark calendar-mark-${mark.type === "심야" ? "night" : mark.type === "노조" ? "union" : mark.type.toLowerCase()}`}
+                    className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(mark.type)}`}
                   >
                     {calendarMarkLabels[mark.type]}{mark.plus ? "+" : ""}
                   </span>
@@ -4539,9 +4547,10 @@ export default function HomePage() {
                     event.stopPropagation();
                     openScheduleEditorForItem(item, currentMonth, day);
                   }}
-                  aria-label={`${item.title} 일정 수정`}
+                  aria-label={`${item.title} 일정 수정${item.startTime ? ` (${item.startTime})` : ""}`}
+                  title={item.startTime ? `${item.startTime} ${item.title}` : item.title}
                 >
-                  {item.startTime && <span>{item.startTime}</span>} {item.title}
+                  {item.title || "제목 없음"}
                 </button>
               ))}
             </div>
@@ -4947,7 +4956,7 @@ function MarkDateView() {
               <button
                 type="button"
                 key={type}
-                className={`mark-type-btn mark-type-${type === "심야" ? "night" : type === "노조" ? "union" : type.toLowerCase()} ${markType === type ? "active" : ""}`}
+                className={`mark-type-btn mark-type-${calendarMarkClassSuffix(type)} ${markType === type ? "active" : ""}`}
                 onClick={() => {
                   setMarkType(type);
                   if (type === "노조") setMarkPlus(false);
@@ -4988,7 +4997,7 @@ function MarkDateView() {
             {monthMarkEntries.map(({ day, item }) => (
               <div className="saved-mark-row" key={`${day}-${item.type}-${item.plus}`}>
                 <span>{currentMonth}/{day}</span>
-                <span className={`calendar-mark calendar-mark-${item.type === "심야" ? "night" : item.type === "노조" ? "union" : item.type.toLowerCase()}`}>
+                <span className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(item.type)}`}>
                   {calendarMarkLabels[item.type]}{item.plus ? "+" : ""}
                 </span>
                 <button type="button" className="soft-btn delete-btn" onClick={() => deleteCalendarMark(currentMonth, day, item)}>삭제</button>

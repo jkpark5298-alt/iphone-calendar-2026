@@ -62,19 +62,24 @@ export function Card({
   subtitle,
   children,
   compact = false,
+  actions,
 }: {
   number: string;
   title: string;
   subtitle?: string;
   children: React.ReactNode;
   compact?: boolean;
+  actions?: React.ReactNode;
 }) {
   return (
     <section className={`card ${compact ? "compactCard" : ""}`}>
       <div className="cardHeader">
         <span className="cardNumber">{number}</span>
-        <div>
-          <h2>{title}</h2>
+        <div className="cardHeaderMain">
+          <div className="cardHeaderTitleRow">
+            <h2>{title}</h2>
+            {actions ? <div className="cardHeaderActions">{actions}</div> : null}
+          </div>
           {subtitle && <p>{subtitle}</p>}
         </div>
       </div>
