@@ -544,9 +544,37 @@ export default function GeneralInfoDetailModal({
               <h3>{item.title}</h3>
             )}
           </div>
-          <button className="iconButton" type="button" onClick={onClose}>
-            ×
-          </button>
+          <div className="generalInfoDetailHeaderActions">
+            {isEditing ? (
+              <>
+                <button
+                  className="primaryButton smallActionButton"
+                  type="button"
+                  onClick={() => void saveAllEdits()}
+                >
+                  변경 저장
+                </button>
+                <button
+                  className="secondaryButton smallActionButton"
+                  type="button"
+                  onClick={cancelEditing}
+                >
+                  편집 취소
+                </button>
+              </>
+            ) : (
+              <button
+                className="primaryButton smallActionButton"
+                type="button"
+                onClick={beginEditing}
+              >
+                ✏️ 수정
+              </button>
+            )}
+            <button className="iconButton" type="button" onClick={onClose}>
+              ×
+            </button>
+          </div>
         </div>
 
         <div
@@ -969,32 +997,6 @@ export default function GeneralInfoDetailModal({
               style={{ borderColor: "rgba(74, 222, 128, 0.45)", color: "#bbf7d0" }}
             >
               {isExportingPdf ? "PDF 생성 중…" : "PDF보고서"}
-            </button>
-          )}
-          {isEditing ? (
-            <>
-              <button
-                className="primaryButton"
-                type="button"
-                onClick={() => void saveAllEdits()}
-              >
-                변경 저장
-              </button>
-              <button
-                className="secondaryButton"
-                type="button"
-                onClick={cancelEditing}
-              >
-                편집 취소
-              </button>
-            </>
-          ) : (
-            <button
-              className="primaryButton"
-              type="button"
-              onClick={beginEditing}
-            >
-              수정
             </button>
           )}
           {onDelete && !isEditing && (
