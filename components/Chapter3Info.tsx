@@ -206,6 +206,11 @@ export function Chapter3Info({
     });
   }, [normalizeGeneralInfoMediaItems, setGeneralInfoDraft]);
 
+  const [showSourceUrlHelp, setShowSourceUrlHelp] = React.useState(false);
+  const [showTextImageInsert, setShowTextImageInsert] = React.useState(false);
+  const [copyFeedback, setCopyFeedback] = React.useState<"text" | "fact" | null>(null);
+  const textImageFileRef = React.useRef<HTMLInputElement | null>(null);
+
   const collectBodyImageSrcs = React.useMemo(() => {
     const liveHtml = String(generalInfoRichTextRef.current?.innerHTML || "");
     return extractGeneralInfoBodyImageSrcs(
@@ -221,10 +226,6 @@ export function Chapter3Info({
     generalInfoRichTextRef,
     showTextImageInsert,
   ]);
-  const [showSourceUrlHelp, setShowSourceUrlHelp] = React.useState(false);
-  const [showTextImageInsert, setShowTextImageInsert] = React.useState(false);
-  const [copyFeedback, setCopyFeedback] = React.useState<"text" | "fact" | null>(null);
-  const textImageFileRef = React.useRef<HTMLInputElement | null>(null);
 
   const isGeminiPacketDepleted = geminiApiPacketStatus === "depleted";
 
