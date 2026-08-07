@@ -211,6 +211,9 @@ export const findInlineImageTrigger = (
 ): { textNode: Text; start: number; end: number } | null => {
   if (!editor) return null;
 
+  const triggerAtEnd = /[ \t]*[Ss][ \t]*$/;
+  const triggerBeforeCaret = /[ \t]*[Ss]$/;
+
   const selection = window.getSelection();
   if (selection && selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
     const anchor = selection.anchorNode;
@@ -219,7 +222,7 @@ export const findInlineImageTrigger = (
       const text = String(textNode.nodeValue || "");
       const caret = Math.min(selection.anchorOffset, text.length);
       const before = text.slice(0, caret);
-      const match = before.match(/[ \t]*S$/);
+      const match = before.match(triggerBeforeCaret);
       if (match) {
         return {
           textNode,
@@ -228,7 +231,7 @@ export const findInlineImageTrigger = (
         };
       }
       if (caret === text.length) {
-        const endMatch = text.match(/[ \t]*S[ \t]*$/);
+        const endMatch = text.match(triggerAtEnd);
         if (endMatch) {
           return {
             textNode,
@@ -244,13 +247,13 @@ export const findInlineImageTrigger = (
   let lastWithTrigger: Text | null = null;
   while (walker.nextNode()) {
     const node = walker.currentNode as Text;
-    if (/[ \t]*S[ \t]*$/.test(String(node.nodeValue || ""))) {
+    if (triggerAtEnd.test(String(node.nodeValue || ""))) {
       lastWithTrigger = node;
     }
   }
   if (!lastWithTrigger) return null;
   const text = String(lastWithTrigger.nodeValue || "");
-  const endMatch = text.match(/[ \t]*S[ \t]*$/);
+  const endMatch = text.match(triggerAtEnd);
   if (!endMatch) return null;
   return {
     textNode: lastWithTrigger,

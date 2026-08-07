@@ -6965,7 +6965,6 @@ ${photo.memoText}
               isAnalyzingGeneralInfo={infoState.isAnalyzingGeneralInfo}
               handleConfirmGeneralInfo={infoState.handleConfirmGeneralInfo}
               handleCancelEditGeneralInfo={infoState.handleCancelEditGeneralInfo}
-              handleStartEditGeneralInfo={infoState.handleStartEditGeneralInfo}
               generalInfoItems={infoState.generalInfoItems}
               filteredGeneralInfoItems={infoState.filteredGeneralInfoItems}
               generalInfoSearchTerm={infoState.generalInfoSearchTerm}

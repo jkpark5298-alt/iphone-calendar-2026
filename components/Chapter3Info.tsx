@@ -59,7 +59,6 @@ export interface Chapter3InfoProps {
   handleConfirmGeneralInfo: () => void;
   handleSaveTemporaryGeneralInfoDraft: () => void;
   handleCancelEditGeneralInfo: () => void;
-  handleStartEditGeneralInfo: (item: GeneralInfoItem) => void;
 
   // 저장함
   generalInfoItems: GeneralInfoItem[];
@@ -116,7 +115,6 @@ export function Chapter3Info({
   handleConfirmGeneralInfo,
   handleSaveTemporaryGeneralInfoDraft,
   handleCancelEditGeneralInfo,
-  handleStartEditGeneralInfo,
   generalInfoItems,
   filteredGeneralInfoItems,
   generalInfoSearchTerm,
@@ -271,8 +269,8 @@ export function Chapter3Info({
   const textEndsWithImageTrigger = React.useCallback((raw: string) => {
     const text = String(raw || "").replace(/\u00a0/g, " ").replace(/\r/g, "");
     const trimmedEnd = text.replace(/[ \t\n]+$/g, "");
-    // 문자 끝에 S를 붙이면 이미지 붙여넣기 패널 표시
-    return /S$/.test(trimmedEnd);
+    // 문자 끝에 S/s를 붙이면 이미지 붙여넣기 패널 표시
+    return /[Ss]$/.test(trimmedEnd);
   }, []);
 
   const removeTrailingImageTrigger = React.useCallback(() => {
@@ -1276,19 +1274,8 @@ export function Chapter3Info({
                     <p className="cardSummary">{item.summary || "클립보드 이미지 자료"}</p>
                   </div>
 
-                  {/* 수정/상세보기 버튼 — 나머지 1/5 */}
+                  {/* 상세보기/고정 버튼 */}
                   <div className="generalInfoCardActions">
-                    <button
-                      className="generalInfoCardEditButton"
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStartEditGeneralInfo(item);
-                      }}
-                      title="자료 수정"
-                    >
-                      ✏️ 수정
-                    </button>
                     <button
                       className="generalInfoCardDetailButton"
                       type="button"

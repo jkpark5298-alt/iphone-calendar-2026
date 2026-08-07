@@ -318,7 +318,7 @@ export default function GeneralInfoDetailModal({
   const textEndsWithImageTrigger = React.useCallback((raw: string) => {
     const text = String(raw || "").replace(/\u00a0/g, " ").replace(/\r/g, "");
     const trimmedEnd = text.replace(/[ \t\n]+$/g, "");
-    return /S$/.test(trimmedEnd);
+    return /[Ss]$/.test(trimmedEnd);
   }, []);
 
   const removeTrailingImageTrigger = React.useCallback(() => {
@@ -337,6 +337,13 @@ export default function GeneralInfoDetailModal({
       });
     }
   }, [textEndsWithImageTrigger]);
+
+  const openFactImageInsertPanel = React.useCallback(() => {
+    setShowFactImageInsert(true);
+    requestAnimationFrame(() => {
+      factImagePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }, []);
 
   const insertFactImageFiles = React.useCallback((files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
@@ -636,22 +643,31 @@ export default function GeneralInfoDetailModal({
                 }}>
                   {needsManualFactCheck ? "팩트체크 작성 필요" : (item.factCheckStatus || "확인 전")}
                 </span>
-                <button
-                  type="button"
-                  className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                  onClick={() => {
-                    const status = String(item.factCheckStatus || "확인 전").trim();
-                    const summary = htmlToPlainText(String(item.factCheckSummary || "").trim())
-                      || String(item.factCheckSummary || "").trim();
-                    void copyPlainText([`[Fact Check 상태] ${status}`, summary].filter(Boolean).join("\n\n"), "fact");
-                  }}
-                >
-                  {copyFeedback === "fact" ? "✅ 복사됨" : "📋 전체 복사"}
-                </button>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                    onClick={openFactImageInsertPanel}
+                  >
+                    🖼 이미지 추가
+                  </button>
+                  <button
+                    type="button"
+                    className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                    onClick={() => {
+                      const status = String(item.factCheckStatus || "확인 전").trim();
+                      const summary = htmlToPlainText(String(item.factCheckSummary || "").trim())
+                        || String(item.factCheckSummary || "").trim();
+                      void copyPlainText([`[Fact Check 상태] ${status}`, summary].filter(Boolean).join("\n\n"), "fact");
+                    }}
+                  >
+                    {copyFeedback === "fact" ? "✅ 복사됨" : "📋 전체 복사"}
+                  </button>
+                </div>
               </div>
 
               <p className="generalInfoFactCheckHint">
-                문자 끝에 S → 이미지 입력 · 보고서/공유에 함께 표시
+                문장/문단 끝에 S(또는 s) 입력, 또는 [이미지 추가] 버튼 → 사진 선택
               </p>
 
               <label className="generalInfoFactCheckStatusLabel">
@@ -681,7 +697,8 @@ export default function GeneralInfoDetailModal({
                 onInput={checkFactImageTrigger}
                 onKeyUp={checkFactImageTrigger}
                 onBlur={checkFactImageTrigger}
-                data-placeholder="AI 검증 보고서 또는 수동 Fact Check를 작성하세요. 끝에 S를 붙이면 이미지를 넣을 수 있습니다."
+                onCompositionEnd={checkFactImageTrigger}
+                data-placeholder="AI 검증 보고서 또는 수동 Fact Check를 작성하세요. 끝에 S(또는 s)를 붙이거나 [이미지 추가]를 누르세요."
                 style={{
                   display: "block",
                   width: "100%",
