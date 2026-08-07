@@ -8,7 +8,7 @@
 
 import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
-import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText } from "../lib/generalInfoHelpers";
+import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, makeGeneralInfoMediaItem } from "../lib/generalInfoHelpers";
 import { Card, EmptyState } from "./SharedComponents";
 
 export interface Chapter3InfoProps {
@@ -177,6 +177,50 @@ export function Chapter3Info({
       };
     });
   }, [normalizeGeneralInfoMediaItems, setGeneralInfoDraft]);
+
+  const handleSetBodyImageAsRepresentative = React.useCallback((src: string) => {
+    const url = String(src || "").trim();
+    if (!url) return;
+    setGeneralInfoDraft((prev) => {
+      const items = normalizeGeneralInfoMediaItems(prev);
+      const existingIndex = items.findIndex(
+        (media) => media.preview === url || media.fileUrl === url,
+      );
+      let updated: GeneralInfoMediaItem[];
+      if (existingIndex === 0) return prev;
+      if (existingIndex > 0) {
+        updated = [...items];
+        const [picked] = updated.splice(existingIndex, 1);
+        updated = [picked, ...updated];
+      } else {
+        updated = [makeGeneralInfoMediaItem("본문 이미지", "image", url), ...items];
+      }
+      const main = updated[0];
+      return {
+        ...prev,
+        fileName: main?.name || prev.fileName,
+        filePreview: main?.preview || prev.filePreview,
+        fileType: main?.type || "image",
+        mediaItems: updated,
+      };
+    });
+  }, [normalizeGeneralInfoMediaItems, setGeneralInfoDraft]);
+
+  const collectBodyImageSrcs = React.useMemo(() => {
+    const liveHtml = String(generalInfoRichTextRef.current?.innerHTML || "");
+    return extractGeneralInfoBodyImageSrcs(
+      liveHtml,
+      generalInfoDraft.formattedTextHtml,
+      generalInfoRichTextInitialHtml,
+    );
+  }, [
+    generalInfoDraft.formattedTextHtml,
+    generalInfoDraft.mediaItems,
+    generalInfoRichTextEditorKey,
+    generalInfoRichTextInitialHtml,
+    generalInfoRichTextRef,
+    showTextImageInsert,
+  ]);
   const [showSourceUrlHelp, setShowSourceUrlHelp] = React.useState(false);
   const [showTextImageInsert, setShowTextImageInsert] = React.useState(false);
   const [copyFeedback, setCopyFeedback] = React.useState<"text" | "fact" | null>(null);
@@ -910,7 +954,63 @@ export function Chapter3Info({
                   URL에서 대표 이미지를 찾지 못했거나 아직 이미지를 추가하지 않았습니다.
                   웹페이지나 사진앱에서 이미지를 복사한 뒤
                   [클립보드에서 일반 정보 붙여넣기]를 누르면 대표 이미지로 등록됩니다.
+                  또는 아래 본문 이미지에서 선택할 수 있습니다.
                 </p>
+              </div>
+            )}
+
+            {collectBodyImageSrcs.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <strong style={{ display: "block", marginBottom: 8, fontSize: 13, color: "#7dd3fc" }}>
+                  본문 이미지에서 대표 선택
+                </strong>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
+                    gap: 10,
+                  }}
+                >
+                  {collectBodyImageSrcs.map((src, index) => {
+                    const coverItems = normalizeGeneralInfoMediaItems(generalInfoDraft);
+                    const isRep =
+                      coverItems[0] &&
+                      (coverItems[0].preview === src || coverItems[0].fileUrl === src);
+                    return (
+                      <div
+                        key={`collect-body-img-${index}`}
+                        style={{
+                          border: isRep
+                            ? "2px solid #facc15"
+                            : "1px solid rgba(148, 163, 184, 0.28)",
+                          borderRadius: 12,
+                          overflow: "hidden",
+                          background: "rgba(2, 6, 23, 0.55)",
+                        }}
+                      >
+                        <img
+                          src={src}
+                          alt={`본문 이미지 ${index + 1}`}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            height: 96,
+                            objectFit: "cover",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="secondaryButton smallActionButton"
+                          style={{ width: "100%", borderRadius: 0, fontSize: 11 }}
+                          disabled={Boolean(isRep)}
+                          onClick={() => handleSetBodyImageAsRepresentative(src)}
+                        >
+                          {isRep ? "★ 대표" : "★ 대표로 설정"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

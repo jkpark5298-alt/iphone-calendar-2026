@@ -7014,11 +7014,60 @@ body {
   letter-spacing: -0.02em;
 }
 
+.generalInfoRichTextEditor.generalInfoFactCheckEditor,
 .generalInfoFactCheckEditor {
-  min-height: 420px !important;
-  max-height: 72vh !important;
+  min-height: 280px !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
   font-size: 16px !important;
   line-height: 1.85 !important;
+  color: #f1f5f9 !important;
+}
+
+/* PC: 내부 스크롤에 본문이 가두지 않음 → 상세 모달 스크롤로 전체 보고서 확인 */
+@media (min-width: 761px) {
+  .generalInfoDetailModal {
+    width: min(920px, calc(100vw - 40px));
+    max-height: min(92vh, 900px);
+  }
+
+  .generalInfoRichTextEditor.generalInfoFactCheckEditor,
+  .generalInfoFactCheckEditor {
+    min-height: 320px !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .generalInfoFactCheckPanel {
+    overflow: visible !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .generalInfoRichTextEditor.generalInfoFactCheckEditor,
+  .generalInfoFactCheckEditor {
+    min-height: 260px !important;
+    max-height: 60vh !important;
+    overflow-y: auto !important;
+  }
+}
+
+.generalInfoFactCheckEditor h1,
+.generalInfoFactCheckEditor h2,
+.generalInfoFactCheckEditor h3,
+.generalInfoFactCheckEditor h4,
+.generalInfoFactCheckEditor h5,
+.generalInfoFactCheckEditor h6,
+.generalInfoFactCheckEditor p,
+.generalInfoFactCheckEditor div,
+.generalInfoFactCheckEditor span,
+.generalInfoFactCheckEditor li,
+.generalInfoFactCheckEditor strong,
+.generalInfoFactCheckEditor b,
+.generalInfoFactCheckEditor em,
+.generalInfoFactCheckEditor font {
+  color: #e2e8f0 !important;
 }
 
 .generalInfoFactCheckEditor img.generalInfoInlineImage,

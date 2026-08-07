@@ -34,7 +34,7 @@ type GeneralInfoPayload = {
 };
 
 const MAX_TEXT_LENGTH = 50000;
-const MAX_FACT_CHECK_SUMMARY_LENGTH = 200000;
+const MAX_FACT_CHECK_SUMMARY_LENGTH = 1_000_000;
 const MAX_KEYWORDS = 30;
 const MAX_INPUT_TYPES = 8;
 const MAX_MEDIA_ITEMS = 20;

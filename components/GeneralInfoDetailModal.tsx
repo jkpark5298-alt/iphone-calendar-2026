@@ -18,6 +18,9 @@ import {
   hasDisplayableAiReport,
   makeGeneralInfoMediaItem,
   normalizeGeneralInfoMediaItems,
+  salvageFactCheckHtml,
+  extractGeneralInfoBodyImageSrcs,
+  looksLikeHtmlContent,
 } from "../lib/generalInfoHelpers";
 import type { GeneralInfoMediaItem } from "../lib/generalInfoHelpers";
 import React from "react";
@@ -244,6 +247,8 @@ interface Props {
     text: string,
     status: GeneralInfoItem["factCheckStatus"],
   ) => void;
+  /** Fact Check 인라인 이미지를 Storage에 올리고 https URL 반환 */
+  onUploadInlineImage?: (file: File) => Promise<string>;
 }
 
 export default function GeneralInfoDetailModal({
@@ -262,6 +267,7 @@ export default function GeneralInfoDetailModal({
   startInEditMode = false,
   onSaveItemEdit,
   onSaveManualFactCheck,
+  onUploadInlineImage,
 }: Props) {
   const [copyFeedback, setCopyFeedback] = React.useState<"text" | "fact" | null>(null);
   const [isEditing, setIsEditing] = React.useState(Boolean(startInEditMode));
@@ -289,7 +295,7 @@ export default function GeneralInfoDetailModal({
   const factImageInsertLockRef = React.useRef(false);
 
   const factInitialHtml = React.useMemo(() => {
-    const raw = String(item.factCheckSummary || "").trim();
+    const raw = salvageFactCheckHtml(String(item.factCheckSummary || "").trim());
     if (!raw || !hasDisplayableAiReport(raw)) return "";
     // 인라인 이미지가 있는 편집 HTML은 그대로 유지
     if (/<(?:img|video)\b[^>]*\bsrc=/i.test(raw)) {
@@ -301,9 +307,15 @@ export default function GeneralInfoDetailModal({
     return buildFactCheckReportHtml(raw, []);
   }, [item.factCheckSummary]);
 
+  const factReportLooksTruncated = React.useMemo(() => {
+    const plain = htmlToPlainText(factInitialHtml || String(item.factCheckSummary || "")).trim();
+    if (!plain) return false;
+    // 제목만 남고 본문이 거의 없으면 잘린 것으로 간주
+    return plain.length < 80 && /AI 검증 보고서/i.test(plain);
+  }, [factInitialHtml, item.factCheckSummary]);
+
   React.useEffect(() => {
     setManualFactStatus(item.factCheckStatus || "확인 필요");
-    setFactEditorKey((prev) => prev + 1);
     setShowFactImageInsert(false);
     setEditTitle(item.title || "");
     setEditSummary(item.summary || "");
@@ -315,13 +327,19 @@ export default function GeneralInfoDetailModal({
     setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
     setBodyEditorKey((prev) => prev + 1);
     setIsEditing(Boolean(startInEditMode));
+    // 항목이 바뀌거나 저장된 보고서가 바뀌면 편집기만 갱신 (불필요한 초기화 최소화)
+    setFactEditorKey((prev) => prev + 1);
   }, [item.id, item.factCheckSummary, item.factCheckStatus, needsManualFactCheck, startInEditMode]);
 
   React.useEffect(() => {
-    if (factRichTextRef.current) {
-      factRichTextRef.current.innerHTML = factInitialHtml;
-      enhanceInlineImageBlocks(factRichTextRef.current);
-      bindInlineImageRemoveHandler(factRichTextRef.current);
+    const editor = factRichTextRef.current;
+    if (!editor) return;
+    // key 변경으로 새 노드가 오면 dataset.hydrated가 없으므로 ref 콜백에서 채움.
+    // 동일 노드에서 factInitialHtml만 바뀐 경우 여기서 동기화.
+    if (editor.dataset.hydrated === "1" && editor.innerHTML !== factInitialHtml) {
+      editor.innerHTML = factInitialHtml;
+      enhanceInlineImageBlocks(editor);
+      bindInlineImageRemoveHandler(editor);
     }
   }, [factEditorKey, factInitialHtml]);
 
@@ -403,6 +421,16 @@ export default function GeneralInfoDetailModal({
     factImageInsertLockRef.current = true;
 
     const afterNode = removeTrailingImageTrigger();
+    let savedRange: Range | null = null;
+    const selection = window.getSelection();
+    if (
+      !afterNode &&
+      selection &&
+      selection.rangeCount > 0 &&
+      factRichTextRef.current?.contains(selection.anchorNode)
+    ) {
+      savedRange = selection.getRangeAt(0).cloneRange();
+    }
     const list = dedupeImageFiles(files instanceof FileList ? Array.from(files) : files);
     const mediaFiles = list.filter(
       (file) =>
@@ -417,21 +445,39 @@ export default function GeneralInfoDetailModal({
 
     void (async () => {
       try {
-        const loaded = await readFilesAsDataUrls(mediaFiles);
         const editor = factRichTextRef.current;
-        if (editor) {
-          insertInlineMediaIntoEditor(
-            editor,
-            loaded
-              .filter((entry) => entry.dataUrl)
-              .map(({ file, dataUrl }) => ({
-                src: dataUrl,
-                name: file.name,
-                type: "image" as const,
-              })),
-            { afterNode },
-          );
+        if (!editor) return;
+
+        // data URL 대신 Storage https URL로 삽입 → 본문 중간/끝 모두 잘리지 않음
+        const uploaded: Array<{ src: string; name: string; type: "image" }> = [];
+        for (const [index, file] of mediaFiles.entries()) {
+          let src = "";
+          if (onUploadInlineImage) {
+            try {
+              src = String(await onUploadInlineImage(file) || "").trim();
+            } catch (error) {
+              console.error("factcheck image upload failed", error);
+            }
+          }
+          if (!src) {
+            // 업로드 불가 시에만 임시 data URL (저장 직전 재업로드)
+            const loaded = await readFilesAsDataUrls([file]);
+            src = String(loaded[0]?.dataUrl || "").trim();
+          }
+          if (!src) continue;
+          uploaded.push({
+            src,
+            name: file.name || `factcheck-image-${index + 1}.jpg`,
+            type: "image",
+          });
         }
+
+        if (!uploaded.length) {
+          alert("이미지 업로드에 실패했습니다. 네트워크/Storage를 확인한 뒤 다시 시도해 주세요.");
+          return;
+        }
+
+        insertInlineMediaIntoEditor(editor, uploaded, { afterNode, range: savedRange });
       } catch (error) {
         console.error("factcheck inline image insert failed", error);
         alert("이미지를 Fact Check에 넣지 못했습니다.");
@@ -440,7 +486,7 @@ export default function GeneralInfoDetailModal({
         factImageInsertLockRef.current = false;
       }
     })();
-  }, [removeTrailingImageTrigger]);
+  }, [onUploadInlineImage, removeTrailingImageTrigger]);
 
   const handleFactImagePaste = React.useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -528,6 +574,56 @@ export default function GeneralInfoDetailModal({
   const removeEditMediaItem = React.useCallback((index: number) => {
     setEditMediaItems((prev) => prev.filter((_, i) => i !== index));
   }, []);
+
+  const applyBodyImageAsRepresentative = React.useCallback(
+    async (src: string) => {
+      const url = String(src || "").trim();
+      if (!url) return;
+
+      const current = isEditing ? editMediaItems : getGeneralInfoDisplayMediaItems(item);
+      const existingIndex = current.findIndex(
+        (media) => media.preview === url || media.fileUrl === url,
+      );
+      let nextMedia: GeneralInfoMediaItem[];
+      if (existingIndex === 0) {
+        return;
+      }
+      if (existingIndex > 0) {
+        nextMedia = [...current];
+        const [picked] = nextMedia.splice(existingIndex, 1);
+        nextMedia = [picked, ...nextMedia];
+      } else {
+        nextMedia = [makeGeneralInfoMediaItem("본문 이미지", "image", url), ...current];
+      }
+
+      setEditMediaItems(nextMedia);
+
+      // 수정 모드 중이면 저장은 사용자가 [변경 저장]으로 (다른 편집 내용 보호)
+      if (isEditing || !onSaveItemEdit) {
+        setIsEditing(true);
+        return;
+      }
+
+      const main = nextMedia[0];
+      await onSaveItemEdit({
+        ...item,
+        mediaItems: nextMedia,
+        filePreview: main?.preview || "",
+        fileName: main?.name || "본문 이미지",
+      });
+    },
+    [editMediaItems, isEditing, item, onSaveItemEdit],
+  );
+
+  const [bodyImageTick, setBodyImageTick] = React.useState(0);
+  const bodyImageSrcs = React.useMemo(() => {
+    const liveBodyHtml = isEditing ? String(bodyRichTextRef.current?.innerHTML || "") : "";
+    return extractGeneralInfoBodyImageSrcs(
+      liveBodyHtml,
+      item.formattedTextHtml,
+      looksLikeHtmlContent(item.text || "") ? item.text : "",
+    );
+  }, [isEditing, item.formattedTextHtml, item.text, bodyEditorKey, bodyImageTick]);
 
   const saveAllEdits = React.useCallback(async () => {
     const bodyHtml = String(bodyRichTextRef.current?.innerHTML || item.formattedTextHtml || "").trim();
@@ -735,6 +831,27 @@ export default function GeneralInfoDetailModal({
               </div>
             ) : null}
 
+            {factReportLooksTruncated ? (
+              <div
+                style={{
+                  marginTop: 10,
+                  marginBottom: 8,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "1px solid rgba(251, 191, 36, 0.45)",
+                  background: "rgba(245, 158, 11, 0.12)",
+                  color: "#fde68a",
+                  fontSize: 13,
+                  lineHeight: 1.55,
+                  fontWeight: 600,
+                }}
+              >
+                보고서 본문이 비어 있거나 이전에 잘린 상태입니다. 하단{" "}
+                <strong>[AI 검증 보고서]</strong>로 다시 생성하세요. 이미지는 본문 중간·끝 어디에나
+                S 또는 [이미지 추가]로 넣을 수 있습니다.
+              </div>
+            ) : null}
+
             {needsManualFactCheck ? (
               <div style={{
                 marginTop: "10px",
@@ -825,7 +942,7 @@ export default function GeneralInfoDetailModal({
               </div>
 
               <p className="generalInfoFactCheckHint">
-                굵게·밑줄·글자색·①~⑩으로 보고서 본문을 편집할 수 있습니다. 문장 끝 S(또는 s) 또는 [이미지 추가]로 사진 삽입.
+                굵게·밑줄·글자색·①~⑩으로 보고서 본문을 편집할 수 있습니다. 원하는 위치 문장 끝 S(또는 s) 또는 [이미지 추가]로 사진을 삽입합니다(중간·끝 모두 가능).
               </p>
 
               <label className="generalInfoFactCheckStatusLabel">
@@ -846,7 +963,15 @@ export default function GeneralInfoDetailModal({
 
               <div
                 key={factEditorKey}
-                ref={factRichTextRef}
+                ref={(node) => {
+                  factRichTextRef.current = node;
+                  if (node && factInitialHtml && !node.dataset.hydrated) {
+                    node.innerHTML = factInitialHtml;
+                    enhanceInlineImageBlocks(node);
+                    bindInlineImageRemoveHandler(node);
+                    node.dataset.hydrated = "1";
+                  }
+                }}
                 className="generalInfoRichTextEditor generalInfoFactCheckEditor"
                 contentEditable
                 suppressContentEditableWarning
@@ -860,9 +985,9 @@ export default function GeneralInfoDetailModal({
                 style={{
                   display: "block",
                   width: "100%",
-                  minHeight: 420,
-                  maxHeight: "72vh",
-                  overflowY: "auto",
+                  minHeight: 280,
+                  maxHeight: "none",
+                  overflow: "visible",
                   boxSizing: "border-box",
                   borderRadius: 14,
                   border: "1px solid rgba(56, 189, 248, 0.55)",
@@ -1072,6 +1197,64 @@ export default function GeneralInfoDetailModal({
                 맨 앞(★ 대표) 이미지가 대표 이미지입니다. 저장을 눌러야 반영됩니다.
               </p>
             )}
+
+            {bodyImageSrcs.length > 0 && (
+              <div className="generalInfoBodyImagePickBox" style={{ marginTop: 14 }}>
+                <strong style={{ display: "block", marginBottom: 8, fontSize: 13, color: "#7dd3fc" }}>
+                  본문 이미지에서 대표 선택
+                </strong>
+                <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
+                  본문 TEXT에 넣은 사진을 대표 이미지로 쓸 수 있습니다.
+                </p>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+                    gap: 10,
+                  }}
+                >
+                  {bodyImageSrcs.map((src, index) => {
+                    const isRep =
+                      mediaItems[0] &&
+                      (mediaItems[0].preview === src || mediaItems[0].fileUrl === src);
+                    return (
+                      <div
+                        key={`body-img-${index}`}
+                        style={{
+                          border: isRep
+                            ? "2px solid #facc15"
+                            : "1px solid rgba(148, 163, 184, 0.28)",
+                          borderRadius: 12,
+                          overflow: "hidden",
+                          background: "rgba(2, 6, 23, 0.55)",
+                        }}
+                      >
+                        <img
+                          src={src}
+                          alt={`본문 이미지 ${index + 1}`}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            height: 100,
+                            objectFit: "cover",
+                            background: "#020617",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="secondaryButton smallActionButton"
+                          style={{ width: "100%", borderRadius: 0, fontSize: 11 }}
+                          disabled={Boolean(isRep)}
+                          onClick={() => void applyBodyImageAsRepresentative(src)}
+                        >
+                          {isRep ? "★ 대표" : "★ 대표로 설정"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 2 : 1 }}>
@@ -1122,6 +1305,7 @@ export default function GeneralInfoDetailModal({
                 suppressContentEditableWarning
                 role="textbox"
                 tabIndex={0}
+                onInput={() => setBodyImageTick((prev) => prev + 1)}
                 data-placeholder="본문 TEXT를 수정하세요. 이미지에 ×로 삭제할 수 있습니다."
                 style={{
                   display: "block",

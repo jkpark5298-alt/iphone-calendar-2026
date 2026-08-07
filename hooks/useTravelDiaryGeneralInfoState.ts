@@ -6,7 +6,7 @@ import { persistGeneralInfoItemsToLocalStorage, readGeneralInfoItemsFromLocalSto
 import { supabase } from "../lib/supabaseClient";
 
 
-import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, extractTitleFromPlainText, formatReportHtmlForPdf, isFullAiVerificationReport, buildAiReportFromBodyContent, hasDisplayableAiReport } from "../lib/generalInfoHelpers";
+import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, extractTitleFromPlainText, formatReportHtmlForPdf, isFullAiVerificationReport, buildAiReportFromBodyContent, hasDisplayableAiReport, salvageFactCheckHtml } from "../lib/generalInfoHelpers";
 
 
 const TRAVEL_DIARY_BUCKET = "info-photos";
@@ -1080,6 +1080,12 @@ export function useTravelDiaryGeneralInfoState({
     return new File([blob], fileName, { type: blob.type });
   }, []);
 
+  /** Fact Check / 보고서 인라인 이미지 → Storage https URL (본문 중간 삽입·저장 시 잘림 방지) */
+  const uploadGeneralInfoInlineImageFile = useCallback(async (file: File) => {
+    const result = await uploadFileToSupabaseStorage(file);
+    return result.fileUrl;
+  }, []);
+
   const uploadGeneralInfoMediaItemsToSupabaseStorage = useCallback(async (
     draftMediaItems: GeneralInfoMediaItem[]
   ): Promise<GeneralInfoMediaItem[]> => {
@@ -1418,7 +1424,7 @@ export function useTravelDiaryGeneralInfoState({
     }
     const mainMedia = uploadedMediaItems[0];
 
-    let factCheckSummary = String(updatedItem.factCheckSummary || "");
+    let factCheckSummary = salvageFactCheckHtml(String(updatedItem.factCheckSummary || ""));
     const dataSrcs = extractMediaSrcFromHtml(factCheckSummary).filter((src) => src.startsWith("data:"));
     if (dataSrcs.length > 0) {
       showPasteHint(`보고서 이미지 ${dataSrcs.length}장 업로드 중...`);
@@ -1440,7 +1446,17 @@ export function useTravelDiaryGeneralInfoState({
       if (replacements.length > 0) {
         factCheckSummary = replaceHtmlMediaSources(factCheckSummary, replacements);
       }
+      const stillData = extractMediaSrcFromHtml(factCheckSummary).filter((src) =>
+        src.startsWith("data:"),
+      );
+      if (stillData.length > 0) {
+        showPasteHint(
+          `⚠️ 보고서 이미지 ${stillData.length}장 업로드 실패로 저장을 취소했습니다. 본문은 유지됩니다.`,
+        );
+        return;
+      }
     }
+    factCheckSummary = salvageFactCheckHtml(factCheckSummary);
 
     const nextItem: GeneralInfoItem = {
       ...targetItem,
@@ -1575,13 +1591,13 @@ export function useTravelDiaryGeneralInfoState({
     const targetItem = generalInfoItems.find((item) => item.id === itemId);
     if (!targetItem) return;
 
-    let trimmed = String(text || "").trim();
+    let trimmed = salvageFactCheckHtml(String(text || "").trim());
     if (!trimmed) {
       showPasteHint("⚠️ Fact Check 내용을 입력해 주세요.");
       return;
     }
 
-    // 인라인 data: 이미지는 Storage로 올린 뒤 https로 바꿔 저장 (길이 제한·로컬 용량 문제 방지)
+    // 인라인 data: 이미지는 Storage https로 교체. 실패 시 저장 자체를 취소해 본문이 잘리지 않게 함.
     const dataSrcs = extractMediaSrcFromHtml(trimmed).filter((src) => src.startsWith("data:"));
     if (dataSrcs.length > 0) {
       showPasteHint(`이미지 ${dataSrcs.length}장 업로드 중...`);
@@ -1600,6 +1616,19 @@ export function useTravelDiaryGeneralInfoState({
       if (replacements.length > 0) {
         trimmed = replaceHtmlMediaSources(trimmed, replacements);
       }
+      const stillData = extractMediaSrcFromHtml(trimmed).filter((src) => src.startsWith("data:"));
+      if (stillData.length > 0) {
+        showPasteHint(
+          `⚠️ 이미지 ${stillData.length}장 업로드 실패로 저장을 취소했습니다. 본문은 그대로 있으니 다시 저장해 주세요.`,
+        );
+        return;
+      }
+    }
+
+    trimmed = salvageFactCheckHtml(trimmed);
+    if (!trimmed) {
+      showPasteHint("⚠️ 저장할 보고서 본문이 없습니다.");
+      return;
     }
 
     const updatedItem: GeneralInfoItem = {
@@ -2522,6 +2551,7 @@ export function useTravelDiaryGeneralInfoState({
     markGeminiApiPacketsAvailable,
     markGeminiApiPacketsDepleted,
     handleSaveManualFactCheck,
+    uploadGeneralInfoInlineImageFile,
     handleStartEditGeneralInfo,
     handleCancelEditGeneralInfo,
     handleUpdateGeneralInfoExtraNote,

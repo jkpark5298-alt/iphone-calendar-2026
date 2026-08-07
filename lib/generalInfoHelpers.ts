@@ -206,6 +206,55 @@ export const extractMediaSrcFromHtml = (html: string): string[] => {
   return found;
 };
 
+/** 본문 TEXT(및 선택적 HTML)에 들어 있는 이미지 URL 목록 */
+export const extractGeneralInfoBodyImageSrcs = (
+  ...htmlParts: Array<string | undefined | null>
+): string[] => {
+  const found: string[] = [];
+  htmlParts.forEach((part) => {
+    extractMediaSrcFromHtml(String(part || "")).forEach((src) => {
+      if (!/^(https?:\/\/|data:|blob:)/i.test(src)) return;
+      if (src.startsWith("data:") && src.length < 64) return;
+      if (!found.includes(src)) found.push(src);
+    });
+  });
+  return found;
+};
+
+/**
+ * 잘린 data: 이미지 태그(닫는 따옴표 없음)가 이후 본문을 삼키지 않도록
+ * 깨진 미디어 태그 이전까지만 남기거나, 완성된 data: 미디어 블록을 제거한다.
+ */
+export const salvageFactCheckHtml = (html: string): string => {
+  let raw = String(html || "");
+  if (!raw) return "";
+
+  // 닫히지 않은 data: src 미디어 태그 → 그 이전만 유지 (이후는 속성값으로 먹힌 상태)
+  const brokenRe = /<(?:img|video)\b[^>]*\bsrc=["']data:/gi;
+  let match: RegExpExecArray | null;
+  while ((match = brokenRe.exec(raw)) !== null) {
+    const fromTag = raw.slice(match.index);
+    const properlyClosed = /^<(?:img|video)\b[^>]*\bsrc=["']data:[^"']{32,}["'][^>]*>/i.test(fromTag);
+    if (!properlyClosed) {
+      raw = raw.slice(0, match.index).trim();
+      break;
+    }
+  }
+
+  return raw;
+};
+
+/** 저장용: data: 인라인 이미지는 제거(업로드 실패 잔여분). https 이미지는 유지. */
+export const stripDataMediaFromHtml = (html: string): string => {
+  let next = salvageFactCheckHtml(html);
+  next = next.replace(
+    /<div[^>]*class=["'][^"']*generalInfoInlineImageBlock[^"']*["'][^>]*>[\s\S]*?<\/div>/gi,
+    (block) => (/src=["']data:/i.test(block) ? "" : block),
+  );
+  next = next.replace(/<(?:img|video)\b[^>]*\bsrc=["']data:[^"']*["'][^>]*\/?>/gi, "");
+  return next.trim();
+};
+
 export const findInlineImageTrigger = (
   editor: HTMLElement,
 ): { textNode: Text; start: number; end: number } | null => {
@@ -319,7 +368,7 @@ export const collectClipboardImageFiles = (clipboardData: DataTransfer | null): 
 export const insertInlineMediaIntoEditor = (
   editor: HTMLElement,
   items: Array<{ src: string; name?: string; type?: "image" | "video" }>,
-  options?: { afterNode?: Node | null },
+  options?: { afterNode?: Node | null; range?: Range | null },
 ) => {
   if (!editor || !items.length) return;
 
@@ -334,6 +383,7 @@ export const insertInlineMediaIntoEditor = (
   if (!uniqueItems.length) return;
 
   let insertAfter: Node | null = options?.afterNode || null;
+  let pendingRange = !insertAfter && options?.range ? options.range : null;
 
   uniqueItems.forEach((item) => {
     const block = document.createElement("div");
@@ -365,6 +415,18 @@ export const insertInlineMediaIntoEditor = (
     if (insertAfter && insertAfter.parentNode) {
       insertAfter.parentNode.insertBefore(block, insertAfter.nextSibling);
       insertAfter = block;
+      pendingRange = null;
+    } else if (pendingRange) {
+      try {
+        pendingRange.deleteContents();
+        pendingRange.insertNode(block);
+        pendingRange.setStartAfter(block);
+        pendingRange.collapse(true);
+      } catch {
+        editor.appendChild(block);
+      }
+      insertAfter = block;
+      pendingRange = null;
     } else {
       editor.appendChild(block);
       insertAfter = block;
@@ -578,36 +640,36 @@ export const markdownReportToHtml = (markdown: string) => {
 
     if (line.startsWith("### ")) {
       parts.push(
-        `<h5 style="margin:18px 0 10px;font-size:15px;font-weight:800;line-height:1.45;">${escapeGeneralInfoHtml(line.slice(4))}</h5>`,
+        `<h5 style="margin:18px 0 10px;font-size:15px;font-weight:800;line-height:1.45;color:#f1f5f9;">${escapeGeneralInfoHtml(line.slice(4))}</h5>`,
       );
       return;
     }
     if (line.startsWith("## ")) {
       parts.push(
-        `<h4 style="margin:22px 0 10px;padding-top:4px;border-top:1px solid #e5e7eb;font-size:16px;font-weight:800;line-height:1.45;">${escapeGeneralInfoHtml(line.slice(3))}</h4>`,
+        `<h4 style="margin:22px 0 10px;padding-top:4px;border-top:1px solid rgba(148,163,184,0.35);font-size:16px;font-weight:800;line-height:1.45;color:#e0f2fe;">${escapeGeneralInfoHtml(line.slice(3))}</h4>`,
       );
       return;
     }
     if (line.startsWith("# ")) {
       parts.push(
-        `<h3 style="margin:8px 0 14px;font-size:18px;font-weight:800;line-height:1.4;">${escapeGeneralInfoHtml(line.slice(2))}</h3>`,
+        `<h3 style="margin:8px 0 14px;font-size:18px;font-weight:800;line-height:1.4;color:#f8fafc;">${escapeGeneralInfoHtml(line.slice(2))}</h3>`,
       );
       return;
     }
     if (line.startsWith("- ") || line.startsWith("* ")) {
       parts.push(
-        `<div style="margin:0 0 8px;padding-left:10px;line-height:1.8;">• ${escapeGeneralInfoHtml(line.slice(2).trim())}</div>`,
+        `<div style="margin:0 0 8px;padding-left:10px;line-height:1.8;color:#e2e8f0;">• ${escapeGeneralInfoHtml(line.slice(2).trim())}</div>`,
       );
       return;
     }
     if (/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/.test(line)) {
       parts.push(
-        `<div style="margin:14px 0 8px;line-height:1.85;font-weight:700;">${escapeGeneralInfoHtml(line)}</div>`,
+        `<div style="margin:14px 0 8px;line-height:1.85;font-weight:700;color:#f1f5f9;">${escapeGeneralInfoHtml(line)}</div>`,
       );
       return;
     }
     parts.push(
-      `<div style="margin:0 0 10px;line-height:1.85;">${escapeGeneralInfoHtml(line)}</div>`,
+      `<div style="margin:0 0 10px;line-height:1.85;color:#e2e8f0;">${escapeGeneralInfoHtml(line)}</div>`,
     );
   });
 

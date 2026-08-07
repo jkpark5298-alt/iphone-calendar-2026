@@ -8500,6 +8500,7 @@ ${photo.memoText}
           startInEditMode={infoState.generalInfoDetailEditMode}
           onSaveItemEdit={infoState.handleSaveGeneralInfoDetailEdit}
           onSaveManualFactCheck={infoState.handleSaveManualFactCheck}
+          onUploadInlineImage={infoState.uploadGeneralInfoInlineImageFile}
         />
       )}
   
