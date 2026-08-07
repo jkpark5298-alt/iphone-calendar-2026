@@ -2962,6 +2962,7 @@ textarea {
 
 .calendar-mark-c { background: #914141; color: #fff; }
 .calendar-mark-a { background: #2f80ed; color: #fff; }
+.calendar-mark-dang { background: #e67e22; color: #fff; }
 .calendar-mark-night { background: #f2c94c; color: #2b2412; }
 .calendar-mark-union { background: #f2a7c8; color: #402030; }
 .calendar-mark-rest { background: #e53935; color: #fff; }
@@ -2994,9 +2995,36 @@ textarea {
 
 .mark-type-c { background: #914141; color: #fff; }
 .mark-type-a { background: #2f80ed; color: #fff; }
+.mark-type-dang { background: #e67e22; color: #fff; }
 .mark-type-night { background: #f2c94c; color: #2b2412; }
 .mark-type-union { background: #f2a7c8; color: #402030; }
 .mark-type-rest { background: #e53935; color: #fff; }
+
+.work-schedule-import-box {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.work-schedule-import-box strong {
+  display: block;
+  color: #e0f2fe;
+  font-size: 14px;
+}
+
+.work-schedule-import-label {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.work-schedule-import-label input[type="file"] {
+  max-width: 220px;
+  font-size: 12px;
+}
 
 .mark-plus-option {
   display: flex;
