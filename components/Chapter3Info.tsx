@@ -8,7 +8,7 @@
 
 import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
-import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger } from "../lib/generalInfoHelpers";
+import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles } from "../lib/generalInfoHelpers";
 import { Card, EmptyState } from "./SharedComponents";
 
 export interface Chapter3InfoProps {
@@ -291,7 +291,7 @@ export function Chapter3Info({
     if (!files || files.length === 0) return;
     const afterNode = removeTrailingImageTrigger();
 
-    const list = files instanceof FileList ? Array.from(files) : files;
+    const list = dedupeImageFiles(files instanceof FileList ? Array.from(files) : files);
     const mediaFiles = list.filter(
       (file) =>
         file.type.startsWith("image/") ||
@@ -322,9 +322,7 @@ export function Chapter3Info({
           syncGeneralInfoRichTextToDraft();
         }
 
-        const transfer = new DataTransfer();
-        mediaFiles.forEach((file) => transfer.items.add(file));
-        handleGeneralInfoFileUpload(transfer.files);
+        // 본문 인라인 삽입만 수행 (갤러리 중복 추가하지 않음)
       } catch (error) {
         console.error("inline image insert failed", error);
         alert("이미지를 본문 TEXT에 넣지 못했습니다. 다시 시도해 주세요.");
@@ -332,28 +330,12 @@ export function Chapter3Info({
         setShowTextImageInsert(false);
       }
     })();
-  }, [generalInfoRichTextRef, handleGeneralInfoFileUpload, removeTrailingImageTrigger, syncGeneralInfoRichTextToDraft]);
+  }, [generalInfoRichTextRef, removeTrailingImageTrigger, syncGeneralInfoRichTextToDraft]);
 
   const handleTextImageInsertPaste = React.useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    const clipboardData = event.clipboardData;
-    const pastedFiles: File[] = [];
-    if (clipboardData?.files?.length) {
-      Array.from(clipboardData.files).forEach((file) => {
-        if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-          pastedFiles.push(file);
-        }
-      });
-    }
-    if (clipboardData?.items) {
-      Array.from(clipboardData.items).forEach((item) => {
-        if (item.kind === "file" && (item.type.startsWith("image/") || item.type.startsWith("video/"))) {
-          const file = item.getAsFile();
-          if (file) pastedFiles.push(file);
-        }
-      });
-    }
+    const pastedFiles = collectClipboardImageFiles(event.clipboardData);
     if (pastedFiles.length > 0) {
       insertImageFilesFromTextTrigger(pastedFiles);
     }

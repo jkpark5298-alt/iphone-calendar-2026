@@ -8483,7 +8483,7 @@ ${photo.memoText}
       {infoState.selectedGeneralInfoItem && (
         <GeneralInfoDetailModal
           item={infoState.selectedGeneralInfoItem}
-          onClose={() => infoState.setGeneralInfoDetailId(null)}
+          onClose={infoState.handleCloseGeneralInfoDetail}
           onGenerateReport={infoState.handleGenerateGeneralInfoReport}
           onDownloadPdfReport={infoState.handleDownloadGeneralInfoPdfReport}
           onEdit={infoState.handleStartEditGeneralInfo}
@@ -8495,6 +8495,8 @@ ${photo.memoText}
           needsManualFactCheck={
             infoState.generalInfoManualFactCheckId === infoState.selectedGeneralInfoItem.id
           }
+          startInEditMode={infoState.generalInfoDetailEditMode}
+          onSaveItemEdit={infoState.handleSaveGeneralInfoDetailEdit}
           onSaveManualFactCheck={infoState.handleSaveManualFactCheck}
         />
       )}

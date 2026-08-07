@@ -55,6 +55,7 @@ export function useTravelDiaryGeneralInfoState({
   const [generalInfoSearchTerm, setGeneralInfoSearchTerm] = useState("");
   const [isExtractingGeneralInfoUrl, setIsExtractingGeneralInfoUrl] = useState(false);
   const [generalInfoDetailId, setGeneralInfoDetailId] = useState<number | null>(null);
+  const [generalInfoDetailEditMode, setGeneralInfoDetailEditMode] = useState(false);
   const [generalInfoActiveTab, setGeneralInfoActiveTab] = useState<"storage" | "collect">("storage");
   const [generalInfoEditingId, setGeneralInfoEditingId] = useState<number | null>(null);
   const [isCollectingGeneralInfoClipboard, setIsCollectingGeneralInfoClipboard] = useState(false);
@@ -1210,56 +1211,43 @@ export function useTravelDiaryGeneralInfoState({
   ]);
 
   const handleStartEditGeneralInfo = useCallback((item: GeneralInfoItem) => {
-    setGeneralInfoImageLoadFailed(false);
-    setGeneralInfoEditingId(item.id);
-    setGeneralInfoDetailId(null);
-    setGeneralInfoActiveTab("collect"); // 수정 시 자동으로 수집 탭 전환
+    // 상세보기에서 바로 수정 (수집 탭으로 이동하지 않음)
+    setGeneralInfoDetailEditMode(true);
+    setGeneralInfoDetailId(item.id);
+    setGeneralInfoActiveTab("storage");
+    showPasteHint("✏️ 상세보기에서 자료를 수정할 수 있습니다.");
+  }, [showPasteHint]);
 
-    setGeneralInfoKeywordText(
-      (item.keywords || []).map((keyword) => `#${String(keyword).replace(/^#+/, "")}`).join(", "),
-    );
+  const handleSaveGeneralInfoDetailEdit = useCallback(async (updatedItem: GeneralInfoItem) => {
+    const targetItem = generalInfoItems.find((item) => item.id === updatedItem.id);
+    if (!targetItem) return;
 
-    resetGeneralInfoRichTextEditor(
-      item.text || "",
-      String(item.formattedTextHtml || ""),
-    );
+    const nextItem: GeneralInfoItem = {
+      ...targetItem,
+      ...updatedItem,
+      id: targetItem.id,
+      createdAt: targetItem.createdAt,
+      confirmed: true,
+      extraNote: targetItem.extraNote || updatedItem.extraNote || "",
+    };
 
-    setGeneralInfoDraft({
-      title: item.title || "",
-      text: item.text || "",
-      sourceUrl: item.sourceUrl || "",
-      fileName: item.fileName || "",
-      filePreview: item.filePreview || "",
-      mediaItems: normalizeGeneralInfoMediaItems(item),
-      fileType: item.inputTypes.includes("video")
-        ? "video"
-        : item.inputTypes.includes("image")
-          ? "image"
-          : "none",
-      formattedTextHtml: String(item.formattedTextHtml || ""),
-      primaryCategory: item.primaryCategory || "",
-      secondaryCategory: item.secondaryCategory || "",
-      thirdCategory: item.thirdCategory || "",
-      keywords: item.keywords || [],
-      summary: item.summary || "",
-      factCheckStatus: item.factCheckStatus || "확인 전",
-      factCheckSummary: item.factCheckSummary || "",
+    setGeneralInfoItems((prev) => {
+      const nextItems = prev.map((item) => (item.id === nextItem.id ? nextItem : item));
+      try {
+        persistGeneralInfoItemsToLocalStorage(nextItems);
+      } catch {}
+      return nextItems;
     });
 
-    showPasteHint("✏️ 저장된 일반 정보를 수정 모드로 불러왔습니다.");
+    setGeneralInfoDetailEditMode(false);
+    showPasteHint("✅ 일반 정보 수정을 저장했습니다.");
+    await syncGeneralInfoItemToSupabase(nextItem, "PUT");
+  }, [generalInfoItems, showPasteHint, syncGeneralInfoItemToSupabase]);
 
-    // Scroll to the edit form and focus the title input for direct editing
-    setTimeout(() => {
-      const editForm = document.querySelector(".generalInfoLayoutGrid .leftColumn");
-      if (editForm) {
-        editForm.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-      const titleInput = document.querySelector(".generalInfoLayoutGrid input[placeholder*='정보 제목']");
-      if (titleInput instanceof HTMLInputElement) {
-        titleInput.focus();
-      }
-    }, 120);
-  }, [resetGeneralInfoRichTextEditor, showPasteHint]);
+  const handleCloseGeneralInfoDetail = useCallback(() => {
+    setGeneralInfoDetailId(null);
+    setGeneralInfoDetailEditMode(false);
+  }, []);
 
   const handleCancelEditGeneralInfo = useCallback(() => {
     setGeneralInfoImageLoadFailed(false);
@@ -2064,6 +2052,10 @@ export function useTravelDiaryGeneralInfoState({
     setIsExtractingGeneralInfoUrl,
     generalInfoDetailId,
     setGeneralInfoDetailId,
+    generalInfoDetailEditMode,
+    setGeneralInfoDetailEditMode,
+    handleCloseGeneralInfoDetail,
+    handleSaveGeneralInfoDetailEdit,
     generalInfoActiveTab,
     setGeneralInfoActiveTab,
     generalInfoEditingId,

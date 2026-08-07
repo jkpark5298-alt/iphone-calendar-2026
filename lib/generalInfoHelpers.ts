@@ -278,6 +278,41 @@ export const removeInlineImageTrigger = (editor: HTMLElement | null) => {
   return host || textNode;
 };
 
+/** 같은 파일을 files+items 등으로 두 번 받지 않도록 중복 제거 */
+export const dedupeImageFiles = (files: File[]): File[] => {
+  const seen = new Set<string>();
+  const out: File[] = [];
+  for (const file of files) {
+    const key = `${file.name}|${file.size}|${file.lastModified}|${file.type}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(file);
+  }
+  return out;
+};
+
+/** 클립보드에서 이미지 File만 수집 (files/items 중복 제거) */
+export const collectClipboardImageFiles = (clipboardData: DataTransfer | null): File[] => {
+  if (!clipboardData) return [];
+  const collected: File[] = [];
+  if (clipboardData.files?.length) {
+    Array.from(clipboardData.files).forEach((file) => {
+      if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+        collected.push(file);
+      }
+    });
+  }
+  if (clipboardData.items) {
+    Array.from(clipboardData.items).forEach((item) => {
+      if (item.kind !== "file") return;
+      if (!(item.type.startsWith("image/") || item.type.startsWith("video/"))) return;
+      const file = item.getAsFile();
+      if (file) collected.push(file);
+    });
+  }
+  return dedupeImageFiles(collected);
+};
+
 export const insertInlineMediaIntoEditor = (
   editor: HTMLElement,
   items: Array<{ src: string; name?: string; type?: "image" | "video" }>,
@@ -285,9 +320,19 @@ export const insertInlineMediaIntoEditor = (
 ) => {
   if (!editor || !items.length) return;
 
+  const uniqueItems: Array<{ src: string; name?: string; type?: "image" | "video" }> = [];
+  const seenSrc = new Set<string>();
+  for (const item of items) {
+    const src = String(item.src || "").trim();
+    if (!src || seenSrc.has(src)) continue;
+    seenSrc.add(src);
+    uniqueItems.push(item);
+  }
+  if (!uniqueItems.length) return;
+
   let insertAfter: Node | null = options?.afterNode || null;
 
-  items.forEach((item) => {
+  uniqueItems.forEach((item) => {
     const block = document.createElement("div");
     block.className = "generalInfoInlineImageBlock";
 

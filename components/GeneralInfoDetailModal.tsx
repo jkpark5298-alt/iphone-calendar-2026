@@ -13,8 +13,11 @@ import {
   bindInlineImageRemoveHandler,
   editorHasInlineImageTrigger,
   removeInlineImageTrigger,
+  dedupeImageFiles,
+  collectClipboardImageFiles,
 } from "../lib/generalInfoHelpers";
 import React from "react";
+import { generalInfoCategories } from "../lib/generalInfoMock";
 
 function getAiVerificationReportLabel(factCheckSummary?: string, model?: string) {
   const fromModel = String(model || "").trim();
@@ -218,7 +221,7 @@ interface Props {
   onClose: () => void;
   onGenerateReport: (item: GeneralInfoItem) => void;
   onDownloadPdfReport: (item: GeneralInfoItem) => void;
-  onEdit: (item: GeneralInfoItem) => void;
+  onEdit?: (item: GeneralInfoItem) => void;
   onDelete?: (item: GeneralInfoItem) => void;
   onSavePdf?: (item: GeneralInfoItem) => void;
   onShareReport?: (item: GeneralInfoItem) => void;
@@ -226,6 +229,8 @@ interface Props {
   isGeneratingReport?: boolean;
   isExportingPdf?: boolean;
   needsManualFactCheck?: boolean;
+  startInEditMode?: boolean;
+  onSaveItemEdit?: (item: GeneralInfoItem) => void | Promise<void>;
   onSaveManualFactCheck?: (
     itemId: number,
     text: string,
@@ -246,31 +251,52 @@ export default function GeneralInfoDetailModal({
   isGeneratingReport = false,
   isExportingPdf = false,
   needsManualFactCheck = false,
+  startInEditMode = false,
+  onSaveItemEdit,
   onSaveManualFactCheck,
 }: Props) {
   const [copyFeedback, setCopyFeedback] = React.useState<"text" | "fact" | null>(null);
+  const [isEditing, setIsEditing] = React.useState(Boolean(startInEditMode));
+  const [editTitle, setEditTitle] = React.useState(item.title || "");
+  const [editSummary, setEditSummary] = React.useState(item.summary || "");
+  const [editSourceUrl, setEditSourceUrl] = React.useState(item.sourceUrl || "");
+  const [editPrimary, setEditPrimary] = React.useState(item.primaryCategory || "");
+  const [editSecondary, setEditSecondary] = React.useState(item.secondaryCategory || "");
+  const [editThird, setEditThird] = React.useState(item.thirdCategory || "");
+  const [editKeywordsText, setEditKeywordsText] = React.useState(
+    (item.keywords || []).join(", "),
+  );
   const [manualFactStatus, setManualFactStatus] =
     React.useState<GeneralInfoItem["factCheckStatus"]>("확인 필요");
   const [showFactImageInsert, setShowFactImageInsert] = React.useState(false);
   const [factEditorKey, setFactEditorKey] = React.useState(0);
+  const [bodyEditorKey, setBodyEditorKey] = React.useState(0);
+  const bodyRichTextRef = React.useRef<HTMLDivElement | null>(null);
   const factRichTextRef = React.useRef<HTMLDivElement | null>(null);
   const factImageFileRef = React.useRef<HTMLInputElement | null>(null);
+  const factImageInsertLockRef = React.useRef(false);
 
   const factInitialHtml = React.useMemo(() => {
     const raw = String(item.factCheckSummary || "").trim();
     if (!raw) return "";
-    if (looksLikeHtmlContent(raw)) return raw;
-    const evidenceUrls = getGeneralInfoDisplayMediaItems(item)
-      .map((media) => String(media.preview || media.fileUrl || "").trim())
-      .filter(Boolean);
-    return buildFactCheckReportHtml(raw, evidenceUrls);
-  }, [item]);
+    // 대표 이미지를 자동으로 붙이지 않음(수동 S 삽입과 중복 방지)
+    return looksLikeHtmlContent(raw) ? raw : buildFactCheckReportHtml(raw, []);
+  }, [item.factCheckSummary]);
 
   React.useEffect(() => {
     setManualFactStatus(item.factCheckStatus || "확인 필요");
     setFactEditorKey((prev) => prev + 1);
     setShowFactImageInsert(false);
-  }, [item.id, item.factCheckSummary, item.factCheckStatus, needsManualFactCheck]);
+    setEditTitle(item.title || "");
+    setEditSummary(item.summary || "");
+    setEditSourceUrl(item.sourceUrl || "");
+    setEditPrimary(item.primaryCategory || "");
+    setEditSecondary(item.secondaryCategory || "");
+    setEditThird(item.thirdCategory || "");
+    setEditKeywordsText((item.keywords || []).join(", "));
+    setBodyEditorKey((prev) => prev + 1);
+    setIsEditing(Boolean(startInEditMode));
+  }, [item.id, item.factCheckSummary, item.factCheckStatus, needsManualFactCheck, startInEditMode]);
 
   React.useEffect(() => {
     if (factRichTextRef.current) {
@@ -279,6 +305,13 @@ export default function GeneralInfoDetailModal({
       bindInlineImageRemoveHandler(factRichTextRef.current);
     }
   }, [factEditorKey, factInitialHtml]);
+
+  React.useEffect(() => {
+    if (!isEditing || !bodyRichTextRef.current) return;
+    bodyRichTextRef.current.innerHTML = getGeneralInfoFormattedHtml(item);
+    enhanceInlineImageBlocks(bodyRichTextRef.current);
+    bindInlineImageRemoveHandler(bodyRichTextRef.current);
+  }, [isEditing, bodyEditorKey, item]);
 
   const factImagePanelRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -307,14 +340,18 @@ export default function GeneralInfoDetailModal({
 
   const insertFactImageFiles = React.useCallback((files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
+    if (factImageInsertLockRef.current) return;
+    factImageInsertLockRef.current = true;
+
     const afterNode = removeTrailingImageTrigger();
-    const list = files instanceof FileList ? Array.from(files) : files;
+    const list = dedupeImageFiles(files instanceof FileList ? Array.from(files) : files);
     const mediaFiles = list.filter(
       (file) =>
         file.type.startsWith("image/") ||
         /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || ""),
     );
     if (!mediaFiles.length) {
+      factImageInsertLockRef.current = false;
       alert("이미지 파일을 선택해 주세요.");
       return;
     }
@@ -341,6 +378,7 @@ export default function GeneralInfoDetailModal({
         alert("이미지를 Fact Check에 넣지 못했습니다.");
       } finally {
         setShowFactImageInsert(false);
+        factImageInsertLockRef.current = false;
       }
     })();
   }, [removeTrailingImageTrigger]);
@@ -348,21 +386,7 @@ export default function GeneralInfoDetailModal({
   const handleFactImagePaste = React.useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    const clipboardData = event.clipboardData;
-    const pastedFiles: File[] = [];
-    if (clipboardData?.files?.length) {
-      Array.from(clipboardData.files).forEach((file) => {
-        if (file.type.startsWith("image/")) pastedFiles.push(file);
-      });
-    }
-    if (clipboardData?.items) {
-      Array.from(clipboardData.items).forEach((item) => {
-        if (item.kind === "file" && item.type.startsWith("image/")) {
-          const file = item.getAsFile();
-          if (file) pastedFiles.push(file);
-        }
-      });
-    }
+    const pastedFiles = collectClipboardImageFiles(event.clipboardData);
     if (pastedFiles.length > 0) insertFactImageFiles(pastedFiles);
   }, [insertFactImageFiles]);
 
@@ -374,6 +398,69 @@ export default function GeneralInfoDetailModal({
     }
     onSaveManualFactCheck?.(item.id, html, manualFactStatus);
   }, [item.id, manualFactStatus, onSaveManualFactCheck]);
+
+  const beginEditing = React.useCallback(() => {
+    setIsEditing(true);
+  }, []);
+
+  const cancelEditing = React.useCallback(() => {
+    setEditTitle(item.title || "");
+    setEditSummary(item.summary || "");
+    setEditSourceUrl(item.sourceUrl || "");
+    setEditPrimary(item.primaryCategory || "");
+    setEditSecondary(item.secondaryCategory || "");
+    setEditThird(item.thirdCategory || "");
+    setEditKeywordsText((item.keywords || []).join(", "));
+    setManualFactStatus(item.factCheckStatus || "확인 필요");
+    setBodyEditorKey((prev) => prev + 1);
+    setFactEditorKey((prev) => prev + 1);
+    setIsEditing(false);
+  }, [item]);
+
+  const saveAllEdits = React.useCallback(async () => {
+    const bodyHtml = String(bodyRichTextRef.current?.innerHTML || item.formattedTextHtml || "").trim();
+    const bodyText = htmlToPlainText(bodyHtml) || String(item.text || "");
+    const factHtml = String(factRichTextRef.current?.innerHTML || "").trim();
+    const keywords = editKeywordsText
+      .split(/[,，#\n]+/)
+      .map((k) => k.trim().replace(/^#+/, ""))
+      .filter(Boolean);
+
+    const updated: GeneralInfoItem = {
+      ...item,
+      title: editTitle.trim() || item.title,
+      summary: editSummary.trim(),
+      sourceUrl: editSourceUrl.trim() || undefined,
+      primaryCategory: editPrimary.trim() || item.primaryCategory,
+      secondaryCategory: editSecondary.trim() || item.secondaryCategory,
+      thirdCategory: editThird.trim() || item.thirdCategory,
+      keywords,
+      text: bodyText,
+      formattedTextHtml: bodyHtml,
+      factCheckStatus: manualFactStatus,
+      factCheckSummary: factHtml || item.factCheckSummary,
+    };
+
+    if (onSaveItemEdit) {
+      await onSaveItemEdit(updated);
+    } else if (factHtml) {
+      onSaveManualFactCheck?.(item.id, factHtml, manualFactStatus);
+    }
+    setIsEditing(false);
+  }, [
+    bodyRichTextRef,
+    editKeywordsText,
+    editPrimary,
+    editSecondary,
+    editSourceUrl,
+    editSummary,
+    editThird,
+    editTitle,
+    item,
+    manualFactStatus,
+    onSaveItemEdit,
+    onSaveManualFactCheck,
+  ]);
 
   const detailBodyRef = React.useRef<HTMLDivElement | null>(null);
   const hasAiReport = Boolean(String(item?.factCheckSummary || "").trim());
@@ -432,9 +519,30 @@ export default function GeneralInfoDetailModal({
         }}
       >
         <div className="modalHeader">
-          <div>
-            <span>일반 정보 상세보기</span>
-            <h3>{item.title}</h3>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span>일반 정보 상세보기{isEditing ? " · 수정" : ""}</span>
+            {isEditing ? (
+              <input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="제목"
+                style={{
+                  display: "block",
+                  width: "100%",
+                  marginTop: 6,
+                  boxSizing: "border-box",
+                  borderRadius: 10,
+                  border: "1px solid rgba(56, 189, 248, 0.45)",
+                  background: "#020617",
+                  color: "#e2e8f0",
+                  padding: "10px 12px",
+                  fontSize: 16,
+                  fontWeight: 700,
+                }}
+              />
+            ) : (
+              <h3>{item.title}</h3>
+            )}
           </div>
           <button className="iconButton" type="button" onClick={onClose}>
             ×
@@ -670,21 +778,72 @@ export default function GeneralInfoDetailModal({
 
           <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 2 : 1 }}>
             <strong>요약</strong>
-            <p>{item.summary || "요약 없음"}</p>
+            {isEditing ? (
+              <textarea
+                value={editSummary}
+                onChange={(e) => setEditSummary(e.target.value)}
+                rows={4}
+                placeholder="요약을 입력하세요"
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  borderRadius: 10,
+                  border: "1px solid rgba(148, 163, 184, 0.35)",
+                  background: "#020617",
+                  color: "#e2e8f0",
+                  padding: "10px 12px",
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                  resize: "vertical",
+                }}
+              />
+            ) : (
+              <p>{item.summary || "요약 없음"}</p>
+            )}
           </section>
 
           <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 3 : 2 }}>
             <div className="generalInfoSectionTitleRow">
               <strong>본문 TEXT</strong>
-              <button
-                type="button"
-                className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                onClick={() => void copyPlainText(item.text || "", "text")}
-              >
-                {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
-              </button>
+              {!isEditing && (
+                <button
+                  type="button"
+                  className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                  onClick={() => void copyPlainText(item.text || "", "text")}
+                >
+                  {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
+                </button>
+              )}
             </div>
-            {item.text || item.formattedTextHtml ? (
+            {isEditing ? (
+              <div
+                key={bodyEditorKey}
+                ref={bodyRichTextRef}
+                className="generalInfoRichTextEditor"
+                contentEditable
+                suppressContentEditableWarning
+                role="textbox"
+                tabIndex={0}
+                data-placeholder="본문 TEXT를 수정하세요. 이미지에 ×로 삭제할 수 있습니다."
+                style={{
+                  display: "block",
+                  width: "100%",
+                  minHeight: 180,
+                  maxHeight: 420,
+                  overflowY: "auto",
+                  boxSizing: "border-box",
+                  borderRadius: 14,
+                  border: "1px solid rgba(56, 189, 248, 0.45)",
+                  background: "#020617",
+                  color: "#e2e8f0",
+                  padding: "14px 15px",
+                  fontSize: 14,
+                  lineHeight: 1.75,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              />
+            ) : item.text || item.formattedTextHtml ? (
               <div
                 className="generalInfoFormattedTextView"
                 dangerouslySetInnerHTML={{
@@ -698,25 +857,70 @@ export default function GeneralInfoDetailModal({
 
           <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 4 : 3 }}>
             <strong>분류</strong>
-            <p>
-              {[item.primaryCategory, item.secondaryCategory, item.thirdCategory].filter(Boolean).join(" > ") || "분류 없음"}
-            </p>
+            {isEditing ? (
+              <div style={{ display: "grid", gap: 8 }}>
+                <select
+                  value={editPrimary}
+                  onChange={(e) => setEditPrimary(e.target.value)}
+                  className="generalInfoFactCheckStatusSelect"
+                >
+                  <option value="">1차 분류</option>
+                  {generalInfoCategories.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <input
+                  value={editSecondary}
+                  onChange={(e) => setEditSecondary(e.target.value)}
+                  placeholder="2차 분류"
+                  className="generalInfoFactCheckStatusSelect"
+                />
+                <input
+                  value={editThird}
+                  onChange={(e) => setEditThird(e.target.value)}
+                  placeholder="3차 분류"
+                  className="generalInfoFactCheckStatusSelect"
+                />
+              </div>
+            ) : (
+              <p>
+                {[item.primaryCategory, item.secondaryCategory, item.thirdCategory].filter(Boolean).join(" > ") || "분류 없음"}
+              </p>
+            )}
           </section>
 
           <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 5 : 4 }}>
             <strong>키워드</strong>
-            <div className="miniTags">
-              {item.keywords.length > 0 ? (
-                item.keywords.map((keyword) => <span key={keyword}>{keyword}</span>)
-              ) : (
-                <span>키워드 없음</span>
-              )}
-            </div>
+            {isEditing ? (
+              <input
+                value={editKeywordsText}
+                onChange={(e) => setEditKeywordsText(e.target.value)}
+                placeholder="키워드를 쉼표로 구분"
+                className="generalInfoFactCheckStatusSelect"
+                style={{ width: "100%" }}
+              />
+            ) : (
+              <div className="miniTags">
+                {item.keywords.length > 0 ? (
+                  item.keywords.map((keyword) => <span key={keyword}>{keyword}</span>)
+                ) : (
+                  <span>키워드 없음</span>
+                )}
+              </div>
+            )}
           </section>
 
           <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 6 : 5 }}>
             <strong>출처 URL</strong>
-            {item.sourceUrl ? (
+            {isEditing ? (
+              <input
+                value={editSourceUrl}
+                onChange={(e) => setEditSourceUrl(e.target.value)}
+                placeholder="https://"
+                className="generalInfoFactCheckStatusSelect"
+                style={{ width: "100%" }}
+              />
+            ) : item.sourceUrl ? (
               <a
                 href={item.sourceUrl}
                 target="_blank"
@@ -737,7 +941,7 @@ export default function GeneralInfoDetailModal({
         </div>
 
         <div className="modalFooter">
-          {item.factCheckSummary && onShareReport && (
+          {item.factCheckSummary && onShareReport && !isEditing && (
             <button
               className="secondaryButton"
               type="button"
@@ -746,31 +950,54 @@ export default function GeneralInfoDetailModal({
               공유하기
             </button>
           )}
-          <button
-            className="secondaryButton"
-            type="button"
-            disabled={isGeneratingReport || isExportingPdf}
-            onClick={() => onGenerateReport(item)}
-          >
-            {isGeneratingReport ? "작성 중…" : "AI 검증 보고서"}
-          </button>
-          <button
-            className="secondaryButton"
-            type="button"
-            disabled={isGeneratingReport || isExportingPdf || !item.factCheckSummary}
-            onClick={() => onDownloadPdfReport(item)}
-            style={{ borderColor: "rgba(74, 222, 128, 0.45)", color: "#bbf7d0" }}
-          >
-            {isExportingPdf ? "PDF 생성 중…" : "PDF보고서"}
-          </button>
-          <button
-            className="primaryButton"
-            type="button"
-            onClick={() => onEdit(item)}
-          >
-            수정
-          </button>
-          {onDelete && (
+          {!isEditing && (
+            <button
+              className="secondaryButton"
+              type="button"
+              disabled={isGeneratingReport || isExportingPdf}
+              onClick={() => onGenerateReport(item)}
+            >
+              {isGeneratingReport ? "작성 중…" : "AI 검증 보고서"}
+            </button>
+          )}
+          {!isEditing && (
+            <button
+              className="secondaryButton"
+              type="button"
+              disabled={isGeneratingReport || isExportingPdf || !item.factCheckSummary}
+              onClick={() => onDownloadPdfReport(item)}
+              style={{ borderColor: "rgba(74, 222, 128, 0.45)", color: "#bbf7d0" }}
+            >
+              {isExportingPdf ? "PDF 생성 중…" : "PDF보고서"}
+            </button>
+          )}
+          {isEditing ? (
+            <>
+              <button
+                className="primaryButton"
+                type="button"
+                onClick={() => void saveAllEdits()}
+              >
+                변경 저장
+              </button>
+              <button
+                className="secondaryButton"
+                type="button"
+                onClick={cancelEditing}
+              >
+                편집 취소
+              </button>
+            </>
+          ) : (
+            <button
+              className="primaryButton"
+              type="button"
+              onClick={beginEditing}
+            >
+              수정
+            </button>
+          )}
+          {onDelete && !isEditing && (
             <button
               className="secondaryButton"
               style={{ color: "#ef4444" }}
