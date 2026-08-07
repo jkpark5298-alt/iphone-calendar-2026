@@ -558,6 +558,23 @@ export function Chapter3Info({
               <button type="button" className="generalInfoRichColorBlue" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#60a5fa")}>● 파랑</button>
               <button type="button" className="generalInfoRichColorGreen" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#4ade80")}>● 초록</button>
             </div>
+            <div
+              className="generalInfoRichToolbar generalInfoCircledNumberToolbar"
+              aria-label="원형 번호 삽입"
+            >
+              {["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"].map((mark) => (
+                <button
+                  key={mark}
+                  type="button"
+                  className="generalInfoCircledNumberBtn"
+                  title={`${mark} 삽입`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleGeneralInfoRichCommand("insertText", mark)}
+                >
+                  {mark}
+                </button>
+              ))}
+            </div>
 
             <div
               key={generalInfoRichTextEditorKey}

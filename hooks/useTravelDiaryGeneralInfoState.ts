@@ -516,7 +516,24 @@ export function useTravelDiaryGeneralInfoState({
 
   const handleGeneralInfoRichCommand = useCallback((command: string, value?: string) => {
     generalInfoRichTextRef.current?.focus();
-    document.execCommand(command, false, value);
+    if (command === "insertText" && value) {
+      const ok = document.execCommand("insertText", false, value);
+      if (!ok) {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(document.createTextNode(value));
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } else if (generalInfoRichTextRef.current) {
+          generalInfoRichTextRef.current.appendChild(document.createTextNode(value));
+        }
+      }
+    } else {
+      document.execCommand(command, false, value);
+    }
     syncGeneralInfoRichTextToDraft();
   }, [syncGeneralInfoRichTextToDraft]);
 

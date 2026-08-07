@@ -352,6 +352,27 @@ export default function GeneralInfoDetailModal({
     });
   }, []);
 
+  const insertFactPlainText = React.useCallback((text: string) => {
+    const editor = factRichTextRef.current;
+    if (!editor || !text) return;
+    editor.focus();
+    const ok = document.execCommand("insertText", false, text);
+    if (!ok) {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(document.createTextNode(text));
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } else {
+        editor.appendChild(document.createTextNode(text));
+      }
+    }
+    checkFactImageTrigger();
+  }, [checkFactImageTrigger]);
+
   const insertFactImageFiles = React.useCallback((files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     if (factImageInsertLockRef.current) return;
@@ -683,8 +704,27 @@ export default function GeneralInfoDetailModal({
                 </div>
               </div>
 
+              <div
+                className="generalInfoRichToolbar generalInfoCircledNumberToolbar"
+                aria-label="원형 번호 삽입"
+                style={{ marginTop: 8 }}
+              >
+                {["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"].map((mark) => (
+                  <button
+                    key={mark}
+                    type="button"
+                    className="generalInfoCircledNumberBtn"
+                    title={`${mark} 삽입`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => insertFactPlainText(mark)}
+                  >
+                    {mark}
+                  </button>
+                ))}
+              </div>
+
               <p className="generalInfoFactCheckHint">
-                문장/문단 끝에 S(또는 s) 입력, 또는 [이미지 추가] 버튼 → 사진 선택
+                문장/문단 끝에 S(또는 s) 입력, 또는 [이미지 추가] 버튼 → 사진 선택. 번호 버튼으로 ①~⑩ 삽입.
               </p>
 
               <label className="generalInfoFactCheckStatusLabel">

@@ -10221,6 +10221,21 @@ body {
   transform: translateY(0) !important;
 }
 
+.generalInfoCircledNumberToolbar {
+  margin-top: 0 !important;
+}
+
+.generalInfoCircledNumberToolbar .generalInfoCircledNumberBtn,
+.generalInfoCircledNumberBtn {
+  min-width: 40px !important;
+  min-height: 36px !important;
+  padding: 6px 8px !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: #7dd3fc !important;
+  border-color: rgba(56, 189, 248, 0.4) !important;
+}
+
 .generalInfoRichColorDefault {
   color: #e5e7eb !important;
 }

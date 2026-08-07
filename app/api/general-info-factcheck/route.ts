@@ -7,6 +7,7 @@ import {
   clientIpFromRequest,
   getServerGeminiApiKey,
 } from "../../../lib/apiSecurity";
+import { normalizeReportPlainText } from "../../../lib/generalInfoHelpers";
 
 type FactCheckRequest = {
   title?: string;
@@ -351,21 +352,22 @@ export async function POST(request: NextRequest) {
 
 작업 목표:
 1. 본문 TEXT, 인라인 이미지, 첨부 이미지/PDF, 출처 URL, 요약/메모를 검토한다.
-2. 주장 / 근거 / 미확인을 분리해 적는다.
+2. 주장 / 근거 / 미확인을 반드시 분리해 적는다. (쉬운 요약 문장만 나열하지 말 것)
 3. 근거를 적을 때는 반드시 출처를 표시한다.
 4. 초등학생도 이해할 수 있게 쉽게 쓰되, 확인하지 못한 내용은 지어내지 않는다.
 
-검증 기준:
-1. 원문 충실도: 자료에 있는 내용만 요약. 없는 숫자·인명·날짜를 만들지 말 것.
+검증 기준 (반드시 준수):
+1. 원문 충실도: 자료에 있는 내용만 사용. 없는 숫자·인명·날짜를 만들지 말 것.
 2. 주장 vs 근거 분리: (1) 자료가 말하는 것 (2) 뒷받침 근거 (3) 아직 확인 안 된 것.
 3. 검증 가능 항목만 확인: 날짜·수치·기관명·인명·인용은 원문/이미지와 대조.
-4. 이미지 역할 명시: 사진이 무엇을 보여주는지 1~2문장. 못 읽으면 "사진 내용 직접 확인 필요".
-5. 상태값: "확인 완료" | "확인 필요" | "오류 가능성"
-   - 확인 완료: 저장 자료만으로 핵심이 일치
-   - 확인 필요: 근거 부족, URL 미대조, 이미지 미판독
-   - 오류 가능성: 본문 모순, 과장, 출처 불명
+4. 이미지 역할 명시: 사진이 무엇을 보여주는지 1~2문장. 없거나 못 읽으면 "이미지 없음/직접 확인 필요".
+5. 상태값 규칙 (보수적으로):
+   - "확인 완료": 본문·이미지·URL 등 복수 근거가 서로 모순 없이 핵심을 뒷받침할 때만.
+   - "확인 필요": 근거가 본문 TEXT뿐인 경우, URL 미대조, 이미지 미판독, 수치·날짜 추가 확인이 필요한 경우. (기본값으로 우선 고려)
+   - "오류 가능성": 본문 모순, 과장, 출처 불명.
 6. 출처 신뢰도는 보수적으로: URL/매체명을 "신뢰한다"고 단정하지 말고 "출처 표시됨 / 추가 확인 권장"으로 적을 것.
 7. 실시간 뉴스·위키 검색으로 진실을 판정한 것처럼 쓰지 말 것.
+8. "## 8. 더 확인이 필요한 내용"에는 최소 1개 이상 미확인/추가확인 항목을 적을 것. (없으면 "현재 저장 자료 범위에서는 추가 확인 항목 없음"이라고 명시)
 
 근거 출처 표시 규칙 (매우 중요):
 - 본문 TEXT 근거: (출처: 본문 TEXT)
@@ -374,30 +376,41 @@ export async function POST(request: NextRequest) {
 - 요약/메모 근거: (출처: 요약) / (출처: 추가 메모)
 - 한 문장에 근거가 있으면 문장 끝에 출처를 붙인다.
 
-중요 원칙:
-1. 읽을 수 있는 이미지는 반드시 검토하고 근거로 사용한다.
-2. 확인하지 못한 내용은 "추가 확인 필요"라고 쓴다.
-3. 출처 URL이 있으면 "원문 대조 필요" 또는 "출처 확인 필요"로 표시한다.
-4. 결과는 반드시 JSON만 출력한다.
+출력 형식 규칙 (매우 중요):
+1. 결과는 반드시 JSON 객체만 출력한다. 마크다운 코드펜스(\`\`\`)나 설명문을 붙이지 않는다.
+2. result 값은 보고서 본문 문자열이다. JSON 전체를 result에 넣지 않는다.
+3. 섹션 제목은 반드시 같은 줄에 쓴다. 예: "## 1. 이 자료의 주제"
+   - 금지 예: "##" 다음 줄에 "1. 이 자료의 주제"
+4. 각 섹션(## 1. ~ ## 9.) 사이에는 빈 줄을 넣는다.
+5. 불릿은 "* " 형식으로 한 줄에 하나씩 쓴다.
 
 JSON 형식:
 {
   "status": "확인 완료 또는 확인 필요 또는 오류 가능성",
   "summary": "저장함 카드에 표시할 1~2문장 요약",
-  "result": "쉬운 AI 검증 보고서 전체 내용"
+  "result": "AI 검증 보고서 전체 본문"
 }
 
-보고서 result 형식:
+보고서 result 형식 예시:
 # AI 검증 보고서
 ## 1. 이 자료의 주제
+(내용)
 ## 2. 자료가 말하는 핵심 내용
+(내용)
 ## 3. 자료 속 주장
+* 주장1 (출처: 본문 TEXT)
 ## 4. 구체적인 근거 (각 근거 끝에 출처 표시)
+* 근거1 (출처: 본문 TEXT)
 ## 5. 이미지에서 확인한 내용 (출처: 이미지 n)
+(내용)
 ## 6. 초등학생도 이해할 수 있는 쉬운 설명
+(내용)
 ## 7. 확인된 내용
+* 확인1 (출처: 본문 TEXT)
 ## 8. 더 확인이 필요한 내용
+* 추가 확인1
 ## 9. 정리
+(내용)
 
 검토 자료:
 제목: ${payload.title || "제목 없음"}
@@ -405,6 +418,7 @@ JSON 형식:
 키워드: ${Array.isArray(payload.keywords) ? payload.keywords.join(", ") : "없음"}
 자료 구성: ${payload.mediaSummary || "자료 구성 정보 없음"}
 첨부 이미지 수: ${inlineParts.length}
+출처 URL 존재: ${payload.sourceUrl ? "예" : "아니오"}
 
 ${sourceText || "저장된 본문 자료가 부족합니다."}
 `;
@@ -436,8 +450,9 @@ ${sourceText || "저장된 본문 자료가 부족합니다."}
                 },
               ],
               generationConfig: {
-                temperature: 0.25,
+                temperature: 0.2,
                 maxOutputTokens: 4096,
+                responseMimeType: "application/json",
               },
             }),
           },
@@ -501,18 +516,49 @@ ${sourceText || "저장된 본문 자료가 부족합니다."}
       parsed = null;
     }
 
+    const extractResultText = (value: unknown): string => {
+      if (typeof value !== "string") return "";
+      let text = value.trim();
+      if (!text) return "";
+
+      // 실수로 JSON 전체가 result로 들어온 경우 result 필드만 추출
+      if (/^\s*\{/.test(text) && /"result"\s*:/.test(text)) {
+        try {
+          const asJson = JSON.parse(
+            text.replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim(),
+          ) as { result?: unknown };
+          if (typeof asJson.result === "string" && asJson.result.trim()) {
+            text = asJson.result.trim();
+          }
+        } catch {
+          const match = text.match(/"result"\s*:\s*"((?:\\.|[^"\\])*)"/);
+          if (match?.[1]) {
+            try {
+              text = JSON.parse(`"${match[1]}"`);
+            } catch {
+              text = match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+            }
+          }
+        }
+      }
+
+      return normalizeReportPlainText(text);
+    };
+
     const wrapAiVerificationReport = (resultText: string, model: string) => {
       const label = `AI 검증 보고서(${model})`;
-      const body = String(resultText || "").trim();
+      const body = extractResultText(resultText);
       if (!body) return `# ${label}`;
       if (/AI 검증 보고서\([^)]+\)/i.test(body)) {
-        return body.replace(/AI 검증 보고서\([^)]+\)/i, label);
+        return normalizeReportPlainText(
+          body.replace(/AI 검증 보고서\([^)]+\)/i, label),
+        );
       }
       if (body.startsWith("# ")) {
         const withoutFirstTitle = body.replace(/^#\s+[^\n]*\n?/, "").trim();
-        return `# ${label}\n\n${withoutFirstTitle}`;
+        return normalizeReportPlainText(`# ${label}\n\n${withoutFirstTitle}`);
       }
-      return `# ${label}\n\n${body}`;
+      return normalizeReportPlainText(`# ${label}\n\n${body}`);
     };
 
     if (!parsed) {
@@ -530,12 +576,19 @@ ${sourceText || "저장된 본문 자료가 부족합니다."}
       });
     }
 
-    const safeStatus =
+    let safeStatus =
       parsed.status === "확인 완료" ||
       parsed.status === "확인 필요" ||
       parsed.status === "오류 가능성"
         ? parsed.status
         : "확인 필요";
+
+    // 본문만 있고 URL/이미지가 없으면 확인 완료를 확인 필요로 완화
+    const hasUrl = Boolean(getString(payload.sourceUrl));
+    const hasImage = inlineParts.length > 0;
+    if (safeStatus === "확인 완료" && !hasUrl && !hasImage) {
+      safeStatus = "확인 필요";
+    }
 
     return NextResponse.json({
       ok: true,
