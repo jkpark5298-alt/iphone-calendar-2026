@@ -16,7 +16,10 @@ import {
   collectClipboardImageFiles,
   isFullAiVerificationReport,
   hasDisplayableAiReport,
+  makeGeneralInfoMediaItem,
+  normalizeGeneralInfoMediaItems,
 } from "../lib/generalInfoHelpers";
+import type { GeneralInfoMediaItem } from "../lib/generalInfoHelpers";
 import React from "react";
 import { generalInfoCategories } from "../lib/generalInfoMock";
 
@@ -276,14 +279,22 @@ export default function GeneralInfoDetailModal({
   const [showFactImageInsert, setShowFactImageInsert] = React.useState(false);
   const [factEditorKey, setFactEditorKey] = React.useState(0);
   const [bodyEditorKey, setBodyEditorKey] = React.useState(0);
+  const [editMediaItems, setEditMediaItems] = React.useState<GeneralInfoMediaItem[]>(() =>
+    getGeneralInfoDisplayMediaItems(item),
+  );
   const bodyRichTextRef = React.useRef<HTMLDivElement | null>(null);
   const factRichTextRef = React.useRef<HTMLDivElement | null>(null);
   const factImageFileRef = React.useRef<HTMLInputElement | null>(null);
+  const coverImageFileRef = React.useRef<HTMLInputElement | null>(null);
   const factImageInsertLockRef = React.useRef(false);
 
   const factInitialHtml = React.useMemo(() => {
     const raw = String(item.factCheckSummary || "").trim();
     if (!raw || !hasDisplayableAiReport(raw)) return "";
+    // 인라인 이미지가 있는 편집 HTML은 그대로 유지
+    if (/<(?:img|video)\b[^>]*\bsrc=/i.test(raw)) {
+      return /<\/?[a-z][\s\S]*>/i.test(raw) ? raw : buildFactCheckReportHtml(raw, []);
+    }
     if (isFullAiVerificationReport(raw)) return buildFactCheckReportHtml(raw, []);
     // 본문 기반 보고서(HTML)는 그대로 표시
     if (/<\/?[a-z][\s\S]*>/i.test(raw)) return raw;
@@ -301,6 +312,7 @@ export default function GeneralInfoDetailModal({
     setEditSecondary(item.secondaryCategory || "");
     setEditThird(item.thirdCategory || "");
     setEditKeywordsText((item.keywords || []).join(", "));
+    setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
     setBodyEditorKey((prev) => prev + 1);
     setIsEditing(Boolean(startInEditMode));
   }, [item.id, item.factCheckSummary, item.factCheckStatus, needsManualFactCheck, startInEditMode]);
@@ -437,18 +449,19 @@ export default function GeneralInfoDetailModal({
     if (pastedFiles.length > 0) insertFactImageFiles(pastedFiles);
   }, [insertFactImageFiles]);
 
-  const saveFactCheckFromEditor = React.useCallback(() => {
+  const saveFactCheckFromEditor = React.useCallback(async () => {
     const html = String(factRichTextRef.current?.innerHTML || "").trim();
     if (!html || html === "<br>" || html === "<div><br></div>") {
       alert("Fact Check 내용을 입력해 주세요.");
       return;
     }
-    onSaveManualFactCheck?.(item.id, html, manualFactStatus);
+    await onSaveManualFactCheck?.(item.id, html, manualFactStatus);
   }, [item.id, manualFactStatus, onSaveManualFactCheck]);
 
   const beginEditing = React.useCallback(() => {
+    setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
     setIsEditing(true);
-  }, []);
+  }, [item]);
 
   const cancelEditing = React.useCallback(() => {
     setEditTitle(item.title || "");
@@ -459,10 +472,62 @@ export default function GeneralInfoDetailModal({
     setEditThird(item.thirdCategory || "");
     setEditKeywordsText((item.keywords || []).join(", "));
     setManualFactStatus(item.factCheckStatus || "확인 필요");
+    setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
     setBodyEditorKey((prev) => prev + 1);
     setFactEditorKey((prev) => prev + 1);
     setIsEditing(false);
   }, [item]);
+
+  const addCoverMediaFiles = React.useCallback(async (files: FileList | File[] | null) => {
+    const list = files instanceof FileList ? Array.from(files) : Array.isArray(files) ? files : [];
+    const imageOrVideo = list.filter(
+      (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
+    );
+    if (imageOrVideo.length === 0) return;
+
+    const loaded = await readFilesAsDataUrls(imageOrVideo);
+    const nextItems = loaded.map(({ file, dataUrl }) =>
+      makeGeneralInfoMediaItem(
+        file.name || `대표 이미지 ${Date.now()}`,
+        file.type.startsWith("video/") ? "video" : "image",
+        dataUrl,
+      ),
+    );
+    setEditMediaItems((prev) => [...prev, ...nextItems]);
+    setIsEditing(true);
+  }, []);
+
+  const handleCoverFileChange = React.useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files;
+      void addCoverMediaFiles(files);
+      event.target.value = "";
+    },
+    [addCoverMediaFiles],
+  );
+
+  const handleCoverPaste = React.useCallback(
+    (event: React.ClipboardEvent) => {
+      const files = collectClipboardImageFiles(event.clipboardData);
+      if (files.length === 0) return;
+      event.preventDefault();
+      void addCoverMediaFiles(dedupeImageFiles(files));
+    },
+    [addCoverMediaFiles],
+  );
+
+  const setMediaAsRepresentative = React.useCallback((index: number) => {
+    setEditMediaItems((prev) => {
+      if (index <= 0 || index >= prev.length) return prev;
+      const next = [...prev];
+      const [picked] = next.splice(index, 1);
+      return [picked, ...next];
+    });
+  }, []);
+
+  const removeEditMediaItem = React.useCallback((index: number) => {
+    setEditMediaItems((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   const saveAllEdits = React.useCallback(async () => {
     const bodyHtml = String(bodyRichTextRef.current?.innerHTML || item.formattedTextHtml || "").trim();
@@ -472,6 +537,8 @@ export default function GeneralInfoDetailModal({
       .split(/[,，#\n]+/)
       .map((k) => k.trim().replace(/^#+/, ""))
       .filter(Boolean);
+    const mediaItems = normalizeGeneralInfoMediaItems({ mediaItems: editMediaItems });
+    const mainMedia = mediaItems[0];
 
     const updated: GeneralInfoItem = {
       ...item,
@@ -486,6 +553,9 @@ export default function GeneralInfoDetailModal({
       formattedTextHtml: bodyHtml,
       factCheckStatus: manualFactStatus,
       factCheckSummary: factHtml || item.factCheckSummary,
+      mediaItems,
+      filePreview: mainMedia?.preview || "",
+      fileName: mainMedia?.name || "",
     };
 
     if (onSaveItemEdit) {
@@ -497,6 +567,7 @@ export default function GeneralInfoDetailModal({
   }, [
     bodyRichTextRef,
     editKeywordsText,
+    editMediaItems,
     editPrimary,
     editSecondary,
     editSourceUrl,
@@ -520,7 +591,7 @@ export default function GeneralInfoDetailModal({
 
   if (!item) return null;
 
-  const mediaItems = getGeneralInfoDisplayMediaItems(item);
+  const mediaItems = isEditing ? editMediaItems : getGeneralInfoDisplayMediaItems(item);
   const hasFactContent =
     Boolean(String(factInitialHtml || "").trim()) ||
     hasAiReport ||
@@ -639,10 +710,13 @@ export default function GeneralInfoDetailModal({
           ref={detailBodyRef}
           style={{ display: "flex", flexDirection: "column" }}
         >
-          <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 0 : 6 }}>
-            <strong>
+          <section
+            className="generalInfoDetailSection generalInfoFactCheckReportSection"
+            style={{ order: hasAiReport ? 0 : 6 }}
+          >
+            <strong className="generalInfoFactCheckReportTitle">
               {needsManualFactCheck
-                ? "Fact Check (수동 작성)"
+                ? "Fact Check 보고서 (수동 작성)"
                 : getAiVerificationReportLabel(item.factCheckSummary)}
             </strong>
 
@@ -786,17 +860,17 @@ export default function GeneralInfoDetailModal({
                 style={{
                   display: "block",
                   width: "100%",
-                  minHeight: 220,
-                  maxHeight: 480,
+                  minHeight: 420,
+                  maxHeight: "72vh",
                   overflowY: "auto",
                   boxSizing: "border-box",
                   borderRadius: 14,
-                  border: "1px solid rgba(56, 189, 248, 0.45)",
+                  border: "1px solid rgba(56, 189, 248, 0.55)",
                   background: "#020617",
-                  color: "#e2e8f0",
-                  padding: "14px 15px",
-                  fontSize: 14,
-                  lineHeight: 1.75,
+                  color: "#f1f5f9",
+                  padding: "18px 18px",
+                  fontSize: 16,
+                  lineHeight: 1.85,
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
                 }}
@@ -848,7 +922,7 @@ export default function GeneralInfoDetailModal({
               <button
                 type="button"
                 className="primaryButton"
-                onClick={saveFactCheckFromEditor}
+                onClick={() => void saveFactCheckFromEditor()}
               >
                 {needsManualFactCheck ? "수동 Fact Check 저장" : "Fact Check / 보고서 저장"}
               </button>
@@ -871,11 +945,96 @@ export default function GeneralInfoDetailModal({
             </div>
           </section>
           <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 1 : 0 }}>
-            <strong>대표 이미지 / 자료</strong>
+            <div className="generalInfoSectionTitleRow">
+              <strong>대표 이미지 / 자료</strong>
+              {(isEditing || mediaItems.length === 0) && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="secondaryButton smallActionButton"
+                    onClick={() => coverImageFileRef.current?.click()}
+                  >
+                    {mediaItems.length === 0 ? "대표 이미지 추가" : "이미지 추가"}
+                  </button>
+                  {isEditing && mediaItems.length > 0 && (
+                    <button
+                      type="button"
+                      className="secondaryButton smallActionButton dangerSmallButton"
+                      onClick={() => setEditMediaItems([])}
+                    >
+                      전체 삭제
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <input
+              ref={coverImageFileRef}
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              hidden
+              onChange={handleCoverFileChange}
+            />
+            {isEditing && (
+              <div
+                className="generalInfoIphonePasteZone"
+                contentEditable
+                suppressContentEditableWarning
+                role="textbox"
+                tabIndex={0}
+                onPaste={handleCoverPaste}
+                style={{
+                  textAlign: "center",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "12px",
+                  marginTop: 8,
+                  cursor: "pointer",
+                  minHeight: 48,
+                }}
+              >
+                <strong>이미지를 여기에 붙여넣기</strong>
+              </div>
+            )}
             {mediaItems.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "10px" }}>
                 {mediaItems.map((media, index) => (
-                  <div className="generalInfoDetailMediaCard" key={media.id || index} style={{ width: "100%", padding: "12px", border: "1px solid rgba(148, 163, 184, 0.22)", borderRadius: "14px", background: "rgba(15, 23, 42, 0.45)" }}>
+                  <div
+                    className="generalInfoDetailMediaCard"
+                    key={media.id || index}
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      border: "1px solid rgba(148, 163, 184, 0.22)",
+                      borderRadius: "14px",
+                      background: "rgba(15, 23, 42, 0.45)",
+                      position: "relative",
+                    }}
+                  >
+                    {isEditing && (
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                        {index === 0 ? (
+                          <span className="generalInfoDraftMediaBadge representative">★ 대표</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="secondaryButton smallActionButton"
+                            onClick={() => setMediaAsRepresentative(index)}
+                          >
+                            ★ 대표 설정
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="secondaryButton smallActionButton dangerSmallButton"
+                          onClick={() => removeEditMediaItem(index)}
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    )}
                     {media.type === "video" ? (
                       <video src={media.preview} controls style={{ width: "100%", maxHeight: "500px", objectFit: "contain", borderRadius: "10px", display: "block" }} />
                     ) : (
@@ -902,7 +1061,16 @@ export default function GeneralInfoDetailModal({
                 ))}
               </div>
             ) : (
-              <p>대표 이미지가 저장되지 않았습니다.</p>
+              <p style={{ marginTop: 8 }}>
+                대표 이미지가 저장되지 않았습니다.
+                {!isEditing && " [대표 이미지 추가]로 파일 선택 후 [변경 저장]하세요."}
+                {isEditing && " 파일 선택 또는 붙여넣기 후 [변경 저장]하세요."}
+              </p>
+            )}
+            {isEditing && editMediaItems.length > 0 && (
+              <p className="mutedText" style={{ marginTop: 8, fontSize: 12 }}>
+                맨 앞(★ 대표) 이미지가 대표 이미지입니다. 저장을 눌러야 반영됩니다.
+              </p>
             )}
           </section>
 

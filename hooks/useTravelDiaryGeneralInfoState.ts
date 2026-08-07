@@ -1410,6 +1410,38 @@ export function useTravelDiaryGeneralInfoState({
     const targetItem = generalInfoItems.find((item) => item.id === updatedItem.id);
     if (!targetItem) return;
 
+    const draftMediaItems = normalizeGeneralInfoMediaItems(updatedItem);
+    let uploadedMediaItems = draftMediaItems;
+    if (draftMediaItems.some((media) => String(media.preview || "").startsWith("data:"))) {
+      showPasteHint("이미지 업로드 중...");
+      uploadedMediaItems = await uploadGeneralInfoMediaItemsToSupabaseStorage(draftMediaItems);
+    }
+    const mainMedia = uploadedMediaItems[0];
+
+    let factCheckSummary = String(updatedItem.factCheckSummary || "");
+    const dataSrcs = extractMediaSrcFromHtml(factCheckSummary).filter((src) => src.startsWith("data:"));
+    if (dataSrcs.length > 0) {
+      showPasteHint(`보고서 이미지 ${dataSrcs.length}장 업로드 중...`);
+      const replacements: Array<{ from: string; to: string }> = [];
+      for (const [index, src] of dataSrcs.entries()) {
+        try {
+          const file = await dataUrlToGeneralInfoFile(
+            src,
+            `factcheck-${targetItem.id}-${Date.now()}-${index + 1}.jpg`,
+          );
+          const result = await uploadFileToSupabaseStorage(file);
+          if (result.fileUrl) {
+            replacements.push({ from: src, to: result.fileUrl });
+          }
+        } catch (error) {
+          console.error("상세 수정 Fact Check 이미지 업로드 실패:", error);
+        }
+      }
+      if (replacements.length > 0) {
+        factCheckSummary = replaceHtmlMediaSources(factCheckSummary, replacements);
+      }
+    }
+
     const nextItem: GeneralInfoItem = {
       ...targetItem,
       ...updatedItem,
@@ -1417,6 +1449,10 @@ export function useTravelDiaryGeneralInfoState({
       createdAt: targetItem.createdAt,
       confirmed: true,
       extraNote: targetItem.extraNote || updatedItem.extraNote || "",
+      mediaItems: uploadedMediaItems,
+      filePreview: mainMedia?.preview || "",
+      fileName: mainMedia?.name || "",
+      factCheckSummary,
     };
 
     setGeneralInfoItems((prev) => {
@@ -1430,7 +1466,13 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoDetailEditMode(false);
     showPasteHint("✅ 일반 정보 수정을 저장했습니다.");
     await syncGeneralInfoItemToSupabase(nextItem, "PUT");
-  }, [generalInfoItems, showPasteHint, syncGeneralInfoItemToSupabase]);
+  }, [
+    dataUrlToGeneralInfoFile,
+    generalInfoItems,
+    showPasteHint,
+    syncGeneralInfoItemToSupabase,
+    uploadGeneralInfoMediaItemsToSupabaseStorage,
+  ]);
 
   const handleCloseGeneralInfoDetail = useCallback(() => {
     setGeneralInfoDetailId(null);
@@ -1533,10 +1575,31 @@ export function useTravelDiaryGeneralInfoState({
     const targetItem = generalInfoItems.find((item) => item.id === itemId);
     if (!targetItem) return;
 
-    const trimmed = String(text || "").trim();
+    let trimmed = String(text || "").trim();
     if (!trimmed) {
       showPasteHint("⚠️ Fact Check 내용을 입력해 주세요.");
       return;
+    }
+
+    // 인라인 data: 이미지는 Storage로 올린 뒤 https로 바꿔 저장 (길이 제한·로컬 용량 문제 방지)
+    const dataSrcs = extractMediaSrcFromHtml(trimmed).filter((src) => src.startsWith("data:"));
+    if (dataSrcs.length > 0) {
+      showPasteHint(`이미지 ${dataSrcs.length}장 업로드 중...`);
+      const replacements: Array<{ from: string; to: string }> = [];
+      for (const [index, src] of dataSrcs.entries()) {
+        try {
+          const file = await dataUrlToGeneralInfoFile(src, `factcheck-${itemId}-${Date.now()}-${index + 1}.jpg`);
+          const result = await uploadFileToSupabaseStorage(file);
+          if (result.fileUrl) {
+            replacements.push({ from: src, to: result.fileUrl });
+          }
+        } catch (error) {
+          console.error("Fact Check 인라인 이미지 업로드 실패:", error);
+        }
+      }
+      if (replacements.length > 0) {
+        trimmed = replaceHtmlMediaSources(trimmed, replacements);
+      }
     }
 
     const updatedItem: GeneralInfoItem = {
@@ -1560,7 +1623,12 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoFactCheckResult(trimmed);
     showPasteHint("✅ Fact Check / AI 검증 보고서(이미지 포함)를 저장했습니다.");
     await syncGeneralInfoItemToSupabase(updatedItem, "PUT");
-  }, [generalInfoItems, showPasteHint, syncGeneralInfoItemToSupabase]);
+  }, [
+    dataUrlToGeneralInfoFile,
+    generalInfoItems,
+    showPasteHint,
+    syncGeneralInfoItemToSupabase,
+  ]);
 
   // --- AI 보고서 및 Fact Check 작성 핸들러 ---
   const buildGeneralInfoFactCheckPayload = useCallback((item: GeneralInfoItem) => {

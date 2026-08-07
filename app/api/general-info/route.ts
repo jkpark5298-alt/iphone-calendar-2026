@@ -34,6 +34,7 @@ type GeneralInfoPayload = {
 };
 
 const MAX_TEXT_LENGTH = 50000;
+const MAX_FACT_CHECK_SUMMARY_LENGTH = 200000;
 const MAX_KEYWORDS = 30;
 const MAX_INPUT_TYPES = 8;
 const MAX_MEDIA_ITEMS = 20;
@@ -109,7 +110,7 @@ const normalizePayload = (value: unknown): GeneralInfoPayload | null => {
     inputTypes: normalizeStringArray(source.inputTypes, MAX_INPUT_TYPES),
     summary: normalizeString(source.summary, 4000),
     factCheckStatus: normalizeString(source.factCheckStatus, 80) || "확인 전",
-    factCheckSummary: normalizeString(source.factCheckSummary, MAX_TEXT_LENGTH),
+    factCheckSummary: normalizeString(source.factCheckSummary, MAX_FACT_CHECK_SUMMARY_LENGTH),
     extraNote: normalizeString(source.extraNote, 4000) || undefined,
     formattedTextHtml: normalizeString(source.formattedTextHtml, MAX_TEXT_LENGTH) || undefined,
     confirmed: source.confirmed !== false,

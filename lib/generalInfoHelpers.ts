@@ -621,7 +621,13 @@ export const formatReportHtmlForPdf = (reportText: string) => {
 
   const plain = looksLikeHtmlContent(raw) ? htmlToPlainText(raw) : raw;
   const hasHeadingTags = /<h[1-6]\b/i.test(raw);
+  const hasInlineMedia = /<(?:img|video)\b[^>]*\bsrc=/i.test(raw);
   const blockCount = (raw.match(/<(div|p|h[1-6]|li|br)\b/gi) || []).length;
+
+  // 인라인 이미지가 있으면 재생성하지 않고 원본 HTML 유지
+  if (looksLikeHtmlContent(raw) && hasInlineMedia) {
+    return raw;
+  }
 
   // AI 검증 보고서 마크다운이면 항상 구조화 HTML로 재생성 (간격 보장)
   if (isAiVerificationReportPlain(plain) && !hasHeadingTags) {
@@ -658,11 +664,13 @@ export const buildFactCheckReportHtml = (
   const raw = String(reportText || "").trim();
   const plain = looksLikeHtmlContent(raw) ? htmlToPlainText(raw) : raw;
   const hasHeadingTags = /<h[1-6]\b/i.test(raw);
+  const hasInlineMedia = /<(?:img|video)\b[^>]*\bsrc=/i.test(raw);
 
-  // AI 검증 보고서(마크다운 구조)는 항상 간격 있는 HTML로 재생성
-  // 그 외 HTML에 헤더가 있으면 유지, 없으면 마크다운 변환
+  // 이미 인라인 이미지가 들어 있는 편집 HTML은 마크다운 재생성으로 지우지 않음
   let html: string;
-  if (isAiVerificationReportPlain(plain)) {
+  if (looksLikeHtmlContent(raw) && hasInlineMedia) {
+    html = raw;
+  } else if (isAiVerificationReportPlain(plain)) {
     html = markdownReportToHtml(plain);
   } else if (looksLikeHtmlContent(raw) && hasHeadingTags) {
     html = raw;
