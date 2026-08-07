@@ -1,4 +1,12 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import {
+  assertAppApiAccess,
+  assertRateLimit,
+  assertSafePublicHttpUrl,
+  clientIpFromRequest,
+  getServerGeminiApiKey,
+} from "../../../lib/apiSecurity";
 
 type FactCheckRequest = {
   title?: string;
@@ -105,7 +113,11 @@ const htmlToPlainHint = (html: string) =>
 const fetchUrlAsInlinePart = async (url: string): Promise<InlineMediaPart | null> => {
   if (!/^https?:\/\//i.test(url)) return null;
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    const safeUrl = await assertSafePublicHttpUrl(url);
+    const response = await fetch(safeUrl, {
+      signal: AbortSignal.timeout(12000),
+      redirect: "error",
+    });
     if (!response.ok) return null;
     const mimeType = (response.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
     if (!mimeType.startsWith("image/") && mimeType !== "application/pdf") return null;
@@ -270,7 +282,17 @@ const buildFallbackReport = (payload: FactCheckRequest) => {
   };
 };
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const authError = assertAppApiAccess(request);
+  if (authError) return authError;
+
+  const rateError = assertRateLimit(
+    `factcheck:${clientIpFromRequest(request)}`,
+    20,
+    60_000,
+  );
+  if (rateError) return rateError;
+
   let payload: FactCheckRequest = {};
 
   try {
@@ -286,10 +308,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const apiKey =
-      request.headers.get("x-gemini-api-key") ||
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY;
+    const apiKey = getServerGeminiApiKey(request);
     const { inlineParts, mediaText } = await buildMediaEvidence(payload);
 
     if (!apiKey) {

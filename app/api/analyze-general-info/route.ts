@@ -1,4 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  assertAppApiAccess,
+  assertRateLimit,
+  clientIpFromRequest,
+  getServerGeminiApiKey,
+} from "../../../lib/apiSecurity";
 
 type GeneralInfoAnalyzeRequest = {
   title?: string;
@@ -129,9 +135,19 @@ const buildPrompt = (input: GeneralInfoAnalyzeRequest) => {
 
 export async function POST(request: NextRequest) {
   try {
+    const authError = assertAppApiAccess(request);
+    if (authError) return authError;
+
+    const rateError = assertRateLimit(
+      `analyze:${clientIpFromRequest(request)}`,
+      30,
+      60_000,
+    );
+    if (rateError) return rateError;
+
     const body = (await request.json()) as GeneralInfoAnalyzeRequest;
 
-    const apiKey = request.headers.get("x-gemini-api-key") || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = getServerGeminiApiKey(request);
     const model =
       process.env.GEMINI_TEXT_MODEL ||
       process.env.GEMINI_VISION_MODEL ||
@@ -181,11 +197,8 @@ export async function POST(request: NextRequest) {
         {
           ok: false,
           error: "Gemini 일반 정보 분석 요청 실패",
-          status: response.status,
-          detail: JSON.stringify(data, null, 2),
-          model,
         },
-        { status: 500 },
+        { status: 502 },
       );
     }
 

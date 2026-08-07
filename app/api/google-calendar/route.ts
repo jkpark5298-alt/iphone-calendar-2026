@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { assertAppApiAccess } from "../../../lib/apiSecurity";
 
 type ParsedEvent = {
   title: string;
@@ -78,7 +79,10 @@ function parseIcs(text: string, targetDate: string) {
   return events.sort((a, b) => String(a.start || "00:00").localeCompare(String(b.start || "00:00")));
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const authError = assertAppApiAccess(request);
+  if (authError) return authError;
+
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date") || "";
   const calendarUrl = process.env.GOOGLE_CALENDAR_ICS_URL;
@@ -95,16 +99,15 @@ export async function GET(request: Request) {
     const response = await fetch(calendarUrl, { cache: "no-store" });
     if (!response.ok) {
       return NextResponse.json(
-        { ok: false, message: "구글 캘린더 ICS 응답 오류", status: response.status },
-        { status: 502 }
+        { ok: false, message: "구글 캘린더 ICS 응답 오류" },
+        { status: 502 },
       );
     }
 
     const text = await response.text();
     const items = parseIcs(text, date).map(({ startDateKey, ...item }) => item);
     return NextResponse.json({ ok: true, items });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "구글 일정 조회 오류";
-    return NextResponse.json({ ok: false, message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ ok: false, message: "구글 일정 조회 오류" }, { status: 500 });
   }
 }

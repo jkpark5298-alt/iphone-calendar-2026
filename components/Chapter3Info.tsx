@@ -186,7 +186,7 @@ export function Chapter3Info({
       const verifyOnMount = async () => {
         setKeyValidationStatus("validating");
         try {
-          const res = await fetch("/api/test", {
+          const res = await fetch("/api/gemini-key-check", {
             headers: {
               "x-gemini-api-key": geminiApiKey
             }
@@ -225,7 +225,7 @@ export function Chapter3Info({
     setKeyValidationStatus("validating");
     setValidationError(null);
     try {
-      const res = await fetch("/api/test", {
+      const res = await fetch("/api/gemini-key-check", {
         headers: {
           "x-gemini-api-key": tempApiKey.trim()
         }

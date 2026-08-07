@@ -118,18 +118,14 @@ const normalizePayload = (value: unknown): GeneralInfoPayload | null => {
 };
 
 const getWriteAuthError = (request: NextRequest) => {
-  const token = process.env.GENERAL_INFO_API_TOKEN;
-  if (!token) return null;
-
-  // 1. Bearer Token Check (for external APIs, iOS Shortcuts, etc.)
+  const token = process.env.GENERAL_INFO_API_TOKEN || process.env.APP_API_TOKEN;
   const authorization = request.headers.get("authorization") || "";
-  if (authorization === `Bearer ${token}`) return null;
+  if (token && authorization === `Bearer ${token}`) return null;
 
-  // Gather host headers (including reverse proxy forwarding)
+  // 토큰이 없어도 same-origin은 필수 (기존: 토큰 없으면 무조건 통과 → 위험)
   const host = request.headers.get("host") || request.nextUrl.host;
   const forwardedHost = request.headers.get("x-forwarded-host");
 
-  // 2. Origin check (POST/PUT/DELETE requests always send Origin header in modern browsers)
   const origin = request.headers.get("origin");
   if (origin) {
     try {
@@ -141,12 +137,11 @@ const getWriteAuthError = (request: NextRequest) => {
       ) {
         return null;
       }
-    } catch (e) {
-      // ignore
+    } catch {
+      /* ignore */
     }
   }
 
-  // 3. Same-origin request check using Referer header
   const referer = request.headers.get("referer");
   if (referer) {
     try {
@@ -158,12 +153,11 @@ const getWriteAuthError = (request: NextRequest) => {
       ) {
         return null;
       }
-    } catch (e) {
-      // ignore parsing error
+    } catch {
+      /* ignore */
     }
   }
 
-  // 4. Sec-Fetch-Site check (not supported in Safari but useful for other browsers)
   const secFetchSite = request.headers.get("sec-fetch-site");
   if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
     return null;
@@ -180,13 +174,15 @@ const getWriteAuthError = (request: NextRequest) => {
 
 const getSupabaseAdmin = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // 개인 앱 호환: service role 우선. 장기적으로 RLS+anon으로 전환 권장.
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl || !key) {
     throw new Error("Supabase URL 또는 Key 환경변수가 없습니다.");
   }
 
-  return createClient(supabaseUrl, serviceRoleKey, {
+  return createClient(supabaseUrl, key, {
     auth: {
       persistSession: false,
     },
@@ -290,8 +286,12 @@ const fromDbRow = (row: Record<string, unknown>): GeneralInfoPayload => {
   };
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { assertAppApiAccess } = await import("../../../lib/apiSecurity");
+    const authError = assertAppApiAccess(request);
+    if (authError) return authError;
+
     const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase

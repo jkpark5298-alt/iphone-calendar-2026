@@ -1,4 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  assertAppApiAccess,
+  assertRateLimit,
+  assertSafePublicHttpUrl,
+  clientIpFromRequest,
+} from "../../../lib/apiSecurity";
 
 type ExtractUrlRequest = {
   url?: string;
@@ -173,6 +179,16 @@ const decodeHtmlResponse = async (response: Response) => {
 
 export async function POST(request: NextRequest) {
   try {
+    const authError = assertAppApiAccess(request);
+    if (authError) return authError;
+
+    const rateError = assertRateLimit(
+      `extract-url:${clientIpFromRequest(request)}`,
+      30,
+      60_000,
+    );
+    if (rateError) return rateError;
+
     const body = (await request.json()) as ExtractUrlRequest;
     let url = body.url?.trim();
 
@@ -190,6 +206,7 @@ export async function POST(request: NextRequest) {
 
     // 네이버 블로그 URL 전처리 변환
     url = transformNaverBlogUrl(url);
+    url = await assertSafePublicHttpUrl(url);
 
     const response = await fetch(url, {
       headers: {
@@ -198,9 +215,41 @@ export async function POST(request: NextRequest) {
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
       },
-      redirect: "follow",
+      redirect: "manual",
       cache: "no-store",
+      signal: AbortSignal.timeout(15000),
     });
+
+    // 리다이렉트는 안전 URL 재검증 후 1회만 추적
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) {
+        return NextResponse.json(
+          { ok: false, error: "URL 내용을 가져오지 못했습니다." },
+          { status: 500 },
+        );
+      }
+      const redirected = await assertSafePublicHttpUrl(new URL(location, url).toString());
+      const redirectedResponse = await fetch(redirected, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+          "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        },
+        redirect: "error",
+        cache: "no-store",
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!redirectedResponse.ok) {
+        return NextResponse.json(
+          { ok: false, error: "URL 내용을 가져오지 못했습니다.", status: redirectedResponse.status },
+          { status: 500 },
+        );
+      }
+      // continue with redirectedResponse below by reassigning - use a variable
+      return await buildExtractResponse(redirectedResponse, redirected);
+    }
 
     if (!response.ok) {
       return NextResponse.json(
@@ -213,105 +262,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const contentType = response.headers.get("content-type") || "";
-
-    if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "HTML 페이지가 아닙니다.",
-          contentType,
-        },
-        { status: 400 },
-      );
-    }
-
-    const html = await decodeHtmlResponse(response);
-
-    // ReDoS 방지 및 파싱 성능 향상을 위해 head 부분만 슬라이스해서 메타태그 매칭
-    const headEndIndex = html.indexOf("</head>");
-    const headHtml = headEndIndex !== -1 ? html.slice(0, headEndIndex + 7) : html.slice(0, 1024 * 64);
-
-    const siteName = getMetaContent(headHtml, [
-      /<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["'][^>]*>/i,
-      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:site_name["'][^>]*>/i,
-    ]);
-
-    let title =
-      getMetaContent(headHtml, [
-        /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i,
-        /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["'][^>]*>/i,
-        /<title[^>]*>([\s\S]*?)<\/title>/i,
-      ]) || url;
-
-    // 제목이 generic한 경우 (사이트 명과 같거나 셰에라자드 등일 경우) 본문에서 구체적인 제품명 검색
-    const isGenericTitle = !title || title === siteName || title.trim() === "셰에라자드";
-    if (isGenericTitle) {
-      const productTitleRegexes = [
-        /class=["'][^"']*(?:product-name|product_name|goods_name|pdp-title)[^"']*["'][^>]*>([\s\S]*?)<\//i,
-        /id=["'][^"']*(?:product-name|product_name|goods_name|pdp-title)[^"']*["'][^>]*>([\s\S]*?)<\//i,
-        /<h1[^>]*>([\s\S]*?)<\/h1>/i,
-      ];
-      for (const regex of productTitleRegexes) {
-        const match = html.match(regex);
-        if (match?.[1]) {
-          const cleanTitle = match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-          if (cleanTitle && cleanTitle !== siteName) {
-            title = cleanTitle;
-            break;
-          }
-        }
-      }
-    }
-
-    const description = getMetaContent(headHtml, [
-      /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["'][^>]*>/i,
-      /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["'][^>]*>/i,
-      /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i,
-      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["'][^>]*>/i,
-    ]);
-
-    let imageUrl = getMetaContent(headHtml, [
-      /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i,
-      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["'][^>]*>/i,
-      /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["'][^>]*>/i,
-      /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["'][^>]*>/i,
-    ]);
-
-    // 이미지가 generic한 로고 등인 경우 본문에서 실제 제품 포스터/대표 이미지 검색 fallback
-    const isGenericImage = !imageUrl || imageUrl.toLowerCase().includes("logo") || imageUrl.toLowerCase().includes("bi.");
-    if (isGenericImage) {
-      const bodyImageRegexes = [
-        /data-u=["']image["'][^>]+src=["']([^"']+)["']/i,
-        /src=["']([^"']+)["']/i, // fallback for any image in case
-        /<img[^>]+src=["']([^"']*(?:upload|goods|event)[^"']+\.(?:jpg|png|gif|jpeg))["'][^>]*>/i,
-      ];
-      for (const regex of bodyImageRegexes) {
-        const match = html.match(regex);
-        if (match?.[1]) {
-          const candidate = match[1];
-          if (!candidate.includes("logo") && !candidate.includes("btn") && !candidate.includes("icon") && !candidate.includes("menu")) {
-            imageUrl = candidate;
-            break;
-          }
-        }
-      }
-    }
-    const image = toAbsoluteUrl(url, imageUrl);
-
-    const plainText = stripHtmlToText(html, title).slice(0, 1200);
-
-    return NextResponse.json({
-      ok: true,
-      result: {
-        url,
-        title,
-        description,
-        image,
-        siteName,
-        text: [description, plainText].filter(Boolean).join("\n\n").slice(0, 1600),
-      },
-    });
+    return await buildExtractResponse(response, url);
   } catch (error) {
     return NextResponse.json(
       {
@@ -322,5 +273,115 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+async function buildExtractResponse(response: Response, url: string) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "HTML 페이지가 아닙니다.",
+        contentType,
+      },
+      { status: 400 },
+    );
+  }
+
+  const html = await decodeHtmlResponse(response);
+  const clippedHtml = html.length > 500_000 ? html.slice(0, 500_000) : html;
+
+  // ReDoS 방지 및 파싱 성능 향상을 위해 head 부분만 슬라이스해서 메타태그 매칭
+  const headEndIndex = clippedHtml.indexOf("</head>");
+  const headHtml =
+    headEndIndex !== -1 ? clippedHtml.slice(0, headEndIndex + 7) : clippedHtml.slice(0, 1024 * 64);
+
+  const siteName = getMetaContent(headHtml, [
+    /<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:site_name["'][^>]*>/i,
+  ]);
+
+  let title =
+    getMetaContent(headHtml, [
+      /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["'][^>]*>/i,
+      /<title[^>]*>([\s\S]*?)<\/title>/i,
+    ]) || url;
+
+  // 제목이 generic한 경우 (사이트 명과 같거나 셰에라자드 등일 경우) 본문에서 구체적인 제품명 검색
+  const isGenericTitle = !title || title === siteName || title.trim() === "셰에라자드";
+  if (isGenericTitle) {
+    const productTitleRegexes = [
+      /class=["'][^"']*(?:product-name|product_name|goods_name|pdp-title)[^"']*["'][^>]*>([\s\S]*?)<\//i,
+      /id=["'][^"']*(?:product-name|product_name|goods_name|pdp-title)[^"']*["'][^>]*>([\s\S]*?)<\//i,
+      /<h1[^>]*>([\s\S]*?)<\/h1>/i,
+    ];
+    for (const regex of productTitleRegexes) {
+      const match = clippedHtml.match(regex);
+      if (match?.[1]) {
+        const cleanTitle = match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        if (cleanTitle && cleanTitle !== siteName) {
+          title = cleanTitle;
+          break;
+        }
+      }
+    }
+  }
+
+  const description = getMetaContent(headHtml, [
+    /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["'][^>]*>/i,
+    /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["'][^>]*>/i,
+  ]);
+
+  let imageUrl = getMetaContent(headHtml, [
+    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["'][^>]*>/i,
+    /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["'][^>]*>/i,
+  ]);
+
+  // 이미지가 generic한 로고 등인 경우 본문에서 실제 제품 포스터/대표 이미지 검색 fallback
+  const isGenericImage =
+    !imageUrl || imageUrl.toLowerCase().includes("logo") || imageUrl.toLowerCase().includes("bi.");
+  if (isGenericImage) {
+    const bodyImageRegexes = [
+      /data-u=["']image["'][^>]+src=["']([^"']+)["']/i,
+      /src=["']([^"']+)["']/i,
+      /<img[^>]+src=["']([^"']*(?:upload|goods|event)[^"']+\.(?:jpg|png|gif|jpeg))["'][^>]*>/i,
+    ];
+    for (const regex of bodyImageRegexes) {
+      const match = clippedHtml.match(regex);
+      if (match?.[1]) {
+        const candidate = match[1];
+        if (
+          !candidate.includes("logo") &&
+          !candidate.includes("btn") &&
+          !candidate.includes("icon") &&
+          !candidate.includes("menu")
+        ) {
+          imageUrl = candidate;
+          break;
+        }
+      }
+    }
+  }
+  const image = toAbsoluteUrl(url, imageUrl);
+
+  const plainText = stripHtmlToText(clippedHtml, title).slice(0, 1200);
+
+  return NextResponse.json({
+    ok: true,
+    result: {
+      url,
+      title,
+      description,
+      image,
+      siteName,
+      text: [description, plainText].filter(Boolean).join("\n\n").slice(0, 1600),
+    },
+  });
 }
 
