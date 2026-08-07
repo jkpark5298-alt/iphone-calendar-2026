@@ -75,6 +75,31 @@ export function useTravelDiaryGeneralInfoState({
   const [isRunningGeneralInfoFactCheck, setIsRunningGeneralInfoFactCheck] = useState(false);
   /** Gemini 크레딧 소진 시 수동 Fact Check 입력이 필요한 항목 id */
   const [generalInfoManualFactCheckId, setGeneralInfoManualFactCheckId] = useState<number | null>(null);
+  /** Gemini API 패킷(크레딧) 신호등: available=녹색, depleted=빨간색 */
+  const [geminiApiPacketStatus, setGeminiApiPacketStatus] = useState<"available" | "depleted">(() => {
+    if (typeof window === "undefined") return "available";
+    try {
+      return window.localStorage.getItem("gemini_api_packet_status") === "depleted"
+        ? "depleted"
+        : "available";
+    } catch {
+      return "available";
+    }
+  });
+
+  const markGeminiApiPacketsAvailable = useCallback(() => {
+    setGeminiApiPacketStatus("available");
+    try {
+      window.localStorage.setItem("gemini_api_packet_status", "available");
+    } catch {}
+  }, []);
+
+  const markGeminiApiPacketsDepleted = useCallback(() => {
+    setGeminiApiPacketStatus("depleted");
+    try {
+      window.localStorage.setItem("gemini_api_packet_status", "depleted");
+    } catch {}
+  }, []);
 
   const syncGeneralInfoItemToSupabase = useCallback(async (
     item: GeneralInfoItem,
@@ -930,7 +955,7 @@ export function useTravelDiaryGeneralInfoState({
 
     try {
       setIsAnalyzingGeneralInfo(true);
-      showPasteHint("🤖 Gemini가 일반 정보를 분석하는 중입니다.");
+      showPasteHint("🤖 Gemini가 일반 정보를 분석하는 중입니다. (서버 GEMINI_API_KEY 사용)");
 
       const customApiKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") || "" : "";
       const response = await fetch("/api/analyze-general-info", {
@@ -956,6 +981,8 @@ export function useTravelDiaryGeneralInfoState({
       if (!response.ok || !data.ok) {
         throw new Error(data.detail || data.error || "Gemini 분석 실패");
       }
+
+      markGeminiApiPacketsAvailable();
 
       const result = data.result || {};
 
@@ -989,7 +1016,7 @@ export function useTravelDiaryGeneralInfoState({
     } finally {
       setIsAnalyzingGeneralInfo(false);
     }
-  }, [generalInfoDraft, generalInfoKeywordText, getCurrentGeneralInfoRichTextPlain, showPasteHint]);
+  }, [generalInfoDraft, generalInfoKeywordText, getCurrentGeneralInfoRichTextPlain, markGeminiApiPacketsAvailable, showPasteHint]);
 
   const dataUrlToGeneralInfoFile = useCallback(async (dataUrl: string, fileName: string) => {
     const response = await fetch(dataUrl);
@@ -1331,10 +1358,11 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoReportText("");
     setGeneralInfoFactCheckItem(updatedItem);
     setGeneralInfoFactCheckResult("");
+    markGeminiApiPacketsDepleted();
     showPasteHint("⚠️ AI 크레딧 소진 · 수동으로 Fact Check를 작성해 주세요.");
     void syncGeneralInfoItemToSupabase(updatedItem, "PUT");
     return updatedItem;
-  }, [showPasteHint, syncGeneralInfoItemToSupabase]);
+  }, [markGeminiApiPacketsDepleted, showPasteHint, syncGeneralInfoItemToSupabase]);
 
   const handleSaveManualFactCheck = useCallback(async (
     itemId: number,
@@ -1496,7 +1524,7 @@ export function useTravelDiaryGeneralInfoState({
 
     try {
       setIsGeneratingGeneralInfoReport(true);
-      showPasteHint("📄 AI 보고서를 작성합니다.");
+      showPasteHint("📄 AI 보고서를 작성합니다. (서버 GEMINI_API_KEY 사용)");
 
       const customApiKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") || "" : "";
       const controller = new AbortController();
@@ -1599,6 +1627,7 @@ export function useTravelDiaryGeneralInfoState({
 
       const updatedReportItem = applyReportToItem(nextReport, nextStatus);
       setGeneralInfoManualFactCheckId(null);
+      markGeminiApiPacketsAvailable();
       showPasteHint(
         data.mode === "gemini" || data.mode === "gemini-text"
           ? `✅ AI 검증 보고서(${modelName}) 준비 완료`
@@ -1626,6 +1655,7 @@ export function useTravelDiaryGeneralInfoState({
     applyCreditDepletedManualFactCheck,
     buildGeneralInfoFactCheckPayload,
     isGeminiCreditDepletedResponse,
+    markGeminiApiPacketsAvailable,
     showPasteHint,
     syncGeneralInfoItemToSupabase,
   ]);
@@ -2085,6 +2115,9 @@ export function useTravelDiaryGeneralInfoState({
     isExportingGeneralInfoPdf,
     generalInfoManualFactCheckId,
     setGeneralInfoManualFactCheckId,
+    geminiApiPacketStatus,
+    markGeminiApiPacketsAvailable,
+    markGeminiApiPacketsDepleted,
     handleSaveManualFactCheck,
     handleStartEditGeneralInfo,
     handleCancelEditGeneralInfo,
