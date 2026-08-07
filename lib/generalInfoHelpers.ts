@@ -471,36 +471,90 @@ export const htmlToPlainText = (html: string) =>
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
+/** 한 덩어리로 붙은 보고서 텍스트에 문단/목록 줄바꿈을 복원 */
+export const normalizeReportPlainText = (text: string) => {
+  let t = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n");
+
+  // 원형 숫자(①~⑳) 앞에서 문단 분리
+  t = t.replace(/\s*([①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳])\s*/g, "\n\n$1 ");
+  // 마크다운 제목
+  t = t.replace(/([^\n])\s+(#{1,3}\s+)/g, "$1\n\n$2");
+  // 불릿
+  t = t.replace(/([^\n])\s+\*\s+/g, "$1\n* ");
+  t = t.replace(/([^\n])\s+-\s+(?=[가-힣A-Za-z0-9「『“"'(\[])/g, "$1\n- ");
+  // 숫자 목록 1. 2. / 1) 2)
+  t = t.replace(/([^\n\d])\s+(\d{1,2})([.)])\s+/g, "$1\n\n$2$3 ");
+  // 문장 끝 뒤 긴 공백을 문단으로
+  t = t.replace(/([.。!?…])\s{2,}/g, "$1\n\n");
+
+  return t.replace(/\n{3,}/g, "\n\n").trim();
+};
+
 export const markdownReportToHtml = (markdown: string) => {
-  const lines = String(markdown || "").replace(/\r\n/g, "\n").split("\n");
+  const lines = normalizeReportPlainText(markdown).split("\n");
   const parts: string[] = [];
 
   lines.forEach((rawLine) => {
     const line = rawLine.trim();
     if (!line) {
-      parts.push("<div><br /></div>");
+      parts.push('<div style="height:10px;"></div>');
       return;
     }
     if (line.startsWith("### ")) {
-      parts.push(`<h5>${escapeGeneralInfoHtml(line.slice(4))}</h5>`);
+      parts.push(`<h5 style="margin:16px 0 8px;font-size:15px;font-weight:800;line-height:1.45;">${escapeGeneralInfoHtml(line.slice(4))}</h5>`);
       return;
     }
     if (line.startsWith("## ")) {
-      parts.push(`<h4>${escapeGeneralInfoHtml(line.slice(3))}</h4>`);
+      parts.push(`<h4 style="margin:18px 0 8px;font-size:16px;font-weight:800;line-height:1.45;">${escapeGeneralInfoHtml(line.slice(3))}</h4>`);
       return;
     }
     if (line.startsWith("# ")) {
-      parts.push(`<h3>${escapeGeneralInfoHtml(line.slice(2))}</h3>`);
+      parts.push(`<h3 style="margin:20px 0 10px;font-size:18px;font-weight:800;line-height:1.4;">${escapeGeneralInfoHtml(line.slice(2))}</h3>`);
       return;
     }
     if (line.startsWith("- ") || line.startsWith("* ")) {
-      parts.push(`<div>• ${escapeGeneralInfoHtml(line.slice(2))}</div>`);
+      parts.push(`<div style="margin:0 0 8px;padding-left:4px;line-height:1.75;">• ${escapeGeneralInfoHtml(line.slice(2))}</div>`);
       return;
     }
-    parts.push(`<div>${escapeGeneralInfoHtml(rawLine)}</div>`);
+    if (/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/.test(line) || /^\d{1,2}[.)]\s+/.test(line)) {
+      parts.push(`<div style="margin:12px 0 8px;line-height:1.8;font-weight:600;">${escapeGeneralInfoHtml(line)}</div>`);
+      return;
+    }
+    parts.push(`<div style="margin:0 0 10px;line-height:1.8;">${escapeGeneralInfoHtml(line)}</div>`);
   });
 
   return parts.join("");
+};
+
+/** PDF용: 붙어 있는 HTML/텍스트를 문단 간격이 있는 HTML로 정리 */
+export const formatReportHtmlForPdf = (reportText: string) => {
+  const raw = String(reportText || "").trim();
+  if (!raw) return "";
+
+  const hasUsefulBlocks = /<(h[1-6]|p|li|br)\b/i.test(raw) || /<div[^>]*>[\s\S]*?<\/div>/i.test(raw);
+  const plain = htmlToPlainText(raw);
+  const blockCount = (raw.match(/<(div|p|h[1-6]|li|br)\b/gi) || []).length;
+
+  // HTML이어도 블록이 거의 없고 본문이 길면, 평문으로 재구성해 간격 복원
+  if (!looksLikeHtmlContent(raw) || !hasUsefulBlocks || (plain.length > 180 && blockCount < 3)) {
+    return markdownReportToHtml(normalizeReportPlainText(plain || raw));
+  }
+
+  // 기존 HTML 유지하되, 인라인으로 붙은 ①② / * 는 줄바꿈 삽입
+  let html = raw
+    .replace(/\s*([①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳])\s*/g, "<br/><br/>$1 ")
+    .replace(/(<\/(?:div|p|h[1-6]|li)>)(?=\s*<)/gi, "$1");
+
+  // br이 전혀 없고 긴 텍스트 노드만 있으면 plain 재구성
+  if (!/<br\s*\/?>/i.test(html) && plain.length > 240 && blockCount <= 4) {
+    return markdownReportToHtml(normalizeReportPlainText(plain));
+  }
+
+  return html;
 };
 
 export const buildFactCheckReportHtml = (

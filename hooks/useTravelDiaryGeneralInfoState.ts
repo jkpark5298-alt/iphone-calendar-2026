@@ -6,7 +6,7 @@ import { persistGeneralInfoItemsToLocalStorage, readGeneralInfoItemsFromLocalSto
 import { supabase } from "../lib/supabaseClient";
 
 
-import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, looksLikeHtmlContent, extractTitleFromPlainText } from "../lib/generalInfoHelpers";
+import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, extractTitleFromPlainText, formatReportHtmlForPdf } from "../lib/generalInfoHelpers";
 
 
 const TRAVEL_DIARY_BUCKET = "info-photos";
@@ -1944,9 +1944,7 @@ export function useTravelDiaryGeneralInfoState({
       await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
       await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
 
-      const contentHtml = looksLikeHtmlContent(reportHtml)
-        ? reportHtml
-        : buildFactCheckReportHtml(reportHtml);
+      const contentHtml = formatReportHtmlForPdf(reportHtml);
 
       const safeTitle = String(item.title || "AI검증보고서")
         .replace(/[\\/:*?"<>|]/g, "_")
@@ -1965,7 +1963,7 @@ export function useTravelDiaryGeneralInfoState({
       container.style.color = "#000000";
       container.style.fontFamily = "Apple SD Gothic Neo, Malgun Gothic, sans-serif";
       container.style.boxSizing = "border-box";
-      container.style.lineHeight = "1.7";
+      container.style.lineHeight = "1.85";
 
       container.innerHTML = `
         <div style="border-bottom: 3px solid #000; padding-bottom: 18px; margin-bottom: 22px;">
@@ -1978,7 +1976,7 @@ export function useTravelDiaryGeneralInfoState({
           <div style="font-size: 13px; color: #000000; margin-top: 6px;">분류: ${category}</div>
           <div style="font-size: 13px; color: #000000;">상태: ${status}</div>
         </div>
-        <div class="pdf-report-body" style="font-size: 14px; color: #000000;">
+        <div class="pdf-report-body" style="font-size: 14px; color: #000000; line-height: 1.85; white-space: normal;">
           ${contentHtml}
         </div>
         <div style="border-top: 1px solid #000000; margin-top: 28px; padding-top: 14px; text-align: center; font-size: 11px; color: #000000;">
@@ -1986,7 +1984,7 @@ export function useTravelDiaryGeneralInfoState({
         </div>
       `;
 
-      // PDF용: 모든 글자 검정 + 밝은 배경, 이미지/제목 정리
+      // PDF용: 모든 글자 검정 + 밝은 배경, 문단 간격·이미지/제목 정리
       container.querySelectorAll("*").forEach((node) => {
         const el = node as HTMLElement;
         if (!el.style) return;
@@ -1997,18 +1995,33 @@ export function useTravelDiaryGeneralInfoState({
           el.style.backgroundColor = "#ffffff";
         }
       });
+      container.querySelectorAll(".pdf-report-body div, .pdf-report-body p, .pdf-report-body li").forEach((node) => {
+        const el = node as HTMLElement;
+        if (!el.style.marginBottom) el.style.marginBottom = "10px";
+        el.style.lineHeight = "1.85";
+        el.style.whiteSpace = "pre-wrap";
+        el.style.wordBreak = "break-word";
+      });
       container.querySelectorAll("img").forEach((img) => {
         const el = img as HTMLImageElement;
         el.style.maxWidth = "100%";
         el.style.height = "auto";
         el.style.borderRadius = "8px";
-        el.style.margin = "10px 0";
+        el.style.margin = "12px 0";
         el.style.display = "block";
       });
-      container.querySelectorAll("h3,h4,h5").forEach((heading) => {
+      container.querySelectorAll("h1,h2,h3,h4,h5").forEach((heading) => {
         const el = heading as HTMLElement;
         el.style.color = "#000000";
-        el.style.margin = "14px 0 8px";
+        el.style.marginTop = el.style.marginTop || "18px";
+        el.style.marginBottom = el.style.marginBottom || "8px";
+        el.style.lineHeight = "1.45";
+        el.style.fontWeight = "800";
+      });
+      container.querySelectorAll("br").forEach((br) => {
+        const spacer = document.createElement("div");
+        spacer.style.height = "8px";
+        br.parentNode?.insertBefore(spacer, br);
       });
       container.querySelectorAll(".generalInfoInlineImageRemove").forEach((btn) => btn.remove());
 
