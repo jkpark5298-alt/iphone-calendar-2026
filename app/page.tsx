@@ -2564,12 +2564,13 @@ export default function HomePage() {
       setCurrentYear(year);
       setCurrentMonth(month);
 
-      if (isSupabaseConfigured && supabase) {
+      const supabaseClient = supabase;
+      if (isSupabaseConfigured && supabaseClient) {
         const dbMonth = year === 2026 ? month : year * 100 + month;
         const saveErrors: string[] = [];
         await Promise.all(
           result.marks.map(async (mark) => {
-            const { error } = await supabase.from("calendar_marks").upsert(
+            const { error } = await supabaseClient.from("calendar_marks").upsert(
               {
                 month: dbMonth,
                 day: mark.day,
