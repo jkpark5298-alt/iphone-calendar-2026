@@ -8485,14 +8485,17 @@ ${photo.memoText}
           item={infoState.selectedGeneralInfoItem}
           onClose={() => infoState.setGeneralInfoDetailId(null)}
           onGenerateReport={infoState.handleGenerateGeneralInfoReport}
-          onRunFactCheck={infoState.handleRunPreciseGeneralInfoFactCheck}
+          onDownloadPdfReport={infoState.handleDownloadGeneralInfoPdfReport}
           onEdit={infoState.handleStartEditGeneralInfo}
           onDelete={(item) => infoState.handleDeleteGeneralInfo(item.id)}
-          onSavePdf={(item) => {
-            window.print();
-          }}
           onShareReport={infoState.handleShareGeneralInfoReport}
           onOpenStorageImage={openStorageImage}
+          isGeneratingReport={infoState.isGeneratingGeneralInfoReport}
+          isExportingPdf={infoState.isExportingGeneralInfoPdf}
+          needsManualFactCheck={
+            infoState.generalInfoManualFactCheckId === infoState.selectedGeneralInfoItem.id
+          }
+          onSaveManualFactCheck={infoState.handleSaveManualFactCheck}
         />
       )}
   

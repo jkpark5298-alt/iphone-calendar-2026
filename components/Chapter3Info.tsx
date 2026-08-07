@@ -8,7 +8,7 @@
 
 import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
-import { insertInlineMediaIntoEditor, readFilesAsDataUrls } from "../lib/generalInfoHelpers";
+import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger } from "../lib/generalInfoHelpers";
 import { Card, EmptyState } from "./SharedComponents";
 
 export interface Chapter3InfoProps {
@@ -263,6 +263,8 @@ export function Chapter3Info({
     if (generalInfoRichTextRef && "current" in generalInfoRichTextRef && generalInfoRichTextRef.current) {
       // Only set initial HTML on mount/reset to prevent React cursor jumps during typing
       generalInfoRichTextRef.current.innerHTML = generalInfoRichTextInitialHtml;
+      enhanceInlineImageBlocks(generalInfoRichTextRef.current);
+      bindInlineImageRemoveHandler(generalInfoRichTextRef.current);
     }
   }, [generalInfoRichTextEditorKey, generalInfoRichTextInitialHtml, generalInfoRichTextRef]);
 
@@ -274,26 +276,20 @@ export function Chapter3Info({
   }, []);
 
   const removeTrailingImageTrigger = React.useCallback(() => {
-    const editor = generalInfoRichTextRef.current;
-    if (!editor) return;
-    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
-    let last: Text | null = null;
-    while (walker.nextNode()) last = walker.currentNode as Text;
-    if (!last?.nodeValue) return;
-    const next = last.nodeValue.replace(/[ \t]*S[ \t]*$/, "");
-    if (next === last.nodeValue) return;
-    last.nodeValue = next;
-    syncGeneralInfoRichTextToDraft();
-  }, [generalInfoRichTextRef, syncGeneralInfoRichTextToDraft]);
+    return removeInlineImageTrigger(generalInfoRichTextRef.current);
+  }, [generalInfoRichTextRef]);
 
   const checkTextImageTrigger = React.useCallback(() => {
-    const plain = String(generalInfoRichTextRef.current?.innerText || "");
-    setShowTextImageInsert(textEndsWithImageTrigger(plain));
+    const editor = generalInfoRichTextRef.current;
+    const plain = String(editor?.innerText || "");
+    setShowTextImageInsert(
+      editorHasInlineImageTrigger(editor) || textEndsWithImageTrigger(plain),
+    );
   }, [generalInfoRichTextRef, textEndsWithImageTrigger]);
 
   const insertImageFilesFromTextTrigger = React.useCallback((files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
-    removeTrailingImageTrigger();
+    const afterNode = removeTrailingImageTrigger();
 
     const list = files instanceof FileList ? Array.from(files) : files;
     const mediaFiles = list.filter(
@@ -321,6 +317,7 @@ export function Chapter3Info({
                 name: file.name,
                 type: file.type.startsWith("video/") ? "video" : "image",
               })),
+            { afterNode },
           );
           syncGeneralInfoRichTextToDraft();
         }

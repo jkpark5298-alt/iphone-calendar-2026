@@ -206,11 +206,86 @@ export const extractMediaSrcFromHtml = (html: string): string[] => {
   return found;
 };
 
+export const findInlineImageTrigger = (
+  editor: HTMLElement,
+): { textNode: Text; start: number; end: number } | null => {
+  if (!editor) return null;
+
+  const selection = window.getSelection();
+  if (selection && selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+    const anchor = selection.anchorNode;
+    if (anchor?.nodeType === Node.TEXT_NODE) {
+      const textNode = anchor as Text;
+      const text = String(textNode.nodeValue || "");
+      const caret = Math.min(selection.anchorOffset, text.length);
+      const before = text.slice(0, caret);
+      const match = before.match(/[ \t]*S$/);
+      if (match) {
+        return {
+          textNode,
+          start: before.length - match[0].length,
+          end: before.length,
+        };
+      }
+      if (caret === text.length) {
+        const endMatch = text.match(/[ \t]*S[ \t]*$/);
+        if (endMatch) {
+          return {
+            textNode,
+            start: text.length - endMatch[0].length,
+            end: text.length,
+          };
+        }
+      }
+    }
+  }
+
+  const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+  let lastWithTrigger: Text | null = null;
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    if (/[ \t]*S[ \t]*$/.test(String(node.nodeValue || ""))) {
+      lastWithTrigger = node;
+    }
+  }
+  if (!lastWithTrigger) return null;
+  const text = String(lastWithTrigger.nodeValue || "");
+  const endMatch = text.match(/[ \t]*S[ \t]*$/);
+  if (!endMatch) return null;
+  return {
+    textNode: lastWithTrigger,
+    start: text.length - endMatch[0].length,
+    end: text.length,
+  };
+};
+
+export const editorHasInlineImageTrigger = (editor: HTMLElement | null) =>
+  Boolean(editor && findInlineImageTrigger(editor));
+
+export const removeInlineImageTrigger = (editor: HTMLElement | null) => {
+  if (!editor) return null;
+  const trigger = findInlineImageTrigger(editor);
+  if (!trigger) return null;
+
+  const { textNode, start, end } = trigger;
+  const text = String(textNode.nodeValue || "");
+  textNode.nodeValue = `${text.slice(0, start)}${text.slice(end)}`;
+
+  // S가 있던 문단(또는 텍스트 부모) 바로 다음에 이미지를 넣을 기준 노드
+  const host =
+    (textNode.parentElement?.closest("div, p, h3, h4, h5, li, section") as HTMLElement | null) ||
+    textNode.parentElement;
+  return host || textNode;
+};
+
 export const insertInlineMediaIntoEditor = (
   editor: HTMLElement,
   items: Array<{ src: string; name?: string; type?: "image" | "video" }>,
+  options?: { afterNode?: Node | null },
 ) => {
   if (!editor || !items.length) return;
+
+  let insertAfter: Node | null = options?.afterNode || null;
 
   items.forEach((item) => {
     const block = document.createElement("div");
@@ -231,12 +306,30 @@ export const insertInlineMediaIntoEditor = (
       block.appendChild(img);
     }
 
-    editor.appendChild(block);
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "generalInfoInlineImageRemove";
+    removeBtn.setAttribute("contenteditable", "false");
+    removeBtn.setAttribute("aria-label", "이미지 삭제");
+    removeBtn.textContent = "×";
+    block.appendChild(removeBtn);
+
+    if (insertAfter && insertAfter.parentNode) {
+      insertAfter.parentNode.insertBefore(block, insertAfter.nextSibling);
+      insertAfter = block;
+    } else {
+      editor.appendChild(block);
+      insertAfter = block;
+    }
   });
 
   const spacer = document.createElement("div");
   spacer.innerHTML = "<br>";
-  editor.appendChild(spacer);
+  if (insertAfter && insertAfter.parentNode) {
+    insertAfter.parentNode.insertBefore(spacer, insertAfter.nextSibling);
+  } else {
+    editor.appendChild(spacer);
+  }
 
   const selection = window.getSelection();
   if (selection) {
@@ -246,6 +339,58 @@ export const insertInlineMediaIntoEditor = (
     selection.removeAllRanges();
     selection.addRange(range);
   }
+
+  enhanceInlineImageBlocks(editor);
+  bindInlineImageRemoveHandler(editor);
+};
+
+/** 기존 인라인 이미지에 삭제(×) 버튼 보강 */
+export const enhanceInlineImageBlocks = (editor: HTMLElement | null) => {
+  if (!editor) return;
+
+  editor.querySelectorAll("img.generalInfoInlineImage, video.generalInfoInlineImage, img").forEach((media) => {
+    const el = media as HTMLElement;
+    if (el.tagName !== "IMG" && el.tagName !== "VIDEO") return;
+    if (el.tagName === "IMG" && !el.classList.contains("generalInfoInlineImage")) {
+      // 근거 이미지 등 일반 img도 편집기 안이면 삭제 가능하게
+      if (!editor.contains(el)) return;
+      el.classList.add("generalInfoInlineImage");
+    }
+
+    let block = el.closest(".generalInfoInlineImageBlock") as HTMLElement | null;
+    if (!block) {
+      block = document.createElement("div");
+      block.className = "generalInfoInlineImageBlock";
+      el.parentNode?.insertBefore(block, el);
+      block.appendChild(el);
+    }
+
+    if (block.querySelector(".generalInfoInlineImageRemove")) return;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "generalInfoInlineImageRemove";
+    removeBtn.setAttribute("contenteditable", "false");
+    removeBtn.setAttribute("aria-label", "이미지 삭제");
+    removeBtn.textContent = "×";
+    block.appendChild(removeBtn);
+  });
+};
+
+export const bindInlineImageRemoveHandler = (editor: HTMLElement | null) => {
+  if (!editor) return;
+  const flagged = editor as HTMLElement & { __inlineImageRemoveBound?: boolean };
+  if (flagged.__inlineImageRemoveBound) return;
+  flagged.__inlineImageRemoveBound = true;
+
+  editor.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement | null;
+    const btn = target?.closest?.(".generalInfoInlineImageRemove") as HTMLElement | null;
+    if (!btn || !editor.contains(btn)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    btn.closest(".generalInfoInlineImageBlock")?.remove();
+  });
 };
 
 export const readFilesAsDataUrls = (files: File[]): Promise<Array<{ file: File; dataUrl: string }>> =>
@@ -260,6 +405,89 @@ export const readFilesAsDataUrls = (files: File[]): Promise<Array<{ file: File; 
         }),
     ),
   );
+
+export const looksLikeHtmlContent = (value: string) =>
+  /<\/?[a-z][\s\S]*>/i.test(String(value || ""));
+
+export const htmlToPlainText = (html: string) =>
+  String(html || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/h[1-6]>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+export const markdownReportToHtml = (markdown: string) => {
+  const lines = String(markdown || "").replace(/\r\n/g, "\n").split("\n");
+  const parts: string[] = [];
+
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) {
+      parts.push("<div><br /></div>");
+      return;
+    }
+    if (line.startsWith("### ")) {
+      parts.push(`<h5>${escapeGeneralInfoHtml(line.slice(4))}</h5>`);
+      return;
+    }
+    if (line.startsWith("## ")) {
+      parts.push(`<h4>${escapeGeneralInfoHtml(line.slice(3))}</h4>`);
+      return;
+    }
+    if (line.startsWith("# ")) {
+      parts.push(`<h3>${escapeGeneralInfoHtml(line.slice(2))}</h3>`);
+      return;
+    }
+    if (line.startsWith("- ") || line.startsWith("* ")) {
+      parts.push(`<div>• ${escapeGeneralInfoHtml(line.slice(2))}</div>`);
+      return;
+    }
+    parts.push(`<div>${escapeGeneralInfoHtml(rawLine)}</div>`);
+  });
+
+  return parts.join("");
+};
+
+export const buildFactCheckReportHtml = (
+  reportText: string,
+  evidenceImageUrls: string[] = [],
+) => {
+  const raw = String(reportText || "").trim();
+  let html = looksLikeHtmlContent(raw) ? raw : markdownReportToHtml(raw);
+
+  const urls = evidenceImageUrls
+    .map((url) => String(url || "").trim())
+    .filter((url) => /^(https?:\/\/|data:)/i.test(url))
+    .filter((url, index, arr) => arr.indexOf(url) === index)
+    .slice(0, 8);
+
+  if (urls.length > 0 && !/generalInfoFactCheckEvidence/i.test(html)) {
+    const blocks = urls
+      .map(
+        (src, index) =>
+          `<div class="generalInfoInlineImageBlock"><img class="generalInfoInlineImage" src="${src}" alt="근거 이미지 ${index + 1}" /><div style="font-size:12px;color:#94a3b8;margin-top:4px;">(출처: 이미지 ${index + 1})</div></div>`,
+      )
+      .join("");
+    html += `<div class="generalInfoFactCheckEvidence"><h4>근거 이미지</h4>${blocks}</div>`;
+  }
+
+  return html;
+};
+
+export const dataUrlToFile = async (dataUrl: string, fileName = "factcheck-image.png") => {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const ext = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg");
+  const safeName = /\.[a-z0-9]+$/i.test(fileName) ? fileName : `${fileName}.${ext}`;
+  return new File([blob], safeName, { type: blob.type || "image/png" });
+};
 
 const makePublicUrlFromStoragePath = (storagePath: unknown) => {
   const pathValue = String(storagePath || "").trim();

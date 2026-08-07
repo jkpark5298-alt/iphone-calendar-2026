@@ -6,7 +6,7 @@ import { persistGeneralInfoItemsToLocalStorage, readGeneralInfoItemsFromLocalSto
 import { supabase } from "../lib/supabaseClient";
 
 
-import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources } from "../lib/generalInfoHelpers";
+import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, looksLikeHtmlContent } from "../lib/generalInfoHelpers";
 
 
 const TRAVEL_DIARY_BUCKET = "info-photos";
@@ -72,6 +72,8 @@ export function useTravelDiaryGeneralInfoState({
   const [generalInfoFactCheckItem, setGeneralInfoFactCheckItem] = useState<GeneralInfoItem | null>(null);
   const [generalInfoFactCheckResult, setGeneralInfoFactCheckResult] = useState("");
   const [isRunningGeneralInfoFactCheck, setIsRunningGeneralInfoFactCheck] = useState(false);
+  /** Gemini 크레딧 소진 시 수동 Fact Check 입력이 필요한 항목 id */
+  const [generalInfoManualFactCheckId, setGeneralInfoManualFactCheckId] = useState<number | null>(null);
 
   const syncGeneralInfoItemToSupabase = useCallback(async (
     item: GeneralInfoItem,
@@ -113,6 +115,11 @@ export function useTravelDiaryGeneralInfoState({
                 mediaItems: mergedMediaItems,
                 formattedTextHtml:
                   data.item.formattedTextHtml || prevItem.formattedTextHtml || "",
+                factCheckSummary:
+                  String(data.item.factCheckSummary || "").length >=
+                  String(prevItem.factCheckSummary || "").length
+                    ? data.item.factCheckSummary || prevItem.factCheckSummary
+                    : prevItem.factCheckSummary,
                 isPinned: prevItem.isPinned || data.item.isPinned
               };
             }
@@ -238,6 +245,11 @@ export function useTravelDiaryGeneralInfoState({
                 filePreview: remoteItem.filePreview || localItem.filePreview,
                 formattedTextHtml:
                   remoteItem.formattedTextHtml || localItem.formattedTextHtml || "",
+                factCheckSummary:
+                  String(remoteItem.factCheckSummary || "").length >=
+                  String(localItem.factCheckSummary || "").length
+                    ? remoteItem.factCheckSummary || localItem.factCheckSummary
+                    : localItem.factCheckSummary,
               });
             } else {
               map.set(remoteItem.id, remoteItem);
@@ -1296,36 +1308,127 @@ export function useTravelDiaryGeneralInfoState({
     showPasteHint("🗑️ 일반 정보를 삭제했습니다.");
   }, [generalInfoItems, generalInfoEditingId, deleteGeneralInfoItemFromSupabase, resetGeneralInfoRichTextEditor, showPasteHint]);
 
+  const isGeminiCreditDepletedResponse = useCallback((data: Record<string, unknown> | null | undefined) => {
+    if (!data) return false;
+    if (data.mode === "credit_depleted" || data.needsManualFactCheck === true) return true;
+    const text = JSON.stringify(data);
+    return (
+      text.includes("RESOURCE_EXHAUSTED") ||
+      text.includes("prepayment credits") ||
+      text.includes("credits are depleted") ||
+      text.includes('"code":429') ||
+      text.includes('"code": 429')
+    );
+  }, []);
+
+  const applyCreditDepletedManualFactCheck = useCallback((item: GeneralInfoItem) => {
+    const updatedItem: GeneralInfoItem = {
+      ...item,
+      factCheckStatus: "확인 필요",
+      // AI 가짜 보고서는 만들지 않음. 기존 수동/정상 내용만 유지.
+    };
+
+    setGeneralInfoItems((prev) => {
+      const nextItems = prev.map((savedItem) =>
+        savedItem.id === item.id ? updatedItem : savedItem,
+      );
+      try {
+        persistGeneralInfoItemsToLocalStorage(nextItems);
+      } catch {}
+      return nextItems;
+    });
+
+    setGeneralInfoManualFactCheckId(item.id);
+    setGeneralInfoReportItem(updatedItem);
+    setGeneralInfoReportText("");
+    setGeneralInfoFactCheckItem(updatedItem);
+    setGeneralInfoFactCheckResult("");
+    showPasteHint("⚠️ AI 크레딧 소진 · 수동으로 Fact Check를 작성해 주세요.");
+    void syncGeneralInfoItemToSupabase(updatedItem, "PUT");
+    return updatedItem;
+  }, [showPasteHint, syncGeneralInfoItemToSupabase]);
+
+  const handleSaveManualFactCheck = useCallback(async (
+    itemId: number,
+    text: string,
+    status: GeneralInfoItem["factCheckStatus"] = "확인 필요",
+  ) => {
+    const targetItem = generalInfoItems.find((item) => item.id === itemId);
+    if (!targetItem) return;
+
+    const trimmed = String(text || "").trim();
+    if (!trimmed) {
+      showPasteHint("⚠️ Fact Check 내용을 입력해 주세요.");
+      return;
+    }
+
+    const updatedItem: GeneralInfoItem = {
+      ...targetItem,
+      factCheckStatus: status,
+      factCheckSummary: trimmed,
+    };
+
+    setGeneralInfoItems((prev) => {
+      const nextItems = prev.map((item) => (item.id === itemId ? updatedItem : item));
+      try {
+        persistGeneralInfoItemsToLocalStorage(nextItems);
+      } catch {}
+      return nextItems;
+    });
+
+    setGeneralInfoManualFactCheckId(null);
+    setGeneralInfoReportItem(updatedItem);
+    setGeneralInfoReportText(trimmed);
+    setGeneralInfoFactCheckItem(updatedItem);
+    setGeneralInfoFactCheckResult(trimmed);
+    showPasteHint("✅ Fact Check / AI 검증 보고서(이미지 포함)를 저장했습니다.");
+    await syncGeneralInfoItemToSupabase(updatedItem, "PUT");
+  }, [generalInfoItems, showPasteHint, syncGeneralInfoItemToSupabase]);
+
   // --- AI 보고서 및 Fact Check 작성 핸들러 ---
   const buildGeneralInfoFactCheckPayload = useCallback((item: GeneralInfoItem) => {
-    const mediaItems = normalizeGeneralInfoMediaItems(item).map((media) => ({
-      ...media,
-      // Prefer durable URL; keep data URL only when reasonably small for Gemini inline
-      preview:
-        media.fileUrl ||
-        (String(media.preview || "").startsWith("data:") && String(media.preview || "").length > 900_000
-          ? ""
-          : media.preview),
-      fileUrl: media.fileUrl || undefined,
-    }));
+    // 큰 data: URL은 요청 본문을 깨뜨리므로 https/fileUrl만 보냄 (서버가 필요 시 다운로드)
+    const mediaItems = normalizeGeneralInfoMediaItems(item)
+      .map((media) => {
+        const fileUrl = String(media.fileUrl || "").trim();
+        const preview = String(media.preview || "").trim();
+        const bestUrl = /^https?:\/\//i.test(fileUrl)
+          ? fileUrl
+          : /^https?:\/\//i.test(preview)
+            ? preview
+            : "";
+        return {
+          id: media.id,
+          name: media.name,
+          type: media.type,
+          preview: bestUrl,
+          fileUrl: bestUrl || undefined,
+          storagePath: media.storagePath,
+          memo: media.memo,
+        };
+      })
+      .filter((media) => media.preview || media.memo);
 
     let formattedTextHtml = String(item.formattedTextHtml || "");
-    if (formattedTextHtml.length > 250_000) {
-      formattedTextHtml = formattedTextHtml.replace(/src=["']data:[^"']+["']/gi, 'src=""');
+    // 인라인 data: 이미지는 API 본문에서 제거하고, 위 mediaItems(https)로만 전달
+    formattedTextHtml = formattedTextHtml.replace(/src=["']data:[^"']+["']/gi, 'src=""');
+    if (formattedTextHtml.length > 80_000) {
+      formattedTextHtml = formattedTextHtml.slice(0, 80_000);
     }
 
     return {
       title: item.title,
-      text: item.text,
+      text: String(item.text || "").slice(0, 40_000),
       formattedTextHtml,
       sourceUrl: item.sourceUrl,
       summary: item.summary,
-      factCheckSummary: item.factCheckSummary,
+      // 기존 긴 보고서는 재전송하지 않음 (요청 비대화 방지)
+      factCheckSummary: "",
       extraNote: item.extraNote,
       categoryPath: getGeneralInfoCategoryPath(item),
       keywords: item.keywords || [],
       mediaSummary: getGeneralInfoInputCountText(item),
-      mediaItems,
+      mediaItems: mediaItems.slice(0, 8),
       pdfText: "",
     };
   }, []);
@@ -1379,30 +1482,60 @@ export function useTravelDiaryGeneralInfoState({
       ].join("\n");
     };
 
-    try {
-      setGeneralInfoReportItem(item);
-      setGeneralInfoReportText(
-        makeFallbackReport(item, {
-          summary: "Gemini 보고서 생성 전입니다.",
-        })
-      );
+    const applyReportToItem = (nextReport: string, nextStatus: GeneralInfoItem["factCheckStatus"]) => {
+      const updatedReportItem = {
+        ...item,
+        factCheckStatus: nextStatus,
+        factCheckSummary: nextReport,
+      };
 
+      setGeneralInfoItems((prev) => {
+        const nextItems = prev.map((savedItem) =>
+          savedItem.id === item.id ? updatedReportItem : savedItem,
+        );
+        try {
+          persistGeneralInfoItemsToLocalStorage(nextItems);
+        } catch (persistError) {
+          console.error("AI report local persist failed", persistError);
+        }
+        return nextItems;
+      });
+
+      setGeneralInfoReportItem(updatedReportItem);
+      setGeneralInfoReportText(nextReport);
+      return updatedReportItem;
+    };
+
+    try {
       setIsGeneratingGeneralInfoReport(true);
       showPasteHint("📄 AI 보고서를 작성합니다.");
 
       const customApiKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") || "" : "";
-      const response = await fetch("/api/general-info-factcheck", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-gemini-api-key": customApiKey,
-        },
-        body: JSON.stringify(buildGeneralInfoFactCheckPayload(item)),
-      });
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 90_000);
+
+      let response: Response;
+      try {
+        response = await fetch("/api/general-info-factcheck", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-gemini-api-key": customApiKey,
+          },
+          body: JSON.stringify(buildGeneralInfoFactCheckPayload(item)),
+          signal: controller.signal,
+        });
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
 
       let data: {
         error?: string;
         message?: string;
+        detail?: string;
+        warning?: string;
+        mode?: string;
+        model?: string;
         status?: string;
         factCheckStatus?: string;
         summary?: string;
@@ -1423,8 +1556,15 @@ export function useTravelDiaryGeneralInfoState({
         data = {};
       }
 
-      if (!response.ok) {
-        throw new Error(String(data?.error || data?.message || "AI 보고서 API 호출 실패"));
+      if (!response.ok || data.ok === false) {
+        throw new Error(
+          String(data?.detail || data?.error || data?.message || `AI 보고서 API 호출 실패 (${response.status})`),
+        );
+      }
+
+      if (isGeminiCreditDepletedResponse(data as Record<string, unknown>)) {
+        applyCreditDepletedManualFactCheck(item);
+        return;
       }
 
       const rawStatus = String(data.status || data.factCheckStatus || item.factCheckStatus || "확인 필요");
@@ -1447,48 +1587,60 @@ export function useTravelDiaryGeneralInfoState({
         .map((value) => (typeof value === "string" ? value.trim() : ""))
         .find((value) => value.length > 0);
 
-      const apiMessageText = JSON.stringify(data || {});
-      const isGeminiCreditDepleted =
-        apiMessageText.includes("RESOURCE_EXHAUSTED") ||
-        apiMessageText.includes("prepayment credits") ||
-        apiMessageText.includes("credits are depleted") ||
-        apiMessageText.includes("429");
-
-      const nextReport = isGeminiCreditDepleted
-        ? makeFallbackReport(item, {
-            summary: "Gemini 크레딧 소진으로 수동 입력용 양식으로 대체합니다.",
-          })
-        : candidateReport || makeFallbackReport(item, data);
-
-      const updatedReportItem = {
-        ...item,
-        factCheckStatus: nextStatus,
-        factCheckSummary: nextReport, // Store the full markdown report here!
+      const modelName = String(data.model || "gemini-2.5-flash").trim();
+      const ensureAiReportLabel = (report: string) => {
+        const label = `AI 검증 보고서(${modelName})`;
+        const body = String(report || "").trim();
+        if (!body) return `# ${label}`;
+        if (/AI 검증 보고서\([^)]+\)/i.test(body)) {
+          return body.replace(/AI 검증 보고서\([^)]+\)/i, label);
+        }
+        if (body.startsWith("# ")) {
+          return `# ${label}\n\n${body.replace(/^#\s+[^\n]*\n?/, "").trim()}`;
+        }
+        return `# ${label}\n\n${body}`;
       };
 
-      setGeneralInfoItems((prev) => {
-        const nextItems = prev.map((savedItem) =>
-          savedItem.id === item.id ? updatedReportItem : savedItem
-        );
-        persistGeneralInfoItemsToLocalStorage(nextItems);
-        return nextItems;
-      });
+      const labeledMarkdown = ensureAiReportLabel(
+        candidateReport || makeFallbackReport(item, data),
+      );
+      const evidenceUrls = getGeneralInfoDisplayMediaItems(item)
+        .map((media) => String(media.preview || media.fileUrl || "").trim())
+        .filter(Boolean);
+      const nextReport = buildFactCheckReportHtml(labeledMarkdown, evidenceUrls);
 
-      setGeneralInfoReportItem(updatedReportItem);
-      setGeneralInfoReportText(nextReport);
-      showPasteHint("✅ AI 보고서 준비 완료. PDF 저장/공유가 가능합니다.");
+      const updatedReportItem = applyReportToItem(nextReport, nextStatus);
+      setGeneralInfoManualFactCheckId(null);
+      showPasteHint(
+        data.mode === "gemini" || data.mode === "gemini-text"
+          ? `✅ AI 검증 보고서(${modelName}) 준비 완료`
+          : data.warning
+            ? `⚠️ ${data.warning}`
+            : "✅ AI 검증 보고서 준비 완료",
+      );
 
-      // Sync the updated report item to Supabase!
       void syncGeneralInfoItemToSupabase(updatedReportItem, "PUT");
     } catch (error) {
       console.error("general info report failed", error);
-      setGeneralInfoReportItem(item);
-      setGeneralInfoReportText(makeFallbackReport(item, { summary: "보고서 생성 중 오류 발생." }));
-      showPasteHint("⚠️ AI 보고서 작성 중 오류가 발생했습니다.");
+      if (isGeminiCreditDepletedResponse({ message: String(error) })) {
+        applyCreditDepletedManualFactCheck(item);
+        return;
+      }
+      const fallback = makeFallbackReport(item, {
+        summary: `보고서 생성 중 오류: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      applyReportToItem(fallback, "확인 필요");
+      showPasteHint("⚠️ AI 보고서 작성 중 오류가 발생했습니다. 기본 보고서를 표시합니다.");
     } finally {
       setIsGeneratingGeneralInfoReport(false);
     }
-  }, [buildGeneralInfoFactCheckPayload, showPasteHint, syncGeneralInfoItemToSupabase]);
+  }, [
+    applyCreditDepletedManualFactCheck,
+    buildGeneralInfoFactCheckPayload,
+    isGeminiCreditDepletedResponse,
+    showPasteHint,
+    syncGeneralInfoItemToSupabase,
+  ]);
 
   const handleCopyGeneralInfoReport = useCallback(async () => {
     if (!generalInfoReportText.trim()) {
@@ -1503,102 +1655,225 @@ export function useTravelDiaryGeneralInfoState({
     }
   }, [generalInfoReportText, showPasteHint]);
 
-  const handleShareGeneralInfoReport = useCallback(async () => {
-    if (!generalInfoReportText.trim()) {
+  const handleShareGeneralInfoReport = useCallback(async (item?: GeneralInfoItem) => {
+    const source = item || generalInfoReportItem;
+    const htmlOrText = String(
+      source?.factCheckSummary || generalInfoReportText || "",
+    ).trim();
+
+    if (!htmlOrText) {
       showPasteHint("공유할 보고서가 없습니다.");
       return;
     }
+
+    const plainText = htmlToPlainText(htmlOrText) || htmlOrText;
+    const imageSrcs = extractMediaSrcFromHtml(htmlOrText);
+    const shareFiles: File[] = [];
+
+    for (const [index, src] of imageSrcs.entries()) {
+      try {
+        if (src.startsWith("data:")) {
+          shareFiles.push(await dataUrlToFile(src, `ai-report-${index + 1}.png`));
+        } else if (/^https?:\/\//i.test(src)) {
+          const response = await fetch(src);
+          if (!response.ok) continue;
+          const blob = await response.blob();
+          if (!blob.type.startsWith("image/")) continue;
+          const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
+          shareFiles.push(
+            new File([blob], `ai-report-${index + 1}.${ext}`, {
+              type: blob.type || "image/jpeg",
+            }),
+          );
+        }
+      } catch {
+        // ignore single image failures
+      }
+    }
+
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: generalInfoReportItem?.title || "AI 보고서",
-          text: generalInfoReportText,
-        });
-        showPasteHint("✅ 보고서 공유를 열었습니다.");
+        const payload: ShareData = {
+          title: source?.title || generalInfoReportItem?.title || "AI 검증 보고서",
+          text: plainText,
+        };
+        if (
+          shareFiles.length > 0 &&
+          typeof navigator.canShare === "function" &&
+          navigator.canShare({ files: shareFiles })
+        ) {
+          payload.files = shareFiles;
+        }
+        await navigator.share(payload);
+        showPasteHint(
+          shareFiles.length > 0
+            ? `✅ 보고서+이미지 ${shareFiles.length}장 공유를 열었습니다.`
+            : "✅ 보고서 공유를 열었습니다.",
+        );
       } catch {
         showPasteHint("공유 실패/취소");
       }
       return;
     }
-    await handleCopyGeneralInfoReport();
-  }, [generalInfoReportText, generalInfoReportItem, handleCopyGeneralInfoReport, showPasteHint]);
+
+    try {
+      await navigator.clipboard.writeText(plainText);
+      showPasteHint("✅ 보고서 텍스트를 클립보드에 복사했습니다.");
+    } catch {
+      showPasteHint("⚠️ 자동 복사 실패.");
+    }
+  }, [generalInfoReportItem, generalInfoReportText, showPasteHint]);
 
   const handlePrintGeneralInfoReport = useCallback(() => {
     window.print();
   }, []);
 
-  const handleRunPreciseGeneralInfoFactCheck = useCallback(async (item: GeneralInfoItem, forceRegenerate = false) => {
-    // If the item already has a generated report, and we are not forcing, show it!
-    if (!forceRegenerate && item.factCheckSummary && item.factCheckSummary.length > 150 && item.factCheckSummary.includes("##")) {
-      setGeneralInfoFactCheckItem(item);
-      setGeneralInfoFactCheckResult(item.factCheckSummary);
-      setGeneralInfoReportItem(item);
-      setGeneralInfoReportText(item.factCheckSummary);
-      showPasteHint("✅ 보관된 Fact Check 결과를 불러왔습니다.");
+  const [isExportingGeneralInfoPdf, setIsExportingGeneralInfoPdf] = useState(false);
+
+  const handleDownloadGeneralInfoPdfReport = useCallback(async (item: GeneralInfoItem) => {
+    const reportHtml = String(item.factCheckSummary || "").trim();
+    if (!reportHtml) {
+      showPasteHint("⚠️ 먼저 AI 검증 보고서를 작성해 주세요.");
       return;
     }
 
-    try {
-      setGeneralInfoFactCheckItem(item);
-      setGeneralInfoFactCheckResult("Gemini가 자료를 검증하고 보고서를 작성하는 중입니다.");
-      setIsRunningGeneralInfoFactCheck(true);
-      showPasteHint("🔎 Gemini가 정밀 검증 중입니다.");
-
-      const customApiKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") || "" : "";
-      const response = await fetch("/api/general-info-factcheck", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-gemini-api-key": customApiKey,
-        },
-        body: JSON.stringify(buildGeneralInfoFactCheckPayload(item)),
+    const loadScript = (src: string) =>
+      new Promise<void>((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) {
+          resolve();
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = src;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`스크립트 로드 실패: ${src}`));
+        document.body.appendChild(script);
       });
 
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || "정밀 Fact Check 보고서 작성 실패");
+    try {
+      setIsExportingGeneralInfoPdf(true);
+      showPasteHint("📄 PDF 보고서 생성 중…");
+
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+
+      const contentHtml = looksLikeHtmlContent(reportHtml)
+        ? reportHtml
+        : buildFactCheckReportHtml(reportHtml);
+
+      const safeTitle = String(item.title || "AI검증보고서")
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .slice(0, 40);
+      const category = getGeneralInfoCategoryPath(item);
+      const status = getGeneralInfoFactLabel(item);
+      const created = String(item.createdAt || new Date().toLocaleString("ko-KR"));
+
+      const container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.top = "-9999px";
+      container.style.left = "-9999px";
+      container.style.width = "794px";
+      container.style.padding = "48px";
+      container.style.background = "#ffffff";
+      container.style.color = "#000000";
+      container.style.fontFamily = "Apple SD Gothic Neo, Malgun Gothic, sans-serif";
+      container.style.boxSizing = "border-box";
+      container.style.lineHeight = "1.7";
+
+      container.innerHTML = `
+        <div style="border-bottom: 3px solid #000; padding-bottom: 18px; margin-bottom: 22px;">
+          <h1 style="font-size: 24px; margin: 0; color: #000000; font-weight: 800;">AI 검증 보고서 PDF</h1>
+          <p style="font-size: 12px; color: #000000; margin: 8px 0 0 0;">일반 정보 저장함 · 작성/저장: ${created}</p>
+        </div>
+        <div style="margin-bottom: 18px; padding: 14px 16px; background: #ffffff; border-left: 4px solid #000000; border-radius: 8px;">
+          <div style="font-size: 12px; color: #000000; margin-bottom: 4px;">자료 정보</div>
+          <div style="font-size: 16px; font-weight: 700; color: #000000;">${safeTitle}</div>
+          <div style="font-size: 13px; color: #000000; margin-top: 6px;">분류: ${category}</div>
+          <div style="font-size: 13px; color: #000000;">상태: ${status}</div>
+        </div>
+        <div class="pdf-report-body" style="font-size: 14px; color: #000000;">
+          ${contentHtml}
+        </div>
+        <div style="border-top: 1px solid #000000; margin-top: 28px; padding-top: 14px; text-align: center; font-size: 11px; color: #000000;">
+          본 PDF는 저장된 AI 검증 보고서를 변환한 것이며, 원문 자료와 함께 확인하는 것이 좋습니다.
+        </div>
+      `;
+
+      // PDF용: 모든 글자 검정 + 밝은 배경, 이미지/제목 정리
+      container.querySelectorAll("*").forEach((node) => {
+        const el = node as HTMLElement;
+        if (!el.style) return;
+        el.style.color = "#000000";
+        const bg = (el.style.backgroundColor || el.style.background || "").toLowerCase();
+        if (bg && bg !== "transparent" && !bg.includes("rgb(255") && bg !== "#fff" && bg !== "#ffffff") {
+          el.style.background = "#ffffff";
+          el.style.backgroundColor = "#ffffff";
+        }
+      });
+      container.querySelectorAll("img").forEach((img) => {
+        const el = img as HTMLImageElement;
+        el.style.maxWidth = "100%";
+        el.style.height = "auto";
+        el.style.borderRadius = "8px";
+        el.style.margin = "10px 0";
+        el.style.display = "block";
+      });
+      container.querySelectorAll("h3,h4,h5").forEach((heading) => {
+        const el = heading as HTMLElement;
+        el.style.color = "#000000";
+        el.style.margin = "14px 0 8px";
+      });
+      container.querySelectorAll(".generalInfoInlineImageRemove").forEach((btn) => btn.remove());
+
+      document.body.appendChild(container);
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      const html2canvas = (window as any).html2canvas;
+      const jsPDF = (window as any).jspdf?.jsPDF;
+      if (!html2canvas || !jsPDF) {
+        throw new Error("PDF 라이브러리를 불러오지 못했습니다.");
       }
 
-      const rawStatus = String(data.status || "");
-      const nextStatus: GeneralInfoItem["factCheckStatus"] =
-        rawStatus === "오류 가능성" || rawStatus === "오류 가능"
-          ? "오류 가능성"
-          : "확인 완료";
-      const nextResult = String(data.result || data.summary || "정밀 Fact Check 보고서가 작성되었습니다.");
-
-      const updatedItem = {
-        ...item,
-        factCheckStatus: nextStatus,
-        factCheckSummary: nextResult, // Store the full fact check report in factCheckSummary!
-      };
-
-      setGeneralInfoItems((prev) => {
-        const nextItems = prev.map((savedItem) =>
-          savedItem.id === item.id ? updatedItem : savedItem
-        );
-        persistGeneralInfoItemsToLocalStorage(nextItems);
-        return nextItems;
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        backgroundColor: "#ffffff",
       });
+      document.body.removeChild(container);
 
-      setGeneralInfoFactCheckItem((prev) =>
-        prev && prev.id === item.id ? updatedItem : prev
-      );
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const pdf = new jsPDF("p", "mm", "a4");
+      const imgWidth = 210;
+      const pageHeight = 297;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-      setGeneralInfoFactCheckResult(nextResult);
-      setGeneralInfoReportItem(updatedItem);
-      setGeneralInfoReportText(nextResult);
-      showPasteHint("✅ 정밀 Fact Check 보고서 작성 완료");
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
 
-      // Sync the updated item to Supabase!
-      void syncGeneralInfoItemToSupabase(updatedItem, "PUT");
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`AI검증보고서_${safeTitle}.pdf`);
+      showPasteHint("✅ PDF 보고서를 저장했습니다.");
     } catch (error) {
-      console.error("precise general info factcheck failed", error);
-      setGeneralInfoFactCheckResult("정밀 Fact Check 작성 실패.");
-      showPasteHint("⚠️ 정밀 Fact Check 작성 오류.");
+      console.error("general info pdf export failed", error);
+      showPasteHint(
+        `⚠️ PDF 저장 실패: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
-      setIsRunningGeneralInfoFactCheck(false);
+      setIsExportingGeneralInfoPdf(false);
     }
-  }, [buildGeneralInfoFactCheckPayload, showPasteHint, syncGeneralInfoItemToSupabase]);
+  }, [showPasteHint]);
+
+  // (정밀 Fact Check 기능 제거됨 → PDF 보고서로 대체)
 
   // --- 메모 필터링 ---
   const filteredGeneralInfoItems = useMemo(() => {
@@ -1815,6 +2090,10 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoFactCheckResult,
     isRunningGeneralInfoFactCheck,
     setIsRunningGeneralInfoFactCheck,
+    isExportingGeneralInfoPdf,
+    generalInfoManualFactCheckId,
+    setGeneralInfoManualFactCheckId,
+    handleSaveManualFactCheck,
     handleStartEditGeneralInfo,
     handleCancelEditGeneralInfo,
     handleUpdateGeneralInfoExtraNote,
@@ -1845,7 +2124,7 @@ export function useTravelDiaryGeneralInfoState({
     handleCopyGeneralInfoReport,
     handleShareGeneralInfoReport,
     handlePrintGeneralInfoReport,
-    handleRunPreciseGeneralInfoFactCheck,
+    handleDownloadGeneralInfoPdfReport,
     handleTogglePinGeneralInfo,
     handleDeleteGeneralInfoBodyText,
     handleSaveGeneralInfoReportText

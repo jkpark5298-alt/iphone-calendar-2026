@@ -25,6 +25,28 @@ type InlineMediaPart = {
 const MAX_INLINE_MEDIA = 6;
 const MAX_INLINE_BYTES = 4_000_000;
 
+const isGeminiCreditDepletedPayload = (value: unknown) => {
+  const text = typeof value === "string" ? value : JSON.stringify(value || {});
+  return (
+    /RESOURCE_EXHAUSTED/i.test(text) ||
+    /prepayment credits/i.test(text) ||
+    /credits? are depleted/i.test(text) ||
+    /"code"\s*:\s*429/i.test(text) ||
+    /\b429\b/.test(text) ||
+    /quota.*?exceed/i.test(text)
+  );
+};
+
+const creditDepletedResponse = () =>
+  NextResponse.json({
+    ok: true,
+    mode: "credit_depleted",
+    needsManualFactCheck: true,
+    status: "확인 필요",
+    summary: "AI 크레딧이 소진되었습니다. 수동으로 Fact Check를 작성해 주세요.",
+    result: "",
+  });
+
 const getString = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 
@@ -249,8 +271,21 @@ const buildFallbackReport = (payload: FactCheckRequest) => {
 };
 
 export async function POST(request: Request) {
+  let payload: FactCheckRequest = {};
+
   try {
-    const payload = (await request.json()) as FactCheckRequest;
+    try {
+      payload = (await request.json()) as FactCheckRequest;
+    } catch (parseError) {
+      console.error("general-info-factcheck invalid json body", parseError);
+      return NextResponse.json({
+        ok: true,
+        mode: "fallback",
+        warning: "요청 본문 파싱에 실패해 기본 보고서를 작성했습니다.",
+        ...buildFallbackReport({}),
+      });
+    }
+
     const apiKey =
       request.headers.get("x-gemini-api-key") ||
       process.env.GEMINI_API_KEY ||
@@ -292,39 +327,58 @@ export async function POST(request: Request) {
       .join("\n\n");
 
     const prompt = `
-너는 초등학생도 이해할 수 있게 쉬운 보고서를 작성하는 선생님이자 Fact Check 담당자다.
+너는 저장된 자료를 바탕으로 "근거 있는 검증 메모(AI 검증 보고서)"를 작성하는 Fact Check 담당자다.
+목표는 외부 인터넷으로 진실을 단정하는 것이 아니라, 저장함의 TEXT·이미지·URL만으로 주장과 근거를 정리하는 것이다.
 
 작업 목표:
-저장함에 있는 본문 TEXT, 인라인 이미지, 사진/이미지/PDF 자료를 확인하고,
-그 안의 TEXT 내용, 주장, 지식에 대해 구체적인 근거를 정리한 뒤,
-초등학생도 이해할 수 있는 쉬운 보고서를 작성하라.
+1. 본문 TEXT, 인라인 이미지, 첨부 이미지/PDF, 출처 URL, 요약/메모를 검토한다.
+2. 주장 / 근거 / 미확인을 분리해 적는다.
+3. 근거를 적을 때는 반드시 출처를 표시한다.
+4. 초등학생도 이해할 수 있게 쉽게 쓰되, 확인하지 못한 내용은 지어내지 않는다.
+
+검증 기준:
+1. 원문 충실도: 자료에 있는 내용만 요약. 없는 숫자·인명·날짜를 만들지 말 것.
+2. 주장 vs 근거 분리: (1) 자료가 말하는 것 (2) 뒷받침 근거 (3) 아직 확인 안 된 것.
+3. 검증 가능 항목만 확인: 날짜·수치·기관명·인명·인용은 원문/이미지와 대조.
+4. 이미지 역할 명시: 사진이 무엇을 보여주는지 1~2문장. 못 읽으면 "사진 내용 직접 확인 필요".
+5. 상태값: "확인 완료" | "확인 필요" | "오류 가능성"
+   - 확인 완료: 저장 자료만으로 핵심이 일치
+   - 확인 필요: 근거 부족, URL 미대조, 이미지 미판독
+   - 오류 가능성: 본문 모순, 과장, 출처 불명
+6. 출처 신뢰도는 보수적으로: URL/매체명을 "신뢰한다"고 단정하지 말고 "출처 표시됨 / 추가 확인 권장"으로 적을 것.
+7. 실시간 뉴스·위키 검색으로 진실을 판정한 것처럼 쓰지 말 것.
+
+근거 출처 표시 규칙 (매우 중요):
+- 본문 TEXT 근거: (출처: 본문 TEXT)
+- 인라인/첨부 이미지 근거: (출처: 이미지 1) 또는 (출처: 첨부 이미지)
+- URL 근거: (출처: URL) + 가능하면 URL 일부 표기
+- 요약/메모 근거: (출처: 요약) / (출처: 추가 메모)
+- 한 문장에 근거가 있으면 문장 끝에 출처를 붙인다.
 
 중요 원칙:
-1. 저장된 본문 TEXT, URL, 본문 속 인라인 이미지, 첨부 사진/이미지, PDF 추출 TEXT를 모두 검토한다.
-2. 첨부된 이미지나 PDF를 읽을 수 있으면 그 내용도 근거로 사용한다.
-3. 실제로 확인하지 못한 내용은 지어내지 말고 "추가 확인 필요"라고 쓴다.
-4. 출처 URL이 있으면 "원문 대조 필요" 또는 "출처 확인 필요"로 표시한다.
-5. 사진을 직접 판독하기 어려우면 "사진 내용 직접 확인 필요"라고 쓴다.
-6. 보고서 수준은 초등학생도 이해할 수 있을 만큼 쉽게 작성한다.
-7. 결과는 반드시 JSON만 출력한다.
+1. 읽을 수 있는 이미지는 반드시 검토하고 근거로 사용한다.
+2. 확인하지 못한 내용은 "추가 확인 필요"라고 쓴다.
+3. 출처 URL이 있으면 "원문 대조 필요" 또는 "출처 확인 필요"로 표시한다.
+4. 결과는 반드시 JSON만 출력한다.
 
 JSON 형식:
 {
   "status": "확인 완료 또는 확인 필요 또는 오류 가능성",
   "summary": "저장함 카드에 표시할 1~2문장 요약",
-  "result": "초등학생도 이해할 수 있는 쉬운 보고서 전체 내용"
+  "result": "쉬운 AI 검증 보고서 전체 내용"
 }
 
 보고서 result 형식:
-# 쉬운 보고서 제목
+# AI 검증 보고서
 ## 1. 이 자료의 주제
 ## 2. 자료가 말하는 핵심 내용
 ## 3. 자료 속 주장
-## 4. 구체적인 근거
-## 5. 초등학생도 이해할 수 있는 쉬운 설명
-## 6. 확인된 내용
-## 7. 더 확인이 필요한 내용
-## 8. 정리
+## 4. 구체적인 근거 (각 근거 끝에 출처 표시)
+## 5. 이미지에서 확인한 내용 (출처: 이미지 n)
+## 6. 초등학생도 이해할 수 있는 쉬운 설명
+## 7. 확인된 내용
+## 8. 더 확인이 필요한 내용
+## 9. 정리
 
 검토 자료:
 제목: ${payload.title || "제목 없음"}
@@ -344,6 +398,7 @@ ${sourceText || "저장된 본문 자료가 부족합니다."}
     const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
     let data: Record<string, unknown> | null = null;
     let lastError: unknown = null;
+    let usedModel = models[0];
 
     for (const model of models) {
       try {
@@ -371,11 +426,21 @@ ${sourceText || "저장된 본문 자료가 부족합니다."}
 
         data = (await response.json()) as Record<string, unknown>;
 
-        if (response.ok) break;
+        if (response.ok) {
+          usedModel = model;
+          break;
+        }
+
+        if (isGeminiCreditDepletedPayload(data) || response.status === 429) {
+          return creditDepletedResponse();
+        }
 
         lastError = data;
         data = null;
       } catch (error) {
+        if (isGeminiCreditDepletedPayload(error)) {
+          return creditDepletedResponse();
+        }
         lastError = error;
         data = null;
       }
@@ -383,6 +448,9 @@ ${sourceText || "저장된 본문 자료가 부족합니다."}
 
     if (!data) {
       console.error("general-info-factcheck gemini failed", lastError);
+      if (isGeminiCreditDepletedPayload(lastError)) {
+        return creditDepletedResponse();
+      }
       return NextResponse.json({
         ok: true,
         mode: "fallback",
@@ -414,14 +482,32 @@ ${sourceText || "저장된 본문 자료가 부족합니다."}
       parsed = null;
     }
 
+    const wrapAiVerificationReport = (resultText: string, model: string) => {
+      const label = `AI 검증 보고서(${model})`;
+      const body = String(resultText || "").trim();
+      if (!body) return `# ${label}`;
+      if (/AI 검증 보고서\([^)]+\)/i.test(body)) {
+        return body.replace(/AI 검증 보고서\([^)]+\)/i, label);
+      }
+      if (body.startsWith("# ")) {
+        const withoutFirstTitle = body.replace(/^#\s+[^\n]*\n?/, "").trim();
+        return `# ${label}\n\n${withoutFirstTitle}`;
+      }
+      return `# ${label}\n\n${body}`;
+    };
+
     if (!parsed) {
       return NextResponse.json({
         ok: true,
         mode: "gemini-text",
+        model: usedModel,
         status: "확인 필요",
         summary:
           "Gemini가 보고서를 작성했지만 구조화된 결과로 변환하지 못했습니다.",
-        result: rawText || buildFallbackReport(payload).result,
+        result: wrapAiVerificationReport(
+          rawText || buildFallbackReport(payload).result,
+          usedModel,
+        ),
       });
     }
 
@@ -435,19 +521,23 @@ ${sourceText || "저장된 본문 자료가 부족합니다."}
     return NextResponse.json({
       ok: true,
       mode: "gemini",
+      model: usedModel,
       status: safeStatus,
       summary: parsed.summary || "정밀 Fact Check 보고서가 작성되었습니다.",
-      result: parsed.result || rawText,
+      result: wrapAiVerificationReport(parsed.result || rawText, usedModel),
     });
   } catch (error) {
     console.error("general-info-factcheck route error", error);
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "정밀 Fact Check 보고서 작성 중 오류가 발생했습니다.",
-        detail: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    if (isGeminiCreditDepletedPayload(error)) {
+      return creditDepletedResponse();
+    }
+    // 500 대신 폴백 보고서를 반환해 UI에 보고서가 항상 보이게 함
+    return NextResponse.json({
+      ok: true,
+      mode: "fallback",
+      warning: "보고서 작성 중 오류가 발생해 기본 보고서를 작성했습니다.",
+      ...buildFallbackReport(payload),
+      detail: error instanceof Error ? error.message : String(error),
+    });
   }
 }
