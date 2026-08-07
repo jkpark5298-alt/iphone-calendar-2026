@@ -6977,6 +6977,8 @@ body {
   margin-bottom: 8px;
   color: #7dd3fc;
   font-size: 13px;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .generalInfoDetailSection p,
@@ -7017,6 +7019,12 @@ body {
 
   .smallActionButton {
     width: 100%;
+  }
+
+  /* 상세보기 제목 옆 복사 버튼은 가로 100% 금지 → 제목 세로깨짐 방지 */
+  .generalInfoSectionTitleRow .smallActionButton,
+  .generalInfoFactCheckToolbar .smallActionButton {
+    width: auto;
   }
 }
 
@@ -7688,23 +7696,72 @@ body {
 
 .generalInfoSectionTitleRow {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 7px;
+  gap: 8px 10px;
+  margin-bottom: 10px;
 }
 
 .generalInfoSectionTitleRow strong {
-  display: inline;
+  display: block;
+  flex: 1 1 160px;
+  min-width: 0;
   margin-bottom: 0;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  white-space: normal;
+  line-height: 1.45;
 }
 
 .generalInfoCopyAllBtn {
-  flex-shrink: 0;
-  padding: 6px 10px !important;
+  flex: 0 0 auto;
+  width: auto !important;
+  max-width: 100%;
+  padding: 6px 12px !important;
   font-size: 12px !important;
   font-weight: 800 !important;
   white-space: nowrap;
+  border-radius: 999px !important;
+}
+
+.generalInfoFactCheckPanel {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.generalInfoFactCheckToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+}
+
+.generalInfoFactCheckHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #94a3b8;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.generalInfoFactCheckStatusLabel {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.generalInfoFactCheckStatusSelect {
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 8px 10px;
 }
 
 .generalInfoResultBox p {

@@ -447,25 +447,12 @@ export default function GeneralInfoDetailModal({
           style={{ display: "flex", flexDirection: "column" }}
         >
           <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 0 : 6 }}>
-            <div className="generalInfoSectionTitleRow">
-              <strong>
-                {needsManualFactCheck
-                  ? "Fact Check (수동 작성)"
-                  : getAiVerificationReportLabel(item.factCheckSummary)}
-              </strong>
-              <button
-                type="button"
-                className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                onClick={() => {
-                  const status = String(item.factCheckStatus || "확인 전").trim();
-                  const summary = htmlToPlainText(String(item.factCheckSummary || "").trim())
-                    || String(item.factCheckSummary || "").trim();
-                  void copyPlainText([`[Fact Check 상태] ${status}`, summary].filter(Boolean).join("\n\n"), "fact");
-                }}
-              >
-                {copyFeedback === "fact" ? "✅ 복사됨" : "📋 전체 복사"}
-              </button>
-            </div>
+            <strong>
+              {needsManualFactCheck
+                ? "Fact Check (수동 작성)"
+                : getAiVerificationReportLabel(item.factCheckSummary)}
+            </strong>
+
             {isGeneratingReport || isExportingPdf ? (
               <div style={{
                 marginTop: "8px",
@@ -491,6 +478,7 @@ export default function GeneralInfoDetailModal({
                 color: "#fde68a",
                 fontSize: "13px",
                 lineHeight: 1.6,
+                wordBreak: "keep-all",
               }}>
                 <strong style={{ display: "block", marginBottom: 6, color: "#facc15" }}>
                   ⚠️ AI 크레딧 소진
@@ -499,11 +487,11 @@ export default function GeneralInfoDetailModal({
               </div>
             ) : null}
 
-            <div style={{ marginTop: "10px", display: "grid", gap: "10px" }}>
-              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <div className="generalInfoFactCheckPanel">
+              <div className="generalInfoFactCheckToolbar">
                 <span className="miniTag" style={{
-                  padding: "4px 8px",
-                  borderRadius: "6px",
+                  padding: "5px 10px",
+                  borderRadius: "999px",
                   fontSize: "12px",
                   fontWeight: 700,
                   background: needsManualFactCheck ? "rgba(250, 204, 21, 0.15)" : "rgba(56, 189, 248, 0.12)",
@@ -512,26 +500,32 @@ export default function GeneralInfoDetailModal({
                 }}>
                   {needsManualFactCheck ? "팩트체크 작성 필요" : (item.factCheckStatus || "확인 전")}
                 </span>
-                <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                  문자 끝에 S → 이미지 입력 · 보고서/공유에 함께 표시
-                </span>
+                <button
+                  type="button"
+                  className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                  onClick={() => {
+                    const status = String(item.factCheckStatus || "확인 전").trim();
+                    const summary = htmlToPlainText(String(item.factCheckSummary || "").trim())
+                      || String(item.factCheckSummary || "").trim();
+                    void copyPlainText([`[Fact Check 상태] ${status}`, summary].filter(Boolean).join("\n\n"), "fact");
+                  }}
+                >
+                  {copyFeedback === "fact" ? "✅ 복사됨" : "📋 전체 복사"}
+                </button>
               </div>
 
-              <label style={{ display: "grid", gap: 6, fontSize: 12, color: "#94a3b8" }}>
+              <p className="generalInfoFactCheckHint">
+                문자 끝에 S → 이미지 입력 · 보고서/공유에 함께 표시
+              </p>
+
+              <label className="generalInfoFactCheckStatusLabel">
                 Fact Check 상태
                 <select
+                  className="generalInfoFactCheckStatusSelect"
                   value={manualFactStatus}
                   onChange={(e) =>
                     setManualFactStatus(e.target.value as GeneralInfoItem["factCheckStatus"])
                   }
-                  style={{
-                    minHeight: 40,
-                    borderRadius: 10,
-                    border: "1px solid rgba(148, 163, 184, 0.35)",
-                    background: "#0f172a",
-                    color: "#e2e8f0",
-                    padding: "8px 10px",
-                  }}
                 >
                   <option value="확인 필요">확인 필요</option>
                   <option value="확인 완료">확인 완료</option>
