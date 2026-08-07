@@ -373,6 +373,18 @@ export default function GeneralInfoDetailModal({
     checkFactImageTrigger();
   }, [checkFactImageTrigger]);
 
+  const handleFactRichCommand = React.useCallback((command: string, value?: string) => {
+    const editor = factRichTextRef.current;
+    if (!editor) return;
+    editor.focus();
+    if (command === "insertText" && value) {
+      insertFactPlainText(value);
+      return;
+    }
+    document.execCommand(command, false, value);
+    checkFactImageTrigger();
+  }, [checkFactImageTrigger, insertFactPlainText]);
+
   const insertFactImageFiles = React.useCallback((files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     if (factImageInsertLockRef.current) return;
@@ -705,6 +717,21 @@ export default function GeneralInfoDetailModal({
               </div>
 
               <div
+                className="generalInfoRichToolbar"
+                aria-label="AI 보고서 서식 도구"
+                style={{ marginTop: 8 }}
+              >
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("bold")}>B 굵게</button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("underline")}>U 밑줄</button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("removeFormat")}>서식 지우기</button>
+                <button type="button" className="generalInfoRichColorDefault" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("foreColor", "#e2e8f0")}>● 기본</button>
+                <button type="button" className="generalInfoRichColorRed" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("foreColor", "#f87171")}>● 빨강</button>
+                <button type="button" className="generalInfoRichColorYellow" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("foreColor", "#facc15")}>● 노랑</button>
+                <button type="button" className="generalInfoRichColorBlue" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("foreColor", "#60a5fa")}>● 파랑</button>
+                <button type="button" className="generalInfoRichColorGreen" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("foreColor", "#4ade80")}>● 초록</button>
+              </div>
+
+              <div
                 className="generalInfoRichToolbar generalInfoCircledNumberToolbar"
                 aria-label="원형 번호 삽입"
                 style={{ marginTop: 8 }}
@@ -724,7 +751,7 @@ export default function GeneralInfoDetailModal({
               </div>
 
               <p className="generalInfoFactCheckHint">
-                문장/문단 끝에 S(또는 s) 입력, 또는 [이미지 추가] 버튼 → 사진 선택. 번호 버튼으로 ①~⑩ 삽입.
+                굵게·밑줄·글자색·①~⑩으로 보고서 본문을 편집할 수 있습니다. 문장 끝 S(또는 s) 또는 [이미지 추가]로 사진 삽입.
               </p>
 
               <label className="generalInfoFactCheckStatusLabel">
