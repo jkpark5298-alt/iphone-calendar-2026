@@ -476,22 +476,91 @@ export const normalizeReportPlainText = (text: string) => {
   let t = String(text || "")
     .replace(/\r\n/g, "\n")
     .replace(/\u00a0/g, " ")
+    .replace(/\\n/g, "\n")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n[ \t]+/g, "\n");
 
+  // Gemini가 "##\n1. 제목"처럼 줄바꿈한 헤더를 "## 1. 제목"으로 합침
+  t = t.replace(/(#{1,3})\s*\n+(\d+\.\s*)/g, "$1 $2");
+  t = t.replace(/(#{1,3})\s*\n+(?=\S)/g, "$1 ");
+
+  // 섹션 헤더(# / ## / ###) 앞에 빈 줄
+  t = t.replace(/([^\n])\s*(#{1,3}\s+)/g, "$1\n\n$2");
+  // ## 1. … / ## 이 자료의 주제 형태를 독립 문단으로
+  t = t.replace(/\n*(#{1,3}\s+\d+\.\s*[^\n]+)/g, "\n\n$1\n");
+  t = t.replace(/\n*(#{1,3}\s+[^\n]+)/g, "\n\n$1\n");
+
   // 원형 숫자(①~⑳) 앞에서 문단 분리
   t = t.replace(/\s*([①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳])\s*/g, "\n\n$1 ");
-  // 마크다운 제목
-  t = t.replace(/([^\n])\s+(#{1,3}\s+)/g, "$1\n\n$2");
-  // 불릿
+  // 불릿 (*   / -  ) 정리
+  t = t.replace(/^\*\s+/gm, "* ");
+  t = t.replace(/^-\s+/gm, "- ");
   t = t.replace(/([^\n])\s+\*\s+/g, "$1\n* ");
   t = t.replace(/([^\n])\s+-\s+(?=[가-힣A-Za-z0-9「『“"'(\[])/g, "$1\n- ");
-  // 숫자 목록 1. 2. / 1) 2)
-  t = t.replace(/([^\n\d])\s+(\d{1,2})([.)])\s+/g, "$1\n\n$2$3 ");
+  // 숫자 목록 1. 2. / 1) 2) — 단, ## 1. 헤더는 제외
+  t = t.replace(/([^\n#])\s+(\d{1,2})([.)])\s+/g, "$1\n\n$2$3 ");
   // 문장 끝 뒤 긴 공백을 문단으로
   t = t.replace(/([.。!?…])\s{2,}/g, "$1\n\n");
+  // (출처: …) 뒤 문장 분리 보조
+  t = t.replace(/(\(출처:[^)]+\))\s+(?=[가-힣A-Za-z0-9「『])/g, "$1\n");
 
   return t.replace(/\n{3,}/g, "\n\n").trim();
+};
+
+const isAiVerificationReportPlain = (plain: string) =>
+  /AI 검증 보고서/i.test(plain) ||
+  /^#{1,3}\s*\d+\.\s*/m.test(plain) ||
+  /^##\s+/m.test(plain);
+
+/** 짧은 자동분류 메모가 아닌, 실제 AI 검증 보고서인지 판별 */
+export const isFullAiVerificationReport = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  const plain = looksLikeHtmlContent(raw) ? htmlToPlainText(raw) : raw;
+  if (/AI 검증 보고서/i.test(plain)) return true;
+  if (plain.includes("##") && plain.length >= 150) return true;
+  // 구조화 섹션이 여러 개인 긴 보고서
+  const headingCount = (plain.match(/^#{1,3}\s+/gm) || []).length;
+  if (headingCount >= 2 && plain.length >= 200) return true;
+  return false;
+};
+
+/** Fact Check 없이 Confirm 시: Text 입력/편집 내용을 AI 보고서로 사용 */
+export const buildAiReportFromBodyContent = (input: {
+  title?: string;
+  text?: string;
+  formattedTextHtml?: string;
+}) => {
+  const title = String(input.title || "").trim();
+  const html = String(input.formattedTextHtml || "").trim();
+  const plain = String(input.text || "").trim();
+
+  if (html && looksLikeHtmlContent(html) && (htmlToPlainText(html) || "").trim()) {
+    if (/AI 보고서 \(본문\)|AI 검증 보고서/i.test(html)) return html;
+    const heading = escapeGeneralInfoHtml(title ? `AI 보고서 (본문) — ${title}` : "AI 보고서 (본문)");
+    return `<h3 style="margin:8px 0 14px;font-size:18px;font-weight:800;line-height:1.4;">${heading}</h3>${html}`;
+  }
+
+  if (!plain) return "";
+
+  const md = [
+    title ? `# AI 보고서 (본문) — ${title}` : "# AI 보고서 (본문)",
+    "",
+    plain,
+  ].join("\n");
+  return markdownReportToHtml(md);
+};
+
+/** 상세/PDF에 표시할 보고서 내용이 있는지 (본문 기반 보고서 포함) */
+export const hasDisplayableAiReport = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  if (isFullAiVerificationReport(raw)) return true;
+  const plain = looksLikeHtmlContent(raw) ? htmlToPlainText(raw) : raw;
+  if (/AI 보고서 \(본문\)/i.test(plain)) return true;
+  if (looksLikeHtmlContent(raw) && plain.trim().length >= 40) return true;
+  if (plain.trim().length >= 80) return true;
+  return false;
 };
 
 export const markdownReportToHtml = (markdown: string) => {
@@ -501,55 +570,80 @@ export const markdownReportToHtml = (markdown: string) => {
   lines.forEach((rawLine) => {
     const line = rawLine.trim();
     if (!line) {
-      parts.push('<div style="height:10px;"></div>');
+      parts.push('<div style="height:12px;"></div>');
       return;
     }
+    // 단독 # / ## 만 있는 줄은 무시
+    if (/^#{1,3}$/.test(line)) return;
+
     if (line.startsWith("### ")) {
-      parts.push(`<h5 style="margin:16px 0 8px;font-size:15px;font-weight:800;line-height:1.45;">${escapeGeneralInfoHtml(line.slice(4))}</h5>`);
+      parts.push(
+        `<h5 style="margin:18px 0 10px;font-size:15px;font-weight:800;line-height:1.45;">${escapeGeneralInfoHtml(line.slice(4))}</h5>`,
+      );
       return;
     }
     if (line.startsWith("## ")) {
-      parts.push(`<h4 style="margin:18px 0 8px;font-size:16px;font-weight:800;line-height:1.45;">${escapeGeneralInfoHtml(line.slice(3))}</h4>`);
+      parts.push(
+        `<h4 style="margin:22px 0 10px;padding-top:4px;border-top:1px solid #e5e7eb;font-size:16px;font-weight:800;line-height:1.45;">${escapeGeneralInfoHtml(line.slice(3))}</h4>`,
+      );
       return;
     }
     if (line.startsWith("# ")) {
-      parts.push(`<h3 style="margin:20px 0 10px;font-size:18px;font-weight:800;line-height:1.4;">${escapeGeneralInfoHtml(line.slice(2))}</h3>`);
+      parts.push(
+        `<h3 style="margin:8px 0 14px;font-size:18px;font-weight:800;line-height:1.4;">${escapeGeneralInfoHtml(line.slice(2))}</h3>`,
+      );
       return;
     }
     if (line.startsWith("- ") || line.startsWith("* ")) {
-      parts.push(`<div style="margin:0 0 8px;padding-left:4px;line-height:1.75;">• ${escapeGeneralInfoHtml(line.slice(2))}</div>`);
+      parts.push(
+        `<div style="margin:0 0 8px;padding-left:10px;line-height:1.8;">• ${escapeGeneralInfoHtml(line.slice(2).trim())}</div>`,
+      );
       return;
     }
-    if (/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/.test(line) || /^\d{1,2}[.)]\s+/.test(line)) {
-      parts.push(`<div style="margin:12px 0 8px;line-height:1.8;font-weight:600;">${escapeGeneralInfoHtml(line)}</div>`);
+    if (/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/.test(line)) {
+      parts.push(
+        `<div style="margin:14px 0 8px;line-height:1.85;font-weight:700;">${escapeGeneralInfoHtml(line)}</div>`,
+      );
       return;
     }
-    parts.push(`<div style="margin:0 0 10px;line-height:1.8;">${escapeGeneralInfoHtml(line)}</div>`);
+    parts.push(
+      `<div style="margin:0 0 10px;line-height:1.85;">${escapeGeneralInfoHtml(line)}</div>`,
+    );
   });
 
   return parts.join("");
 };
 
-/** PDF용: 붙어 있는 HTML/텍스트를 문단 간격이 있는 HTML로 정리 */
+/** PDF/화면용: 붙어 있는 HTML/텍스트를 문단 간격이 있는 HTML로 정리 */
 export const formatReportHtmlForPdf = (reportText: string) => {
   const raw = String(reportText || "").trim();
   if (!raw) return "";
 
-  const hasUsefulBlocks = /<(h[1-6]|p|li|br)\b/i.test(raw) || /<div[^>]*>[\s\S]*?<\/div>/i.test(raw);
-  const plain = htmlToPlainText(raw);
+  const plain = looksLikeHtmlContent(raw) ? htmlToPlainText(raw) : raw;
+  const hasHeadingTags = /<h[1-6]\b/i.test(raw);
   const blockCount = (raw.match(/<(div|p|h[1-6]|li|br)\b/gi) || []).length;
 
-  // HTML이어도 블록이 거의 없고 본문이 길면, 평문으로 재구성해 간격 복원
+  // AI 검증 보고서 마크다운이면 항상 구조화 HTML로 재생성 (간격 보장)
+  if (isAiVerificationReportPlain(plain) && !hasHeadingTags) {
+    return markdownReportToHtml(plain);
+  }
+  if (isAiVerificationReportPlain(plain) && hasHeadingTags) {
+    // 헤더는 있으나 간격이 부족한 경우에도 plain 기준으로 재생성
+    return markdownReportToHtml(plain);
+  }
+
+  const hasUsefulBlocks =
+    /<(h[1-6]|p|li|br)\b/i.test(raw) || /<div[^>]*>[\s\S]*?<\/div>/i.test(raw);
+
   if (!looksLikeHtmlContent(raw) || !hasUsefulBlocks || (plain.length > 180 && blockCount < 3)) {
     return markdownReportToHtml(normalizeReportPlainText(plain || raw));
   }
 
-  // 기존 HTML 유지하되, 인라인으로 붙은 ①② / * 는 줄바꿈 삽입
-  let html = raw
-    .replace(/\s*([①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳])\s*/g, "<br/><br/>$1 ")
-    .replace(/(<\/(?:div|p|h[1-6]|li)>)(?=\s*<)/gi, "$1");
+  let html = raw.replace(
+    /\s*([①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳])\s*/g,
+    "<br/><br/>$1 ",
+  );
 
-  // br이 전혀 없고 긴 텍스트 노드만 있으면 plain 재구성
   if (!/<br\s*\/?>/i.test(html) && plain.length > 240 && blockCount <= 4) {
     return markdownReportToHtml(normalizeReportPlainText(plain));
   }
@@ -562,7 +656,19 @@ export const buildFactCheckReportHtml = (
   evidenceImageUrls: string[] = [],
 ) => {
   const raw = String(reportText || "").trim();
-  let html = looksLikeHtmlContent(raw) ? raw : markdownReportToHtml(raw);
+  const plain = looksLikeHtmlContent(raw) ? htmlToPlainText(raw) : raw;
+  const hasHeadingTags = /<h[1-6]\b/i.test(raw);
+
+  // AI 검증 보고서(마크다운 구조)는 항상 간격 있는 HTML로 재생성
+  // 그 외 HTML에 헤더가 있으면 유지, 없으면 마크다운 변환
+  let html: string;
+  if (isAiVerificationReportPlain(plain)) {
+    html = markdownReportToHtml(plain);
+  } else if (looksLikeHtmlContent(raw) && hasHeadingTags) {
+    html = raw;
+  } else {
+    html = markdownReportToHtml(plain || raw);
+  }
 
   const urls = evidenceImageUrls
     .map((url) => String(url || "").trim())
@@ -574,10 +680,10 @@ export const buildFactCheckReportHtml = (
     const blocks = urls
       .map(
         (src, index) =>
-          `<div class="generalInfoInlineImageBlock"><img class="generalInfoInlineImage" src="${src}" alt="근거 이미지 ${index + 1}" /><div style="font-size:12px;color:#94a3b8;margin-top:4px;">(출처: 이미지 ${index + 1})</div></div>`,
+          `<div class="generalInfoInlineImageBlock" style="margin:12px 0;"><img class="generalInfoInlineImage" src="${src}" alt="근거 이미지 ${index + 1}" /><div style="font-size:12px;color:#94a3b8;margin-top:4px;">(출처: 이미지 ${index + 1})</div></div>`,
       )
       .join("");
-    html += `<div class="generalInfoFactCheckEvidence"><h4>근거 이미지</h4>${blocks}</div>`;
+    html += `<div class="generalInfoFactCheckEvidence"><h4 style="margin:18px 0 8px;">근거 이미지</h4>${blocks}</div>`;
   }
 
   return html;

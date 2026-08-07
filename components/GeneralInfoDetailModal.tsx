@@ -8,13 +8,14 @@ import {
   insertInlineMediaIntoEditor,
   readFilesAsDataUrls,
   htmlToPlainText,
-  looksLikeHtmlContent,
   enhanceInlineImageBlocks,
   bindInlineImageRemoveHandler,
   editorHasInlineImageTrigger,
   removeInlineImageTrigger,
   dedupeImageFiles,
   collectClipboardImageFiles,
+  isFullAiVerificationReport,
+  hasDisplayableAiReport,
 } from "../lib/generalInfoHelpers";
 import React from "react";
 import { generalInfoCategories } from "../lib/generalInfoMock";
@@ -27,11 +28,15 @@ function getAiVerificationReportLabel(factCheckSummary?: string, model?: string)
   const matched = text.match(/AI 검증 보고서\(([^)]+)\)/i);
   if (matched?.[1]) return `AI 검증 보고서(${matched[1]})`;
 
-  if (text.includes("##") || text.includes("# ")) {
+  if (isFullAiVerificationReport(text)) {
     return "AI 검증 보고서(Gemini)";
   }
 
-  return "Fact Check 및 AI 보고서";
+  if (/AI 보고서 \(본문\)/i.test(text) || hasDisplayableAiReport(text)) {
+    return "AI 보고서 (본문)";
+  }
+
+  return "AI 보고서";
 }
 
 function decodeEscapedChars(str: string): string {
@@ -278,9 +283,11 @@ export default function GeneralInfoDetailModal({
 
   const factInitialHtml = React.useMemo(() => {
     const raw = String(item.factCheckSummary || "").trim();
-    if (!raw) return "";
-    // 대표 이미지를 자동으로 붙이지 않음(수동 S 삽입과 중복 방지)
-    return looksLikeHtmlContent(raw) ? raw : buildFactCheckReportHtml(raw, []);
+    if (!raw || !hasDisplayableAiReport(raw)) return "";
+    if (isFullAiVerificationReport(raw)) return buildFactCheckReportHtml(raw, []);
+    // 본문 기반 보고서(HTML)는 그대로 표시
+    if (/<\/?[a-z][\s\S]*>/i.test(raw)) return raw;
+    return buildFactCheckReportHtml(raw, []);
   }, [item.factCheckSummary]);
 
   React.useEffect(() => {
@@ -470,7 +477,7 @@ export default function GeneralInfoDetailModal({
   ]);
 
   const detailBodyRef = React.useRef<HTMLDivElement | null>(null);
-  const hasAiReport = Boolean(String(item?.factCheckSummary || "").trim());
+  const hasAiReport = hasDisplayableAiReport(String(item?.factCheckSummary || ""));
 
   React.useEffect(() => {
     if (detailBodyRef.current) {
@@ -481,7 +488,10 @@ export default function GeneralInfoDetailModal({
   if (!item) return null;
 
   const mediaItems = getGeneralInfoDisplayMediaItems(item);
-  const hasFactContent = Boolean(String(item.factCheckSummary || "").trim()) || needsManualFactCheck;
+  const hasFactContent =
+    Boolean(String(factInitialHtml || "").trim()) ||
+    hasAiReport ||
+    needsManualFactCheck;
 
   const copyPlainText = async (text: string, kind: "text" | "fact") => {
     const value = String(text || "").trim();
@@ -548,7 +558,14 @@ export default function GeneralInfoDetailModal({
                 }}
               />
             ) : (
-              <h3>{item.title}</h3>
+              <h3>
+                {item.confirmed === false && (
+                  <span className="generalInfoTempBadge" style={{ marginRight: 8 }}>
+                    임시저장
+                  </span>
+                )}
+                {item.title}
+              </h3>
             )}
           </div>
           <div className="generalInfoDetailHeaderActions">
@@ -780,7 +797,8 @@ export default function GeneralInfoDetailModal({
                   color: "#94a3b8",
                   fontSize: "13px"
                 }}>
-                  아직 작성된 AI 검증 보고서가 없습니다. 하단의 [AI 검증 보고서] 버튼을 누르거나, 위 편집창에 직접 작성하세요.
+                  아직 AI 보고서가 없습니다. Confirm 저장 시 Text 본문이 보고서로 들어가며,
+                  하단 <strong>[AI 검증 보고서]</strong>로 Gemini 구조화 보고서를 만들 수도 있습니다.
                 </div>
               ) : null}
             </div>
@@ -1009,7 +1027,7 @@ export default function GeneralInfoDetailModal({
             <button
               className="secondaryButton"
               type="button"
-              disabled={isGeneratingReport || isExportingPdf || !item.factCheckSummary}
+              disabled={isGeneratingReport || isExportingPdf || !hasDisplayableAiReport(String(item.factCheckSummary || ""))}
               onClick={() => onDownloadPdfReport(item)}
               style={{ borderColor: "rgba(74, 222, 128, 0.45)", color: "#bbf7d0" }}
             >

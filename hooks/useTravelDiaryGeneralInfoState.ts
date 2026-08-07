@@ -6,7 +6,7 @@ import { persistGeneralInfoItemsToLocalStorage, readGeneralInfoItemsFromLocalSto
 import { supabase } from "../lib/supabaseClient";
 
 
-import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, extractTitleFromPlainText, formatReportHtmlForPdf } from "../lib/generalInfoHelpers";
+import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, extractTitleFromPlainText, formatReportHtmlForPdf, isFullAiVerificationReport, buildAiReportFromBodyContent, hasDisplayableAiReport } from "../lib/generalInfoHelpers";
 
 
 const TRAVEL_DIARY_BUCKET = "info-photos";
@@ -1035,7 +1035,8 @@ export function useTravelDiaryGeneralInfoState({
         thirdCategory: result.thirdCategory || prev.thirdCategory,
         keywords: Array.isArray(result.keywords) ? result.keywords : prev.keywords,
         factCheckStatus: result.factCheckStatus || prev.factCheckStatus,
-        factCheckSummary: result.factCheckSummary || prev.factCheckSummary,
+        // 자동분류의 짧은 factCheckSummary는 AI 검증 보고서가 아님 → 기존 보고서만 유지
+        factCheckSummary: prev.factCheckSummary,
       }));
 
       showPasteHint("🤖 Gemini 일반 정보 분석 완료 · 확인 후 저장하세요.");
@@ -1093,16 +1094,120 @@ export function useTravelDiaryGeneralInfoState({
   }, [dataUrlToGeneralInfoFile]);
 
   const handleSaveTemporaryGeneralInfoDraft = useCallback(() => {
-    const html = getCurrentGeneralInfoRichTextHtml();
-    const draftToSave = {
-      draft: generalInfoDraft,
-      keywordText: generalInfoKeywordText,
-      richTextHtml: html,
-      editingId: generalInfoEditingId
+    const latestText = getCurrentGeneralInfoRichTextPlain();
+    const richHtml = getCurrentGeneralInfoRichTextHtml();
+    const draftWithLatestText =
+      latestText !== generalInfoDraft.text
+        ? { ...generalInfoDraft, text: latestText, formattedTextHtml: richHtml }
+        : { ...generalInfoDraft, formattedTextHtml: richHtml || generalInfoDraft.formattedTextHtml };
+
+    const draftMediaItems = normalizeGeneralInfoMediaItems(draftWithLatestText);
+    const mainMedia = draftMediaItems[0];
+
+    const inputTypes: GeneralInfoItem["inputTypes"] = [];
+    if (draftWithLatestText.text.trim()) inputTypes.push("text");
+    if (draftWithLatestText.sourceUrl.trim()) inputTypes.push("url");
+    if (draftWithLatestText.fileType === "image" || draftMediaItems.some((m) => m.type === "image")) {
+      inputTypes.push("image");
+    }
+    if (draftWithLatestText.fileType === "video" || draftMediaItems.some((m) => m.type === "video")) {
+      inputTypes.push("video");
+    }
+
+    if (
+      !draftWithLatestText.title.trim() &&
+      !draftWithLatestText.text.trim() &&
+      !draftWithLatestText.sourceUrl.trim() &&
+      draftMediaItems.length === 0
+    ) {
+      showPasteHint("⚠️ 임시 저장할 내용이 없습니다.");
+      return;
+    }
+
+    const finalTitle =
+      extractTitleFromPlainText(draftWithLatestText.text) ||
+      draftWithLatestText.title.trim() ||
+      draftWithLatestText.summary.trim() ||
+      draftWithLatestText.sourceUrl.trim() ||
+      draftWithLatestText.fileName.trim() ||
+      "임시 저장 자료";
+
+    const existingEditing = generalInfoEditingId
+      ? generalInfoItems.find((item) => item.id === generalInfoEditingId)
+      : null;
+
+    // 기존 임시저장 항목이면 갱신, 확정 항목 편집 중이면 새 임시 항목 생성
+    const targetId =
+      existingEditing && existingEditing.confirmed === false
+        ? existingEditing.id
+        : !existingEditing
+          ? Date.now()
+          : Date.now();
+
+    const factCheckSummary = isFullAiVerificationReport(draftWithLatestText.factCheckSummary)
+      ? draftWithLatestText.factCheckSummary
+      : buildAiReportFromBodyContent({
+          title: finalTitle,
+          text: draftWithLatestText.text,
+          formattedTextHtml: richHtml,
+        });
+
+    const tempItem: GeneralInfoItem = {
+      id: targetId,
+      title: finalTitle,
+      inputTypes: inputTypes.length > 0 ? inputTypes : ["text"],
+      text: draftWithLatestText.text,
+      formattedTextHtml: richHtml,
+      sourceUrl: draftWithLatestText.sourceUrl || undefined,
+      fileName: draftWithLatestText.fileName || mainMedia?.name || undefined,
+      filePreview: mainMedia?.preview || draftWithLatestText.filePreview || undefined,
+      mediaItems: draftMediaItems,
+      primaryCategory: draftWithLatestText.primaryCategory || "사회",
+      secondaryCategory: draftWithLatestText.secondaryCategory || "일반",
+      thirdCategory: draftWithLatestText.thirdCategory || "기타",
+      keywords: draftWithLatestText.keywords || [],
+      factCheckStatus: draftWithLatestText.factCheckStatus || "확인 전",
+      factCheckSummary,
+      summary: draftWithLatestText.summary || draftWithLatestText.text.slice(0, 160),
+      extraNote: existingEditing?.extraNote || "",
+      confirmed: false,
+      createdAt: existingEditing?.confirmed === false ? existingEditing.createdAt : nowText(),
+      isPinned: existingEditing?.confirmed === false ? existingEditing.isPinned : false,
     };
-    localStorage.setItem("travel_diary_general_info_temp_draft", JSON.stringify(draftToSave));
-    showPasteHint("💾 현재 입력 중인 내용이 임시 저장되었습니다.");
-  }, [generalInfoDraft, generalInfoKeywordText, getCurrentGeneralInfoRichTextHtml, generalInfoEditingId, showPasteHint]);
+
+    setGeneralInfoItems((prev) => {
+      const exists = prev.some((item) => item.id === tempItem.id);
+      const nextItems = exists
+        ? prev.map((item) => (item.id === tempItem.id ? tempItem : item))
+        : [tempItem, ...prev];
+      try {
+        persistGeneralInfoItemsToLocalStorage(nextItems);
+      } catch (error) {
+        console.error("temp general info persist failed", error);
+      }
+      return nextItems;
+    });
+
+    // 이어서 수정·Confirm 할 수 있도록 편집 id 연결
+    setGeneralInfoEditingId(tempItem.id);
+    setGeneralInfoActiveTab("storage");
+    localStorage.removeItem("travel_diary_general_info_temp_draft");
+
+    void syncGeneralInfoItemToSupabase(
+      tempItem,
+      generalInfoItems.some((item) => item.id === tempItem.id) ? "PUT" : "POST",
+    );
+
+    showPasteHint("💾 정보 창고에 [임시저장]으로 저장되었습니다.");
+  }, [
+    generalInfoDraft,
+    generalInfoEditingId,
+    generalInfoItems,
+    getCurrentGeneralInfoRichTextHtml,
+    getCurrentGeneralInfoRichTextPlain,
+    showPasteHint,
+    syncGeneralInfoItemToSupabase,
+  ]);
 
   const handleConfirmGeneralInfo = useCallback(async () => {
     // 버튼 클릭 시 onBlur가 스킵될 수 있으므로 DOM ref에서 직접 최신 텍스트를 읽음
@@ -1174,6 +1279,22 @@ export function useTravelDiaryGeneralInfoState({
       generalInfoRichTextRef.current.innerHTML = richHtml;
     }
 
+    const resolveFactCheckSummaryForSave = (existingItem?: GeneralInfoItem | null) => {
+      // 1) 이미 AI Fact Check / AI 검증 보고서가 있으면 유지
+      if (isFullAiVerificationReport(analyzed.factCheckSummary)) {
+        return analyzed.factCheckSummary;
+      }
+      if (existingItem && isFullAiVerificationReport(existingItem.factCheckSummary || "")) {
+        return String(existingItem.factCheckSummary || "");
+      }
+      // 2) Fact Check 없이 Confirm → Text 입력/편집 내용을 그대로 AI 보고서로
+      return buildAiReportFromBodyContent({
+        title: finalTitle,
+        text: analyzed.text,
+        formattedTextHtml: richHtml,
+      });
+    };
+
     const item: GeneralInfoItem = {
       id: Date.now(),
       title: finalTitle,
@@ -1189,7 +1310,7 @@ export function useTravelDiaryGeneralInfoState({
       thirdCategory: analyzed.thirdCategory || "기타",
       keywords: analyzed.keywords,
       factCheckStatus: analyzed.factCheckStatus,
-      factCheckSummary: analyzed.factCheckSummary,
+      factCheckSummary: resolveFactCheckSummaryForSave(null),
       summary: analyzed.summary,
       extraNote: "",
       confirmed: true,
@@ -1209,6 +1330,7 @@ export function useTravelDiaryGeneralInfoState({
         filePreview: uploadedMainMedia?.preview || item.filePreview || existingGeneralInfoItem?.filePreview,
         mediaItems: uploadedDraftMediaItems,
         isPinned: existingGeneralInfoItem?.isPinned || false,
+        factCheckSummary: resolveFactCheckSummaryForSave(existingGeneralInfoItem),
       };
 
       setGeneralInfoItems((prev) => {
@@ -1583,17 +1705,24 @@ export function useTravelDiaryGeneralInfoState({
         data.text,
         data.easyReport,
         data.factCheckSummary,
-        data.summary,
       ]
         .map((value) => String(value || "").trim())
-        .find(Boolean) || "";
+        .find((value) => value && value !== String(data.summary || "").trim()) || "";
+
+      // summary만 온 경우는 AI 검증 보고서로 쓰지 않음
+      const reportToStore =
+        candidateReport && isFullAiVerificationReport(candidateReport)
+          ? buildFactCheckReportHtml(candidateReport)
+          : candidateReport
+            ? buildFactCheckReportHtml(candidateReport)
+            : "";
 
       setGeneralInfoDraft((prev) => ({
         ...prev,
         title: titleFromText || prev.title,
         text: effectiveDraft.text,
         factCheckStatus: nextStatus,
-        factCheckSummary: candidateReport || prev.factCheckSummary,
+        factCheckSummary: reportToStore || prev.factCheckSummary,
         summary: String(data.summary || prev.summary || "").trim() || prev.summary,
       }));
 
@@ -1619,8 +1748,11 @@ export function useTravelDiaryGeneralInfoState({
   ]);
 
   const handleGenerateGeneralInfoReport = useCallback(async (item: GeneralInfoItem, forceRegenerate = false) => {
-    // If the item already has a generated report (longer than 150 chars and containing markdown headers), just display it!
-    if (!forceRegenerate && item.factCheckSummary && item.factCheckSummary.length > 150 && item.factCheckSummary.includes("##")) {
+    // 이미 구조화된 AI 검증 보고서만 재사용 (짧은 자동분류 메모는 재사용하지 않음)
+    if (
+      !forceRegenerate &&
+      isFullAiVerificationReport(String(item.factCheckSummary || ""))
+    ) {
       setGeneralInfoReportItem(item);
       setGeneralInfoReportText(item.factCheckSummary);
       showPasteHint("✅ 보관된 AI 보고서를 불러왔습니다.");
@@ -1919,8 +2051,8 @@ export function useTravelDiaryGeneralInfoState({
 
   const handleDownloadGeneralInfoPdfReport = useCallback(async (item: GeneralInfoItem) => {
     const reportHtml = String(item.factCheckSummary || "").trim();
-    if (!reportHtml) {
-      showPasteHint("⚠️ 먼저 AI 검증 보고서를 작성해 주세요.");
+    if (!hasDisplayableAiReport(reportHtml)) {
+      showPasteHint("⚠️ PDF로 만들 보고서가 없습니다. Confirm 저장(본문→보고서) 또는 [AI 검증 보고서]를 먼저 실행하세요.");
       return;
     }
 
@@ -2081,6 +2213,10 @@ export function useTravelDiaryGeneralInfoState({
     return [...filtered].sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
+      // 임시저장을 확정 저장보다 위에
+      const aTemp = a.confirmed === false ? 1 : 0;
+      const bTemp = b.confirmed === false ? 1 : 0;
+      if (aTemp !== bTemp) return bTemp - aTemp;
       return b.id - a.id;
     });
   }, [generalInfoItems, generalInfoSearchTerm]);

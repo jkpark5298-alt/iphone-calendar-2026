@@ -149,8 +149,7 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
     keywords,
     summary,
     factCheckStatus: factCheckNeedsReview ? "확인 필요" : "확인 완료",
-    factCheckSummary: factCheckNeedsReview
-      ? "수치·최신성·출처 확인이 필요한 표현이 포함되어 있습니다. 저장 전 원문 출처 확인을 권장합니다."
-      : "입력 자료 기준으로 큰 충돌 표현은 발견되지 않았습니다. 단, 중요한 정보는 원문 출처 확인이 필요합니다.",
+    // 짧은 자동 메모는 AI 검증 보고서 칸에 넣지 않음
+    factCheckSummary: draft.factCheckSummary || "",
   };
 };

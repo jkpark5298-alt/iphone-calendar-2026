@@ -1191,6 +1191,9 @@ export function Chapter3Info({
                   >
                     <strong>
                       {item.isPinned && <span className="generalInfoCardPinMark">📌</span>}
+                      {item.confirmed === false && (
+                        <span className="generalInfoTempBadge">임시저장</span>
+                      )}
                       {item.title}
                     </strong>
                     <p className="mutedText">{item.createdAt}</p>
