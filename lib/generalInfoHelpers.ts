@@ -629,3 +629,15 @@ export const extractMarkdownReport = (text: string): string => {
   }
   return trimmed;
 };
+
+/** Text 입력 첫 비어 있지 않은 줄을 정보 제목으로 사용 */
+export const extractTitleFromPlainText = (text: string, maxLen = 120): string => {
+  const firstLine =
+    String(text || "")
+      .replace(/\u00a0/g, " ")
+      .split(/\r?\n/)
+      .map((line) => line.replace(/<[^>]*>/g, "").trim())
+      .find(Boolean) || "";
+  if (!firstLine) return "";
+  return firstLine.length > maxLen ? firstLine.slice(0, maxLen) : firstLine;
+};

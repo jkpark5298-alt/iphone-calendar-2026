@@ -8,7 +8,7 @@
 
 import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
-import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles } from "../lib/generalInfoHelpers";
+import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText } from "../lib/generalInfoHelpers";
 import { Card, EmptyState } from "./SharedComponents";
 
 export interface Chapter3InfoProps {
@@ -56,6 +56,8 @@ export interface Chapter3InfoProps {
   handleRemoveGeneralInfoMediaItem: (index: number) => void;
   handleAnalyzeGeneralInfoDraft: () => void;
   isAnalyzingGeneralInfo: boolean;
+  handleFactCheckGeneralInfoDraft?: () => void;
+  isRunningGeneralInfoFactCheck?: boolean;
   geminiApiPacketStatus?: "available" | "depleted";
   handleConfirmGeneralInfo: () => void;
   handleSaveTemporaryGeneralInfoDraft: () => void;
@@ -113,6 +115,8 @@ export function Chapter3Info({
   handleRemoveGeneralInfoMediaItem,
   handleAnalyzeGeneralInfoDraft,
   isAnalyzingGeneralInfo,
+  handleFactCheckGeneralInfoDraft,
+  isRunningGeneralInfoFactCheck = false,
   geminiApiPacketStatus = "available",
   handleConfirmGeneralInfo,
   handleSaveTemporaryGeneralInfoDraft,
@@ -321,7 +325,13 @@ export function Chapter3Info({
     setShowTextImageInsert(
       editorHasInlineImageTrigger(editor) || textEndsWithImageTrigger(plain),
     );
-  }, [generalInfoRichTextRef, textEndsWithImageTrigger]);
+    const titleFromText = extractTitleFromPlainText(plain);
+    if (titleFromText) {
+      setGeneralInfoDraft((prev) =>
+        prev.title === titleFromText ? prev : { ...prev, title: titleFromText },
+      );
+    }
+  }, [generalInfoRichTextRef, textEndsWithImageTrigger, setGeneralInfoDraft]);
 
   const insertImageFilesFromTextTrigger = React.useCallback((files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
@@ -503,9 +513,13 @@ export function Chapter3Info({
             정보 제목
             <input
               value={generalInfoDraft.title}
-              onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, title: e.target.value }))}
-              placeholder="예: 반도체 공급망 정책 자료"
+              readOnly
+              placeholder="Text 입력 첫 줄이 제목으로 사용됩니다"
+              title="Text 입력 / 편집의 첫 줄이 제목입니다"
             />
+            <span className="mutedText" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
+              Text 입력 / 편집 <strong>첫 줄</strong>이 제목으로 자동 반영됩니다.
+            </span>
           </label>
 
           {/* Rich Text Editor */}
@@ -633,6 +647,7 @@ export function Chapter3Info({
             <p className="generalInfoRichTextNote">
               AI 분석에는 서식을 제외한 순수 Text가 사용되고, 저장함에는 편집된 색상/강조가 함께 표시됩니다.
               문장 끝에 <strong>S</strong>를 붙이면 이미지 붙여넣기가 열리고, 선택한 이미지는 본문 TEXT 안에 들어갑니다.
+              Text 입력 후 아래 <strong>AI Fact Check</strong> 버튼으로 바로 검증할 수 있습니다.
             </p>
           </div>
 
@@ -887,9 +902,18 @@ export function Chapter3Info({
             <button
               className="primaryButton"
               onClick={handleAnalyzeGeneralInfoDraft}
-              disabled={isAnalyzingGeneralInfo}
+              disabled={isAnalyzingGeneralInfo || isRunningGeneralInfoFactCheck}
             >
               {isAnalyzingGeneralInfo ? "🤖 Gemini 분석 중..." : "🤖 AI 자동분류"}
+            </button>
+            <button
+              className="secondaryButton"
+              type="button"
+              onClick={() => handleFactCheckGeneralInfoDraft?.()}
+              disabled={isAnalyzingGeneralInfo || isRunningGeneralInfoFactCheck || !handleFactCheckGeneralInfoDraft}
+              style={{ borderColor: "rgba(250, 204, 21, 0.45)", color: "#fde68a" }}
+            >
+              {isRunningGeneralInfoFactCheck ? "🔍 Fact Check 중..." : "🔍 AI Fact Check"}
             </button>
             <button className="gradientButton" onClick={handleConfirmGeneralInfo}>
               {generalInfoEditingId ? "수정 저장" : "Confirm 저장"}
@@ -1001,14 +1025,28 @@ export function Chapter3Info({
           <div className="generalInfoResultBox generalInfoEditableResultBox">
             <div className="generalInfoSectionTitleRow">
               <strong>Fact Check</strong>
-              <button
-                type="button"
-                className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                onClick={handleCopyFactCheckResult}
-              >
-                {copyFeedback === "fact" ? "✅ 복사됨" : "📋 전체 복사"}
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="secondaryButton smallActionButton"
+                  onClick={() => handleFactCheckGeneralInfoDraft?.()}
+                  disabled={isRunningGeneralInfoFactCheck || isAnalyzingGeneralInfo || !handleFactCheckGeneralInfoDraft}
+                  style={{ borderColor: "rgba(250, 204, 21, 0.45)", color: "#fde68a" }}
+                >
+                  {isRunningGeneralInfoFactCheck ? "작성 중…" : "🔍 AI Fact Check"}
+                </button>
+                <button
+                  type="button"
+                  className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                  onClick={handleCopyFactCheckResult}
+                >
+                  {copyFeedback === "fact" ? "✅ 복사됨" : "📋 전체 복사"}
+                </button>
+              </div>
             </div>
+            <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
+              Text 입력 후 <strong>AI Fact Check</strong>를 누르면 저장 전에도 바로 결과가 채워집니다.
+            </p>
             <div className="generalInfoFactEditGrid">
               <label>
                 상태
@@ -1024,7 +1062,7 @@ export function Chapter3Info({
                   <option value="확인 전">확인 전</option>
                   <option value="확인 완료">확인 완료</option>
                   <option value="확인 필요">확인 필요</option>
-                  <option value="오류 가능">오류 가능</option>
+                  <option value="오류 가능성">오류 가능성</option>
                 </select>
               </label>
               <label>

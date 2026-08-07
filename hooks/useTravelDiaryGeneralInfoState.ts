@@ -6,7 +6,7 @@ import { persistGeneralInfoItemsToLocalStorage, readGeneralInfoItemsFromLocalSto
 import { supabase } from "../lib/supabaseClient";
 
 
-import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, looksLikeHtmlContent } from "../lib/generalInfoHelpers";
+import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, looksLikeHtmlContent, extractTitleFromPlainText } from "../lib/generalInfoHelpers";
 
 
 const TRAVEL_DIARY_BUCKET = "info-photos";
@@ -399,10 +399,12 @@ export function useTravelDiaryGeneralInfoState({
     }
 
     const nextText = [generalInfoDraft.text, text].filter(Boolean).join(generalInfoDraft.text && text ? "\n\n" : "");
+    const titleFromText = extractTitleFromPlainText(nextText);
 
     setGeneralInfoDraft((prev) => ({
       ...prev,
-      title: prev.title || title || siteName || fallbackUrl,
+      // Text 첫 줄이 있으면 제목으로 사용, 없으면 URL 메타 제목
+      title: titleFromText || title || siteName || prev.title || fallbackUrl,
       text: nextText,
       sourceUrl: String(result.url || fallbackUrl),
       fileName: image ? title || siteName || "URL 대표 이미지" : prev.fileName,
@@ -461,10 +463,23 @@ export function useTravelDiaryGeneralInfoState({
       .replace(/\u00a0/g, " ")
       .replace(/\n{4,}/g, "\n\n\n");
     const html = String(generalInfoRichTextRef.current?.innerHTML || "").trim();
+    const titleFromText = extractTitleFromPlainText(plainText);
 
     setGeneralInfoDraft((prev) => {
-      if (prev.text === plainText && (prev.formattedTextHtml || "") === html) return prev;
-      return { ...prev, text: plainText, formattedTextHtml: html };
+      const nextTitle = titleFromText || prev.title;
+      if (
+        prev.text === plainText &&
+        (prev.formattedTextHtml || "") === html &&
+        prev.title === nextTitle
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        text: plainText,
+        formattedTextHtml: html,
+        title: nextTitle,
+      };
     });
   }, []);
 
@@ -698,7 +713,15 @@ export function useTravelDiaryGeneralInfoState({
           text === firstUrl
             ? prev.text
             : [prev.text, text].filter(Boolean).join(prev.text ? "\n\n" : ""),
-        title: prev.title || text.split(/\r?\n/).find(Boolean)?.slice(0, 80) || "URL 자료",
+        title:
+          extractTitleFromPlainText(
+            text === firstUrl
+              ? prev.text
+              : [prev.text, text].filter(Boolean).join(prev.text ? "\n\n" : ""),
+          ) ||
+          extractTitleFromPlainText(text) ||
+          prev.title ||
+          "URL 자료",
       }));
 
       try {
@@ -711,12 +734,12 @@ export function useTravelDiaryGeneralInfoState({
       return;
     }
 
-    const firstLine = text.split(/\r?\n/).find((line) => line.trim())?.trim() || "";
+    const firstLine = extractTitleFromPlainText(text);
     const nextText = [generalInfoDraft.text, text].filter(Boolean).join(generalInfoDraft.text ? "\n\n" : "");
 
     setGeneralInfoDraft((prev) => ({
       ...prev,
-      title: prev.title || firstLine.slice(0, 80) || "붙여넣은 Text 자료",
+      title: extractTitleFromPlainText(nextText) || firstLine || prev.title || "붙여넣은 Text 자료",
       text: nextText,
       summary: prev.summary || text.slice(0, 160),
     }));
@@ -809,15 +832,22 @@ export function useTravelDiaryGeneralInfoState({
         const firstUrl = urlMatch?.[0]?.replace(/[),.\]]+$/g, "") || "";
 
         if (firstUrl) {
-          setGeneralInfoDraft((prev) => ({
-            ...prev,
-            sourceUrl: firstUrl,
-            text:
+          setGeneralInfoDraft((prev) => {
+            const nextText =
               text === firstUrl
                 ? prev.text
-                : [prev.text, text].filter(Boolean).join(prev.text ? "\n\n" : ""),
-            title: prev.title || text.split(/\r?\n/).find(Boolean)?.slice(0, 80) || "URL 자료",
-          }));
+                : [prev.text, text].filter(Boolean).join(prev.text ? "\n\n" : "");
+            return {
+              ...prev,
+              sourceUrl: firstUrl,
+              text: nextText,
+              title:
+                extractTitleFromPlainText(nextText) ||
+                extractTitleFromPlainText(text) ||
+                prev.title ||
+                "URL 자료",
+            };
+          });
 
           try {
             await extractGeneralInfoUrl(firstUrl);
@@ -828,11 +858,10 @@ export function useTravelDiaryGeneralInfoState({
             showPasteHint(`⚠️ URL 자동 가져오기는 실패했습니다: ${error instanceof Error ? error.message : String(error)}`);
           }
         } else {
-          const firstLine = text.split(/\r?\n/).find((line) => line.trim())?.trim() || "";
           const nextText = [generalInfoDraft.text, text].filter(Boolean).join(generalInfoDraft.text ? "\n\n" : "");
           setGeneralInfoDraft((prev) => ({
             ...prev,
-            title: prev.title || firstLine.slice(0, 80) || "클립보드 Text 자료",
+            title: extractTitleFromPlainText(nextText) || extractTitleFromPlainText(text) || prev.title || "클립보드 Text 자료",
             text: nextText,
             summary: prev.summary || text.slice(0, 160),
           }));
@@ -934,9 +963,12 @@ export function useTravelDiaryGeneralInfoState({
   const handleAnalyzeGeneralInfoDraft = useCallback(async () => {
     // 버튼 클릭 시 onBlur가 스킵될 수 있으므로 DOM ref에서 직접 최신 텍스트를 읽음
     const latestText = getCurrentGeneralInfoRichTextPlain();
-    const effectiveDraft = latestText !== generalInfoDraft.text
-      ? { ...generalInfoDraft, text: latestText }
-      : generalInfoDraft;
+    const titleFromText = extractTitleFromPlainText(latestText);
+    const effectiveDraft = {
+      ...generalInfoDraft,
+      text: latestText || generalInfoDraft.text,
+      title: titleFromText || generalInfoDraft.title,
+    };
 
     const hasInput =
       effectiveDraft.title.trim() ||
@@ -994,7 +1026,9 @@ export function useTravelDiaryGeneralInfoState({
 
       setGeneralInfoDraft((prev) => ({
         ...prev,
-        title: result.title || prev.title,
+        // 제목은 Text 첫 줄 유지 (AI가 바꾼 제목보다 우선)
+        title: titleFromText || prev.title || result.title || "",
+        text: effectiveDraft.text,
         summary: result.summary || prev.summary,
         primaryCategory: result.primaryCategory || prev.primaryCategory,
         secondaryCategory: result.secondaryCategory || prev.secondaryCategory,
@@ -1007,11 +1041,15 @@ export function useTravelDiaryGeneralInfoState({
       showPasteHint("🤖 Gemini 일반 정보 분석 완료 · 확인 후 저장하세요.");
     } catch (error) {
       console.error("travel-diary general info Gemini analysis failed", error);
-      const analyzed = mockAnalyzeGeneralInfo(generalInfoDraft);
+      const analyzed = mockAnalyzeGeneralInfo(effectiveDraft);
       setGeneralInfoKeywordText(
         analyzed.keywords.map((keyword) => `#${String(keyword).replace(/^#+/, "")}`).join(", "),
       );
-      setGeneralInfoDraft(analyzed);
+      setGeneralInfoDraft({
+        ...analyzed,
+        title: titleFromText || analyzed.title,
+        text: effectiveDraft.text,
+      });
       showPasteHint("⚠️ Gemini 분석 실패 · 임시 Mock 자동분류로 처리했습니다.");
     } finally {
       setIsAnalyzingGeneralInfo(false);
@@ -1114,24 +1152,8 @@ export function useTravelDiaryGeneralInfoState({
     }
 
     const finalTitle = (() => {
-      const t = (analyzed.title || "").trim();
-      const isGeneric = !t || [
-        "일반 정보 자료",
-        "붙여넣은 text 자료",
-        "클립보드 text 자료",
-        "url 자료",
-        "클립보드 이미지 자료"
-      ].includes(t.toLowerCase());
-      
-      if (isGeneric && analyzed.text.trim()) {
-        const lines = analyzed.text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        if (lines.length > 0) {
-          const firstLine = lines[0].replace(/<[^>]*>/g, "").trim();
-          if (firstLine) {
-            return firstLine.length > 40 ? firstLine.slice(0, 40) + "..." : firstLine;
-          }
-        }
-      }
+      const fromText = extractTitleFromPlainText(analyzed.text);
+      if (fromText) return fromText;
       return analyzed.title || analyzed.summary || analyzed.sourceUrl || analyzed.fileName || "일반 정보 자료";
     })();
 
@@ -1448,6 +1470,153 @@ export function useTravelDiaryGeneralInfoState({
       pdfText: "",
     };
   }, []);
+
+  /** Text 입력 직후 Fact Check / AI 검증 보고서 실행 (저장 전 초안에도 가능) */
+  const handleFactCheckGeneralInfoDraft = useCallback(async () => {
+    const latestText = getCurrentGeneralInfoRichTextPlain();
+    const titleFromText = extractTitleFromPlainText(latestText);
+    const effectiveDraft = {
+      ...generalInfoDraft,
+      text: latestText || generalInfoDraft.text,
+      title: titleFromText || generalInfoDraft.title,
+      formattedTextHtml: getCurrentGeneralInfoRichTextHtml(),
+    };
+
+    if (!String(effectiveDraft.text || "").trim()) {
+      showPasteHint("⚠️ Fact Check할 Text를 먼저 입력하세요.");
+      return;
+    }
+
+    try {
+      setIsRunningGeneralInfoFactCheck(true);
+      showPasteHint("🔍 Fact Check / AI 검증 보고서를 작성합니다. (서버 GEMINI_API_KEY 사용)");
+
+      const draftAsItem = {
+        id: generalInfoEditingId || Date.now(),
+        createdAt: nowText(),
+        confirmed: false,
+        pinned: false,
+        inputTypes: ["text"] as GeneralInfoItem["inputTypes"],
+        title: effectiveDraft.title || "일반 정보 자료",
+        text: effectiveDraft.text,
+        sourceUrl: effectiveDraft.sourceUrl || "",
+        summary: effectiveDraft.summary || "",
+        factCheckStatus: effectiveDraft.factCheckStatus || "확인 전",
+        factCheckSummary: effectiveDraft.factCheckSummary || "",
+        primaryCategory: effectiveDraft.primaryCategory || "",
+        secondaryCategory: effectiveDraft.secondaryCategory || "",
+        thirdCategory: effectiveDraft.thirdCategory || "",
+        keywords: effectiveDraft.keywords || [],
+        extraNote: "",
+        fileName: effectiveDraft.fileName || "",
+        filePreview: effectiveDraft.filePreview || "",
+        fileType: effectiveDraft.fileType || "none",
+        mediaItems: normalizeGeneralInfoMediaItems(effectiveDraft),
+        formattedTextHtml: effectiveDraft.formattedTextHtml || "",
+      } as GeneralInfoItem;
+
+      const customApiKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") || "" : "";
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 90_000);
+
+      let response: Response;
+      try {
+        response = await fetch("/api/general-info-factcheck", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-gemini-api-key": customApiKey,
+          },
+          body: JSON.stringify(buildGeneralInfoFactCheckPayload(draftAsItem)),
+          signal: controller.signal,
+        });
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+
+      let data: Record<string, unknown> = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+
+      if (!response.ok || data.ok === false) {
+        throw new Error(
+          String(data.detail || data.error || data.message || `Fact Check API 호출 실패 (${response.status})`),
+        );
+      }
+
+      if (isGeminiCreditDepletedResponse(data)) {
+        markGeminiApiPacketsDepleted();
+        setGeneralInfoDraft((prev) => ({
+          ...prev,
+          title: titleFromText || prev.title,
+          text: effectiveDraft.text,
+          factCheckStatus: "확인 필요",
+        }));
+        showPasteHint("⚠️ API 패킷 부족 · 수동으로 Fact Check를 작성해 주세요.");
+        return;
+      }
+
+      markGeminiApiPacketsAvailable();
+
+      const rawStatus = String(data.status || data.factCheckStatus || "확인 필요");
+      const nextStatus = (
+        rawStatus === "확인 완료" ||
+        rawStatus === "확인 필요" ||
+        rawStatus === "확인 전" ||
+        rawStatus === "오류 가능성" ||
+        rawStatus === "오류 가능"
+          ? rawStatus === "오류 가능"
+            ? "오류 가능성"
+            : rawStatus
+          : "확인 필요"
+      ) as GeneralInfoDraft["factCheckStatus"];
+
+      const candidateReport = [
+        data.result,
+        data.report,
+        data.reportText,
+        data.markdown,
+        data.content,
+        data.text,
+        data.easyReport,
+        data.factCheckSummary,
+        data.summary,
+      ]
+        .map((value) => String(value || "").trim())
+        .find(Boolean) || "";
+
+      setGeneralInfoDraft((prev) => ({
+        ...prev,
+        title: titleFromText || prev.title,
+        text: effectiveDraft.text,
+        factCheckStatus: nextStatus,
+        factCheckSummary: candidateReport || prev.factCheckSummary,
+        summary: String(data.summary || prev.summary || "").trim() || prev.summary,
+      }));
+
+      showPasteHint("✅ Fact Check 완료 · 아래 Fact Check 칸을 확인한 뒤 Confirm 저장하세요.");
+    } catch (error) {
+      console.error("travel-diary draft fact check failed", error);
+      showPasteHint(
+        `⚠️ Fact Check 실패: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setIsRunningGeneralInfoFactCheck(false);
+    }
+  }, [
+    generalInfoDraft,
+    generalInfoEditingId,
+    getCurrentGeneralInfoRichTextPlain,
+    getCurrentGeneralInfoRichTextHtml,
+    buildGeneralInfoFactCheckPayload,
+    isGeminiCreditDepletedResponse,
+    markGeminiApiPacketsAvailable,
+    markGeminiApiPacketsDepleted,
+    showPasteHint,
+  ]);
 
   const handleGenerateGeneralInfoReport = useCallback(async (item: GeneralInfoItem, forceRegenerate = false) => {
     // If the item already has a generated report (longer than 150 chars and containing markdown headers), just display it!
@@ -2134,6 +2303,7 @@ export function useTravelDiaryGeneralInfoState({
     handleClearGeneralInfoCoverImage,
     handleRemoveGeneralInfoMediaItem,
     handleAnalyzeGeneralInfoDraft,
+    handleFactCheckGeneralInfoDraft,
     handleConfirmGeneralInfo,
     filteredGeneralInfoItems,
     generalInfoCategories,

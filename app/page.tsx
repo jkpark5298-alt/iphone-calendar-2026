@@ -6963,6 +6963,8 @@ ${photo.memoText}
               handleRemoveGeneralInfoMediaItem={infoState.handleRemoveGeneralInfoMediaItem}
               handleAnalyzeGeneralInfoDraft={infoState.handleAnalyzeGeneralInfoDraft}
               isAnalyzingGeneralInfo={infoState.isAnalyzingGeneralInfo}
+              handleFactCheckGeneralInfoDraft={infoState.handleFactCheckGeneralInfoDraft}
+              isRunningGeneralInfoFactCheck={infoState.isRunningGeneralInfoFactCheck}
               geminiApiPacketStatus={infoState.geminiApiPacketStatus}
               handleConfirmGeneralInfo={infoState.handleConfirmGeneralInfo}
               handleCancelEditGeneralInfo={infoState.handleCancelEditGeneralInfo}
