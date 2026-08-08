@@ -2,6 +2,7 @@
 
 import { Chapter3Info } from "../components/Chapter3Info";
 import GeneralInfoDetailModal from "../components/GeneralInfoDetailModal";
+import GeneralInfoAiReportScreen from "../components/GeneralInfoAiReportScreen";
 import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralInfoState";
 
 
@@ -7204,6 +7205,7 @@ ${photo.memoText}
               generalInfoSearchTerm={infoState.generalInfoSearchTerm}
               setGeneralInfoSearchTerm={infoState.setGeneralInfoSearchTerm}
               setGeneralInfoDetailId={infoState.setGeneralInfoDetailId}
+              handleOpenGeneralInfoAiReport={infoState.handleOpenGeneralInfoAiReport}
               generalInfoDetailId={infoState.generalInfoDetailId}
               generalInfoActiveTab={infoState.generalInfoActiveTab}
               setGeneralInfoActiveTab={infoState.setGeneralInfoActiveTab}
@@ -8713,6 +8715,21 @@ ${photo.memoText}
         </div>
       )}
     
+      {infoState.selectedGeneralInfoAiReportItem && (
+        <GeneralInfoAiReportScreen
+          item={infoState.selectedGeneralInfoAiReportItem}
+          onClose={infoState.handleCloseGeneralInfoAiReport}
+          onSaveReport={async (html, status) => {
+            await infoState.handleSaveManualFactCheck(
+              infoState.selectedGeneralInfoAiReportItem!.id,
+              html,
+              status,
+            );
+          }}
+          onUploadImage={infoState.uploadGeneralInfoInlineImageFile}
+        />
+      )}
+
       {infoState.selectedGeneralInfoItem && (
         <GeneralInfoDetailModal
           item={infoState.selectedGeneralInfoItem}

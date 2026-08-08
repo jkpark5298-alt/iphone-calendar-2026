@@ -224,6 +224,34 @@ export const extractGeneralInfoBodyImageSrcs = (
 /** AI 검증 보고서(Fact Check HTML)에 들어 있는 이미지 URL 목록 */
 export const extractGeneralInfoReportImageSrcs = extractGeneralInfoBodyImageSrcs;
 
+/** AI 검증 보고서 HTML 병합: 단순 길이 비교는 이미지 삭제를 되돌리므로 본문·이미지 수 기준으로 고른다 */
+export const pickPreferredFactCheckSummary = (
+  primary: string | undefined | null,
+  fallback: string | undefined | null,
+): string => {
+  const a = salvageFactCheckHtml(String(primary || ""));
+  const b = salvageFactCheckHtml(String(fallback || ""));
+  if (!a) return b;
+  if (!b) return a;
+
+  const plainA = htmlToPlainText(a).trim().length;
+  const plainB = htmlToPlainText(b).trim().length;
+  const imgsA = extractMediaSrcFromHtml(a).length;
+  const imgsB = extractMediaSrcFromHtml(b).length;
+
+  // 본문 텍스트가 비슷한데 이미지만 줄었으면(삭제) 이미지 적은 쪽을 채택
+  if (Math.abs(plainA - plainB) <= 100 && imgsA !== imgsB) {
+    return imgsA < imgsB ? a : b;
+  }
+
+  // 본문이 한쪽만 거의 비면 내용 있는 쪽
+  if (plainA >= 80 && plainB < 40) return a;
+  if (plainB >= 80 && plainA < 40) return b;
+
+  // 그 외에는 본문이 더 긴 쪽 (잘림 방지). 동률이면 primary 유지
+  return plainA >= plainB ? a : b;
+};
+
 /**
  * 잘린 data: 이미지 태그(닫는 따옴표 없음)가 이후 본문을 삼키지 않도록
  * 깨진 미디어 태그 이전까지만 남기거나, 완성된 data: 미디어 블록을 제거한다.
@@ -398,14 +426,23 @@ export const insertInlineMediaIntoEditor = (
       video.controls = true;
       video.className = "generalInfoInlineImage generalInfoInlineVideo";
       video.setAttribute("playsinline", "true");
+      video.setAttribute("webkit-playsinline", "true");
+      video.setAttribute("contenteditable", "false");
+      video.setAttribute("draggable", "false");
       block.appendChild(video);
     } else {
       const img = document.createElement("img");
       img.src = item.src;
       img.alt = item.name || "본문 이미지";
       img.className = "generalInfoInlineImage";
+      img.setAttribute("contenteditable", "false");
+      img.setAttribute("draggable", "false");
+      img.setAttribute("loading", "eager");
       block.appendChild(img);
     }
+
+    block.setAttribute("contenteditable", "false");
+    block.setAttribute("data-gi-media", "1");
 
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
@@ -462,12 +499,27 @@ export const enhanceInlineImageBlocks = (editor: HTMLElement | null) => {
   if (!editor) return;
 
   editor.querySelectorAll("img.generalInfoInlineImage, video.generalInfoInlineImage, img").forEach((media) => {
-    const el = media as HTMLElement;
+    const el = media as HTMLImageElement | HTMLVideoElement;
     if (el.tagName !== "IMG" && el.tagName !== "VIDEO") return;
     if (el.tagName === "IMG" && !el.classList.contains("generalInfoInlineImage")) {
       // 근거 이미지 등 일반 img도 편집기 안이면 삭제 가능하게
       if (!editor.contains(el)) return;
       el.classList.add("generalInfoInlineImage");
+    }
+
+    // iOS Safari: contentEditable 안 이미지는 false 가 아니면 안 보이거나 터치 불가인 경우가 많음
+    el.setAttribute("contenteditable", "false");
+    el.setAttribute("draggable", "false");
+    if (el.tagName === "IMG") {
+      el.setAttribute("loading", "eager");
+      el.setAttribute("decoding", "async");
+      // 깨진/미페인트 시에도 자리·삭제 버튼이 남도록
+      if (!el.getAttribute("alt")) el.setAttribute("alt", "보고서 이미지");
+    }
+    if (el.tagName === "VIDEO") {
+      el.setAttribute("playsinline", "true");
+      el.setAttribute("webkit-playsinline", "true");
+      el.setAttribute("controls", "true");
     }
 
     let block = el.closest(".generalInfoInlineImageBlock") as HTMLElement | null;
@@ -477,6 +529,8 @@ export const enhanceInlineImageBlocks = (editor: HTMLElement | null) => {
       el.parentNode?.insertBefore(block, el);
       block.appendChild(el);
     }
+    block.setAttribute("contenteditable", "false");
+    block.setAttribute("data-gi-media", "1");
 
     if (block.querySelector(".generalInfoInlineImageRemove")) return;
 
@@ -496,13 +550,103 @@ export const bindInlineImageRemoveHandler = (editor: HTMLElement | null) => {
   if (flagged.__inlineImageRemoveBound) return;
   flagged.__inlineImageRemoveBound = true;
 
-  editor.addEventListener("click", (event) => {
+  const removeFromEvent = (event: Event) => {
     const target = event.target as HTMLElement | null;
     const btn = target?.closest?.(".generalInfoInlineImageRemove") as HTMLElement | null;
     if (!btn || !editor.contains(btn)) return;
     event.preventDefault();
     event.stopPropagation();
     btn.closest(".generalInfoInlineImageBlock")?.remove();
+  };
+
+  // iOS: click 이 씹히는 경우가 있어 capture 로 처리
+  editor.addEventListener("click", removeFromEvent, true);
+};
+
+/** 편집기 HTML에서 특정 src 이미지/비디오 블록 제거 */
+export const removeInlineMediaBySrc = (editor: HTMLElement | null, src: string) => {
+  if (!editor || !src) return false;
+  const normalize = (value: string) => {
+    const raw = String(value || "").trim();
+    try {
+      return decodeURIComponent(raw.replace(/&amp;/gi, "&"));
+    } catch {
+      return raw.replace(/&amp;/gi, "&");
+    }
+  };
+  const sameSrc = (a: string, b: string) => {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const na = normalize(a);
+    const nb = normalize(b);
+    if (na === nb) return true;
+    const strip = (s: string) => s.split("?")[0].split("#")[0];
+    return strip(na) === strip(nb);
+  };
+
+  const target = String(src || "").trim();
+  let removed = false;
+  editor.querySelectorAll("img, video").forEach((media) => {
+    const el = media as HTMLImageElement | HTMLVideoElement;
+    const current = String(el.getAttribute("src") || el.src || "");
+    if (!sameSrc(current, target)) return;
+    const block = el.closest(".generalInfoInlineImageBlock");
+    if (block) block.remove();
+    else el.remove();
+    removed = true;
+  });
+  return removed;
+};
+
+/** HTML 문자열에서 특정 src 미디어 제거 (에디터 미존재/미매칭 대비) */
+export const removeMediaSrcFromHtml = (html: string, src: string): string => {
+  let next = String(html || "");
+  const raw = String(src || "").trim();
+  if (!next || !raw) return next;
+
+  const variants = Array.from(
+    new Set([
+      raw,
+      raw.replace(/&/g, "&amp;"),
+      (() => {
+        try {
+          return decodeURIComponent(raw);
+        } catch {
+          return raw;
+        }
+      })(),
+    ]),
+  );
+
+  variants.forEach((variant) => {
+    const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    next = next.replace(
+      new RegExp(
+        `<div[^>]*class=["'][^"']*generalInfoInlineImageBlock[^"']*["'][^>]*>[\\s\\S]*?src=["']${escaped}["'][\\s\\S]*?<\\/div>`,
+        "gi",
+      ),
+      "",
+    );
+    next = next.replace(
+      new RegExp(`<(?:img|video)\\b[^>]*\\bsrc=["']${escaped}["'][^>]*\\/?>`, "gi"),
+      "",
+    );
+  });
+
+  return next.replace(/\n{3,}/g, "\n\n").trim();
+};
+
+/** iOS 등에서 안 그려진 이미지 src 재지정으로 다시 로드 */
+export const refreshInlineImagesInEditor = (editor: HTMLElement | null) => {
+  if (!editor) return;
+  enhanceInlineImageBlocks(editor);
+  editor.querySelectorAll("img").forEach((media) => {
+    const img = media as HTMLImageElement;
+    const src = String(img.getAttribute("src") || "").trim();
+    if (!src) return;
+    if (img.complete && img.naturalWidth > 0) return;
+    img.src = "";
+    img.src = src;
   });
 };
 

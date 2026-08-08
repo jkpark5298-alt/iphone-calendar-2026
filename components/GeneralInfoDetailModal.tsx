@@ -12,6 +12,9 @@ import {
   bindInlineImageRemoveHandler,
   editorHasInlineImageTrigger,
   removeInlineImageTrigger,
+  removeInlineMediaBySrc,
+  removeMediaSrcFromHtml,
+  refreshInlineImagesInEditor,
   dedupeImageFiles,
   collectClipboardImageFiles,
   isFullAiVerificationReport,
@@ -26,6 +29,7 @@ import {
 import type { GeneralInfoMediaItem } from "../lib/generalInfoHelpers";
 import React from "react";
 import { generalInfoCategories } from "../lib/generalInfoMock";
+import { GeneralInfoMobileFormatBubble } from "./GeneralInfoMobileFormatBubble";
 
 function getAiVerificationReportLabel(factCheckSummary?: string, model?: string) {
   const fromModel = String(model || "").trim();
@@ -288,6 +292,7 @@ export default function GeneralInfoDetailModal({
   const [reportImageTick, setReportImageTick] = React.useState(0);
   const [factEditorKey, setFactEditorKey] = React.useState(0);
   const [bodyEditorKey, setBodyEditorKey] = React.useState(0);
+  const [factEditorFocused, setFactEditorFocused] = React.useState(false);
   const [editMediaItems, setEditMediaItems] = React.useState<GeneralInfoMediaItem[]>(() =>
     getGeneralInfoDisplayMediaItems(item),
   );
@@ -343,7 +348,15 @@ export default function GeneralInfoDetailModal({
       editor.innerHTML = factInitialHtml;
       enhanceInlineImageBlocks(editor);
       bindInlineImageRemoveHandler(editor);
+      refreshInlineImagesInEditor(editor);
     }
+  }, [factEditorKey, factInitialHtml]);
+
+  React.useEffect(() => {
+    const editor = factRichTextRef.current;
+    if (!editor || editor.dataset.hydrated !== "1") return;
+    const timer = window.setTimeout(() => refreshInlineImagesInEditor(editor), 300);
+    return () => window.clearTimeout(timer);
   }, [factEditorKey, factInitialHtml]);
 
   React.useEffect(() => {
@@ -412,6 +425,21 @@ export default function GeneralInfoDetailModal({
     editor.focus();
     if (command === "insertText" && value) {
       insertFactPlainText(value);
+      return;
+    }
+    if (command === "fontSizeStep") {
+      const delta = Number(value || 0);
+      const current = Number.parseInt(document.queryCommandValue("fontSize") || "3", 10);
+      const next = Math.max(1, Math.min(7, (Number.isFinite(current) ? current : 3) + delta));
+      document.execCommand("fontSize", false, String(next));
+      checkFactImageTrigger();
+      return;
+    }
+    if (command === "hiliteColor" && value) {
+      // Safari / iOS: backColor, 그 외 hiliteColor
+      const ok = document.execCommand("hiliteColor", false, value);
+      if (!ok) document.execCommand("backColor", false, value);
+      checkFactImageTrigger();
       return;
     }
     document.execCommand(command, false, value);
@@ -630,6 +658,45 @@ export default function GeneralInfoDetailModal({
     [editMediaItems, isEditing, item, onSaveItemEdit],
   );
 
+  const removeFactReportImage = React.useCallback(
+    async (src: string) => {
+      const url = String(src || "").trim();
+      if (!url) return;
+
+      const editor = factRichTextRef.current;
+      let html = String(editor?.innerHTML || factInitialHtml || item.factCheckSummary || "");
+      removeInlineMediaBySrc(editor, url);
+      html = removeMediaSrcFromHtml(
+        String(editor?.innerHTML || html),
+        url,
+      );
+
+      if (editor) {
+        if (editor.innerHTML !== html) {
+          editor.innerHTML = html;
+          enhanceInlineImageBlocks(editor);
+          bindInlineImageRemoveHandler(editor);
+          editor.dataset.hydrated = "1";
+        }
+      }
+
+      setReportImageTick((prev) => prev + 1);
+
+      if (!html || html === "<br>" || html === "<div><br></div>") {
+        alert("이미지 삭제 후 남은 보고서 내용이 없습니다.");
+        return;
+      }
+
+      try {
+        await onSaveManualFactCheck?.(item.id, html, manualFactStatus);
+      } catch (error) {
+        console.error("remove fact image save failed", error);
+        alert("이미지는 지웠지만 저장에 실패했습니다. [Fact Check / 보고서 저장]을 눌러 주세요.");
+      }
+    },
+    [factInitialHtml, item.factCheckSummary, item.id, manualFactStatus, onSaveManualFactCheck],
+  );
+
   const bodyImageSrcs = React.useMemo(() => {
     const liveBodyHtml = isEditing ? String(bodyRichTextRef.current?.innerHTML || "") : "";
     return extractGeneralInfoBodyImageSrcs(
@@ -640,12 +707,14 @@ export default function GeneralInfoDetailModal({
   }, [isEditing, item.formattedTextHtml, item.text, bodyEditorKey, bodyImageTick]);
 
   const reportImageSrcs = React.useMemo(() => {
-    const liveFactHtml = String(factRichTextRef.current?.innerHTML || "");
-    return extractGeneralInfoReportImageSrcs(
-      liveFactHtml,
-      factInitialHtml,
-      item.factCheckSummary,
-    );
+    const editor = factRichTextRef.current;
+    const liveFactHtml =
+      editor?.dataset.hydrated === "1" ? String(editor.innerHTML || "") : "";
+    // 라이브 편집기가 있으면 그것만 사용 (삭제 후 초기 HTML로 다시 살아나는 문제 방지)
+    if (liveFactHtml) {
+      return extractGeneralInfoReportImageSrcs(liveFactHtml);
+    }
+    return extractGeneralInfoReportImageSrcs(factInitialHtml, item.factCheckSummary);
   }, [factInitialHtml, item.factCheckSummary, factEditorKey, reportImageTick]);
 
   const saveAllEdits = React.useCallback(async () => {
@@ -931,7 +1000,7 @@ export default function GeneralInfoDetailModal({
               </div>
 
               <div
-                className="generalInfoRichToolbar"
+                className="generalInfoRichToolbar generalInfoFactDesktopToolbar"
                 aria-label="AI 보고서 서식 도구"
                 style={{ marginTop: 8 }}
               >
@@ -946,7 +1015,7 @@ export default function GeneralInfoDetailModal({
               </div>
 
               <div
-                className="generalInfoRichToolbar generalInfoCircledNumberToolbar"
+                className="generalInfoRichToolbar generalInfoCircledNumberToolbar generalInfoFactDesktopToolbar"
                 aria-label="원형 번호 삽입"
                 style={{ marginTop: 8 }}
               >
@@ -963,6 +1032,10 @@ export default function GeneralInfoDetailModal({
                   </button>
                 ))}
               </div>
+
+              <p className="generalInfoFactMobileFormatHint">
+                본문을 탭하면 키보드 위에 서식 바가 나타납니다. ‹ ›로 도구를 좌우로 옮길 수 있습니다.
+              </p>
 
               <p className="generalInfoFactCheckHint">
                 굵게·밑줄·글자색·①~⑩으로 보고서 본문을 편집할 수 있습니다. 원하는 위치 문장 끝 S(또는 s) 또는 [이미지 추가]로 사진을 삽입합니다(중간·끝 모두 가능).
@@ -992,6 +1065,7 @@ export default function GeneralInfoDetailModal({
                     node.innerHTML = factInitialHtml;
                     enhanceInlineImageBlocks(node);
                     bindInlineImageRemoveHandler(node);
+                    refreshInlineImagesInEditor(node);
                     node.dataset.hydrated = "1";
                   }
                 }}
@@ -1000,6 +1074,7 @@ export default function GeneralInfoDetailModal({
                 suppressContentEditableWarning
                 role="textbox"
                 tabIndex={0}
+                onFocus={() => setFactEditorFocused(true)}
                 onInput={() => {
                   checkFactImageTrigger();
                   setReportImageTick((prev) => prev + 1);
@@ -1008,7 +1083,12 @@ export default function GeneralInfoDetailModal({
                   checkFactImageTrigger();
                   setReportImageTick((prev) => prev + 1);
                 }}
-                onBlur={() => {
+                onBlur={(e) => {
+                  const next = e.relatedTarget as HTMLElement | null;
+                  if (next?.closest?.(".generalInfoMobileFormatBubble")) {
+                    return;
+                  }
+                  setFactEditorFocused(false);
                   checkFactImageTrigger();
                   setReportImageTick((prev) => prev + 1);
                 }}
@@ -1035,6 +1115,36 @@ export default function GeneralInfoDetailModal({
                   wordBreak: "break-word",
                 }}
               />
+
+              <GeneralInfoMobileFormatBubble
+                active={Boolean(onSaveManualFactCheck) && factEditorFocused}
+                editorRef={factRichTextRef}
+                onCommand={handleFactRichCommand}
+                onInsertChar={insertFactPlainText}
+              />
+
+              {reportImageSrcs.length > 0 && (
+                <div className="generalInfoFactImageManageStrip" aria-label="보고서 이미지 관리">
+                  <p className="mutedText" style={{ margin: "8px 0 8px", fontSize: 12 }}>
+                    보고서 이미지 ({reportImageSrcs.length}) · 안 보이면 여기서 × 삭제
+                  </p>
+                  <div className="generalInfoFactImageManageRow">
+                    {reportImageSrcs.map((src, index) => (
+                      <div key={`fact-mgmt-${index}`} className="generalInfoFactImageManageCard">
+                        <button
+                          type="button"
+                          className="generalInfoInlineImageRemove"
+                          aria-label="보고서 이미지 삭제"
+                          onClick={() => void removeFactReportImage(src)}
+                        >
+                          ×
+                        </button>
+                        <img src={src} alt={`보고서 이미지 ${index + 1}`} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {showFactImageInsert && (
                 <div className="generalInfoTextImageInsertPanel" ref={factImagePanelRef}>
@@ -1298,6 +1408,7 @@ export default function GeneralInfoDetailModal({
                 </strong>
                 <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
                   AI 검증 보고서(Fact Check)에 넣은 사진을 대표 이미지로 쓸 수 있습니다.
+                  아이폰에서 본문 이미지가 안 보이면 여기서 ×로 삭제할 수 있습니다.
                 </p>
                 <div
                   style={{
@@ -1314,6 +1425,7 @@ export default function GeneralInfoDetailModal({
                       <div
                         key={`report-img-${index}`}
                         style={{
+                          position: "relative",
                           border: isRep
                             ? "2px solid #facc15"
                             : "1px solid rgba(148, 163, 184, 0.28)",
@@ -1322,6 +1434,16 @@ export default function GeneralInfoDetailModal({
                           background: "rgba(2, 6, 23, 0.55)",
                         }}
                       >
+                        <button
+                          type="button"
+                          className="generalInfoInlineImageRemove"
+                          aria-label="보고서 이미지 삭제"
+                          title="보고서에서 삭제"
+                          onClick={() => void removeFactReportImage(src)}
+                          style={{ position: "absolute", top: 6, right: 6, zIndex: 3 }}
+                        >
+                          ×
+                        </button>
                         <img
                           src={src}
                           alt={`보고서 이미지 ${index + 1}`}

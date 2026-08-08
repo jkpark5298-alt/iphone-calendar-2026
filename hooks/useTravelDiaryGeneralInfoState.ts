@@ -6,7 +6,7 @@ import { persistGeneralInfoItemsToLocalStorage, readGeneralInfoItemsFromLocalSto
 import { supabase } from "../lib/supabaseClient";
 
 
-import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, extractTitleFromPlainText, formatReportHtmlForPdf, isFullAiVerificationReport, buildAiReportFromBodyContent, hasDisplayableAiReport, salvageFactCheckHtml } from "../lib/generalInfoHelpers";
+import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, extractTitleFromPlainText, formatReportHtmlForPdf, isFullAiVerificationReport, buildAiReportFromBodyContent, hasDisplayableAiReport, salvageFactCheckHtml, pickPreferredFactCheckSummary } from "../lib/generalInfoHelpers";
 
 
 const TRAVEL_DIARY_BUCKET = "info-photos";
@@ -55,6 +55,7 @@ export function useTravelDiaryGeneralInfoState({
   const [generalInfoSearchTerm, setGeneralInfoSearchTerm] = useState("");
   const [isExtractingGeneralInfoUrl, setIsExtractingGeneralInfoUrl] = useState(false);
   const [generalInfoDetailId, setGeneralInfoDetailId] = useState<number | null>(null);
+  const [generalInfoAiReportId, setGeneralInfoAiReportId] = useState<number | null>(null);
   const [generalInfoDetailEditMode, setGeneralInfoDetailEditMode] = useState(false);
   const [generalInfoActiveTab, setGeneralInfoActiveTab] = useState<"storage" | "collect">("storage");
   const [generalInfoEditingId, setGeneralInfoEditingId] = useState<number | null>(null);
@@ -141,11 +142,10 @@ export function useTravelDiaryGeneralInfoState({
                 mediaItems: mergedMediaItems,
                 formattedTextHtml:
                   data.item.formattedTextHtml || prevItem.formattedTextHtml || "",
-                factCheckSummary:
-                  String(data.item.factCheckSummary || "").length >=
-                  String(prevItem.factCheckSummary || "").length
-                    ? data.item.factCheckSummary || prevItem.factCheckSummary
-                    : prevItem.factCheckSummary,
+                factCheckSummary: pickPreferredFactCheckSummary(
+                  data.item.factCheckSummary,
+                  prevItem.factCheckSummary,
+                ),
                 isPinned: prevItem.isPinned || data.item.isPinned
               };
             }
@@ -271,11 +271,10 @@ export function useTravelDiaryGeneralInfoState({
                 filePreview: remoteItem.filePreview || localItem.filePreview,
                 formattedTextHtml:
                   remoteItem.formattedTextHtml || localItem.formattedTextHtml || "",
-                factCheckSummary:
-                  String(remoteItem.factCheckSummary || "").length >=
-                  String(localItem.factCheckSummary || "").length
-                    ? remoteItem.factCheckSummary || localItem.factCheckSummary
-                    : localItem.factCheckSummary,
+                factCheckSummary: pickPreferredFactCheckSummary(
+                  remoteItem.factCheckSummary,
+                  localItem.factCheckSummary,
+                ),
               });
             } else {
               map.set(remoteItem.id, remoteItem);
@@ -1436,7 +1435,13 @@ export function useTravelDiaryGeneralInfoState({
       setGeneralInfoDraft(initialGeneralInfoDraft);
       resetGeneralInfoRichTextEditor("", "");
       localStorage.removeItem("travel_diary_general_info_temp_draft");
-      showPasteHint("✅ 수정 저장 완료 · 새 일반 정보 입력 준비 완료");
+      setGeneralInfoActiveTab("storage");
+      if (hasDisplayableAiReport(String(updatedItem.factCheckSummary || ""))) {
+        setGeneralInfoAiReportId(updatedItem.id);
+        showPasteHint("✅ 수정 저장 완료 · AI 검증 보고서 화면을 열었습니다.");
+      } else {
+        showPasteHint("✅ 수정 저장 완료 · 새 일반 정보 입력 준비 완료");
+      }
       return;
     }
 
@@ -1454,7 +1459,13 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoDraft(initialGeneralInfoDraft);
     resetGeneralInfoRichTextEditor("", "");
     localStorage.removeItem("travel_diary_general_info_temp_draft");
-    showPasteHint("✅ 저장 완료 · 새 일반 정보 입력 준비 완료");
+    setGeneralInfoActiveTab("storage");
+    if (hasDisplayableAiReport(String(item.factCheckSummary || ""))) {
+      setGeneralInfoAiReportId(item.id);
+      showPasteHint("✅ 저장 완료 · AI 검증 보고서가 만들어졌습니다.");
+    } else {
+      showPasteHint("✅ 저장 완료 · 새 일반 정보 입력 준비 완료");
+    }
   }, [
     generalInfoDraft,
     generalInfoEditingId,
@@ -1593,6 +1604,7 @@ export function useTravelDiaryGeneralInfoState({
     });
 
     setGeneralInfoDetailId((prev) => (prev === itemId ? null : prev));
+    setGeneralInfoAiReportId((prev) => (prev === itemId ? null : prev));
 
     if (generalInfoEditingId === itemId) {
       setGeneralInfoEditingId(null);
@@ -2541,6 +2553,19 @@ export function useTravelDiaryGeneralInfoState({
     return generalInfoItems.find((item) => item.id === generalInfoDetailId) || null;
   }, [generalInfoItems, generalInfoDetailId]);
 
+  const selectedGeneralInfoAiReportItem = useMemo(() => {
+    return generalInfoItems.find((item) => item.id === generalInfoAiReportId) || null;
+  }, [generalInfoItems, generalInfoAiReportId]);
+
+  const handleOpenGeneralInfoAiReport = useCallback((itemId: number) => {
+    setGeneralInfoAiReportId(itemId);
+    setGeneralInfoActiveTab("storage");
+  }, []);
+
+  const handleCloseGeneralInfoAiReport = useCallback(() => {
+    setGeneralInfoAiReportId(null);
+  }, []);
+
   return {
     generalInfoDraft,
     setGeneralInfoDraft,
@@ -2562,6 +2587,11 @@ export function useTravelDiaryGeneralInfoState({
     setIsExtractingGeneralInfoUrl,
     generalInfoDetailId,
     setGeneralInfoDetailId,
+    generalInfoAiReportId,
+    setGeneralInfoAiReportId,
+    selectedGeneralInfoAiReportItem,
+    handleOpenGeneralInfoAiReport,
+    handleCloseGeneralInfoAiReport,
     generalInfoDetailEditMode,
     setGeneralInfoDetailEditMode,
     handleCloseGeneralInfoDetail,

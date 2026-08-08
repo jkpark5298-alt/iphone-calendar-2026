@@ -8,7 +8,7 @@
 
 import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
-import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, extractGeneralInfoReportImageSrcs, makeGeneralInfoMediaItem } from "../lib/generalInfoHelpers";
+import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, extractGeneralInfoReportImageSrcs, makeGeneralInfoMediaItem, hasDisplayableAiReport } from "../lib/generalInfoHelpers";
 import { Card, EmptyState } from "./SharedComponents";
 
 export interface Chapter3InfoProps {
@@ -71,6 +71,7 @@ export interface Chapter3InfoProps {
   setGeneralInfoSearchTerm: (value: string) => void;
   generalInfoDetailId: number | null;
   setGeneralInfoDetailId: (id: number | null) => void;
+  handleOpenGeneralInfoAiReport?: (itemId: number) => void;
   handleTogglePinGeneralInfo: (itemId: number) => void;
   loadGeneralInfoItemsFromSupabase: () => Promise<void>;
   generalInfoSupabaseStatus: string;
@@ -129,6 +130,7 @@ export function Chapter3Info({
   setGeneralInfoSearchTerm,
   generalInfoDetailId,
   setGeneralInfoDetailId,
+  handleOpenGeneralInfoAiReport,
   handleTogglePinGeneralInfo,
   loadGeneralInfoItemsFromSupabase,
   generalInfoSupabaseStatus,
@@ -1398,8 +1400,21 @@ export function Chapter3Info({
                     <p className="cardSummary">{item.summary || "클립보드 이미지 자료"}</p>
                   </div>
 
-                  {/* 상세보기/고정 버튼 */}
+                  {/* AI 검증 보고서 / 상세보기 / 고정 */}
                   <div className="generalInfoCardActions">
+                    {hasDisplayableAiReport(String(item.factCheckSummary || "")) && (
+                      <button
+                        className="generalInfoCardAiReportButton"
+                        type="button"
+                        title="AI 검증 보고서"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenGeneralInfoAiReport?.(item.id);
+                        }}
+                      >
+                        AI 검증 보고서
+                      </button>
+                    )}
                     <button
                       className="generalInfoCardDetailButton"
                       type="button"
