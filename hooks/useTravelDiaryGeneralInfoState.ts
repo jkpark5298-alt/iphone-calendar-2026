@@ -1663,6 +1663,7 @@ export function useTravelDiaryGeneralInfoState({
     itemId: number,
     text: string,
     status: GeneralInfoItem["factCheckStatus"] = "확인 필요",
+    title?: string,
   ) => {
     const targetItem = generalInfoItems.find((item) => item.id === itemId);
     if (!targetItem) return;
@@ -1691,8 +1692,12 @@ export function useTravelDiaryGeneralInfoState({
       return;
     }
 
+    const nextTitle =
+      title !== undefined ? String(title || "").trim() || targetItem.title : targetItem.title;
+
     const updatedItem: GeneralInfoItem = {
       ...targetItem,
+      title: nextTitle,
       factCheckStatus: status,
       factCheckSummary: trimmed,
     };

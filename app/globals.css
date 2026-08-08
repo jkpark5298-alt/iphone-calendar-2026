@@ -11718,12 +11718,36 @@ body {
   color: #7dd3fc;
 }
 
-.giAiReportScreenHeader h2 {
+.giAiReportScreenTitleBlock {
+  flex: 1;
+  min-width: 0;
+}
+
+.giAiReportTitleInput {
+  width: 100%;
+  box-sizing: border-box;
   margin: 0;
-  font-size: 20px;
-  line-height: 1.35;
-  font-weight: 800;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: rgba(2, 6, 23, 0.92);
   color: #f8fafc;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.giAiReportTitleInput:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+}
+
+.giAiReportTitleInputHeader {
+  margin-top: 4px;
+  font-size: 17px;
+  font-weight: 800;
+  padding: 6px 10px;
 }
 
 .giAiReportScreenHeaderActions {
@@ -11854,6 +11878,10 @@ body {
   line-height: 1.75;
   font-size: 15px;
   overflow: auto;
+}
+
+.giAiReportBody :where(p, div, li, strong, em, b, u, h1, h2, h3, h4, h5, h6, a, td, th) {
+  color: inherit;
 }
 
 .giAiReportBody img {
@@ -11993,12 +12021,15 @@ body {
   height: 14px;
 }
 
-.giAiReportBulletBtnImg {
-  width: 12px;
-  height: 12px;
-  display: block;
-  object-fit: contain;
-  filter: invert(1);
+.giAiReportBulletChar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  font-size: 18px;
+  line-height: 1;
+  color: #f8fafc;
+  font-weight: 800;
 }
 
 .giAiReportToolbarSep {
@@ -12069,6 +12100,10 @@ body {
   font-size: 15px;
   line-height: 1.75;
   outline: none;
+}
+
+.giAiReportTipTap :where(p, div, li, strong, em, b, u, h1, h2, h3, h4, h5, h6) {
+  color: inherit;
 }
 
 .giAiReportTipTap:focus {

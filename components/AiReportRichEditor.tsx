@@ -129,15 +129,6 @@ export function AiReportRichEditor({ html, onChange, onUploadImage }: Props) {
         onColor={(color) => editor.chain().focus().setColor(color).run()}
         onHighlight={(bg) => editor.chain().focus().toggleHighlight({ color: bg }).run()}
         onInsertChar={(ch) => editor.chain().focus().insertContent(ch).run()}
-        onInsertBullet={() =>
-          editor
-            .chain()
-            .focus()
-            .insertContent(
-              '<img src="/gi-bullet-dot.png" alt="•" class="gi-report-bullet-dot" /> ',
-            )
-            .run()
-        }
         onImage={onUploadImage ? () => fileRef.current?.click() : undefined}
       />
       <EditorContent editor={editor} />
@@ -168,7 +159,7 @@ export function AiReportRichEditor({ html, onChange, onUploadImage }: Props) {
         />
       )}
       <p className="giAiReportEditorHint">
-        굵게·밑줄·검정원(•)·크기·글자색·형광·①~⑩·이미지. 이미지 붙여넣기도 가능합니다.
+        굵게·밑줄·•·크기·글자색·형광·①~⑩·이미지. 이미지 붙여넣기도 가능합니다.
       </p>
     </div>
   );

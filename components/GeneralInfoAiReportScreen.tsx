@@ -19,6 +19,7 @@ type Props = {
   onSaveReport?: (
     html: string,
     status: GeneralInfoItem["factCheckStatus"],
+    title?: string,
   ) => Promise<void>;
   onUploadImage?: (file: File) => Promise<string>;
 };
@@ -38,24 +39,30 @@ export default function GeneralInfoAiReportScreen({
   const [draftHtml, setDraftHtml] = React.useState(() =>
     normalizeAiReportEditorHtml(String(item.factCheckSummary || "")),
   );
+  const [draftTitle, setDraftTitle] = React.useState(() => String(item.title || ""));
   const [saving, setSaving] = React.useState(false);
   const [saveMsg, setSaveMsg] = React.useState("");
   const bodyRef = React.useRef<HTMLDivElement | null>(null);
 
   const reportHtml = String(item.factCheckSummary || "").trim();
   const hasReport = hasDisplayableAiReport(reportHtml) || hasDisplayableAiReport(draftHtml);
-  const dirty = normalizeAiReportEditorHtml(draftHtml) !== normalizeAiReportEditorHtml(reportHtml);
+  const htmlDirty =
+    normalizeAiReportEditorHtml(draftHtml) !== normalizeAiReportEditorHtml(reportHtml);
+  const titleDirty = draftTitle.trim() !== String(item.title || "").trim();
+  const dirty = htmlDirty || titleDirty;
 
   React.useEffect(() => {
     setDraftHtml(normalizeAiReportEditorHtml(String(item.factCheckSummary || "")));
+    setDraftTitle(String(item.title || ""));
     setSaveMsg("");
-  }, [item.id, item.factCheckSummary]);
+  }, [item.id, item.factCheckSummary, item.title]);
 
   const displayHtml = React.useMemo(() => {
     const raw = tab === "body" ? draftHtml : reportHtml || draftHtml;
     if (!raw) return "";
-    if (looksLikeHtmlContent(raw)) return raw;
-    return raw
+    const normalized = normalizeAiReportEditorHtml(raw);
+    if (looksLikeHtmlContent(normalized)) return normalized;
+    return normalized
       .split(/\n{2,}/)
       .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br/>")}</p>`)
       .join("");
@@ -73,10 +80,11 @@ export default function GeneralInfoAiReportScreen({
       alert("저장할 보고서 내용이 없습니다.");
       return;
     }
+    const nextTitle = draftTitle.trim() || item.title || "제목 없음";
     setSaving(true);
     setSaveMsg("");
     try {
-      await onSaveReport(html, item.factCheckStatus || "확인 필요");
+      await onSaveReport(html, item.factCheckStatus || "확인 필요", nextTitle);
       setSaveMsg("✅ 저장됨");
     } catch (error) {
       console.error(error);
@@ -85,15 +93,21 @@ export default function GeneralInfoAiReportScreen({
     } finally {
       setSaving(false);
     }
-  }, [draftHtml, item.factCheckStatus, onSaveReport]);
+  }, [draftHtml, draftTitle, item.factCheckStatus, item.title, onSaveReport]);
 
   return (
     <div className="giAiReportScreen" role="dialog" aria-modal="true" aria-label="AI 검증 보고서">
       <div className="giAiReportScreenPanel">
         <header className="giAiReportScreenHeader">
-          <div>
+          <div className="giAiReportScreenTitleBlock">
             <p className="giAiReportScreenEyebrow">AI 검증 보고서</p>
-            <h2>{item.title || "제목 없음"}</h2>
+            <input
+              className="giAiReportTitleInput giAiReportTitleInputHeader"
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              placeholder="제목 없음"
+              aria-label="보고서 제목"
+            />
           </div>
           <div className="giAiReportScreenHeaderActions">
             <button
@@ -157,7 +171,13 @@ export default function GeneralInfoAiReportScreen({
         <section className="giAiReportMeta">
           <div>
             <span>제목</span>
-            <strong>{item.title || "-"}</strong>
+            <input
+              className="giAiReportTitleInput"
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              placeholder="제목을 입력하세요"
+              aria-label="보고서 제목"
+            />
           </div>
           <div>
             <span>작성일자</span>

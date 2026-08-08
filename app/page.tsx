@@ -8719,11 +8719,12 @@ ${photo.memoText}
         <GeneralInfoAiReportScreen
           item={infoState.selectedGeneralInfoAiReportItem}
           onClose={infoState.handleCloseGeneralInfoAiReport}
-          onSaveReport={async (html, status) => {
+          onSaveReport={async (html, status, title) => {
             await infoState.handleSaveManualFactCheck(
               infoState.selectedGeneralInfoAiReportItem!.id,
               html,
               status,
+              title,
             );
           }}
           onUploadImage={infoState.uploadGeneralInfoInlineImageFile}
