@@ -100,6 +100,12 @@ const calendarMarkLabels: Record<CalendarMarkType, string> = {
   休: "休",
 };
 
+function formatCalendarMarkText(type: CalendarMarkType, plus: boolean) {
+  const label = calendarMarkLabels[type];
+  if (plus && type !== "노조") return `👍${label}`;
+  return label;
+}
+
 function calendarMarkClassSuffix(type: CalendarMarkType) {
   if (type === "심야") return "night";
   if (type === "노조") return "union";
@@ -2419,20 +2425,42 @@ export default function HomePage() {
       return;
     }
 
-    const nextPlus = markType === "노조" ? false : markPlus;
+    // 👍는 C/A/당에만 — 새 칩을 추가하지 않고 기존 표시 앞에 붙임
+    const canThumb = markType === "C" || markType === "A" || markType === "당";
+    const nextPlus = canThumb && markPlus;
     const nextMarks = { ...calendarMarks };
+    const daysNeedingBaseDelete: number[] = [];
 
     uniqueDays.forEach(day => {
       const markKey = key(currentMonth, day, currentYear);
-      const current = nextMarks[markKey] || [];
-      const exists = current.some(item => item.type === markType && item.plus === nextPlus);
-      if (!exists) {
-        current.push({
-          id: `${Date.now()}-${currentMonth}-${day}-${markType}-${nextPlus ? "plus" : "base"}`,
-          type: markType,
-          plus: nextPlus,
-        });
+      let current = [...(nextMarks[markKey] || [])];
+
+      if (nextPlus) {
+        const sameType = current.filter(item => item.type === markType);
+        if (sameType.length) {
+          const hadBase = sameType.some(item => !item.plus);
+          const keepId = sameType[0].id;
+          current = current.filter(item => item.type !== markType);
+          current.push({ id: keepId, type: markType, plus: true });
+          if (hadBase) daysNeedingBaseDelete.push(day);
+        } else {
+          current.push({
+            id: `${Date.now()}-${currentMonth}-${day}-${markType}-plus`,
+            type: markType,
+            plus: true,
+          });
+        }
+      } else {
+        const exists = current.some(item => item.type === markType);
+        if (!exists) {
+          current.push({
+            id: `${Date.now()}-${currentMonth}-${day}-${markType}-base`,
+            type: markType,
+            plus: false,
+          });
+        }
       }
+
       nextMarks[markKey] = current;
     });
 
@@ -2444,6 +2472,18 @@ export default function HomePage() {
       await Promise.all(
         uniqueDays.map(async (day) => {
           const dbMonth = currentYear === 2026 ? currentMonth : currentYear * 100 + currentMonth;
+          if (nextPlus && daysNeedingBaseDelete.includes(day)) {
+            const { error: delError } = await supabaseClient
+              .from("calendar_marks")
+              .delete()
+              .eq("month", dbMonth)
+              .eq("day", day)
+              .eq("mark_type", markType)
+              .eq("plus", false);
+            if (delError) {
+              console.warn("Supabase calendar mark base delete error:", delError.message);
+            }
+          }
           const { error } = await supabaseClient.from("calendar_marks").upsert(
             {
               month: dbMonth,
@@ -2485,7 +2525,9 @@ export default function HomePage() {
     }
 
     setMarkDateInput(uniqueDays.join(", "));
-    alert(`${currentMonth}월 ${uniqueDays.join(", ")}일에 ${markType}${nextPlus ? "+" : ""} 표시를 저장했습니다.`);
+    alert(
+      `${currentMonth}월 ${uniqueDays.join(", ")}일에 ${formatCalendarMarkText(markType, nextPlus)} 표시를 저장했습니다.`,
+    );
   }
 
   function deleteCalendarMark(month: number, day: number, mark: CalendarMarkItem, year: number = currentYear) {
@@ -4729,7 +4771,7 @@ export default function HomePage() {
                     key={`${mark.type}-${mark.plus}`}
                     className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(mark.type)}`}
                   >
-                    {calendarMarkLabels[mark.type]}{mark.plus ? "+" : ""}
+                    {formatCalendarMarkText(mark.type, mark.plus)}
                   </span>
                 ))}
               </div>
@@ -5270,7 +5312,7 @@ function MarkDateView() {
                 className={`mark-type-btn mark-type-${calendarMarkClassSuffix(type)} ${markType === type ? "active" : ""}`}
                 onClick={() => {
                   setMarkType(type);
-                  if (type === "노조") setMarkPlus(false);
+                  if (!(type === "C" || type === "A" || type === "당")) setMarkPlus(false);
                 }}
               >
                 {calendarMarkLabels[type]}
@@ -5281,11 +5323,16 @@ function MarkDateView() {
           <label className="mark-plus-option">
             <input
               type="checkbox"
-              checked={markPlus && markType !== "노조"}
+              checked={markPlus && (markType === "C" || markType === "A" || markType === "당")}
               onChange={event => setMarkPlus(event.target.checked)}
-              disabled={markType === "노조"}
+              disabled={!(markType === "C" || markType === "A" || markType === "당")}
             />
-            <span>+ 표시 추가 {markType === "노조" ? "(노조는 + 제외)" : `→ ${markType}+`}</span>
+            <span>
+              👍 표시{" "}
+              {markType === "C" || markType === "A" || markType === "당"
+                ? `→ 기존 ${markType} 앞에 👍 (예: 👍${markType})`
+                : "(C / A / 당만 가능)"}
+            </span>
           </label>
 
           <p className="muted">날짜를 쉼표로 여러 개 입력하세요. 예: 1, 3, 15</p>
@@ -5299,7 +5346,11 @@ function MarkDateView() {
           />
 
           <button type="button" className="save-schedule-btn" onClick={addCalendarMarks}>
-            {markType}{markType !== "노조" && markPlus ? "+" : ""} 표시 저장
+            {formatCalendarMarkText(
+              markType,
+              Boolean(markPlus && (markType === "C" || markType === "A" || markType === "당")),
+            )}{" "}
+            표시 저장
           </button>
 
           <div className="saved-marks">
@@ -5309,7 +5360,7 @@ function MarkDateView() {
               <div className="saved-mark-row" key={`${day}-${item.type}-${item.plus}`}>
                 <span>{currentMonth}/{day}</span>
                 <span className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(item.type)}`}>
-                  {calendarMarkLabels[item.type]}{item.plus ? "+" : ""}
+                  {formatCalendarMarkText(item.type, item.plus)}
                 </span>
                 <button type="button" className="soft-btn delete-btn" onClick={() => deleteCalendarMark(currentMonth, day, item)}>삭제</button>
               </div>
