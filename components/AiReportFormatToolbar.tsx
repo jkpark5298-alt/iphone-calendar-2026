@@ -29,6 +29,7 @@ export function AiReportFormatToolbar({
   onColor,
   onHighlight,
   onInsertChar,
+  onInsertBullet,
   onImage,
 }: {
   canUndo: boolean;
@@ -42,6 +43,7 @@ export function AiReportFormatToolbar({
   onColor: (c: string) => void;
   onHighlight: (c: string) => void;
   onInsertChar: (ch: string) => void;
+  onInsertBullet?: () => void;
   onImage?: () => void;
 }) {
   const keep = (e: React.MouseEvent) => e.preventDefault();
@@ -63,6 +65,15 @@ export function AiReportFormatToolbar({
       <ToolBtn onClick={onUnderline} title="밑줄" onMouseDown={keep}>
         <Underline className="giAiReportToolbarIcon" />
       </ToolBtn>
+      {onInsertBullet && (
+        <ToolBtn onClick={onInsertBullet} title="검정 원 불릿 삽입" onMouseDown={keep}>
+          <img
+            src="/gi-bullet-dot.png"
+            alt="불릿"
+            className="giAiReportBulletBtnImg"
+          />
+        </ToolBtn>
+      )}
       <ToolBtn onClick={() => onFontSizeStep(-1)} title="글자 작게" onMouseDown={keep}>
         <Minus className="giAiReportToolbarIcon" />
       </ToolBtn>

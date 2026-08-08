@@ -11676,7 +11676,7 @@ body {
   }
 }
 
-/* ===== AI 검증 보고서 별도 화면 (1단계 골격) ===== */
+/* ===== AI 검증 보고서 별도 화면 (다크 · 기존 AI 보고서 톤) ===== */
 .giAiReportScreen {
   position: fixed;
   inset: 0;
@@ -11685,8 +11685,8 @@ body {
   align-items: stretch;
   justify-content: center;
   padding: 10px;
-  background: rgba(2, 6, 23, 0.72);
-  backdrop-filter: blur(6px);
+  background: rgba(2, 6, 23, 0.82);
+  backdrop-filter: blur(8px);
 }
 
 .giAiReportScreenPanel {
@@ -11694,12 +11694,12 @@ body {
   max-height: 100%;
   overflow: auto;
   border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: #f8fafc;
-  color: #0f172a;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: #020617;
+  color: #e2e8f0;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(14, 165, 233, 0.08);
 }
 
 .giAiReportScreenHeader {
@@ -11708,14 +11708,14 @@ body {
   gap: 12px;
   align-items: flex-start;
   padding: 16px 18px 10px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  border-bottom: 1px solid rgba(56, 189, 248, 0.18);
 }
 
 .giAiReportScreenEyebrow {
   margin: 0 0 4px;
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: #7dd3fc;
 }
 
 .giAiReportScreenHeader h2 {
@@ -11723,7 +11723,7 @@ body {
   font-size: 20px;
   line-height: 1.35;
   font-weight: 800;
-  color: #0f172a;
+  color: #f8fafc;
 }
 
 .giAiReportScreenHeaderActions {
@@ -11734,16 +11734,27 @@ body {
 }
 
 .giAiReportGhostBtn,
-.giAiReportCloseBtn,
-.giAiReportPrimaryBtn {
+.giAiReportCloseBtn {
   appearance: none;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: #fff;
-  color: #0f172a;
-  border-radius: 10px;
-  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+  border-radius: 999px;
+  padding: 8px 14px;
   font-size: 12px;
   font-weight: 700;
+  cursor: pointer;
+}
+
+.giAiReportPrimaryBtn {
+  appearance: none;
+  border: none;
+  background: #f8fafc;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 800;
   cursor: pointer;
 }
 
@@ -11757,6 +11768,7 @@ body {
   padding: 0;
   font-size: 22px;
   line-height: 34px;
+  border-radius: 10px;
 }
 
 .giAiReportTabs {
@@ -11769,7 +11781,7 @@ body {
   appearance: none;
   border: 1px solid transparent;
   background: transparent;
-  color: #64748b;
+  color: #94a3b8;
   border-radius: 10px;
   padding: 8px 12px;
   font-size: 13px;
@@ -11778,16 +11790,18 @@ body {
 }
 
 .giAiReportTabs button.active {
-  background: #0f172a;
-  color: #fff;
+  background: rgba(14, 165, 233, 0.18);
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #e0f2fe;
 }
 
 .giAiReportHint {
   margin: 8px 18px 0;
   padding: 8px 10px;
   border-radius: 10px;
-  background: #e2e8f0;
-  color: #334155;
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #bae6fd;
   font-size: 12px;
   line-height: 1.45;
 }
@@ -11796,7 +11810,8 @@ body {
   margin: 12px 18px 0;
   padding: 12px;
   border-radius: 12px;
-  background: #eef2f7;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.22);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 14px;
@@ -11805,14 +11820,14 @@ body {
 .giAiReportMeta span {
   display: block;
   font-size: 11px;
-  color: #64748b;
+  color: #7dd3fc;
   margin-bottom: 2px;
 }
 
 .giAiReportMeta strong {
   display: block;
   font-size: 13px;
-  color: #0f172a;
+  color: #f1f5f9;
   word-break: break-word;
 }
 
@@ -11825,7 +11840,7 @@ body {
 .giAiReportBodyLabel {
   font-size: 12px;
   font-weight: 800;
-  color: #475569;
+  color: #7dd3fc;
   margin-bottom: 8px;
 }
 
@@ -11833,9 +11848,9 @@ body {
   min-height: 260px;
   padding: 16px;
   border-radius: 14px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  background: #fff;
-  color: #0f172a;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: #020617;
+  color: #e2e8f0;
   line-height: 1.75;
   font-size: 15px;
   overflow: auto;
@@ -11856,19 +11871,20 @@ body {
 .giAiReportPlaceholder {
   padding: 16px;
   border-radius: 14px;
-  border: 1px dashed rgba(15, 23, 42, 0.18);
-  background: #fff;
+  border: 1px dashed rgba(56, 189, 248, 0.35);
+  background: rgba(15, 23, 42, 0.7);
 }
 
 .giAiReportPlaceholder strong {
   display: block;
   margin-bottom: 6px;
   font-size: 15px;
+  color: #e0f2fe;
 }
 
 .giAiReportPlaceholder p {
   margin: 0 0 10px;
-  color: #475569;
+  color: #94a3b8;
   font-size: 13px;
   line-height: 1.5;
 }
@@ -11876,11 +11892,11 @@ body {
 .giAiReportEmpty {
   padding: 28px 16px;
   text-align: center;
-  color: #64748b;
+  color: #94a3b8;
   font-size: 13px;
   border-radius: 14px;
-  border: 1px dashed rgba(15, 23, 42, 0.18);
-  background: #fff;
+  border: 1px dashed rgba(56, 189, 248, 0.3);
+  background: rgba(15, 23, 42, 0.7);
 }
 
 .giAiReportFooter {
@@ -11891,9 +11907,6 @@ body {
 }
 
 .giAiReportPrimaryBtn {
-  background: #0f172a;
-  color: #fff;
-  border-color: #0f172a;
   padding: 10px 16px;
 }
 
@@ -11927,7 +11940,7 @@ body {
   }
 }
 
-/* ===== AI 보고서 TipTap 편집기 ===== */
+/* ===== AI 보고서 TipTap 편집기 (다크) ===== */
 .giAiReportEditorShell {
   display: flex;
   flex-direction: column;
@@ -11937,10 +11950,10 @@ body {
 .giAiReportEditorLoading {
   padding: 24px;
   text-align: center;
-  color: #64748b;
-  background: #fff;
+  color: #94a3b8;
+  background: #020617;
   border-radius: 14px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
 }
 
 .giAiReportToolbar {
@@ -11950,8 +11963,8 @@ body {
   align-items: center;
   padding: 8px;
   border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: #f1f5f9;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(15, 23, 42, 0.96);
 }
 
 .giAiReportToolBtn {
@@ -11962,9 +11975,9 @@ body {
   min-height: 32px;
   padding: 4px 8px;
   border-radius: 8px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: #fff;
-  color: #0f172a;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
+  color: #e2e8f0;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -11980,17 +11993,25 @@ body {
   height: 14px;
 }
 
+.giAiReportBulletBtnImg {
+  width: 12px;
+  height: 12px;
+  display: block;
+  object-fit: contain;
+  filter: invert(1);
+}
+
 .giAiReportToolbarSep {
   width: 1px;
   height: 22px;
-  background: rgba(15, 23, 42, 0.15);
+  background: rgba(148, 163, 184, 0.35);
   margin: 0 2px;
 }
 
 .giAiReportToolbarLabel,
 .giAiReportToolbarSizes > span {
   font-size: 11px;
-  color: #64748b;
+  color: #7dd3fc;
   font-weight: 700;
   padding: 0 2px;
 }
@@ -12002,8 +12023,8 @@ body {
   align-items: center;
   padding: 2px 4px;
   border-radius: 8px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  background: #fff;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  background: rgba(2, 6, 23, 0.85);
 }
 
 .giAiReportToolbarSizes button {
@@ -12013,14 +12034,14 @@ body {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #0f172a;
+  color: #e2e8f0;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
 }
 
 .giAiReportToolbarSizes button:hover {
-  background: #e2e8f0;
+  background: rgba(14, 165, 233, 0.2);
 }
 
 .giAiReportSwatch,
@@ -12029,7 +12050,7 @@ body {
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.2);
+  border: 1px solid rgba(148, 163, 184, 0.45);
   cursor: pointer;
   padding: 0;
 }
@@ -12042,17 +12063,17 @@ body {
   min-height: 280px;
   padding: 14px 16px;
   border-radius: 14px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: #fff;
-  color: #0f172a;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: #020617;
+  color: #e2e8f0;
   font-size: 15px;
   line-height: 1.75;
   outline: none;
 }
 
 .giAiReportTipTap:focus {
-  border-color: #0ea5e9;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
 }
 
 .giAiReportTipTap p {
@@ -12067,10 +12088,23 @@ body {
   display: block;
 }
 
+.giAiReportTipTap img.gi-report-bullet-dot,
+.giAiReportBody img.gi-report-bullet-dot {
+  display: inline-block !important;
+  width: 0.55em !important;
+  height: 0.55em !important;
+  max-width: 0.55em !important;
+  margin: 0 0.28em 0.05em 0 !important;
+  border-radius: 0 !important;
+  vertical-align: middle !important;
+  object-fit: contain !important;
+  filter: invert(1);
+}
+
 .giAiReportEditorHint {
   margin: 0;
   font-size: 12px;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .giAiReportPrimaryBtn:disabled {
