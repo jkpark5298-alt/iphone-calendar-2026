@@ -247,7 +247,7 @@ interface Props {
     itemId: number,
     text: string,
     status: GeneralInfoItem["factCheckStatus"],
-  ) => void;
+  ) => void | Promise<void>;
   /** Fact Check 인라인 이미지를 Storage에 올리고 https URL 반환 */
   onUploadInlineImage?: (file: File) => Promise<string>;
 }
@@ -482,6 +482,17 @@ export default function GeneralInfoDetailModal({
 
         insertInlineMediaIntoEditor(editor, uploaded, { afterNode, range: savedRange });
         setReportImageTick((prev) => prev + 1);
+
+        // 아이폰 등에서 앱을 나갔다 와도 유지되도록 삽입 직후 자동 저장
+        const html = String(editor.innerHTML || "").trim();
+        if (html && onSaveManualFactCheck) {
+          try {
+            await onSaveManualFactCheck(item.id, html, manualFactStatus);
+          } catch (error) {
+            console.error("factcheck auto-save after image insert failed", error);
+            alert("이미지는 넣었지만 자동 저장에 실패했습니다. [Fact Check / 보고서 저장]을 눌러 주세요.");
+          }
+        }
       } catch (error) {
         console.error("factcheck inline image insert failed", error);
         alert("이미지를 Fact Check에 넣지 못했습니다.");
@@ -490,7 +501,7 @@ export default function GeneralInfoDetailModal({
         factImageInsertLockRef.current = false;
       }
     })();
-  }, [onUploadInlineImage, removeTrailingImageTrigger]);
+  }, [item.id, manualFactStatus, onSaveManualFactCheck, onUploadInlineImage, removeTrailingImageTrigger]);
 
   const handleFactImagePaste = React.useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     event.preventDefault();

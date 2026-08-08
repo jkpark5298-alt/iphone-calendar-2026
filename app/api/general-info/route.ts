@@ -276,10 +276,10 @@ const fromDbRow = (row: Record<string, unknown>): GeneralInfoPayload => {
 
     summary: normalizeString(row.summary, 4000),
     factCheckStatus: normalizeString(row.fact_check_status, 80) || "확인 전",
-    factCheckSummary: normalizeString(row.fact_check_summary, MAX_TEXT_LENGTH),
+    factCheckSummary: normalizeString(row.fact_check_summary, MAX_FACT_CHECK_SUMMARY_LENGTH),
 
     extraNote: normalizeString(row.extra_note, 4000),
-    formattedTextHtml: normalizeString(row.formatted_text_html, MAX_TEXT_LENGTH) || undefined,
+    formattedTextHtml: normalizeString(row.formatted_text_html, MAX_FACT_CHECK_SUMMARY_LENGTH) || undefined,
     confirmed: row.confirmed !== false,
     createdAt:
       normalizeString(row.created_at_text, 80) ||

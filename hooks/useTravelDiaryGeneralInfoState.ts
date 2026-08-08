@@ -1086,6 +1086,38 @@ export function useTravelDiaryGeneralInfoState({
     return result.fileUrl;
   }, []);
 
+  /** HTML 안의 data: 이미지를 Storage https로 교체 */
+  const uploadInlineDataUrlsInHtml = useCallback(async (html: string, filePrefix: string) => {
+    let next = salvageFactCheckHtml(String(html || ""));
+    const dataSrcs = extractMediaSrcFromHtml(next).filter((src) => src.startsWith("data:"));
+    if (!dataSrcs.length) {
+      return { html: next, ok: true as const, failed: 0 };
+    }
+
+    const replacements: Array<{ from: string; to: string }> = [];
+    for (const [index, src] of dataSrcs.entries()) {
+      try {
+        const file = await dataUrlToGeneralInfoFile(
+          src,
+          `${filePrefix}-${Date.now()}-${index + 1}.jpg`,
+        );
+        const result = await uploadFileToSupabaseStorage(file);
+        if (result.fileUrl) {
+          replacements.push({ from: src, to: result.fileUrl });
+        }
+      } catch (error) {
+        console.error("인라인 이미지 업로드 실패:", error);
+      }
+    }
+
+    if (replacements.length > 0) {
+      next = replaceHtmlMediaSources(next, replacements);
+    }
+    next = salvageFactCheckHtml(next);
+    const stillData = extractMediaSrcFromHtml(next).filter((src) => src.startsWith("data:"));
+    return { html: next, ok: stillData.length === 0, failed: stillData.length };
+  }, [dataUrlToGeneralInfoFile]);
+
   const uploadGeneralInfoMediaItemsToSupabaseStorage = useCallback(async (
     draftMediaItems: GeneralInfoMediaItem[]
   ): Promise<GeneralInfoMediaItem[]> => {
@@ -1116,9 +1148,25 @@ export function useTravelDiaryGeneralInfoState({
     return uploadedItems;
   }, [dataUrlToGeneralInfoFile]);
 
-  const handleSaveTemporaryGeneralInfoDraft = useCallback(() => {
+  const handleSaveTemporaryGeneralInfoDraft = useCallback(async () => {
     const latestText = getCurrentGeneralInfoRichTextPlain();
-    const richHtml = getCurrentGeneralInfoRichTextHtml();
+    let richHtml = getCurrentGeneralInfoRichTextHtml();
+
+    if (extractMediaSrcFromHtml(richHtml).some((src) => src.startsWith("data:"))) {
+      showPasteHint("본문 이미지 업로드 중...");
+      const inlineUpload = await uploadInlineDataUrlsInHtml(richHtml, "temp-body-inline");
+      richHtml = inlineUpload.html;
+      if (!inlineUpload.ok) {
+        showPasteHint(
+          `⚠️ 본문 이미지 ${inlineUpload.failed}장 업로드 실패. 네트워크 확인 후 다시 임시 저장하세요.`,
+        );
+        return;
+      }
+      if (generalInfoRichTextRef.current) {
+        generalInfoRichTextRef.current.innerHTML = richHtml;
+      }
+    }
+
     const draftWithLatestText =
       latestText !== generalInfoDraft.text
         ? { ...generalInfoDraft, text: latestText, formattedTextHtml: richHtml }
@@ -1230,6 +1278,7 @@ export function useTravelDiaryGeneralInfoState({
     getCurrentGeneralInfoRichTextPlain,
     showPasteHint,
     syncGeneralInfoItemToSupabase,
+    uploadInlineDataUrlsInHtml,
   ]);
 
   const handleConfirmGeneralInfo = useCallback(async () => {
@@ -1297,7 +1346,21 @@ export function useTravelDiaryGeneralInfoState({
         ),
       }))
       .filter((item) => item.from && item.to && item.from !== item.to);
-    const richHtml = replaceHtmlMediaSources(richHtmlBefore, htmlReplacements);
+    let richHtml = replaceHtmlMediaSources(richHtmlBefore, htmlReplacements);
+
+    // 본문 S삽입 data: 이미지도 Storage https로 올려 재진입 시 유지
+    if (extractMediaSrcFromHtml(richHtml).some((src) => src.startsWith("data:"))) {
+      showPasteHint("본문 이미지 업로드 중...");
+      const inlineUpload = await uploadInlineDataUrlsInHtml(richHtml, "body-inline");
+      richHtml = inlineUpload.html;
+      if (!inlineUpload.ok) {
+        showPasteHint(
+          `⚠️ 본문 이미지 ${inlineUpload.failed}장 업로드 실패. 네트워크 확인 후 다시 Confirm 하세요.`,
+        );
+        return;
+      }
+    }
+
     if (generalInfoRichTextRef.current && richHtml !== richHtmlBefore) {
       generalInfoRichTextRef.current.innerHTML = richHtml;
     }
@@ -1402,6 +1465,7 @@ export function useTravelDiaryGeneralInfoState({
     showPasteHint,
     syncGeneralInfoItemToSupabase,
     uploadGeneralInfoMediaItemsToSupabaseStorage,
+    uploadInlineDataUrlsInHtml,
   ]);
 
   const handleStartEditGeneralInfo = useCallback((item: GeneralInfoItem) => {
@@ -1425,38 +1489,37 @@ export function useTravelDiaryGeneralInfoState({
     const mainMedia = uploadedMediaItems[0];
 
     let factCheckSummary = salvageFactCheckHtml(String(updatedItem.factCheckSummary || ""));
-    const dataSrcs = extractMediaSrcFromHtml(factCheckSummary).filter((src) => src.startsWith("data:"));
-    if (dataSrcs.length > 0) {
-      showPasteHint(`보고서 이미지 ${dataSrcs.length}장 업로드 중...`);
-      const replacements: Array<{ from: string; to: string }> = [];
-      for (const [index, src] of dataSrcs.entries()) {
-        try {
-          const file = await dataUrlToGeneralInfoFile(
-            src,
-            `factcheck-${targetItem.id}-${Date.now()}-${index + 1}.jpg`,
-          );
-          const result = await uploadFileToSupabaseStorage(file);
-          if (result.fileUrl) {
-            replacements.push({ from: src, to: result.fileUrl });
-          }
-        } catch (error) {
-          console.error("상세 수정 Fact Check 이미지 업로드 실패:", error);
-        }
-      }
-      if (replacements.length > 0) {
-        factCheckSummary = replaceHtmlMediaSources(factCheckSummary, replacements);
-      }
-      const stillData = extractMediaSrcFromHtml(factCheckSummary).filter((src) =>
-        src.startsWith("data:"),
+    if (extractMediaSrcFromHtml(factCheckSummary).some((src) => src.startsWith("data:"))) {
+      showPasteHint("보고서 이미지 업로드 중...");
+      const factUpload = await uploadInlineDataUrlsInHtml(
+        factCheckSummary,
+        `factcheck-${targetItem.id}`,
       );
-      if (stillData.length > 0) {
+      factCheckSummary = factUpload.html;
+      if (!factUpload.ok) {
         showPasteHint(
-          `⚠️ 보고서 이미지 ${stillData.length}장 업로드 실패로 저장을 취소했습니다. 본문은 유지됩니다.`,
+          `⚠️ 보고서 이미지 ${factUpload.failed}장 업로드 실패로 저장을 취소했습니다. 본문은 유지됩니다.`,
         );
         return;
       }
     }
     factCheckSummary = salvageFactCheckHtml(factCheckSummary);
+
+    let formattedTextHtml = String(updatedItem.formattedTextHtml || "");
+    if (extractMediaSrcFromHtml(formattedTextHtml).some((src) => src.startsWith("data:"))) {
+      showPasteHint("본문 이미지 업로드 중...");
+      const bodyUpload = await uploadInlineDataUrlsInHtml(
+        formattedTextHtml,
+        `body-${targetItem.id}`,
+      );
+      formattedTextHtml = bodyUpload.html;
+      if (!bodyUpload.ok) {
+        showPasteHint(
+          `⚠️ 본문 이미지 ${bodyUpload.failed}장 업로드 실패로 저장을 취소했습니다.`,
+        );
+        return;
+      }
+    }
 
     const nextItem: GeneralInfoItem = {
       ...targetItem,
@@ -1469,6 +1532,7 @@ export function useTravelDiaryGeneralInfoState({
       filePreview: mainMedia?.preview || "",
       fileName: mainMedia?.name || "",
       factCheckSummary,
+      formattedTextHtml,
     };
 
     setGeneralInfoItems((prev) => {
@@ -1483,11 +1547,11 @@ export function useTravelDiaryGeneralInfoState({
     showPasteHint("✅ 일반 정보 수정을 저장했습니다.");
     await syncGeneralInfoItemToSupabase(nextItem, "PUT");
   }, [
-    dataUrlToGeneralInfoFile,
     generalInfoItems,
     showPasteHint,
     syncGeneralInfoItemToSupabase,
     uploadGeneralInfoMediaItemsToSupabaseStorage,
+    uploadInlineDataUrlsInHtml,
   ]);
 
   const handleCloseGeneralInfoDetail = useCallback(() => {
@@ -1597,29 +1661,13 @@ export function useTravelDiaryGeneralInfoState({
       return;
     }
 
-    // 인라인 data: 이미지는 Storage https로 교체. 실패 시 저장 자체를 취소해 본문이 잘리지 않게 함.
-    const dataSrcs = extractMediaSrcFromHtml(trimmed).filter((src) => src.startsWith("data:"));
-    if (dataSrcs.length > 0) {
-      showPasteHint(`이미지 ${dataSrcs.length}장 업로드 중...`);
-      const replacements: Array<{ from: string; to: string }> = [];
-      for (const [index, src] of dataSrcs.entries()) {
-        try {
-          const file = await dataUrlToGeneralInfoFile(src, `factcheck-${itemId}-${Date.now()}-${index + 1}.jpg`);
-          const result = await uploadFileToSupabaseStorage(file);
-          if (result.fileUrl) {
-            replacements.push({ from: src, to: result.fileUrl });
-          }
-        } catch (error) {
-          console.error("Fact Check 인라인 이미지 업로드 실패:", error);
-        }
-      }
-      if (replacements.length > 0) {
-        trimmed = replaceHtmlMediaSources(trimmed, replacements);
-      }
-      const stillData = extractMediaSrcFromHtml(trimmed).filter((src) => src.startsWith("data:"));
-      if (stillData.length > 0) {
+    if (extractMediaSrcFromHtml(trimmed).some((src) => src.startsWith("data:"))) {
+      showPasteHint("이미지 업로드 중...");
+      const inlineUpload = await uploadInlineDataUrlsInHtml(trimmed, `factcheck-${itemId}`);
+      trimmed = inlineUpload.html;
+      if (!inlineUpload.ok) {
         showPasteHint(
-          `⚠️ 이미지 ${stillData.length}장 업로드 실패로 저장을 취소했습니다. 본문은 그대로 있으니 다시 저장해 주세요.`,
+          `⚠️ 이미지 ${inlineUpload.failed}장 업로드 실패로 저장을 취소했습니다. 본문은 그대로 있으니 다시 저장해 주세요.`,
         );
         return;
       }
@@ -1653,10 +1701,10 @@ export function useTravelDiaryGeneralInfoState({
     showPasteHint("✅ Fact Check / AI 검증 보고서(이미지 포함)를 저장했습니다.");
     await syncGeneralInfoItemToSupabase(updatedItem, "PUT");
   }, [
-    dataUrlToGeneralInfoFile,
     generalInfoItems,
     showPasteHint,
     syncGeneralInfoItemToSupabase,
+    uploadInlineDataUrlsInHtml,
   ]);
 
   // --- AI 보고서 및 Fact Check 작성 핸들러 ---

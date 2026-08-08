@@ -54,6 +54,7 @@ export interface Chapter3InfoProps {
   handleGeneralInfoIphonePasteZonePaste: (event: React.ClipboardEvent<HTMLDivElement>) => void;
   handleClearGeneralInfoCoverImage: () => void;
   handleRemoveGeneralInfoMediaItem: (index: number) => void;
+  uploadInlineImageFile?: (file: File) => Promise<string>;
   handleAnalyzeGeneralInfoDraft: () => void;
   isAnalyzingGeneralInfo: boolean;
   handleFactCheckGeneralInfoDraft?: () => void;
@@ -113,6 +114,7 @@ export function Chapter3Info({
   handleGeneralInfoIphonePasteZonePaste,
   handleClearGeneralInfoCoverImage,
   handleRemoveGeneralInfoMediaItem,
+  uploadInlineImageFile,
   handleAnalyzeGeneralInfoDraft,
   isAnalyzingGeneralInfo,
   handleFactCheckGeneralInfoDraft,
@@ -400,24 +402,40 @@ export function Chapter3Info({
 
     void (async () => {
       try {
-        const loaded = await readFilesAsDataUrls(mediaFiles);
         const editor = generalInfoRichTextRef.current;
-        if (editor) {
-          insertInlineMediaIntoEditor(
-            editor,
-            loaded
-              .filter((item) => item.dataUrl)
-              .map(({ file, dataUrl }) => ({
-                src: dataUrl,
-                name: file.name,
-                type: file.type.startsWith("video/") ? "video" : "image",
-              })),
-            { afterNode },
-          );
-          syncGeneralInfoRichTextToDraft();
+        if (!editor) return;
+
+        const uploaded: Array<{ src: string; name: string; type: "image" | "video" }> = [];
+        for (const [index, file] of mediaFiles.entries()) {
+          const isVideo =
+            file.type.startsWith("video/") || /\.(mp4|mov|webm)$/i.test(file.name || "");
+          let src = "";
+          if (!isVideo && uploadInlineImageFile) {
+            try {
+              src = String(await uploadInlineImageFile(file) || "").trim();
+            } catch (error) {
+              console.error("body inline image upload failed", error);
+            }
+          }
+          if (!src) {
+            const loaded = await readFilesAsDataUrls([file]);
+            src = String(loaded[0]?.dataUrl || "").trim();
+          }
+          if (!src) continue;
+          uploaded.push({
+            src,
+            name: file.name || `inline-${index + 1}`,
+            type: isVideo ? "video" : "image",
+          });
         }
 
-        // 본문 인라인 삽입만 수행 (갤러리 중복 추가하지 않음)
+        if (!uploaded.length) {
+          alert("이미지를 넣지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.");
+          return;
+        }
+
+        insertInlineMediaIntoEditor(editor, uploaded, { afterNode });
+        syncGeneralInfoRichTextToDraft();
       } catch (error) {
         console.error("inline image insert failed", error);
         alert("이미지를 본문 TEXT에 넣지 못했습니다. 다시 시도해 주세요.");
@@ -425,7 +443,7 @@ export function Chapter3Info({
         setShowTextImageInsert(false);
       }
     })();
-  }, [generalInfoRichTextRef, removeTrailingImageTrigger, syncGeneralInfoRichTextToDraft]);
+  }, [generalInfoRichTextRef, removeTrailingImageTrigger, syncGeneralInfoRichTextToDraft, uploadInlineImageFile]);
 
   const handleTextImageInsertPaste = React.useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     event.preventDefault();

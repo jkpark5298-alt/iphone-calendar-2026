@@ -7191,6 +7191,7 @@ ${photo.memoText}
               handleGeneralInfoIphonePasteZonePaste={infoState.handleGeneralInfoIphonePasteZonePaste}
               handleClearGeneralInfoCoverImage={infoState.handleClearGeneralInfoCoverImage}
               handleRemoveGeneralInfoMediaItem={infoState.handleRemoveGeneralInfoMediaItem}
+              uploadInlineImageFile={infoState.uploadGeneralInfoInlineImageFile}
               handleAnalyzeGeneralInfoDraft={infoState.handleAnalyzeGeneralInfoDraft}
               isAnalyzingGeneralInfo={infoState.isAnalyzingGeneralInfo}
               handleFactCheckGeneralInfoDraft={infoState.handleFactCheckGeneralInfoDraft}
