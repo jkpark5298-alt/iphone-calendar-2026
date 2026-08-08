@@ -2425,46 +2425,107 @@ export default function HomePage() {
       return;
     }
 
-    // 👍는 C/A/당에만 — 새 칩을 추가하지 않고 기존 표시 앞에 붙임
-    const canThumb = markType === "C" || markType === "A" || markType === "당";
-    const nextPlus = canThumb && markPlus;
+    const thumbTypes: CalendarMarkType[] = ["C", "A", "당"];
     const nextMarks = { ...calendarMarks };
-    const daysNeedingBaseDelete: number[] = [];
 
-    uniqueDays.forEach(day => {
-      const markKey = key(currentMonth, day, currentYear);
-      let current = [...(nextMarks[markKey] || [])];
+    // 👍 전용: C/A/당 선택 없이, 해당 일 기존 C/A/당 앞에만 👍
+    if (markPlus) {
+      const upgraded: Array<{ day: number; type: CalendarMarkType; hadBase: boolean }> = [];
+      const skippedDays: number[] = [];
 
-      if (nextPlus) {
-        const sameType = current.filter(item => item.type === markType);
-        if (sameType.length) {
-          const hadBase = sameType.some(item => !item.plus);
+      uniqueDays.forEach((day) => {
+        const markKey = key(currentMonth, day, currentYear);
+        let current = [...(nextMarks[markKey] || [])];
+        let changed = false;
+
+        thumbTypes.forEach((type) => {
+          const sameType = current.filter((item) => item.type === type);
+          if (!sameType.length) return;
+          const hadBase = sameType.some((item) => !item.plus);
           const keepId = sameType[0].id;
-          current = current.filter(item => item.type !== markType);
-          current.push({ id: keepId, type: markType, plus: true });
-          if (hadBase) daysNeedingBaseDelete.push(day);
-        } else {
-          current.push({
-            id: `${Date.now()}-${currentMonth}-${day}-${markType}-plus`,
-            type: markType,
-            plus: true,
-          });
-        }
-      } else {
-        const exists = current.some(item => item.type === markType);
-        if (!exists) {
-          current.push({
-            id: `${Date.now()}-${currentMonth}-${day}-${markType}-base`,
-            type: markType,
-            plus: false,
-          });
+          current = current.filter((item) => item.type !== type);
+          current.push({ id: keepId, type, plus: true });
+          upgraded.push({ day, type, hadBase });
+          changed = true;
+        });
+
+        if (!changed) skippedDays.push(day);
+        else nextMarks[markKey] = current;
+      });
+
+      if (!upgraded.length) {
+        alert("선택한 날짜에 C/A/당 표시가 없습니다. 먼저 C·A·당을 저장한 뒤 👍만 선택해 저장하세요.");
+        return;
+      }
+
+      saveCalendarMarks(nextMarks);
+
+      const supabaseClient = supabase;
+      if (isSupabaseConfigured && supabaseClient) {
+        const saveErrors: string[] = [];
+        await Promise.all(
+          upgraded.map(async ({ day, type, hadBase }) => {
+            const dbMonth = currentYear === 2026 ? currentMonth : currentYear * 100 + currentMonth;
+            if (hadBase) {
+              const { error: delError } = await supabaseClient
+                .from("calendar_marks")
+                .delete()
+                .eq("month", dbMonth)
+                .eq("day", day)
+                .eq("mark_type", type)
+                .eq("plus", false);
+              if (delError) console.warn("Supabase calendar mark base delete error:", delError.message);
+            }
+            const { error } = await supabaseClient.from("calendar_marks").upsert(
+              {
+                month: dbMonth,
+                day,
+                mark_type: type,
+                plus: true,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "month,day,mark_type,plus" },
+            );
+            if (error) {
+              console.warn("Supabase calendar mark save error:", error.message);
+              saveErrors.push(error.message);
+            }
+          }),
+        );
+        if (saveErrors.length) {
+          alert(`👍 표시 서버 저장 일부 실패: ${saveErrors[0]}`);
+          return;
         }
       }
 
-      nextMarks[markKey] = current;
+      setMarkDateInput(uniqueDays.join(", "));
+      const upgradedLabel = upgraded
+        .map(({ day, type }) => `${day}일 👍${type}`)
+        .join(", ");
+      const skipMsg = skippedDays.length
+        ? `\n(C/A/당 없음 → 건너뜀: ${skippedDays.join(", ")}일)`
+        : "";
+      alert(`${currentMonth}월 ${upgradedLabel} 적용했습니다.${skipMsg}`);
+      return;
+    }
+
+    // 일반 근무 표시 저장 (C/A/당/심야/노조/休)
+    const nextMarksNormal = nextMarks;
+    uniqueDays.forEach((day) => {
+      const markKey = key(currentMonth, day, currentYear);
+      const current = [...(nextMarksNormal[markKey] || [])];
+      const exists = current.some((item) => item.type === markType);
+      if (!exists) {
+        current.push({
+          id: `${Date.now()}-${currentMonth}-${day}-${markType}-base`,
+          type: markType,
+          plus: false,
+        });
+      }
+      nextMarksNormal[markKey] = current;
     });
 
-    saveCalendarMarks(nextMarks);
+    saveCalendarMarks(nextMarksNormal);
 
     const supabaseClient = supabase;
     if (isSupabaseConfigured && supabaseClient) {
@@ -2472,24 +2533,12 @@ export default function HomePage() {
       await Promise.all(
         uniqueDays.map(async (day) => {
           const dbMonth = currentYear === 2026 ? currentMonth : currentYear * 100 + currentMonth;
-          if (nextPlus && daysNeedingBaseDelete.includes(day)) {
-            const { error: delError } = await supabaseClient
-              .from("calendar_marks")
-              .delete()
-              .eq("month", dbMonth)
-              .eq("day", day)
-              .eq("mark_type", markType)
-              .eq("plus", false);
-            if (delError) {
-              console.warn("Supabase calendar mark base delete error:", delError.message);
-            }
-          }
           const { error } = await supabaseClient.from("calendar_marks").upsert(
             {
               month: dbMonth,
               day,
               mark_type: markType,
-              plus: nextPlus,
+              plus: false,
               updated_at: new Date().toISOString(),
             },
             { onConflict: "month,day,mark_type,plus" },
@@ -2525,9 +2574,7 @@ export default function HomePage() {
     }
 
     setMarkDateInput(uniqueDays.join(", "));
-    alert(
-      `${currentMonth}월 ${uniqueDays.join(", ")}일에 ${formatCalendarMarkText(markType, nextPlus)} 표시를 저장했습니다.`,
-    );
+    alert(`${currentMonth}월 ${uniqueDays.join(", ")}일에 ${formatCalendarMarkText(markType, false)} 표시를 저장했습니다.`);
   }
 
   function deleteCalendarMark(month: number, day: number, mark: CalendarMarkItem, year: number = currentYear) {
@@ -5309,31 +5356,30 @@ function MarkDateView() {
               <button
                 type="button"
                 key={type}
-                className={`mark-type-btn mark-type-${calendarMarkClassSuffix(type)} ${markType === type ? "active" : ""}`}
+                className={`mark-type-btn mark-type-${calendarMarkClassSuffix(type)} ${!markPlus && markType === type ? "active" : ""}`}
                 onClick={() => {
                   setMarkType(type);
-                  if (!(type === "C" || type === "A" || type === "당")) setMarkPlus(false);
+                  setMarkPlus(false);
                 }}
               >
                 {calendarMarkLabels[type]}
               </button>
             ))}
+            <button
+              type="button"
+              className={`mark-type-btn mark-type-thumb ${markPlus ? "active" : ""}`}
+              onClick={() => setMarkPlus(true)}
+              title="기존 C/A/당 앞에 👍만 붙입니다"
+            >
+              👍
+            </button>
           </div>
 
-          <label className="mark-plus-option">
-            <input
-              type="checkbox"
-              checked={markPlus && (markType === "C" || markType === "A" || markType === "당")}
-              onChange={event => setMarkPlus(event.target.checked)}
-              disabled={!(markType === "C" || markType === "A" || markType === "당")}
-            />
-            <span>
-              👍 표시{" "}
-              {markType === "C" || markType === "A" || markType === "당"
-                ? `→ 기존 ${markType} 앞에 👍 (예: 👍${markType})`
-                : "(C / A / 당만 가능)"}
-            </span>
-          </label>
+          <p className="muted" style={{ marginTop: 8 }}>
+            {markPlus
+              ? "👍만 선택했습니다. 저장하면 해당 날짜의 기존 C/A/당 앞에만 👍가 붙습니다. (예: 👍C)"
+              : "근무 종류를 선택한 뒤 날짜를 입력해 저장하세요. 👍는 별도 버튼으로 기존 C/A/당에만 붙입니다."}
+          </p>
 
           <p className="muted">날짜를 쉼표로 여러 개 입력하세요. 예: 1, 3, 15</p>
           <input
@@ -5346,11 +5392,7 @@ function MarkDateView() {
           />
 
           <button type="button" className="save-schedule-btn" onClick={addCalendarMarks}>
-            {formatCalendarMarkText(
-              markType,
-              Boolean(markPlus && (markType === "C" || markType === "A" || markType === "당")),
-            )}{" "}
-            표시 저장
+            {markPlus ? "👍 표시 저장" : `${formatCalendarMarkText(markType, false)} 표시 저장`}
           </button>
 
           <div className="saved-marks">

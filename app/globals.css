@@ -2999,6 +2999,7 @@ textarea {
 .mark-type-night { background: #f2c94c; color: #2b2412; }
 .mark-type-union { background: #f2a7c8; color: #402030; }
 .mark-type-rest { background: #e53935; color: #fff; }
+.mark-type-thumb { background: #1e3a5f; color: #fff; font-size: 20px; }
 
 .work-schedule-import-box {
   margin: 12px 0 16px;
