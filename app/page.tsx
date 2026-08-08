@@ -2584,9 +2584,14 @@ export default function HomePage() {
           }),
         );
         if (saveErrors.length) {
+          const isCheckConstraint = saveErrors.some((msg) => /mark_type_check|23514/i.test(msg));
           alert(
             `기기에는 ${result.marks.length}건 반영됐지만 서버 저장 일부 실패:\n${saveErrors[0]}\n\n` +
-              "당/休 타입이 DB 제약에 없으면 Supabase에서 mark_type 체크를 업데이트하세요.",
+              (isCheckConstraint
+                ? "Supabase → SQL Editor에서 아래를 1회 실행한 뒤 다시 가져오세요.\n\n" +
+                  "ALTER TABLE public.calendar_marks DROP CONSTRAINT IF EXISTS calendar_marks_mark_type_check;\n" +
+                  "ALTER TABLE public.calendar_marks ADD CONSTRAINT calendar_marks_mark_type_check CHECK (mark_type = ANY (ARRAY['C'::text, 'A'::text, '당'::text, '심야'::text, '노조'::text, '休'::text]));"
+                : "잠시 후 다시 시도해 주세요."),
           );
         } else {
           alert(`✅ ${year}년 ${month}월 근무 ${result.marks.length}건을 가져왔습니다.`);

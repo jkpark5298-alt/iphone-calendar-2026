@@ -8,7 +8,7 @@
 
 import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
-import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, makeGeneralInfoMediaItem } from "../lib/generalInfoHelpers";
+import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, extractGeneralInfoReportImageSrcs, makeGeneralInfoMediaItem } from "../lib/generalInfoHelpers";
 import { Card, EmptyState } from "./SharedComponents";
 
 export interface Chapter3InfoProps {
@@ -178,7 +178,7 @@ export function Chapter3Info({
     });
   }, [normalizeGeneralInfoMediaItems, setGeneralInfoDraft]);
 
-  const handleSetBodyImageAsRepresentative = React.useCallback((src: string) => {
+  const handleSetHtmlImageAsRepresentative = React.useCallback((src: string, label: string) => {
     const url = String(src || "").trim();
     if (!url) return;
     setGeneralInfoDraft((prev) => {
@@ -193,7 +193,7 @@ export function Chapter3Info({
         const [picked] = updated.splice(existingIndex, 1);
         updated = [picked, ...updated];
       } else {
-        updated = [makeGeneralInfoMediaItem("본문 이미지", "image", url), ...items];
+        updated = [makeGeneralInfoMediaItem(label, "image", url), ...items];
       }
       const main = updated[0];
       return {
@@ -226,6 +226,10 @@ export function Chapter3Info({
     generalInfoRichTextRef,
     showTextImageInsert,
   ]);
+
+  const collectReportImageSrcs = React.useMemo(() => {
+    return extractGeneralInfoReportImageSrcs(generalInfoDraft.factCheckSummary);
+  }, [generalInfoDraft.factCheckSummary]);
 
   const isGeminiPacketDepleted = geminiApiPacketStatus === "depleted";
 
@@ -1004,7 +1008,65 @@ export function Chapter3Info({
                           className="secondaryButton smallActionButton"
                           style={{ width: "100%", borderRadius: 0, fontSize: 11 }}
                           disabled={Boolean(isRep)}
-                          onClick={() => handleSetBodyImageAsRepresentative(src)}
+                          onClick={() => handleSetHtmlImageAsRepresentative(src, "본문 이미지")}
+                        >
+                          {isRep ? "★ 대표" : "★ 대표로 설정"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {collectReportImageSrcs.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <strong style={{ display: "block", marginBottom: 8, fontSize: 13, color: "#7dd3fc" }}>
+                  AI 보고서 이미지에서 대표 선택
+                </strong>
+                <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
+                  AI 검증 보고서(Fact Check)에 넣은 사진을 대표로 쓸 수 있습니다.
+                </p>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
+                    gap: 10,
+                  }}
+                >
+                  {collectReportImageSrcs.map((src, index) => {
+                    const coverItems = normalizeGeneralInfoMediaItems(generalInfoDraft);
+                    const isRep =
+                      coverItems[0] &&
+                      (coverItems[0].preview === src || coverItems[0].fileUrl === src);
+                    return (
+                      <div
+                        key={`collect-report-img-${index}`}
+                        style={{
+                          border: isRep
+                            ? "2px solid #facc15"
+                            : "1px solid rgba(148, 163, 184, 0.28)",
+                          borderRadius: 12,
+                          overflow: "hidden",
+                          background: "rgba(2, 6, 23, 0.55)",
+                        }}
+                      >
+                        <img
+                          src={src}
+                          alt={`보고서 이미지 ${index + 1}`}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            height: 96,
+                            objectFit: "cover",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="secondaryButton smallActionButton"
+                          style={{ width: "100%", borderRadius: 0, fontSize: 11 }}
+                          disabled={Boolean(isRep)}
+                          onClick={() => handleSetHtmlImageAsRepresentative(src, "보고서 이미지")}
                         >
                           {isRep ? "★ 대표" : "★ 대표로 설정"}
                         </button>

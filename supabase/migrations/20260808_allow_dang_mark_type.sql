@@ -1,5 +1,5 @@
--- Allow 休 (rest day) as a calendar mark type for PC/iPhone sync.
--- Run once in Supabase Dashboard → SQL Editor → Run.
+-- Allow 당 (duty) as a calendar mark type for PC/iPhone sync.
+-- Also keeps 休 and existing types. Run once in Supabase Dashboard → SQL Editor → Run.
 
 ALTER TABLE public.calendar_marks
   DROP CONSTRAINT IF EXISTS calendar_marks_mark_type_check;

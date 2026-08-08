@@ -206,7 +206,7 @@ export const extractMediaSrcFromHtml = (html: string): string[] => {
   return found;
 };
 
-/** 본문 TEXT(및 선택적 HTML)에 들어 있는 이미지 URL 목록 */
+/** 본문 TEXT / AI 보고서 등 HTML에 들어 있는 이미지 URL 목록 */
 export const extractGeneralInfoBodyImageSrcs = (
   ...htmlParts: Array<string | undefined | null>
 ): string[] => {
@@ -220,6 +220,9 @@ export const extractGeneralInfoBodyImageSrcs = (
   });
   return found;
 };
+
+/** AI 검증 보고서(Fact Check HTML)에 들어 있는 이미지 URL 목록 */
+export const extractGeneralInfoReportImageSrcs = extractGeneralInfoBodyImageSrcs;
 
 /**
  * 잘린 data: 이미지 태그(닫는 따옴표 없음)가 이후 본문을 삼키지 않도록

@@ -20,6 +20,7 @@ import {
   normalizeGeneralInfoMediaItems,
   salvageFactCheckHtml,
   extractGeneralInfoBodyImageSrcs,
+  extractGeneralInfoReportImageSrcs,
   looksLikeHtmlContent,
 } from "../lib/generalInfoHelpers";
 import type { GeneralInfoMediaItem } from "../lib/generalInfoHelpers";
@@ -283,6 +284,8 @@ export default function GeneralInfoDetailModal({
   const [manualFactStatus, setManualFactStatus] =
     React.useState<GeneralInfoItem["factCheckStatus"]>("확인 필요");
   const [showFactImageInsert, setShowFactImageInsert] = React.useState(false);
+  const [bodyImageTick, setBodyImageTick] = React.useState(0);
+  const [reportImageTick, setReportImageTick] = React.useState(0);
   const [factEditorKey, setFactEditorKey] = React.useState(0);
   const [bodyEditorKey, setBodyEditorKey] = React.useState(0);
   const [editMediaItems, setEditMediaItems] = React.useState<GeneralInfoMediaItem[]>(() =>
@@ -478,6 +481,7 @@ export default function GeneralInfoDetailModal({
         }
 
         insertInlineMediaIntoEditor(editor, uploaded, { afterNode, range: savedRange });
+        setReportImageTick((prev) => prev + 1);
       } catch (error) {
         console.error("factcheck inline image insert failed", error);
         alert("이미지를 Fact Check에 넣지 못했습니다.");
@@ -575,8 +579,8 @@ export default function GeneralInfoDetailModal({
     setEditMediaItems((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  const applyBodyImageAsRepresentative = React.useCallback(
-    async (src: string) => {
+  const applyHtmlImageAsRepresentative = React.useCallback(
+    async (src: string, label: string) => {
       const url = String(src || "").trim();
       if (!url) return;
 
@@ -593,7 +597,7 @@ export default function GeneralInfoDetailModal({
         const [picked] = nextMedia.splice(existingIndex, 1);
         nextMedia = [picked, ...nextMedia];
       } else {
-        nextMedia = [makeGeneralInfoMediaItem("본문 이미지", "image", url), ...current];
+        nextMedia = [makeGeneralInfoMediaItem(label, "image", url), ...current];
       }
 
       setEditMediaItems(nextMedia);
@@ -609,13 +613,12 @@ export default function GeneralInfoDetailModal({
         ...item,
         mediaItems: nextMedia,
         filePreview: main?.preview || "",
-        fileName: main?.name || "본문 이미지",
+        fileName: main?.name || label,
       });
     },
     [editMediaItems, isEditing, item, onSaveItemEdit],
   );
 
-  const [bodyImageTick, setBodyImageTick] = React.useState(0);
   const bodyImageSrcs = React.useMemo(() => {
     const liveBodyHtml = isEditing ? String(bodyRichTextRef.current?.innerHTML || "") : "";
     return extractGeneralInfoBodyImageSrcs(
@@ -624,6 +627,15 @@ export default function GeneralInfoDetailModal({
       looksLikeHtmlContent(item.text || "") ? item.text : "",
     );
   }, [isEditing, item.formattedTextHtml, item.text, bodyEditorKey, bodyImageTick]);
+
+  const reportImageSrcs = React.useMemo(() => {
+    const liveFactHtml = String(factRichTextRef.current?.innerHTML || "");
+    return extractGeneralInfoReportImageSrcs(
+      liveFactHtml,
+      factInitialHtml,
+      item.factCheckSummary,
+    );
+  }, [factInitialHtml, item.factCheckSummary, factEditorKey, reportImageTick]);
 
   const saveAllEdits = React.useCallback(async () => {
     const bodyHtml = String(bodyRichTextRef.current?.innerHTML || item.formattedTextHtml || "").trim();
@@ -977,10 +989,22 @@ export default function GeneralInfoDetailModal({
                 suppressContentEditableWarning
                 role="textbox"
                 tabIndex={0}
-                onInput={checkFactImageTrigger}
-                onKeyUp={checkFactImageTrigger}
-                onBlur={checkFactImageTrigger}
-                onCompositionEnd={checkFactImageTrigger}
+                onInput={() => {
+                  checkFactImageTrigger();
+                  setReportImageTick((prev) => prev + 1);
+                }}
+                onKeyUp={() => {
+                  checkFactImageTrigger();
+                  setReportImageTick((prev) => prev + 1);
+                }}
+                onBlur={() => {
+                  checkFactImageTrigger();
+                  setReportImageTick((prev) => prev + 1);
+                }}
+                onCompositionEnd={() => {
+                  checkFactImageTrigger();
+                  setReportImageTick((prev) => prev + 1);
+                }}
                 data-placeholder="AI 검증 보고서 또는 수동 Fact Check를 작성하세요. 끝에 S(또는 s)를 붙이거나 [이미지 추가]를 누르세요."
                 style={{
                   display: "block",
@@ -1245,7 +1269,65 @@ export default function GeneralInfoDetailModal({
                           className="secondaryButton smallActionButton"
                           style={{ width: "100%", borderRadius: 0, fontSize: 11 }}
                           disabled={Boolean(isRep)}
-                          onClick={() => void applyBodyImageAsRepresentative(src)}
+                          onClick={() => void applyHtmlImageAsRepresentative(src, "본문 이미지")}
+                        >
+                          {isRep ? "★ 대표" : "★ 대표로 설정"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {reportImageSrcs.length > 0 && (
+              <div className="generalInfoBodyImagePickBox" style={{ marginTop: 14 }}>
+                <strong style={{ display: "block", marginBottom: 8, fontSize: 13, color: "#7dd3fc" }}>
+                  AI 보고서 이미지에서 대표 선택
+                </strong>
+                <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
+                  AI 검증 보고서(Fact Check)에 넣은 사진을 대표 이미지로 쓸 수 있습니다.
+                </p>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+                    gap: 10,
+                  }}
+                >
+                  {reportImageSrcs.map((src, index) => {
+                    const isRep =
+                      mediaItems[0] &&
+                      (mediaItems[0].preview === src || mediaItems[0].fileUrl === src);
+                    return (
+                      <div
+                        key={`report-img-${index}`}
+                        style={{
+                          border: isRep
+                            ? "2px solid #facc15"
+                            : "1px solid rgba(148, 163, 184, 0.28)",
+                          borderRadius: 12,
+                          overflow: "hidden",
+                          background: "rgba(2, 6, 23, 0.55)",
+                        }}
+                      >
+                        <img
+                          src={src}
+                          alt={`보고서 이미지 ${index + 1}`}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            height: 100,
+                            objectFit: "cover",
+                            background: "#020617",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="secondaryButton smallActionButton"
+                          style={{ width: "100%", borderRadius: 0, fontSize: 11 }}
+                          disabled={Boolean(isRep)}
+                          onClick={() => void applyHtmlImageAsRepresentative(src, "보고서 이미지")}
                         >
                           {isRep ? "★ 대표" : "★ 대표로 설정"}
                         </button>
