@@ -1700,11 +1700,14 @@ export function useTravelDiaryGeneralInfoState({
     const nextTitle =
       title !== undefined ? String(title || "").trim() || targetItem.title : targetItem.title;
 
+    const wasTemporary = targetItem.confirmed === false;
     const withReport: GeneralInfoItem = {
       ...targetItem,
       title: nextTitle,
       factCheckStatus: status,
       factCheckSummary: trimmed,
+      // 보고서 저장 시 임시저장 → 확정
+      confirmed: true,
     };
     const updatedItem = applyInfographicAsRepresentative(withReport, trimmed);
     const infoSrc = extractFirstInfographicSrc(trimmed);
@@ -1726,8 +1729,10 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoFactCheckResult(trimmed);
     showPasteHint(
       becameRepresentative
-        ? "✅ 보고서 저장 · 인포그래픽을 대표 이미지(창고 카드)로 설정했습니다."
-        : "✅ Fact Check / AI 검증 보고서(이미지 포함)를 저장했습니다.",
+        ? "✅ 보고서 저장·확정 · 인포그래픽을 대표 이미지(창고 카드)로 설정했습니다."
+        : wasTemporary
+          ? "✅ 보고서 저장 · 임시저장이 확정되었습니다."
+          : "✅ Fact Check / AI 검증 보고서(이미지 포함)를 저장했습니다.",
     );
     await syncGeneralInfoItemToSupabase(updatedItem, "PUT");
   }, [
