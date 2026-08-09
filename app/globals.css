@@ -11680,7 +11680,7 @@ body {
 .giAiReportScreen {
   position: fixed;
   inset: 0;
-  z-index: 220;
+  z-index: 10000;
   display: flex;
   align-items: stretch;
   justify-content: center;
@@ -11691,8 +11691,9 @@ body {
 
 .giAiReportScreenPanel {
   width: min(920px, 100%);
+  height: 100%;
   max-height: 100%;
-  overflow: auto;
+  overflow: hidden;
   border-radius: 18px;
   border: 1px solid rgba(56, 189, 248, 0.35);
   background: #020617;
@@ -11703,6 +11704,7 @@ body {
 }
 
 .giAiReportScreenHeader {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -11796,6 +11798,7 @@ body {
 }
 
 .giAiReportTabs {
+  flex-shrink: 0;
   display: flex;
   gap: 6px;
   padding: 10px 18px 0;
@@ -11831,6 +11834,7 @@ body {
 }
 
 .giAiReportMeta {
+  flex-shrink: 0;
   margin: 12px 18px 0;
   padding: 12px;
   border-radius: 12px;
@@ -11857,11 +11861,15 @@ body {
 
 .giAiReportBodyWrap {
   margin: 12px 18px 0;
-  flex: 1;
-  min-height: 280px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .giAiReportBodyLabel {
+  flex-shrink: 0;
   font-size: 12px;
   font-weight: 800;
   color: #7dd3fc;
@@ -11869,7 +11877,8 @@ body {
 }
 
 .giAiReportBody {
-  min-height: 260px;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 16px;
   border-radius: 14px;
   border: 1px solid rgba(56, 189, 248, 0.35);
@@ -11878,6 +11887,9 @@ body {
   line-height: 1.75;
   font-size: 15px;
   overflow: auto;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 
 .giAiReportBody :where(p, div, li, strong, em, b, u, h1, h2, h3, h4, h5, h6, a, td, th) {
@@ -11894,6 +11906,194 @@ body {
 
 .giAiReportBodyMuted {
   opacity: 0.92;
+}
+
+.giAiReportFactCheckPanel {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(15, 23, 42, 0.75);
+}
+
+.giAiReportFactCheckPanel strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 15px;
+  color: #e0f2fe;
+}
+
+.giAiReportFactCheckPanel .muted {
+  margin: 0 0 14px;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.giAiReportFactStatusLabel {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #bae6fd;
+}
+
+.giAiReportFactStatusSelect {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: #020617;
+  color: #e2e8f0;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.giAiReportInfographicPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 2px 12px;
+}
+
+.giAiReportInfographicHint {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.giAiReportInfographicCaptionLabel {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7dd3fc;
+}
+
+.giAiReportInfographicActions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 10px;
+}
+
+.giAiReportInfographicFileBtn {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: rgba(14, 165, 233, 0.12);
+  color: #e0f2fe;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 12px;
+}
+
+.giAiReportInfographicFileBtn.disabled {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
+
+.giAiReportInfographicPaste {
+  min-height: 88px;
+  border-radius: 14px;
+  border: 1px dashed rgba(148, 163, 184, 0.5);
+  background: rgba(2, 6, 23, 0.75);
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+
+.giAiReportInfographicPaste:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+}
+
+.giAiReportInfographicPaste:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.18);
+}
+
+.giAiReportInfographicEmpty {
+  padding: 22px 14px;
+  text-align: center;
+  border-radius: 14px;
+  border: 1px dashed rgba(56, 189, 248, 0.28);
+  color: #94a3b8;
+  font-size: 13px;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.giAiReportInfographicList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.giAiReportInfographicCard {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.giAiReportInfographicCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #bae6fd;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.giAiReportInfographicCard img,
+.giAiReportBody .gi-report-infographic img,
+.giAiReportTipTap .gi-report-infographic img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(2, 6, 23, 0.85);
+}
+
+.giAiReportBody .gi-report-infographic,
+.giAiReportTipTap .gi-report-infographic {
+  margin: 16px 0;
+  padding: 0;
+}
+
+.giAiReportBody .gi-report-infographic-caption,
+.giAiReportTipTap .gi-report-infographic-caption {
+  margin-top: 8px;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .giAiReportInfographicActions {
+    grid-template-columns: 1fr;
+  }
 }
 
 .giAiReportPlaceholder {
@@ -11928,10 +12128,13 @@ body {
 }
 
 .giAiReportFooter {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   padding: 14px 18px 16px;
+  border-top: 1px solid rgba(56, 189, 248, 0.18);
+  background: #020617;
 }
 
 .giAiReportPrimaryBtn {
@@ -11973,6 +12176,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .giAiReportEditorLoading {
@@ -11985,6 +12191,7 @@ body {
 }
 
 .giAiReportToolbar {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -12090,8 +12297,15 @@ body {
   border-radius: 6px;
 }
 
+.giAiReportEditorContent {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border-radius: 14px;
+}
+
 .giAiReportTipTap {
-  min-height: 280px;
+  min-height: 200px;
   padding: 14px 16px;
   border-radius: 14px;
   border: 1px solid rgba(56, 189, 248, 0.4);
@@ -12100,6 +12314,9 @@ body {
   font-size: 15px;
   line-height: 1.75;
   outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 
 .giAiReportTipTap :where(p, div, li, strong, em, b, u, h1, h2, h3, h4, h5, h6) {
@@ -12137,6 +12354,7 @@ body {
 }
 
 .giAiReportEditorHint {
+  flex-shrink: 0;
   margin: 0;
   font-size: 12px;
   color: #94a3b8;

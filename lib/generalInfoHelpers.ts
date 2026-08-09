@@ -1018,3 +1018,44 @@ export const extractTitleFromPlainText = (text: string, maxLen = 120): string =>
   if (!firstLine) return "";
   return firstLine.length > maxLen ? firstLine.slice(0, maxLen) : firstLine;
 };
+
+
+/** AI 보고서 HTML에서 첫 인포그래픽 이미지 URL 추출 */
+export const extractFirstInfographicSrc = (html: string): string => {
+  const raw = String(html || "");
+  if (!raw.trim()) return "";
+  const blockMatch = raw.match(
+    /data-gi-infographic\s*=\s*["']1["'][\s\S]*?<img\b[^>]*\bsrc=["']([^"']+)["']/i,
+  );
+  if (blockMatch?.[1]) return String(blockMatch[1]).trim();
+  return "";
+};
+
+/** 인포그래픽이 있으면 mediaItems[0] / filePreview 대표 이미지로 승격 */
+export const applyInfographicAsRepresentative = (
+  item: GeneralInfoItem,
+  reportHtml: string,
+): GeneralInfoItem => {
+  const src = extractFirstInfographicSrc(reportHtml);
+  if (!src) return item;
+
+  const existing = normalizeGeneralInfoMediaItems(item);
+  const withoutDup = existing.filter(
+    (media) =>
+      String(media.preview || "").trim() !== src &&
+      String(media.fileUrl || "").trim() !== src,
+  );
+  const nextMedia = [
+    makeGeneralInfoMediaItem("인포그래픽 대표", "image", src, undefined, src),
+    ...withoutDup,
+  ];
+
+  return {
+    ...item,
+    mediaItems: nextMedia,
+    filePreview: src,
+    fileName: nextMedia[0]?.name || "인포그래픽 대표",
+    fileType: "image",
+  };
+};
+

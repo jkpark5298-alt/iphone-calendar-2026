@@ -46,6 +46,7 @@ export function AiReportRichEditor({ html, onChange, onUploadImage }: Props) {
     editorProps: {
       attributes: {
         class: "giAiReportTipTap",
+        spellcheck: "false",
       },
       handlePaste: (_view, event) => {
         const clipboard = event.clipboardData;
@@ -78,10 +79,8 @@ export function AiReportRichEditor({ html, onChange, onUploadImage }: Props) {
       if (next === lastEmittedRef.current) return;
       lastEmittedRef.current = next;
       onChangeRef.current(next);
-      bump((n) => n + 1);
     },
     onSelectionUpdate: () => bump((n) => n + 1),
-    onTransaction: () => bump((n) => n + 1),
   });
 
   const editorRef = React.useRef<Editor | null>(null);
@@ -131,7 +130,7 @@ export function AiReportRichEditor({ html, onChange, onUploadImage }: Props) {
         onInsertChar={(ch) => editor.chain().focus().insertContent(ch).run()}
         onImage={onUploadImage ? () => fileRef.current?.click() : undefined}
       />
-      <EditorContent editor={editor} />
+      <EditorContent editor={editor} className="giAiReportEditorContent" />
       {onUploadImage && (
         <input
           ref={fileRef}

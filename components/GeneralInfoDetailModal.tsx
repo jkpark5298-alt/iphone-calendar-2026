@@ -4,24 +4,15 @@ import type { GeneralInfoItem } from "../types/generalInfo";
 import {
   getGeneralInfoDisplayMediaItems,
   getGeneralInfoFormattedHtml,
-  buildFactCheckReportHtml,
-  insertInlineMediaIntoEditor,
-  readFilesAsDataUrls,
   htmlToPlainText,
   enhanceInlineImageBlocks,
   bindInlineImageRemoveHandler,
-  editorHasInlineImageTrigger,
-  removeInlineImageTrigger,
-  removeInlineMediaBySrc,
-  removeMediaSrcFromHtml,
-  refreshInlineImagesInEditor,
+  readFilesAsDataUrls,
   dedupeImageFiles,
   collectClipboardImageFiles,
-  isFullAiVerificationReport,
   hasDisplayableAiReport,
   makeGeneralInfoMediaItem,
   normalizeGeneralInfoMediaItems,
-  salvageFactCheckHtml,
   extractGeneralInfoBodyImageSrcs,
   extractGeneralInfoReportImageSrcs,
   looksLikeHtmlContent,
@@ -29,252 +20,36 @@ import {
 import type { GeneralInfoMediaItem } from "../lib/generalInfoHelpers";
 import React from "react";
 import { generalInfoCategories } from "../lib/generalInfoMock";
-import { GeneralInfoMobileFormatBubble } from "./GeneralInfoMobileFormatBubble";
-
-function getAiVerificationReportLabel(factCheckSummary?: string, model?: string) {
-  const fromModel = String(model || "").trim();
-  if (fromModel) return `AI 검증 보고서(${fromModel})`;
-
-  const text = String(factCheckSummary || "");
-  const matched = text.match(/AI 검증 보고서\(([^)]+)\)/i);
-  if (matched?.[1]) return `AI 검증 보고서(${matched[1]})`;
-
-  if (isFullAiVerificationReport(text)) {
-    return "AI 검증 보고서(Gemini)";
-  }
-
-  if (/AI 보고서 \(본문\)/i.test(text) || hasDisplayableAiReport(text)) {
-    return "AI 보고서 (본문)";
-  }
-
-  return "AI 보고서";
-}
-
-function decodeEscapedChars(str: string): string {
-  if (typeof str !== "string") return "";
-  return str
-    .replace(/\\r/g, "")
-    .replace(/\\n/g, "\n")
-    .replace(/\\t/g, "\t")
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, "\\");
-}
-
-function parseReportText(text: string) {
-  let status = "확인 필요";
-  let summary = "";
-  let result = text;
-  
-  let cleaned = (text || "").trim();
-  
-  // Strip markdown code block wrapper if present
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
-  }
-  
-  // 1. Try standard JSON.parse
-  try {
-    const parsed = JSON.parse(cleaned);
-    return {
-      status: parsed.status || "확인 필요",
-      summary: parsed.summary || "",
-      result: parsed.result || text
-    };
-  } catch (e) {
-    // Continue
-  }
-  
-  // 2. Try JSON.parse with string repair (e.g. escaping raw newlines inside quotes)
-  try {
-    const repaired = cleaned.replace(/\n/g, "\\n");
-    const parsed = JSON.parse(repaired);
-    return {
-      status: parsed.status || "확인 필요",
-      summary: parsed.summary || "",
-      result: parsed.result || text
-    };
-  } catch (e) {
-    // Continue
-  }
-  
-  // 3. Fallback: regex extraction
-  const statusMatch = cleaned.match(/"status"\s*:\s*"([^"]+)"/);
-  if (statusMatch) {
-    status = statusMatch[1];
-  }
-  
-  const summaryMatch = cleaned.match(/"summary"\s*:\s*"([\s\S]*?)"\s*,\s*"result"/);
-  if (summaryMatch) {
-    summary = summaryMatch[1];
-  } else {
-    const fallbackSummaryMatch = cleaned.match(/"summary"\s*:\s*"([^"]+)"/);
-    if (fallbackSummaryMatch) {
-      summary = fallbackSummaryMatch[1];
-    }
-  }
-  
-  const resultMatch = cleaned.match(/"result"\s*:\s*"([\s\S]*?)"\s*}\s*$/);
-  if (resultMatch) {
-    result = resultMatch[1];
-  } else {
-    const fallbackResultMatch = cleaned.match(/"result"\s*:\s*"([\s\S]*?)"/);
-    if (fallbackResultMatch) {
-      result = fallbackResultMatch[1];
-    } else {
-      const cutOffResultMatch = cleaned.match(/"result"\s*:\s*"([\s\S]*)$/);
-      if (cutOffResultMatch) {
-        result = cutOffResultMatch[1];
-      }
-    }
-  }
-  
-  // Decode escaped characters (\n, \t, etc.)
-  status = decodeEscapedChars(status);
-  summary = decodeEscapedChars(summary);
-  result = decodeEscapedChars(result);
-  
-  return { status, summary, result };
-}
-
-function parseMarkdownSections(markdown: string) {
-  const sections: Array<{ title: string; content: string[] }> = [];
-  const lines = markdown.split("\n");
-  let currentSection: { title: string; content: string[] } | null = null;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i];
-    const line = rawLine.trim();
-    
-    if (line.startsWith("# ") && !line.includes("##")) {
-      // 메인 타이틀 라인은 건너뜀
-      continue;
-    } else if (line.startsWith("## ")) {
-      const title = line.replace("## ", "").trim();
-      currentSection = { title, content: [] };
-      sections.push(currentSection);
-    } else {
-      if (currentSection) {
-        currentSection.content.push(rawLine);
-      } else if (line !== "") {
-        currentSection = { title: "개요", content: [rawLine] };
-        sections.push(currentSection);
-      }
-    }
-  }
-  return sections;
-}
-
-function MarkdownViewer({ text }: { text: string }) {
-  const lines = text.split("\n");
-  let insideList = false;
-  let listItems: string[] = [];
-  const elements: React.ReactNode[] = [];
-  let key = 0;
-
-  const flushList = () => {
-    if (listItems.length > 0) {
-      elements.push(
-        <ul key={`ul-${key++}`} className="report-ul" style={{ paddingLeft: "20px", margin: "8px 0" }}>
-          {listItems.map((item, idx) => (
-            <li key={idx} dangerouslySetInnerHTML={{ __html: formatBold(item) }} style={{ listStyleType: "disc", marginBottom: "4px" }} />
-          ))}
-        </ul>
-      );
-      listItems = [];
-      insideList = false;
-    }
-  };
-
-  const formatBold = (str: string) => {
-    return str
-      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*(.*?)\*/g, "<em>$1</em>");
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i];
-    const line = rawLine.trim();
-
-    if (line === "") {
-      flushList();
-      continue;
-    }
-
-    if (line.startsWith("* ") || line.startsWith("- ")) {
-      insideList = true;
-      listItems.push(line.substring(2));
-      continue;
-    } else if (/^\d+\.\s/.test(line)) {
-      flushList();
-      elements.push(
-        <p key={key++} className="report-list-item" style={{ margin: "6px 0", lineHeight: "1.6" }} dangerouslySetInnerHTML={{ __html: formatBold(rawLine) }} />
-      );
-      continue;
-    } else {
-      flushList();
-    }
-
-    if (line.startsWith("# ") && !line.includes("##")) {
-      elements.push(<h3 key={key++} className="report-h1" style={{ fontSize: "18px", margin: "14px 0 8px", color: "#bae6fd" }}>{line.replace("# ", "")}</h3>);
-    } else if (line.startsWith("## ")) {
-      elements.push(<h4 key={key++} className="report-h2" style={{ fontSize: "16px", margin: "12px 0 6px", color: "#38bdf8" }}>{line.replace("## ", "")}</h4>);
-    } else if (line.startsWith("### ")) {
-      elements.push(<h5 key={key++} className="report-h3" style={{ fontSize: "14px", margin: "10px 0 4px", color: "#7dd3fc" }}>{line.replace("### ", "")}</h5>);
-    } else {
-      elements.push(
-        <p key={key++} className="report-p" style={{ margin: "8px 0", lineHeight: "1.7" }} dangerouslySetInnerHTML={{ __html: formatBold(rawLine) }} />
-      );
-    }
-  }
-  flushList();
-
-  return <div className="report-markdown-body" style={{ overflowX: "hidden", wordBreak: "break-all", overflowWrap: "anywhere" }}>{elements}</div>;
-}
-
 
 interface Props {
   item: GeneralInfoItem;
   onClose: () => void;
-  onGenerateReport: (item: GeneralInfoItem) => void;
-  onDownloadPdfReport: (item: GeneralInfoItem) => void;
+  onGenerateReport: (item: GeneralInfoItem) => void | Promise<void>;
+  onOpenAiReport?: (itemId: number) => void;
   onEdit?: (item: GeneralInfoItem) => void;
   onDelete?: (item: GeneralInfoItem) => void;
-  onSavePdf?: (item: GeneralInfoItem) => void;
   onShareReport?: (item: GeneralInfoItem) => void;
   onOpenStorageImage?: (url: string, fileName?: string) => void;
   isGeneratingReport?: boolean;
-  isExportingPdf?: boolean;
   needsManualFactCheck?: boolean;
   startInEditMode?: boolean;
   onSaveItemEdit?: (item: GeneralInfoItem) => void | Promise<void>;
-  onSaveManualFactCheck?: (
-    itemId: number,
-    text: string,
-    status: GeneralInfoItem["factCheckStatus"],
-  ) => void | Promise<void>;
-  /** Fact Check 인라인 이미지를 Storage에 올리고 https URL 반환 */
-  onUploadInlineImage?: (file: File) => Promise<string>;
 }
 
 export default function GeneralInfoDetailModal({
   item,
   onClose,
   onGenerateReport,
-  onDownloadPdfReport,
-  onEdit,
+  onOpenAiReport,
   onDelete,
-  onSavePdf,
   onShareReport,
   onOpenStorageImage,
   isGeneratingReport = false,
-  isExportingPdf = false,
   needsManualFactCheck = false,
   startInEditMode = false,
   onSaveItemEdit,
-  onSaveManualFactCheck,
-  onUploadInlineImage,
 }: Props) {
-  const [copyFeedback, setCopyFeedback] = React.useState<"text" | "fact" | null>(null);
+  const [copyFeedback, setCopyFeedback] = React.useState<"text" | null>(null);
   const [isEditing, setIsEditing] = React.useState(Boolean(startInEditMode));
   const [editTitle, setEditTitle] = React.useState(item.title || "");
   const [editSummary, setEditSummary] = React.useState(item.summary || "");
@@ -285,46 +60,18 @@ export default function GeneralInfoDetailModal({
   const [editKeywordsText, setEditKeywordsText] = React.useState(
     (item.keywords || []).join(", "),
   );
-  const [manualFactStatus, setManualFactStatus] =
-    React.useState<GeneralInfoItem["factCheckStatus"]>("확인 필요");
-  const [showFactImageInsert, setShowFactImageInsert] = React.useState(false);
   const [bodyImageTick, setBodyImageTick] = React.useState(0);
-  const [reportImageTick, setReportImageTick] = React.useState(0);
-  const [factEditorKey, setFactEditorKey] = React.useState(0);
   const [bodyEditorKey, setBodyEditorKey] = React.useState(0);
-  const [factEditorFocused, setFactEditorFocused] = React.useState(false);
   const [editMediaItems, setEditMediaItems] = React.useState<GeneralInfoMediaItem[]>(() =>
     getGeneralInfoDisplayMediaItems(item),
   );
   const bodyRichTextRef = React.useRef<HTMLDivElement | null>(null);
-  const factRichTextRef = React.useRef<HTMLDivElement | null>(null);
-  const factImageFileRef = React.useRef<HTMLInputElement | null>(null);
   const coverImageFileRef = React.useRef<HTMLInputElement | null>(null);
-  const factImageInsertLockRef = React.useRef(false);
+  const detailBodyRef = React.useRef<HTMLDivElement | null>(null);
 
-  const factInitialHtml = React.useMemo(() => {
-    const raw = salvageFactCheckHtml(String(item.factCheckSummary || "").trim());
-    if (!raw || !hasDisplayableAiReport(raw)) return "";
-    // 인라인 이미지가 있는 편집 HTML은 그대로 유지
-    if (/<(?:img|video)\b[^>]*\bsrc=/i.test(raw)) {
-      return /<\/?[a-z][\s\S]*>/i.test(raw) ? raw : buildFactCheckReportHtml(raw, []);
-    }
-    if (isFullAiVerificationReport(raw)) return buildFactCheckReportHtml(raw, []);
-    // 본문 기반 보고서(HTML)는 그대로 표시
-    if (/<\/?[a-z][\s\S]*>/i.test(raw)) return raw;
-    return buildFactCheckReportHtml(raw, []);
-  }, [item.factCheckSummary]);
-
-  const factReportLooksTruncated = React.useMemo(() => {
-    const plain = htmlToPlainText(factInitialHtml || String(item.factCheckSummary || "")).trim();
-    if (!plain) return false;
-    // 제목만 남고 본문이 거의 없으면 잘린 것으로 간주
-    return plain.length < 80 && /AI 검증 보고서/i.test(plain);
-  }, [factInitialHtml, item.factCheckSummary]);
+  const hasAiReport = hasDisplayableAiReport(String(item?.factCheckSummary || ""));
 
   React.useEffect(() => {
-    setManualFactStatus(item.factCheckStatus || "확인 필요");
-    setShowFactImageInsert(false);
     setEditTitle(item.title || "");
     setEditSummary(item.summary || "");
     setEditSourceUrl(item.sourceUrl || "");
@@ -335,29 +82,7 @@ export default function GeneralInfoDetailModal({
     setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
     setBodyEditorKey((prev) => prev + 1);
     setIsEditing(Boolean(startInEditMode));
-    // 항목이 바뀌거나 저장된 보고서가 바뀌면 편집기만 갱신 (불필요한 초기화 최소화)
-    setFactEditorKey((prev) => prev + 1);
-  }, [item.id, item.factCheckSummary, item.factCheckStatus, needsManualFactCheck, startInEditMode]);
-
-  React.useEffect(() => {
-    const editor = factRichTextRef.current;
-    if (!editor) return;
-    // key 변경으로 새 노드가 오면 dataset.hydrated가 없으므로 ref 콜백에서 채움.
-    // 동일 노드에서 factInitialHtml만 바뀐 경우 여기서 동기화.
-    if (editor.dataset.hydrated === "1" && editor.innerHTML !== factInitialHtml) {
-      editor.innerHTML = factInitialHtml;
-      enhanceInlineImageBlocks(editor);
-      bindInlineImageRemoveHandler(editor);
-      refreshInlineImagesInEditor(editor);
-    }
-  }, [factEditorKey, factInitialHtml]);
-
-  React.useEffect(() => {
-    const editor = factRichTextRef.current;
-    if (!editor || editor.dataset.hydrated !== "1") return;
-    const timer = window.setTimeout(() => refreshInlineImagesInEditor(editor), 300);
-    return () => window.clearTimeout(timer);
-  }, [factEditorKey, factInitialHtml]);
+  }, [item.id, item.factCheckSummary, item.factCheckStatus, startInEditMode]);
 
   React.useEffect(() => {
     if (!isEditing || !bodyRichTextRef.current) return;
@@ -366,186 +91,11 @@ export default function GeneralInfoDetailModal({
     bindInlineImageRemoveHandler(bodyRichTextRef.current);
   }, [isEditing, bodyEditorKey, item]);
 
-  const factImagePanelRef = React.useRef<HTMLDivElement | null>(null);
-
-  const textEndsWithImageTrigger = React.useCallback((raw: string) => {
-    const text = String(raw || "").replace(/\u00a0/g, " ").replace(/\r/g, "");
-    const trimmedEnd = text.replace(/[ \t\n]+$/g, "");
-    return /[Ss]$/.test(trimmedEnd);
-  }, []);
-
-  const removeTrailingImageTrigger = React.useCallback(() => {
-    return removeInlineImageTrigger(factRichTextRef.current);
-  }, []);
-
-  const checkFactImageTrigger = React.useCallback(() => {
-    const editor = factRichTextRef.current;
-    const plain = String(editor?.innerText || "");
-    const shouldShow =
-      editorHasInlineImageTrigger(editor) || textEndsWithImageTrigger(plain);
-    setShowFactImageInsert(shouldShow);
-    if (shouldShow) {
-      requestAnimationFrame(() => {
-        factImagePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      });
+  React.useEffect(() => {
+    if (detailBodyRef.current) {
+      detailBodyRef.current.scrollTop = 0;
     }
-  }, [textEndsWithImageTrigger]);
-
-  const openFactImageInsertPanel = React.useCallback(() => {
-    setShowFactImageInsert(true);
-    requestAnimationFrame(() => {
-      factImagePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
-  }, []);
-
-  const insertFactPlainText = React.useCallback((text: string) => {
-    const editor = factRichTextRef.current;
-    if (!editor || !text) return;
-    editor.focus();
-    const ok = document.execCommand("insertText", false, text);
-    if (!ok) {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
-        range.insertNode(document.createTextNode(text));
-        range.collapse(false);
-        selection.removeAllRanges();
-        selection.addRange(range);
-      } else {
-        editor.appendChild(document.createTextNode(text));
-      }
-    }
-    checkFactImageTrigger();
-  }, [checkFactImageTrigger]);
-
-  const handleFactRichCommand = React.useCallback((command: string, value?: string) => {
-    const editor = factRichTextRef.current;
-    if (!editor) return;
-    editor.focus();
-    if (command === "insertText" && value) {
-      insertFactPlainText(value);
-      return;
-    }
-    if (command === "fontSizeStep") {
-      const delta = Number(value || 0);
-      const current = Number.parseInt(document.queryCommandValue("fontSize") || "3", 10);
-      const next = Math.max(1, Math.min(7, (Number.isFinite(current) ? current : 3) + delta));
-      document.execCommand("fontSize", false, String(next));
-      checkFactImageTrigger();
-      return;
-    }
-    if (command === "hiliteColor" && value) {
-      // Safari / iOS: backColor, 그 외 hiliteColor
-      const ok = document.execCommand("hiliteColor", false, value);
-      if (!ok) document.execCommand("backColor", false, value);
-      checkFactImageTrigger();
-      return;
-    }
-    document.execCommand(command, false, value);
-    checkFactImageTrigger();
-  }, [checkFactImageTrigger, insertFactPlainText]);
-
-  const insertFactImageFiles = React.useCallback((files: FileList | File[] | null) => {
-    if (!files || files.length === 0) return;
-    if (factImageInsertLockRef.current) return;
-    factImageInsertLockRef.current = true;
-
-    const afterNode = removeTrailingImageTrigger();
-    let savedRange: Range | null = null;
-    const selection = window.getSelection();
-    if (
-      !afterNode &&
-      selection &&
-      selection.rangeCount > 0 &&
-      factRichTextRef.current?.contains(selection.anchorNode)
-    ) {
-      savedRange = selection.getRangeAt(0).cloneRange();
-    }
-    const list = dedupeImageFiles(files instanceof FileList ? Array.from(files) : files);
-    const mediaFiles = list.filter(
-      (file) =>
-        file.type.startsWith("image/") ||
-        /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || ""),
-    );
-    if (!mediaFiles.length) {
-      factImageInsertLockRef.current = false;
-      alert("이미지 파일을 선택해 주세요.");
-      return;
-    }
-
-    void (async () => {
-      try {
-        const editor = factRichTextRef.current;
-        if (!editor) return;
-
-        // data URL 대신 Storage https URL로 삽입 → 본문 중간/끝 모두 잘리지 않음
-        const uploaded: Array<{ src: string; name: string; type: "image" }> = [];
-        for (const [index, file] of mediaFiles.entries()) {
-          let src = "";
-          if (onUploadInlineImage) {
-            try {
-              src = String(await onUploadInlineImage(file) || "").trim();
-            } catch (error) {
-              console.error("factcheck image upload failed", error);
-            }
-          }
-          if (!src) {
-            // 업로드 불가 시에만 임시 data URL (저장 직전 재업로드)
-            const loaded = await readFilesAsDataUrls([file]);
-            src = String(loaded[0]?.dataUrl || "").trim();
-          }
-          if (!src) continue;
-          uploaded.push({
-            src,
-            name: file.name || `factcheck-image-${index + 1}.jpg`,
-            type: "image",
-          });
-        }
-
-        if (!uploaded.length) {
-          alert("이미지 업로드에 실패했습니다. 네트워크/Storage를 확인한 뒤 다시 시도해 주세요.");
-          return;
-        }
-
-        insertInlineMediaIntoEditor(editor, uploaded, { afterNode, range: savedRange });
-        setReportImageTick((prev) => prev + 1);
-
-        // 아이폰 등에서 앱을 나갔다 와도 유지되도록 삽입 직후 자동 저장
-        const html = String(editor.innerHTML || "").trim();
-        if (html && onSaveManualFactCheck) {
-          try {
-            await onSaveManualFactCheck(item.id, html, manualFactStatus);
-          } catch (error) {
-            console.error("factcheck auto-save after image insert failed", error);
-            alert("이미지는 넣었지만 자동 저장에 실패했습니다. [Fact Check / 보고서 저장]을 눌러 주세요.");
-          }
-        }
-      } catch (error) {
-        console.error("factcheck inline image insert failed", error);
-        alert("이미지를 Fact Check에 넣지 못했습니다.");
-      } finally {
-        setShowFactImageInsert(false);
-        factImageInsertLockRef.current = false;
-      }
-    })();
-  }, [item.id, manualFactStatus, onSaveManualFactCheck, onUploadInlineImage, removeTrailingImageTrigger]);
-
-  const handleFactImagePaste = React.useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const pastedFiles = collectClipboardImageFiles(event.clipboardData);
-    if (pastedFiles.length > 0) insertFactImageFiles(pastedFiles);
-  }, [insertFactImageFiles]);
-
-  const saveFactCheckFromEditor = React.useCallback(async () => {
-    const html = String(factRichTextRef.current?.innerHTML || "").trim();
-    if (!html || html === "<br>" || html === "<div><br></div>") {
-      alert("Fact Check 내용을 입력해 주세요.");
-      return;
-    }
-    await onSaveManualFactCheck?.(item.id, html, manualFactStatus);
-  }, [item.id, manualFactStatus, onSaveManualFactCheck]);
+  }, [item?.id, hasAiReport]);
 
   const beginEditing = React.useCallback(() => {
     setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
@@ -560,36 +110,60 @@ export default function GeneralInfoDetailModal({
     setEditSecondary(item.secondaryCategory || "");
     setEditThird(item.thirdCategory || "");
     setEditKeywordsText((item.keywords || []).join(", "));
-    setManualFactStatus(item.factCheckStatus || "확인 필요");
     setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
     setBodyEditorKey((prev) => prev + 1);
-    setFactEditorKey((prev) => prev + 1);
     setIsEditing(false);
   }, [item]);
 
-  const addCoverMediaFiles = React.useCallback(async (files: FileList | File[] | null) => {
-    const list = files instanceof FileList ? Array.from(files) : Array.isArray(files) ? files : [];
-    const imageOrVideo = list.filter(
-      (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
-    );
-    if (imageOrVideo.length === 0) return;
+  const persistRepresentativeMedia = React.useCallback(
+    async (nextMedia: GeneralInfoMediaItem[]) => {
+      setEditMediaItems(nextMedia);
+      if (isEditing || !onSaveItemEdit) {
+        setIsEditing(true);
+        return;
+      }
+      const main = nextMedia[0];
+      await onSaveItemEdit({
+        ...item,
+        mediaItems: nextMedia,
+        filePreview: main?.preview || "",
+        fileName: main?.name || item.fileName || "",
+        fileType: main?.type || item.fileType || "image",
+      });
+    },
+    [isEditing, item, onSaveItemEdit],
+  );
 
-    const loaded = await readFilesAsDataUrls(imageOrVideo);
-    const nextItems = loaded.map(({ file, dataUrl }) =>
-      makeGeneralInfoMediaItem(
-        file.name || `대표 이미지 ${Date.now()}`,
-        file.type.startsWith("video/") ? "video" : "image",
-        dataUrl,
-      ),
-    );
-    setEditMediaItems((prev) => [...prev, ...nextItems]);
-    setIsEditing(true);
-  }, []);
+  const addCoverMediaFiles = React.useCallback(
+    async (files: FileList | File[] | null, asRepresentative = false) => {
+      const list = files instanceof FileList ? Array.from(files) : Array.isArray(files) ? files : [];
+      const imageOrVideo = list.filter(
+        (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
+      );
+      if (imageOrVideo.length === 0) return;
+
+      const loaded = await readFilesAsDataUrls(imageOrVideo);
+      const nextItems = loaded.map(({ file, dataUrl }) =>
+        makeGeneralInfoMediaItem(
+          file.name || `대표 이미지 ${Date.now()}`,
+          file.type.startsWith("video/") ? "video" : "image",
+          dataUrl,
+        ),
+      );
+      const current = isEditing ? editMediaItems : getGeneralInfoDisplayMediaItems(item);
+      const merged = asRepresentative
+        ? [...nextItems, ...current]
+        : [...current, ...nextItems];
+      await persistRepresentativeMedia(merged);
+    },
+    [editMediaItems, isEditing, item, persistRepresentativeMedia],
+  );
 
   const handleCoverFileChange = React.useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files;
-      void addCoverMediaFiles(files);
+      const asRepresentative = event.currentTarget.dataset.mode === "replace";
+      void addCoverMediaFiles(files, asRepresentative);
       event.target.value = "";
     },
     [addCoverMediaFiles],
@@ -600,23 +174,30 @@ export default function GeneralInfoDetailModal({
       const files = collectClipboardImageFiles(event.clipboardData);
       if (files.length === 0) return;
       event.preventDefault();
-      void addCoverMediaFiles(dedupeImageFiles(files));
+      void addCoverMediaFiles(dedupeImageFiles(files), true);
     },
     [addCoverMediaFiles],
   );
 
-  const setMediaAsRepresentative = React.useCallback((index: number) => {
-    setEditMediaItems((prev) => {
-      if (index <= 0 || index >= prev.length) return prev;
-      const next = [...prev];
+  const setMediaAsRepresentative = React.useCallback(
+    (index: number) => {
+      const current = isEditing ? editMediaItems : getGeneralInfoDisplayMediaItems(item);
+      if (index <= 0 || index >= current.length) return;
+      const next = [...current];
       const [picked] = next.splice(index, 1);
-      return [picked, ...next];
-    });
-  }, []);
+      void persistRepresentativeMedia([picked, ...next]);
+    },
+    [editMediaItems, isEditing, item, persistRepresentativeMedia],
+  );
 
-  const removeEditMediaItem = React.useCallback((index: number) => {
-    setEditMediaItems((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  const removeEditMediaItem = React.useCallback(
+    (index: number) => {
+      const current = isEditing ? editMediaItems : getGeneralInfoDisplayMediaItems(item);
+      const next = current.filter((_, i) => i !== index);
+      void persistRepresentativeMedia(next);
+    },
+    [editMediaItems, isEditing, item, persistRepresentativeMedia],
+  );
 
   const applyHtmlImageAsRepresentative = React.useCallback(
     async (src: string, label: string) => {
@@ -639,62 +220,9 @@ export default function GeneralInfoDetailModal({
         nextMedia = [makeGeneralInfoMediaItem(label, "image", url), ...current];
       }
 
-      setEditMediaItems(nextMedia);
-
-      // 수정 모드 중이면 저장은 사용자가 [변경 저장]으로 (다른 편집 내용 보호)
-      if (isEditing || !onSaveItemEdit) {
-        setIsEditing(true);
-        return;
-      }
-
-      const main = nextMedia[0];
-      await onSaveItemEdit({
-        ...item,
-        mediaItems: nextMedia,
-        filePreview: main?.preview || "",
-        fileName: main?.name || label,
-      });
+      await persistRepresentativeMedia(nextMedia);
     },
-    [editMediaItems, isEditing, item, onSaveItemEdit],
-  );
-
-  const removeFactReportImage = React.useCallback(
-    async (src: string) => {
-      const url = String(src || "").trim();
-      if (!url) return;
-
-      const editor = factRichTextRef.current;
-      let html = String(editor?.innerHTML || factInitialHtml || item.factCheckSummary || "");
-      removeInlineMediaBySrc(editor, url);
-      html = removeMediaSrcFromHtml(
-        String(editor?.innerHTML || html),
-        url,
-      );
-
-      if (editor) {
-        if (editor.innerHTML !== html) {
-          editor.innerHTML = html;
-          enhanceInlineImageBlocks(editor);
-          bindInlineImageRemoveHandler(editor);
-          editor.dataset.hydrated = "1";
-        }
-      }
-
-      setReportImageTick((prev) => prev + 1);
-
-      if (!html || html === "<br>" || html === "<div><br></div>") {
-        alert("이미지 삭제 후 남은 보고서 내용이 없습니다.");
-        return;
-      }
-
-      try {
-        await onSaveManualFactCheck?.(item.id, html, manualFactStatus);
-      } catch (error) {
-        console.error("remove fact image save failed", error);
-        alert("이미지는 지웠지만 저장에 실패했습니다. [Fact Check / 보고서 저장]을 눌러 주세요.");
-      }
-    },
-    [factInitialHtml, item.factCheckSummary, item.id, manualFactStatus, onSaveManualFactCheck],
+    [editMediaItems, isEditing, item, persistRepresentativeMedia],
   );
 
   const bodyImageSrcs = React.useMemo(() => {
@@ -707,20 +235,12 @@ export default function GeneralInfoDetailModal({
   }, [isEditing, item.formattedTextHtml, item.text, bodyEditorKey, bodyImageTick]);
 
   const reportImageSrcs = React.useMemo(() => {
-    const editor = factRichTextRef.current;
-    const liveFactHtml =
-      editor?.dataset.hydrated === "1" ? String(editor.innerHTML || "") : "";
-    // 라이브 편집기가 있으면 그것만 사용 (삭제 후 초기 HTML로 다시 살아나는 문제 방지)
-    if (liveFactHtml) {
-      return extractGeneralInfoReportImageSrcs(liveFactHtml);
-    }
-    return extractGeneralInfoReportImageSrcs(factInitialHtml, item.factCheckSummary);
-  }, [factInitialHtml, item.factCheckSummary, factEditorKey, reportImageTick]);
+    return extractGeneralInfoReportImageSrcs(String(item.factCheckSummary || ""));
+  }, [item.factCheckSummary]);
 
   const saveAllEdits = React.useCallback(async () => {
     const bodyHtml = String(bodyRichTextRef.current?.innerHTML || item.formattedTextHtml || "").trim();
     const bodyText = htmlToPlainText(bodyHtml) || String(item.text || "");
-    const factHtml = String(factRichTextRef.current?.innerHTML || "").trim();
     const keywords = editKeywordsText
       .split(/[,，#\n]+/)
       .map((k) => k.trim().replace(/^#+/, ""))
@@ -739,8 +259,6 @@ export default function GeneralInfoDetailModal({
       keywords,
       text: bodyText,
       formattedTextHtml: bodyHtml,
-      factCheckStatus: manualFactStatus,
-      factCheckSummary: factHtml || item.factCheckSummary,
       mediaItems,
       filePreview: mainMedia?.preview || "",
       fileName: mainMedia?.name || "",
@@ -748,12 +266,9 @@ export default function GeneralInfoDetailModal({
 
     if (onSaveItemEdit) {
       await onSaveItemEdit(updated);
-    } else if (factHtml) {
-      onSaveManualFactCheck?.(item.id, factHtml, manualFactStatus);
     }
     setIsEditing(false);
   }, [
-    bodyRichTextRef,
     editKeywordsText,
     editMediaItems,
     editPrimary,
@@ -763,39 +278,35 @@ export default function GeneralInfoDetailModal({
     editThird,
     editTitle,
     item,
-    manualFactStatus,
     onSaveItemEdit,
-    onSaveManualFactCheck,
   ]);
 
-  const detailBodyRef = React.useRef<HTMLDivElement | null>(null);
-  const hasAiReport = hasDisplayableAiReport(String(item?.factCheckSummary || ""));
-
-  React.useEffect(() => {
-    if (detailBodyRef.current) {
-      detailBodyRef.current.scrollTop = 0;
+  const handleAiReportAction = React.useCallback(() => {
+    if (hasAiReport) {
+      onOpenAiReport?.(item.id);
+      return;
     }
-  }, [item?.id, hasAiReport]);
+    void onGenerateReport(item);
+  }, [hasAiReport, item, onGenerateReport, onOpenAiReport]);
 
   if (!item) return null;
 
   const mediaItems = isEditing ? editMediaItems : getGeneralInfoDisplayMediaItems(item);
-  const hasFactContent =
-    Boolean(String(factInitialHtml || "").trim()) ||
-    hasAiReport ||
-    needsManualFactCheck;
+  const statusLabel = needsManualFactCheck
+    ? "팩트체크 작성 필요"
+    : item.factCheckStatus || "확인 전";
 
-  const copyPlainText = async (text: string, kind: "text" | "fact") => {
+  const copyPlainText = async (text: string) => {
     const value = String(text || "").trim();
     if (!value) {
-      alert(kind === "text" ? "복사할 Text가 없습니다." : "복사할 Fact Check 결과가 없습니다.");
+      alert("복사할 Text가 없습니다.");
       return;
     }
     try {
       await navigator.clipboard.writeText(value);
-      setCopyFeedback(kind);
+      setCopyFeedback("text");
       window.setTimeout(() => {
-        setCopyFeedback((prev) => (prev === kind ? null : prev));
+        setCopyFeedback((prev) => (prev === "text" ? null : prev));
       }, 1800);
     } catch {
       alert("클립보드 복사에 실패했습니다.");
@@ -803,8 +314,8 @@ export default function GeneralInfoDetailModal({
   };
 
   return (
-    <div 
-      className="overlay" 
+    <div
+      className="overlay"
       onClick={onClose}
       style={{
         position: "fixed",
@@ -829,7 +340,7 @@ export default function GeneralInfoDetailModal({
       >
         <div className="modalHeader">
           <div style={{ flex: 1, minWidth: 0 }}>
-            <span>일반 정보 상세보기{isEditing ? " · 수정" : ""}</span>
+            <span>Source DATA{isEditing ? " · 수정" : ""}</span>
             {isEditing ? (
               <input
                 value={editTitle}
@@ -898,345 +409,112 @@ export default function GeneralInfoDetailModal({
           ref={detailBodyRef}
           style={{ display: "flex", flexDirection: "column" }}
         >
-          <section
-            className="generalInfoDetailSection generalInfoFactCheckReportSection"
-            style={{ order: hasAiReport ? 0 : 6 }}
-          >
-            <strong className="generalInfoFactCheckReportTitle">
-              {needsManualFactCheck
-                ? "Fact Check 보고서 (수동 작성)"
-                : getAiVerificationReportLabel(item.factCheckSummary)}
-            </strong>
-
-            {isGeneratingReport || isExportingPdf ? (
-              <div style={{
-                marginTop: "8px",
-                padding: "14px",
-                borderRadius: "10px",
-                border: "1px solid rgba(56, 189, 248, 0.35)",
-                background: "rgba(14, 165, 233, 0.08)",
-                color: "#bae6fd",
-                fontSize: "13px",
-                fontWeight: 700,
-              }}>
-                {isGeneratingReport ? "📄 AI 검증 보고서 작성 중…" : "📄 PDF 보고서 생성 중…"}
-              </div>
-            ) : null}
-
-            {factReportLooksTruncated ? (
-              <div
+          <section className="generalInfoDetailSection generalInfoAiReportEntrySection">
+            <div className="generalInfoSectionTitleRow">
+              <strong>AI 검증 보고서</strong>
+              <span
+                className="miniTag"
                 style={{
-                  marginTop: 10,
-                  marginBottom: 8,
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  border: "1px solid rgba(251, 191, 36, 0.45)",
-                  background: "rgba(245, 158, 11, 0.12)",
-                  color: "#fde68a",
-                  fontSize: 13,
-                  lineHeight: 1.55,
-                  fontWeight: 600,
-                }}
-              >
-                보고서 본문이 비어 있거나 이전에 잘린 상태입니다. 하단{" "}
-                <strong>[AI 검증 보고서]</strong>로 다시 생성하세요. 이미지는 본문 중간·끝 어디에나
-                S 또는 [이미지 추가]로 넣을 수 있습니다.
-              </div>
-            ) : null}
-
-            {needsManualFactCheck ? (
-              <div style={{
-                marginTop: "10px",
-                padding: "14px 16px",
-                borderRadius: "12px",
-                border: "1px solid rgba(250, 204, 21, 0.45)",
-                background: "rgba(250, 204, 21, 0.1)",
-                color: "#fde68a",
-                fontSize: "13px",
-                lineHeight: 1.6,
-                wordBreak: "keep-all",
-              }}>
-                <strong style={{ display: "block", marginBottom: 6, color: "#facc15" }}>
-                  ⚠️ AI 크레딧 소진
-                </strong>
-                AI 검증 보고서를 작성하지 않습니다. <strong>수동으로 팩트 체크 작성</strong>이 필요합니다.
-              </div>
-            ) : null}
-
-            <div className="generalInfoFactCheckPanel">
-              <div className="generalInfoFactCheckToolbar">
-                <span className="miniTag" style={{
                   padding: "5px 10px",
                   borderRadius: "999px",
                   fontSize: "12px",
                   fontWeight: 700,
-                  background: needsManualFactCheck ? "rgba(250, 204, 21, 0.15)" : "rgba(56, 189, 248, 0.12)",
-                  border: needsManualFactCheck ? "1px solid rgba(250, 204, 21, 0.35)" : "1px solid rgba(56, 189, 248, 0.3)",
-                  color: needsManualFactCheck ? "#facc15" : "#7dd3fc",
-                }}>
-                  {needsManualFactCheck ? "팩트체크 작성 필요" : (item.factCheckStatus || "확인 전")}
-                </span>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                    onClick={openFactImageInsertPanel}
-                  >
-                    🖼 이미지 추가
-                  </button>
-                  <button
-                    type="button"
-                    className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                    onClick={() => {
-                      const status = String(item.factCheckStatus || "확인 전").trim();
-                      const summary = htmlToPlainText(String(item.factCheckSummary || "").trim())
-                        || String(item.factCheckSummary || "").trim();
-                      void copyPlainText([`[Fact Check 상태] ${status}`, summary].filter(Boolean).join("\n\n"), "fact");
-                    }}
-                  >
-                    {copyFeedback === "fact" ? "✅ 복사됨" : "📋 전체 복사"}
-                  </button>
-                </div>
-              </div>
-
-              <div
-                className="generalInfoRichToolbar generalInfoFactDesktopToolbar"
-                aria-label="AI 보고서 서식 도구"
-                style={{ marginTop: 8 }}
+                  background: needsManualFactCheck
+                    ? "rgba(250, 204, 21, 0.15)"
+                    : hasAiReport
+                      ? "rgba(74, 222, 128, 0.12)"
+                      : "rgba(56, 189, 248, 0.12)",
+                  border: needsManualFactCheck
+                    ? "1px solid rgba(250, 204, 21, 0.35)"
+                    : hasAiReport
+                      ? "1px solid rgba(74, 222, 128, 0.35)"
+                      : "1px solid rgba(56, 189, 248, 0.3)",
+                  color: needsManualFactCheck
+                    ? "#facc15"
+                    : hasAiReport
+                      ? "#86efac"
+                      : "#7dd3fc",
+                }}
               >
-                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("bold")}>B 굵게</button>
-                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("underline")}>U 밑줄</button>
-                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("removeFormat")}>서식 지우기</button>
-                <button type="button" className="generalInfoRichColorDefault" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("foreColor", "#e2e8f0")}>● 기본</button>
-                <button type="button" className="generalInfoRichColorRed" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("foreColor", "#f87171")}>● 빨강</button>
-                <button type="button" className="generalInfoRichColorYellow" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("foreColor", "#facc15")}>● 노랑</button>
-                <button type="button" className="generalInfoRichColorBlue" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("foreColor", "#60a5fa")}>● 파랑</button>
-                <button type="button" className="generalInfoRichColorGreen" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFactRichCommand("foreColor", "#4ade80")}>● 초록</button>
-              </div>
-
-              <div
-                className="generalInfoRichToolbar generalInfoCircledNumberToolbar generalInfoFactDesktopToolbar"
-                aria-label="원형 번호 삽입"
-                style={{ marginTop: 8 }}
-              >
-                {["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"].map((mark) => (
-                  <button
-                    key={mark}
-                    type="button"
-                    className="generalInfoCircledNumberBtn"
-                    title={`${mark} 삽입`}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => insertFactPlainText(mark)}
-                  >
-                    {mark}
-                  </button>
-                ))}
-              </div>
-
-              <p className="generalInfoFactMobileFormatHint">
-                본문을 탭하면 키보드 위에 서식 바가 나타납니다. ‹ ›로 도구를 좌우로 옮길 수 있습니다.
-              </p>
-
-              <p className="generalInfoFactCheckHint">
-                굵게·밑줄·글자색·①~⑩으로 보고서 본문을 편집할 수 있습니다. 원하는 위치 문장 끝 S(또는 s) 또는 [이미지 추가]로 사진을 삽입합니다(중간·끝 모두 가능).
-              </p>
-
-              <label className="generalInfoFactCheckStatusLabel">
-                Fact Check 상태
-                <select
-                  className="generalInfoFactCheckStatusSelect"
-                  value={manualFactStatus}
-                  onChange={(e) =>
-                    setManualFactStatus(e.target.value as GeneralInfoItem["factCheckStatus"])
-                  }
-                >
-                  <option value="확인 필요">확인 필요</option>
-                  <option value="확인 완료">확인 완료</option>
-                  <option value="오류 가능성">오류 가능성</option>
-                  <option value="확인 전">확인 전</option>
-                </select>
-              </label>
-
-              <div
-                key={factEditorKey}
-                ref={(node) => {
-                  factRichTextRef.current = node;
-                  if (node && factInitialHtml && !node.dataset.hydrated) {
-                    node.innerHTML = factInitialHtml;
-                    enhanceInlineImageBlocks(node);
-                    bindInlineImageRemoveHandler(node);
-                    refreshInlineImagesInEditor(node);
-                    node.dataset.hydrated = "1";
-                  }
-                }}
-                className="generalInfoRichTextEditor generalInfoFactCheckEditor"
-                contentEditable
-                suppressContentEditableWarning
-                role="textbox"
-                tabIndex={0}
-                onFocus={() => setFactEditorFocused(true)}
-                onInput={() => {
-                  checkFactImageTrigger();
-                  setReportImageTick((prev) => prev + 1);
-                }}
-                onKeyUp={() => {
-                  checkFactImageTrigger();
-                  setReportImageTick((prev) => prev + 1);
-                }}
-                onBlur={(e) => {
-                  const next = e.relatedTarget as HTMLElement | null;
-                  if (next?.closest?.(".generalInfoMobileFormatBubble")) {
-                    return;
-                  }
-                  setFactEditorFocused(false);
-                  checkFactImageTrigger();
-                  setReportImageTick((prev) => prev + 1);
-                }}
-                onCompositionEnd={() => {
-                  checkFactImageTrigger();
-                  setReportImageTick((prev) => prev + 1);
-                }}
-                data-placeholder="AI 검증 보고서 또는 수동 Fact Check를 작성하세요. 끝에 S(또는 s)를 붙이거나 [이미지 추가]를 누르세요."
-                style={{
-                  display: "block",
-                  width: "100%",
-                  minHeight: 280,
-                  maxHeight: "none",
-                  overflow: "visible",
-                  boxSizing: "border-box",
-                  borderRadius: 14,
-                  border: "1px solid rgba(56, 189, 248, 0.55)",
-                  background: "#020617",
-                  color: "#f1f5f9",
-                  padding: "18px 18px",
-                  fontSize: 16,
-                  lineHeight: 1.85,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
-              />
-
-              <GeneralInfoMobileFormatBubble
-                active={Boolean(onSaveManualFactCheck) && factEditorFocused}
-                editorRef={factRichTextRef}
-                onCommand={handleFactRichCommand}
-                onInsertChar={insertFactPlainText}
-              />
-
-              {reportImageSrcs.length > 0 && (
-                <div className="generalInfoFactImageManageStrip" aria-label="보고서 이미지 관리">
-                  <p className="mutedText" style={{ margin: "8px 0 8px", fontSize: 12 }}>
-                    보고서 이미지 ({reportImageSrcs.length}) · 안 보이면 여기서 × 삭제
-                  </p>
-                  <div className="generalInfoFactImageManageRow">
-                    {reportImageSrcs.map((src, index) => (
-                      <div key={`fact-mgmt-${index}`} className="generalInfoFactImageManageCard">
-                        <button
-                          type="button"
-                          className="generalInfoInlineImageRemove"
-                          aria-label="보고서 이미지 삭제"
-                          onClick={() => void removeFactReportImage(src)}
-                        >
-                          ×
-                        </button>
-                        <img src={src} alt={`보고서 이미지 ${index + 1}`} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {showFactImageInsert && (
-                <div className="generalInfoTextImageInsertPanel" ref={factImagePanelRef}>
-                  <div className="generalInfoTextImageInsertHead">
-                    <strong>Fact Check 이미지 붙여넣기</strong>
-                    <span>S 바로 아래에 이미지가 들어갑니다 · 편집창 아래에 선택 패널이 열립니다</span>
-                    <button
-                      type="button"
-                      className="secondaryButton smallActionButton"
-                      onClick={() => {
-                        removeTrailingImageTrigger();
-                        setShowFactImageInsert(false);
-                      }}
-                    >
-                      닫기
-                    </button>
-                  </div>
-                  <div className="generalInfoTextImageInsertActions">
-                    <label className="primaryLabel generalInfoTextImageFileLabel">
-                      🖼 사진첩 · 파일 선택
-                      <input
-                        ref={factImageFileRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={(e) => {
-                          insertFactImageFiles(e.target.files);
-                          e.target.value = "";
-                        }}
-                        style={{ display: "none" }}
-                      />
-                    </label>
-                    <div
-                      className="generalInfoTextImagePasteZone"
-                      contentEditable
-                      suppressContentEditableWarning
-                      onPaste={handleFactImagePaste}
-                    >
-                      📋 여기 눌러 이미지 붙여넣기
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="button"
-                className="primaryButton"
-                onClick={() => void saveFactCheckFromEditor()}
-              >
-                {needsManualFactCheck ? "수동 Fact Check 저장" : "Fact Check / 보고서 저장"}
-              </button>
-
-              {!hasFactContent ? (
-                <div style={{
-                  whiteSpace: "pre-wrap",
-                  lineHeight: "1.7",
-                  background: "rgba(15, 23, 42, 0.4)",
-                  padding: "12px 14px",
-                  borderRadius: "10px",
-                  border: "1px solid rgba(148, 163, 184, 0.15)",
-                  color: "#94a3b8",
-                  fontSize: "13px"
-                }}>
-                  아직 AI 보고서가 없습니다. Confirm 저장 시 Text 본문이 보고서로 들어가며,
-                  하단 <strong>[AI 검증 보고서]</strong>로 Gemini 구조화 보고서를 만들 수도 있습니다.
-                </div>
-              ) : null}
+                {statusLabel}
+              </span>
             </div>
+            {isGeneratingReport ? (
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: "12px 14px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(56, 189, 248, 0.35)",
+                  background: "rgba(14, 165, 233, 0.08)",
+                  color: "#bae6fd",
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                📄 AI 검증 보고서 작성 중…
+              </div>
+            ) : (
+              <p className="mutedText" style={{ margin: "8px 0 10px", fontSize: 13 }}>
+                {hasAiReport
+                  ? "저장된 AI 검증 보고서를 열어 편집·팩트체크·PDF 저장할 수 있습니다."
+                  : "아직 보고서가 없습니다. 생성하면 AI 보고서 화면으로 이동합니다."}
+              </p>
+            )}
+            <button
+              type="button"
+              className="primaryButton"
+              disabled={isGeneratingReport}
+              onClick={handleAiReportAction}
+            >
+              {isGeneratingReport
+                ? "작성 중…"
+                : hasAiReport
+                  ? "AI 보고서 열기"
+                  : "AI 보고서 생성"}
+            </button>
           </section>
-          <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 1 : 0 }}>
+
+          <section className="generalInfoDetailSection">
             <div className="generalInfoSectionTitleRow">
               <strong>대표 이미지 / 자료</strong>
-              {(isEditing || mediaItems.length === 0) && (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="secondaryButton smallActionButton"
+                  onClick={() => {
+                    if (coverImageFileRef.current) {
+                      coverImageFileRef.current.dataset.mode = "replace";
+                      coverImageFileRef.current.click();
+                    }
+                  }}
+                >
+                  {mediaItems.length === 0 ? "대표 이미지 추가" : "대표 이미지 교체"}
+                </button>
+                {mediaItems.length > 0 && (
                   <button
                     type="button"
                     className="secondaryButton smallActionButton"
-                    onClick={() => coverImageFileRef.current?.click()}
+                    onClick={() => {
+                      if (coverImageFileRef.current) {
+                        coverImageFileRef.current.dataset.mode = "append";
+                        coverImageFileRef.current.click();
+                      }
+                    }}
                   >
-                    {mediaItems.length === 0 ? "대표 이미지 추가" : "이미지 추가"}
+                    이미지 추가
                   </button>
-                  {isEditing && mediaItems.length > 0 && (
-                    <button
-                      type="button"
-                      className="secondaryButton smallActionButton dangerSmallButton"
-                      onClick={() => setEditMediaItems([])}
-                    >
-                      전체 삭제
-                    </button>
-                  )}
-                </div>
-              )}
+                )}
+                {isEditing && mediaItems.length > 0 && (
+                  <button
+                    type="button"
+                    className="secondaryButton smallActionButton dangerSmallButton"
+                    onClick={() => void persistRepresentativeMedia([])}
+                  >
+                    전체 삭제
+                  </button>
+                )}
+              </div>
             </div>
             <input
               ref={coverImageFileRef}
@@ -1246,28 +524,26 @@ export default function GeneralInfoDetailModal({
               hidden
               onChange={handleCoverFileChange}
             />
-            {isEditing && (
-              <div
-                className="generalInfoIphonePasteZone"
-                contentEditable
-                suppressContentEditableWarning
-                role="textbox"
-                tabIndex={0}
-                onPaste={handleCoverPaste}
-                style={{
-                  textAlign: "center",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "12px",
-                  marginTop: 8,
-                  cursor: "pointer",
-                  minHeight: 48,
-                }}
-              >
-                <strong>이미지를 여기에 붙여넣기</strong>
-              </div>
-            )}
+            <div
+              className="generalInfoIphonePasteZone"
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              tabIndex={0}
+              onPaste={handleCoverPaste}
+              style={{
+                textAlign: "center",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "12px",
+                marginTop: 8,
+                cursor: "pointer",
+                minHeight: 48,
+              }}
+            >
+              <strong>대표 이미지 붙여넣기(교체)</strong>
+            </div>
             {mediaItems.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "10px" }}>
                 {mediaItems.map((media, index) => (
@@ -1277,49 +553,72 @@ export default function GeneralInfoDetailModal({
                     style={{
                       width: "100%",
                       padding: "12px",
-                      border: "1px solid rgba(148, 163, 184, 0.22)",
+                      border:
+                        index === 0
+                          ? "2px solid rgba(250, 204, 21, 0.65)"
+                          : "1px solid rgba(148, 163, 184, 0.22)",
                       borderRadius: "14px",
                       background: "rgba(15, 23, 42, 0.45)",
                       position: "relative",
                     }}
                   >
-                    {isEditing && (
-                      <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                        {index === 0 ? (
-                          <span className="generalInfoDraftMediaBadge representative">★ 대표</span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="secondaryButton smallActionButton"
-                            onClick={() => setMediaAsRepresentative(index)}
-                          >
-                            ★ 대표 설정
-                          </button>
-                        )}
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                      {index === 0 ? (
+                        <span className="generalInfoDraftMediaBadge representative">★ 대표</span>
+                      ) : (
                         <button
                           type="button"
-                          className="secondaryButton smallActionButton dangerSmallButton"
-                          onClick={() => removeEditMediaItem(index)}
+                          className="secondaryButton smallActionButton"
+                          onClick={() => setMediaAsRepresentative(index)}
                         >
-                          삭제
+                          ★ 대표로 교체
                         </button>
-                      </div>
-                    )}
+                      )}
+                      <button
+                        type="button"
+                        className="secondaryButton smallActionButton dangerSmallButton"
+                        onClick={() => removeEditMediaItem(index)}
+                      >
+                        삭제
+                      </button>
+                    </div>
                     {media.type === "video" ? (
-                      <video src={media.preview} controls style={{ width: "100%", maxHeight: "500px", objectFit: "contain", borderRadius: "10px", display: "block" }} />
+                      <video
+                        src={media.preview}
+                        controls
+                        style={{
+                          width: "100%",
+                          maxHeight: "500px",
+                          objectFit: "contain",
+                          borderRadius: "10px",
+                          display: "block",
+                        }}
+                      />
                     ) : (
                       <img
                         src={media.preview}
                         alt={media.name || item.title || `자료 이미지 ${index + 1}`}
-                        style={{ width: "100%", maxHeight: "500px", objectFit: "contain", borderRadius: "10px", background: "rgba(2, 6, 23, 0.55)", display: "block", cursor: onOpenStorageImage ? "zoom-in" : "default" }}
+                        style={{
+                          width: "100%",
+                          maxHeight: "500px",
+                          objectFit: "contain",
+                          borderRadius: "10px",
+                          background: "rgba(2, 6, 23, 0.55)",
+                          display: "block",
+                          cursor: onOpenStorageImage ? "zoom-in" : "default",
+                        }}
                         onClick={() => {
                           if (!onOpenStorageImage) return;
-                          onOpenStorageImage(media.preview, media.name || `${item.title || "general_info"}_${index + 1}.jpg`);
+                          onOpenStorageImage(
+                            media.preview,
+                            media.name || `${item.title || "general_info"}_${index + 1}.jpg`,
+                          );
                         }}
                       />
                     )}
                     <p className="mutedText" style={{ margin: "8px 0 4px", wordBreak: "break-all" }}>
                       {media.name || `자료 이미지 ${index + 1}`}
+                      {index === 0 ? " · 창고 카드 썸네일" : ""}
                     </p>
                     {media.memo?.trim() && (
                       <div className="generalInfoDetailMediaMemo">
@@ -1332,14 +631,12 @@ export default function GeneralInfoDetailModal({
               </div>
             ) : (
               <p style={{ marginTop: 8 }}>
-                대표 이미지가 저장되지 않았습니다.
-                {!isEditing && " [대표 이미지 추가]로 파일 선택 후 [변경 저장]하세요."}
-                {isEditing && " 파일 선택 또는 붙여넣기 후 [변경 저장]하세요."}
+                대표 이미지가 저장되지 않았습니다. [대표 이미지 추가] 또는 붙여넣기로 등록하세요.
               </p>
             )}
-            {isEditing && editMediaItems.length > 0 && (
+            {mediaItems.length > 0 && (
               <p className="mutedText" style={{ marginTop: 8, fontSize: 12 }}>
-                맨 앞(★ 대표) 이미지가 대표 이미지입니다. 저장을 눌러야 반영됩니다.
+                ★ 대표로 교체하면 바로 반영됩니다. 본문·보고서 이미지에서도 고를 수 있습니다.
               </p>
             )}
 
@@ -1408,7 +705,6 @@ export default function GeneralInfoDetailModal({
                 </strong>
                 <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
                   AI 검증 보고서(Fact Check)에 넣은 사진을 대표 이미지로 쓸 수 있습니다.
-                  아이폰에서 본문 이미지가 안 보이면 여기서 ×로 삭제할 수 있습니다.
                 </p>
                 <div
                   style={{
@@ -1425,7 +721,6 @@ export default function GeneralInfoDetailModal({
                       <div
                         key={`report-img-${index}`}
                         style={{
-                          position: "relative",
                           border: isRep
                             ? "2px solid #facc15"
                             : "1px solid rgba(148, 163, 184, 0.28)",
@@ -1434,16 +729,6 @@ export default function GeneralInfoDetailModal({
                           background: "rgba(2, 6, 23, 0.55)",
                         }}
                       >
-                        <button
-                          type="button"
-                          className="generalInfoInlineImageRemove"
-                          aria-label="보고서 이미지 삭제"
-                          title="보고서에서 삭제"
-                          onClick={() => void removeFactReportImage(src)}
-                          style={{ position: "absolute", top: 6, right: 6, zIndex: 3 }}
-                        >
-                          ×
-                        </button>
                         <img
                           src={src}
                           alt={`보고서 이미지 ${index + 1}`}
@@ -1472,7 +757,7 @@ export default function GeneralInfoDetailModal({
             )}
           </section>
 
-          <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 2 : 1 }}>
+          <section className="generalInfoDetailSection">
             <strong>요약</strong>
             {isEditing ? (
               <textarea
@@ -1498,14 +783,14 @@ export default function GeneralInfoDetailModal({
             )}
           </section>
 
-          <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 3 : 2 }}>
+          <section className="generalInfoDetailSection">
             <div className="generalInfoSectionTitleRow">
               <strong>본문 TEXT</strong>
               {!isEditing && (
                 <button
                   type="button"
                   className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                  onClick={() => void copyPlainText(item.text || "", "text")}
+                  onClick={() => void copyPlainText(item.text || "")}
                 >
                   {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
                 </button>
@@ -1552,7 +837,7 @@ export default function GeneralInfoDetailModal({
             )}
           </section>
 
-          <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 4 : 3 }}>
+          <section className="generalInfoDetailSection">
             <strong>분류</strong>
             {isEditing ? (
               <div style={{ display: "grid", gap: 8 }}>
@@ -1563,7 +848,9 @@ export default function GeneralInfoDetailModal({
                 >
                   <option value="">1차 분류</option>
                   {generalInfoCategories.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
                   ))}
                 </select>
                 <input
@@ -1581,12 +868,14 @@ export default function GeneralInfoDetailModal({
               </div>
             ) : (
               <p>
-                {[item.primaryCategory, item.secondaryCategory, item.thirdCategory].filter(Boolean).join(" > ") || "분류 없음"}
+                {[item.primaryCategory, item.secondaryCategory, item.thirdCategory]
+                  .filter(Boolean)
+                  .join(" > ") || "분류 없음"}
               </p>
             )}
           </section>
 
-          <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 5 : 4 }}>
+          <section className="generalInfoDetailSection">
             <strong>키워드</strong>
             {isEditing ? (
               <input
@@ -1607,7 +896,7 @@ export default function GeneralInfoDetailModal({
             )}
           </section>
 
-          <section className="generalInfoDetailSection" style={{ order: hasAiReport ? 6 : 5 }}>
+          <section className="generalInfoDetailSection">
             <strong>출처 URL</strong>
             {isEditing ? (
               <input
@@ -1651,21 +940,14 @@ export default function GeneralInfoDetailModal({
             <button
               className="secondaryButton"
               type="button"
-              disabled={isGeneratingReport || isExportingPdf}
-              onClick={() => onGenerateReport(item)}
+              disabled={isGeneratingReport}
+              onClick={handleAiReportAction}
             >
-              {isGeneratingReport ? "작성 중…" : "AI 검증 보고서"}
-            </button>
-          )}
-          {!isEditing && (
-            <button
-              className="secondaryButton"
-              type="button"
-              disabled={isGeneratingReport || isExportingPdf || !hasDisplayableAiReport(String(item.factCheckSummary || ""))}
-              onClick={() => onDownloadPdfReport(item)}
-              style={{ borderColor: "rgba(74, 222, 128, 0.45)", color: "#bbf7d0" }}
-            >
-              {isExportingPdf ? "PDF 생성 중…" : "PDF보고서"}
+              {isGeneratingReport
+                ? "작성 중…"
+                : hasAiReport
+                  ? "AI 보고서 열기"
+                  : "AI 검증 보고서"}
             </button>
           )}
           {onDelete && !isEditing && (

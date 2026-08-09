@@ -6,7 +6,7 @@ import { persistGeneralInfoItemsToLocalStorage, readGeneralInfoItemsFromLocalSto
 import { supabase } from "../lib/supabaseClient";
 
 
-import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, extractTitleFromPlainText, formatReportHtmlForPdf, isFullAiVerificationReport, buildAiReportFromBodyContent, hasDisplayableAiReport, salvageFactCheckHtml, pickPreferredFactCheckSummary } from "../lib/generalInfoHelpers";
+import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, extractTitleFromPlainText, formatReportHtmlForPdf, isFullAiVerificationReport, buildAiReportFromBodyContent, hasDisplayableAiReport, salvageFactCheckHtml, pickPreferredFactCheckSummary, applyInfographicAsRepresentative, extractFirstInfographicSrc } from "../lib/generalInfoHelpers";
 
 
 const TRAVEL_DIARY_BUCKET = "info-photos";
@@ -1437,6 +1437,8 @@ export function useTravelDiaryGeneralInfoState({
       localStorage.removeItem("travel_diary_general_info_temp_draft");
       setGeneralInfoActiveTab("storage");
       if (hasDisplayableAiReport(String(updatedItem.factCheckSummary || ""))) {
+        setGeneralInfoDetailId(null);
+        setGeneralInfoDetailEditMode(false);
         setGeneralInfoAiReportId(updatedItem.id);
         showPasteHint("✅ 수정 저장 완료 · AI 검증 보고서 화면을 열었습니다.");
       } else {
@@ -1461,6 +1463,8 @@ export function useTravelDiaryGeneralInfoState({
     localStorage.removeItem("travel_diary_general_info_temp_draft");
     setGeneralInfoActiveTab("storage");
     if (hasDisplayableAiReport(String(item.factCheckSummary || ""))) {
+      setGeneralInfoDetailId(null);
+      setGeneralInfoDetailEditMode(false);
       setGeneralInfoAiReportId(item.id);
       showPasteHint("✅ 저장 완료 · AI 검증 보고서가 만들어졌습니다.");
     } else {
@@ -1480,11 +1484,12 @@ export function useTravelDiaryGeneralInfoState({
   ]);
 
   const handleStartEditGeneralInfo = useCallback((item: GeneralInfoItem) => {
-    // 상세보기에서 바로 수정 (수집 탭으로 이동하지 않음)
+    // Source DATA에서 바로 수정 (수집 탭으로 이동하지 않음)
+    setGeneralInfoAiReportId(null);
     setGeneralInfoDetailEditMode(true);
     setGeneralInfoDetailId(item.id);
     setGeneralInfoActiveTab("storage");
-    showPasteHint("✏️ 상세보기에서 자료를 수정할 수 있습니다.");
+    showPasteHint("✏️ Source DATA에서 자료를 수정할 수 있습니다.");
   }, [showPasteHint]);
 
   const handleSaveGeneralInfoDetailEdit = useCallback(async (updatedItem: GeneralInfoItem) => {
@@ -1695,12 +1700,16 @@ export function useTravelDiaryGeneralInfoState({
     const nextTitle =
       title !== undefined ? String(title || "").trim() || targetItem.title : targetItem.title;
 
-    const updatedItem: GeneralInfoItem = {
+    const withReport: GeneralInfoItem = {
       ...targetItem,
       title: nextTitle,
       factCheckStatus: status,
       factCheckSummary: trimmed,
     };
+    const updatedItem = applyInfographicAsRepresentative(withReport, trimmed);
+    const infoSrc = extractFirstInfographicSrc(trimmed);
+    const becameRepresentative =
+      Boolean(infoSrc) && String(updatedItem.filePreview || "") === infoSrc;
 
     setGeneralInfoItems((prev) => {
       const nextItems = prev.map((item) => (item.id === itemId ? updatedItem : item));
@@ -1715,7 +1724,11 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoReportText(trimmed);
     setGeneralInfoFactCheckItem(updatedItem);
     setGeneralInfoFactCheckResult(trimmed);
-    showPasteHint("✅ Fact Check / AI 검증 보고서(이미지 포함)를 저장했습니다.");
+    showPasteHint(
+      becameRepresentative
+        ? "✅ 보고서 저장 · 인포그래픽을 대표 이미지(창고 카드)로 설정했습니다."
+        : "✅ Fact Check / AI 검증 보고서(이미지 포함)를 저장했습니다.",
+    );
     await syncGeneralInfoItemToSupabase(updatedItem, "PUT");
   }, [
     generalInfoItems,
@@ -1723,6 +1736,45 @@ export function useTravelDiaryGeneralInfoState({
     syncGeneralInfoItemToSupabase,
     uploadInlineDataUrlsInHtml,
   ]);
+
+  /** 임의 이미지를 대표(창고 카드 썸네일)로 교체 */
+  const handleSetRepresentativeImage = useCallback(
+    async (itemId: number, src: string) => {
+      const url = String(src || "").trim();
+      if (!url) return;
+      const targetItem = generalInfoItems.find((item) => item.id === itemId);
+      if (!targetItem) return;
+
+      const existing = normalizeGeneralInfoMediaItems(targetItem);
+      const withoutDup = existing.filter(
+        (media) =>
+          String(media.preview || "").trim() !== url &&
+          String(media.fileUrl || "").trim() !== url,
+      );
+      const nextMedia = [
+        makeGeneralInfoMediaItem("대표 이미지", "image", url, undefined, url),
+        ...withoutDup,
+      ];
+      const updatedItem: GeneralInfoItem = {
+        ...targetItem,
+        mediaItems: nextMedia,
+        filePreview: url,
+        fileName: nextMedia[0]?.name || "대표 이미지",
+        fileType: "image",
+      };
+
+      setGeneralInfoItems((prev) => {
+        const nextItems = prev.map((item) => (item.id === itemId ? updatedItem : item));
+        try {
+          persistGeneralInfoItemsToLocalStorage(nextItems);
+        } catch {}
+        return nextItems;
+      });
+      showPasteHint("✅ 대표 이미지를 교체했습니다.");
+      await syncGeneralInfoItemToSupabase(updatedItem, "PUT");
+    },
+    [generalInfoItems, showPasteHint, syncGeneralInfoItemToSupabase],
+  );
 
   // --- AI 보고서 및 Fact Check 작성 핸들러 ---
   const buildGeneralInfoFactCheckPayload = useCallback((item: GeneralInfoItem) => {
@@ -1927,6 +1979,13 @@ export function useTravelDiaryGeneralInfoState({
   ]);
 
   const handleGenerateGeneralInfoReport = useCallback(async (item: GeneralInfoItem, forceRegenerate = false) => {
+    const openAiReportScreen = (itemId: number) => {
+      setGeneralInfoDetailId(null);
+      setGeneralInfoDetailEditMode(false);
+      setGeneralInfoAiReportId(itemId);
+      setGeneralInfoActiveTab("storage");
+    };
+
     // 이미 구조화된 AI 검증 보고서만 재사용 (짧은 자동분류 메모는 재사용하지 않음)
     if (
       !forceRegenerate &&
@@ -1934,6 +1993,7 @@ export function useTravelDiaryGeneralInfoState({
     ) {
       setGeneralInfoReportItem(item);
       setGeneralInfoReportText(item.factCheckSummary);
+      openAiReportScreen(item.id);
       showPasteHint("✅ 보관된 AI 보고서를 불러왔습니다.");
       return;
     }
@@ -2060,6 +2120,7 @@ export function useTravelDiaryGeneralInfoState({
 
       if (isGeminiCreditDepletedResponse(data as Record<string, unknown>)) {
         applyCreditDepletedManualFactCheck(item);
+        openAiReportScreen(item.id);
         return;
       }
 
@@ -2108,6 +2169,7 @@ export function useTravelDiaryGeneralInfoState({
       const updatedReportItem = applyReportToItem(nextReport, nextStatus);
       setGeneralInfoManualFactCheckId(null);
       markGeminiApiPacketsAvailable();
+      openAiReportScreen(item.id);
       showPasteHint(
         data.mode === "gemini" || data.mode === "gemini-text"
           ? `✅ AI 검증 보고서(${modelName}) 준비 완료`
@@ -2121,12 +2183,14 @@ export function useTravelDiaryGeneralInfoState({
       console.error("general info report failed", error);
       if (isGeminiCreditDepletedResponse({ message: String(error) })) {
         applyCreditDepletedManualFactCheck(item);
+        openAiReportScreen(item.id);
         return;
       }
       const fallback = makeFallbackReport(item, {
         summary: `보고서 생성 중 오류: ${error instanceof Error ? error.message : String(error)}`,
       });
       applyReportToItem(fallback, "확인 필요");
+      openAiReportScreen(item.id);
       showPasteHint("⚠️ AI 보고서 작성 중 오류가 발생했습니다. 기본 보고서를 표시합니다.");
     } finally {
       setIsGeneratingGeneralInfoReport(false);
@@ -2562,7 +2626,15 @@ export function useTravelDiaryGeneralInfoState({
     return generalInfoItems.find((item) => item.id === generalInfoAiReportId) || null;
   }, [generalInfoItems, generalInfoAiReportId]);
 
+  const handleOpenGeneralInfoDetail = useCallback((itemId: number) => {
+    setGeneralInfoAiReportId(null);
+    setGeneralInfoDetailId(itemId);
+    setGeneralInfoActiveTab("storage");
+  }, []);
+
   const handleOpenGeneralInfoAiReport = useCallback((itemId: number) => {
+    setGeneralInfoDetailId(null);
+    setGeneralInfoDetailEditMode(false);
     setGeneralInfoAiReportId(itemId);
     setGeneralInfoActiveTab("storage");
   }, []);
@@ -2595,6 +2667,7 @@ export function useTravelDiaryGeneralInfoState({
     generalInfoAiReportId,
     setGeneralInfoAiReportId,
     selectedGeneralInfoAiReportItem,
+    handleOpenGeneralInfoDetail,
     handleOpenGeneralInfoAiReport,
     handleCloseGeneralInfoAiReport,
     generalInfoDetailEditMode,
@@ -2634,6 +2707,7 @@ export function useTravelDiaryGeneralInfoState({
     markGeminiApiPacketsAvailable,
     markGeminiApiPacketsDepleted,
     handleSaveManualFactCheck,
+    handleSetRepresentativeImage,
     uploadGeneralInfoInlineImageFile,
     handleStartEditGeneralInfo,
     handleCancelEditGeneralInfo,

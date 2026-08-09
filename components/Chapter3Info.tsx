@@ -71,6 +71,7 @@ export interface Chapter3InfoProps {
   setGeneralInfoSearchTerm: (value: string) => void;
   generalInfoDetailId: number | null;
   setGeneralInfoDetailId: (id: number | null) => void;
+  handleOpenGeneralInfoDetail?: (itemId: number) => void;
   handleOpenGeneralInfoAiReport?: (itemId: number) => void;
   handleTogglePinGeneralInfo: (itemId: number) => void;
   loadGeneralInfoItemsFromSupabase: () => Promise<void>;
@@ -130,6 +131,7 @@ export function Chapter3Info({
   setGeneralInfoSearchTerm,
   generalInfoDetailId,
   setGeneralInfoDetailId,
+  handleOpenGeneralInfoDetail,
   handleOpenGeneralInfoAiReport,
   handleTogglePinGeneralInfo,
   loadGeneralInfoItemsFromSupabase,
@@ -1357,13 +1359,13 @@ export function Chapter3Info({
                   key={item.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setGeneralInfoDetailId(item.id)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setGeneralInfoDetailId(item.id); }}
+                  onClick={() => (handleOpenGeneralInfoDetail ?? setGeneralInfoDetailId)(item.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") (handleOpenGeneralInfoDetail ?? setGeneralInfoDetailId)(item.id); }}
                 >
                   {/* 이미지 — 2/5 */}
                   <div
                     className="generalInfoCardThumbnail"
-                    onClick={() => setGeneralInfoDetailId(item.id)}
+                    onClick={() => (handleOpenGeneralInfoDetail ?? setGeneralInfoDetailId)(item.id)}
                   >
                     {getGeneralInfoDisplayMediaItems(item).length > 0 ? (
                       <img
@@ -1387,7 +1389,7 @@ export function Chapter3Info({
                   {/* 제목/날짜/요약 — 2/5 */}
                   <div
                     className="generalInfoCardContent"
-                    onClick={() => setGeneralInfoDetailId(item.id)}
+                    onClick={() => (handleOpenGeneralInfoDetail ?? setGeneralInfoDetailId)(item.id)}
                   >
                     <strong>
                       {item.isPinned && <span className="generalInfoCardPinMark">📌</span>}
@@ -1400,7 +1402,7 @@ export function Chapter3Info({
                     <p className="cardSummary">{item.summary || "클립보드 이미지 자료"}</p>
                   </div>
 
-                  {/* AI 검증 보고서 / 상세보기 / 고정 */}
+                  {/* AI 검증 보고서 / Source DATA / 고정 */}
                   <div className="generalInfoCardActions">
                     {hasDisplayableAiReport(String(item.factCheckSummary || "")) && (
                       <button
@@ -1418,13 +1420,13 @@ export function Chapter3Info({
                     <button
                       className="generalInfoCardDetailButton"
                       type="button"
-                      title="상세보기"
+                      title="Source DATA"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setGeneralInfoDetailId(item.id);
+                        (handleOpenGeneralInfoDetail ?? setGeneralInfoDetailId)(item.id);
                       }}
                     >
-                      상세보기
+                      Source DATA
                     </button>
                     <button
                       className={`generalInfoCardPinButton ${item.isPinned ? "pinned" : ""}`}

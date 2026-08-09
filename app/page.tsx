@@ -7205,6 +7205,7 @@ ${photo.memoText}
               generalInfoSearchTerm={infoState.generalInfoSearchTerm}
               setGeneralInfoSearchTerm={infoState.setGeneralInfoSearchTerm}
               setGeneralInfoDetailId={infoState.setGeneralInfoDetailId}
+              handleOpenGeneralInfoDetail={infoState.handleOpenGeneralInfoDetail}
               handleOpenGeneralInfoAiReport={infoState.handleOpenGeneralInfoAiReport}
               generalInfoDetailId={infoState.generalInfoDetailId}
               generalInfoActiveTab={infoState.generalInfoActiveTab}
@@ -8728,6 +8729,14 @@ ${photo.memoText}
             );
           }}
           onUploadImage={infoState.uploadGeneralInfoInlineImageFile}
+          onDownloadPdfReport={infoState.handleDownloadGeneralInfoPdfReport}
+          isExportingPdf={infoState.isExportingGeneralInfoPdf}
+          onSetRepresentativeImage={(src) =>
+            infoState.handleSetRepresentativeImage(
+              infoState.selectedGeneralInfoAiReportItem!.id,
+              src,
+            )
+          }
         />
       )}
 
@@ -8736,20 +8745,17 @@ ${photo.memoText}
           item={infoState.selectedGeneralInfoItem}
           onClose={infoState.handleCloseGeneralInfoDetail}
           onGenerateReport={infoState.handleGenerateGeneralInfoReport}
-          onDownloadPdfReport={infoState.handleDownloadGeneralInfoPdfReport}
+          onOpenAiReport={infoState.handleOpenGeneralInfoAiReport}
           onEdit={infoState.handleStartEditGeneralInfo}
           onDelete={(item) => infoState.handleDeleteGeneralInfo(item.id)}
           onShareReport={infoState.handleShareGeneralInfoReport}
           onOpenStorageImage={openStorageImage}
           isGeneratingReport={infoState.isGeneratingGeneralInfoReport}
-          isExportingPdf={infoState.isExportingGeneralInfoPdf}
           needsManualFactCheck={
             infoState.generalInfoManualFactCheckId === infoState.selectedGeneralInfoItem.id
           }
           startInEditMode={infoState.generalInfoDetailEditMode}
           onSaveItemEdit={infoState.handleSaveGeneralInfoDetailEdit}
-          onSaveManualFactCheck={infoState.handleSaveManualFactCheck}
-          onUploadInlineImage={infoState.uploadGeneralInfoInlineImageFile}
         />
       )}
   

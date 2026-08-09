@@ -3,7 +3,7 @@ export const AI_REPORT_TEXT_COLORS = [
   { id: "white", label: "흰색", color: "#f8fafc" },
   { id: "gray", label: "회색", color: "#94a3b8" },
   { id: "cyan", label: "시안", color: "#38bdf8" },
-  { id: "amber", label: "호박", color: "#fbbf24" },
+  { id: "amber", label: "노랑", color: "#fef08a" },
   { id: "rose", label: "장미", color: "#fb7185" },
   { id: "mint", label: "민트", color: "#4ade80" },
 ] as const;
