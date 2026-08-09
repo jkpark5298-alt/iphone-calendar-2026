@@ -4,7 +4,7 @@ import React from "react";
 
 const CIRCLED_NUMBERS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"] as const;
 
-const TEXT_COLORS = [
+const DEFAULT_TEXT_COLORS = [
   { id: "default", color: "#e2e8f0", label: "기본" },
   { id: "brown", color: "#b45309", label: "갈" },
   { id: "blue", color: "#2563eb", label: "파랑" },
@@ -12,12 +12,15 @@ const TEXT_COLORS = [
   { id: "green", color: "#15803d", label: "초록" },
 ] as const;
 
-const HIGHLIGHT_COLORS = [
+const DEFAULT_HIGHLIGHT_COLORS = [
   { id: "yellow", bg: "#fef08a", label: "노랑" },
   { id: "sky", bg: "#bae6fd", label: "하늘" },
   { id: "pink", bg: "#fbcfe8", label: "분홍" },
   { id: "mint", bg: "#bbf7d0", label: "연두" },
 ] as const;
+
+export type MobileFormatSwatch = { id: string; color: string; label: string };
+export type MobileFormatHighlight = { id: string; bg: string; label: string };
 
 /**
  * 아이폰: 키보드 바로 위에 고정되는 서식 바 (본문 위를 떠다니지 않음)
@@ -27,11 +30,17 @@ export function GeneralInfoMobileFormatBubble({
   editorRef,
   onCommand,
   onInsertChar,
+  textColors = DEFAULT_TEXT_COLORS,
+  highlightColors = DEFAULT_HIGHLIGHT_COLORS,
+  onImage,
 }: {
   active: boolean;
   editorRef: React.RefObject<HTMLElement | null>;
   onCommand: (command: string, value?: string) => void;
   onInsertChar: (ch: string) => void;
+  textColors?: readonly MobileFormatSwatch[];
+  highlightColors?: readonly MobileFormatHighlight[];
+  onImage?: () => void;
 }) {
   const [visible, setVisible] = React.useState(false);
   const [isMobile, setIsMobile] = React.useState(false);
@@ -162,6 +171,7 @@ export function GeneralInfoMobileFormatBubble({
       className="generalInfoMobileFormatBubble generalInfoMobileFormatDock"
       style={{ bottom: keyboardBottom }}
       onMouseDown={keep}
+      onTouchStart={keep}
       role="toolbar"
       aria-label="AI 보고서 서식 도구"
     >
@@ -171,6 +181,7 @@ export function GeneralInfoMobileFormatBubble({
         aria-label="서식 왼쪽으로"
         disabled={!canScrollLeft}
         onMouseDown={keep}
+        onTouchStart={keep}
         onClick={() => scrollByDir(-1)}
       >
         ‹
@@ -180,8 +191,19 @@ export function GeneralInfoMobileFormatBubble({
         <button
           type="button"
           className="generalInfoMobileFormatBtn"
+          title="굵게"
+          onMouseDown={keep}
+          onTouchStart={keep}
+          onClick={() => onCommand("bold")}
+        >
+          <span className="generalInfoMobileFormatB">B</span>
+        </button>
+        <button
+          type="button"
+          className="generalInfoMobileFormatBtn"
           title="밑줄"
           onMouseDown={keep}
+          onTouchStart={keep}
           onClick={() => onCommand("underline")}
         >
           <span className="generalInfoMobileFormatU">U</span>
@@ -191,6 +213,7 @@ export function GeneralInfoMobileFormatBubble({
           className="generalInfoMobileFormatBtn"
           title="글자 작게"
           onMouseDown={keep}
+          onTouchStart={keep}
           onClick={() => onCommand("fontSizeStep", "-1")}
         >
           −
@@ -200,6 +223,7 @@ export function GeneralInfoMobileFormatBubble({
           className="generalInfoMobileFormatBtn"
           title="글자 크게"
           onMouseDown={keep}
+          onTouchStart={keep}
           onClick={() => onCommand("fontSizeStep", "1")}
         >
           +
@@ -214,6 +238,7 @@ export function GeneralInfoMobileFormatBubble({
             className="generalInfoMobileFormatNum"
             title={`${ch} 삽입`}
             onMouseDown={keep}
+            onTouchStart={keep}
             onClick={() => onInsertChar(ch)}
           >
             {ch}
@@ -222,13 +247,14 @@ export function GeneralInfoMobileFormatBubble({
 
         <span className="generalInfoMobileFormatSep" aria-hidden />
 
-        {TEXT_COLORS.map((c) => (
+        {textColors.map((c) => (
           <button
             key={c.id}
             type="button"
             className="generalInfoMobileFormatSwatch"
             title={c.label}
             onMouseDown={keep}
+            onTouchStart={keep}
             onClick={() => onCommand("foreColor", c.color)}
             style={{ background: c.color }}
           />
@@ -236,23 +262,41 @@ export function GeneralInfoMobileFormatBubble({
 
         <span className="generalInfoMobileFormatSep" aria-hidden />
 
-        {HIGHLIGHT_COLORS.map((c) => (
+        {highlightColors.map((c) => (
           <button
             key={c.id}
             type="button"
             className="generalInfoMobileFormatHighlight"
             title={`${c.label} 형광`}
             onMouseDown={keep}
+            onTouchStart={keep}
             onClick={() => onCommand("hiliteColor", c.bg)}
             style={{ background: c.bg }}
           />
         ))}
+
+        {onImage && (
+          <>
+            <span className="generalInfoMobileFormatSep" aria-hidden />
+            <button
+              type="button"
+              className="generalInfoMobileFormatBtn"
+              title="이미지 추가"
+              onMouseDown={keep}
+              onTouchStart={keep}
+              onClick={onImage}
+            >
+              이미지
+            </button>
+          </>
+        )}
 
         <button
           type="button"
           className="generalInfoMobileFormatClear"
           title="서식 지우기"
           onMouseDown={keep}
+          onTouchStart={keep}
           onClick={() => onCommand("removeFormat")}
         >
           지우기
@@ -265,6 +309,7 @@ export function GeneralInfoMobileFormatBubble({
         aria-label="서식 오른쪽으로"
         disabled={!canScrollRight}
         onMouseDown={keep}
+        onTouchStart={keep}
         onClick={() => scrollByDir(1)}
       >
         ›

@@ -10487,6 +10487,11 @@ body {
   background: rgba(251, 191, 36, 0.28) !important;
 }
 
+.generalInfoMobileFormatB {
+  font-weight: 900 !important;
+  letter-spacing: 0.02em !important;
+}
+
 .generalInfoMobileFormatU {
   text-decoration: underline !important;
   font-weight: 800 !important;
@@ -12414,7 +12419,22 @@ body {
   cursor: default;
 }
 
+.giAiReportMobileFormatHint {
+  display: none;
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
 @media (max-width: 760px) {
+  .giAiReportDesktopToolbarWrap,
+  .giAiReportDesktopHint {
+    display: none !important;
+  }
+  .giAiReportMobileFormatHint {
+    display: block;
+  }
   .giAiReportToolbar {
     gap: 4px;
     padding: 6px;
@@ -12422,8 +12442,35 @@ body {
   .giAiReportToolBtn span {
     display: none;
   }
+  .giAiReportEditorContent {
+    scroll-padding-bottom: calc(var(--gi-mobile-format-bar-h, 0px) + 16px);
+  }
   .giAiReportTipTap {
     font-size: 16px;
-    min-height: 240px;
+    min-height: 55vh;
+    padding-bottom: calc(28px + var(--gi-mobile-format-bar-h, 0px));
+    /* builder 본문 입력과 같은 밝은 지면에 키보드 위 서식 바 */
+    background: #f4f5f7;
+    color: #1e293b;
+    border-color: rgba(148, 163, 184, 0.55);
+    border-left: 3px solid #f97316;
+    box-shadow: inset 3px 0 0 #fb923c;
+  }
+  .giAiReportTipTap:focus {
+    border-color: #f97316;
+    box-shadow: inset 3px 0 0 #fb923c, 0 0 0 3px rgba(249, 115, 22, 0.18);
+  }
+  .giAiReportTipTap :where(p, div, li, strong, em, b, u) {
+    color: inherit;
+  }
+  /* 다크용으로 저장된 밝은 글자색은 밝은 지면에서 검게 */
+  .giAiReportTipTap [style*="color: #e2e8f0"],
+  .giAiReportTipTap [style*="color:#e2e8f0"],
+  .giAiReportTipTap [style*="color: #f8fafc"],
+  .giAiReportTipTap [style*="color:#f8fafc"] {
+    color: #1e293b !important;
+  }
+  .giAiReportTipTap img.gi-report-bullet-dot {
+    filter: none;
   }
 }

@@ -8,10 +8,27 @@ import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import Underline from "@tiptap/extension-underline";
 import { AiReportFormatToolbar } from "./AiReportFormatToolbar";
+import { GeneralInfoMobileFormatBubble } from "./GeneralInfoMobileFormatBubble";
 import {
   normalizeAiReportEditorHtml,
   stepAiReportFontSize,
 } from "../lib/aiReportEditor";
+
+/** builder 본문(밝은 지면)용 — 다크 팔레트 대신 가독성 있는 글자색 */
+const MOBILE_PAPER_TEXT_COLORS = [
+  { id: "default", color: "#1e293b", label: "기본" },
+  { id: "brown", color: "#b45309", label: "갈" },
+  { id: "blue", color: "#2563eb", label: "파랑" },
+  { id: "red", color: "#dc2626", label: "빨강" },
+  { id: "green", color: "#15803d", label: "초록" },
+] as const;
+
+const MOBILE_PAPER_HIGHLIGHTS = [
+  { id: "yellow", bg: "#fef08a", label: "노랑" },
+  { id: "sky", bg: "#bae6fd", label: "하늘" },
+  { id: "pink", bg: "#fbcfe8", label: "분홍" },
+  { id: "mint", bg: "#bbf7d0", label: "연두" },
+] as const;
 
 type Props = {
   html: string;
@@ -23,6 +40,7 @@ export function AiReportRichEditor({ html, onChange, onUploadImage }: Props) {
   const onChangeRef = React.useRef(onChange);
   const lastEmittedRef = React.useRef(normalizeAiReportEditorHtml(html));
   const fileRef = React.useRef<HTMLInputElement | null>(null);
+  const editorDomRef = React.useRef<HTMLElement | null>(null);
   const [, bump] = React.useState(0);
   onChangeRef.current = onChange;
 
@@ -87,6 +105,10 @@ export function AiReportRichEditor({ html, onChange, onUploadImage }: Props) {
   editorRef.current = editor;
 
   React.useEffect(() => {
+    editorDomRef.current = editor?.view?.dom ?? null;
+  }, [editor]);
+
+  React.useEffect(() => {
     if (!editor) return;
     const incoming = normalizeAiReportEditorHtml(html || "<p></p>");
     if (incoming === lastEmittedRef.current) return;
@@ -106,6 +128,46 @@ export function AiReportRichEditor({ html, onChange, onUploadImage }: Props) {
     return Number.isFinite(n) ? n : 14;
   })();
 
+  const runMobileCommand = React.useCallback((command: string, value?: string) => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    if (command === "bold") {
+      ed.chain().focus().toggleBold().run();
+      return;
+    }
+    if (command === "underline") {
+      ed.chain().focus().toggleUnderline().run();
+      return;
+    }
+    if (command === "fontSizeStep") {
+      const raw = String(ed.getAttributes("textStyle").fontSize || "14px");
+      const n = Number.parseInt(raw, 10);
+      const current = Number.isFinite(n) ? n : 14;
+      const next = stepAiReportFontSize(current, Number(value || 0));
+      ed.chain().focus().setFontSize(`${next}px`).run();
+      return;
+    }
+    if (command === "foreColor" && value) {
+      ed.chain().focus().setColor(value).run();
+      return;
+    }
+    if (command === "hiliteColor" && value) {
+      ed.chain().focus().toggleHighlight({ color: value }).run();
+      return;
+    }
+    if (command === "removeFormat") {
+      ed.chain().focus().unsetAllMarks().run();
+    }
+  }, []);
+
+  const insertChar = React.useCallback((ch: string) => {
+    editorRef.current?.chain().focus().insertContent(ch).run();
+  }, []);
+
+  const openImagePicker = React.useCallback(() => {
+    fileRef.current?.click();
+  }, []);
+
   if (!editor) {
     return <div className="giAiReportEditorLoading">편집기 준비 중…</div>;
   }
@@ -113,24 +175,38 @@ export function AiReportRichEditor({ html, onChange, onUploadImage }: Props) {
   return (
     <div className="giAiReportEditorShell">
       <div className="giAiReportBodyLabel">편집 중 · 본문</div>
-      <AiReportFormatToolbar
-        canUndo={editor.can().undo()}
-        canRedo={editor.can().redo()}
-        onUndo={() => editor.chain().focus().undo().run()}
-        onRedo={() => editor.chain().focus().redo().run()}
-        onBold={() => editor.chain().focus().toggleBold().run()}
-        onUnderline={() => editor.chain().focus().toggleUnderline().run()}
-        onFontSize={(px) => editor.chain().focus().setFontSize(`${px}px`).run()}
-        onFontSizeStep={(delta) => {
-          const next = stepAiReportFontSize(currentFontPx, delta);
-          editor.chain().focus().setFontSize(`${next}px`).run();
-        }}
-        onColor={(color) => editor.chain().focus().setColor(color).run()}
-        onHighlight={(bg) => editor.chain().focus().toggleHighlight({ color: bg }).run()}
-        onInsertChar={(ch) => editor.chain().focus().insertContent(ch).run()}
-        onImage={onUploadImage ? () => fileRef.current?.click() : undefined}
-      />
+      <p className="giAiReportMobileFormatHint">
+        본문을 탭하면 키보드 위에 서식 바(B·U·−·+·①~⑩·색·형광)가 나타납니다.
+      </p>
+      <div className="giAiReportDesktopToolbarWrap">
+        <AiReportFormatToolbar
+          canUndo={editor.can().undo()}
+          canRedo={editor.can().redo()}
+          onUndo={() => editor.chain().focus().undo().run()}
+          onRedo={() => editor.chain().focus().redo().run()}
+          onBold={() => editor.chain().focus().toggleBold().run()}
+          onUnderline={() => editor.chain().focus().toggleUnderline().run()}
+          onFontSize={(px) => editor.chain().focus().setFontSize(`${px}px`).run()}
+          onFontSizeStep={(delta) => {
+            const next = stepAiReportFontSize(currentFontPx, delta);
+            editor.chain().focus().setFontSize(`${next}px`).run();
+          }}
+          onColor={(color) => editor.chain().focus().setColor(color).run()}
+          onHighlight={(bg) => editor.chain().focus().toggleHighlight({ color: bg }).run()}
+          onInsertChar={(ch) => editor.chain().focus().insertContent(ch).run()}
+          onImage={onUploadImage ? openImagePicker : undefined}
+        />
+      </div>
       <EditorContent editor={editor} className="giAiReportEditorContent" />
+      <GeneralInfoMobileFormatBubble
+        active
+        editorRef={editorDomRef}
+        onCommand={runMobileCommand}
+        onInsertChar={insertChar}
+        textColors={MOBILE_PAPER_TEXT_COLORS}
+        highlightColors={MOBILE_PAPER_HIGHLIGHTS}
+        onImage={onUploadImage ? openImagePicker : undefined}
+      />
       {onUploadImage && (
         <input
           ref={fileRef}
@@ -157,7 +233,7 @@ export function AiReportRichEditor({ html, onChange, onUploadImage }: Props) {
           }}
         />
       )}
-      <p className="giAiReportEditorHint">
+      <p className="giAiReportEditorHint giAiReportDesktopHint">
         굵게·밑줄·•·크기·글자색·형광·①~⑩·이미지. 이미지 붙여넣기도 가능합니다.
       </p>
     </div>
