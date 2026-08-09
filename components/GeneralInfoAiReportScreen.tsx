@@ -70,6 +70,20 @@ export default function GeneralInfoAiReportScreen({
   const statusDirty = draftStatus !== (item.factCheckStatus || "확인 전");
   const dirty = htmlDirty || titleDirty || statusDirty;
 
+  const reportLooksTruncated = React.useMemo(() => {
+    const plain = htmlToPlainText(draftHtml || reportHtml).trim();
+    if (!plain) return false;
+    // 제목만 있고 본문이 거의 없으면 잘린 상태로 간주
+    return plain.length < 80 && /AI 검증 보고서/i.test(plain);
+  }, [draftHtml, reportHtml]);
+
+  const draftStatusRef = React.useRef(draftStatus);
+  const draftTitleRef = React.useRef(draftTitle);
+  const draftHtmlRef = React.useRef(draftHtml);
+  draftStatusRef.current = draftStatus;
+  draftTitleRef.current = draftTitle;
+  draftHtmlRef.current = draftHtml;
+
   const infographics = React.useMemo(
     () => extractInfographicsFromHtml(draftHtml),
     [draftHtml],
@@ -169,6 +183,34 @@ export default function GeneralInfoAiReportScreen({
       setSaving(false);
     }
   }, [draftHtml, draftStatus, draftTitle, item.title, onSaveReport]);
+
+  const handleMediaInserted = React.useCallback(
+    async (bodyHtml: string) => {
+      const infos = extractInfographicsFromHtml(draftHtmlRef.current);
+      const merged = normalizeAiReportEditorHtml(
+        upsertInfographicInHtml(bodyHtml || "<p></p>", infos),
+      );
+      setDraftHtml(merged);
+      draftHtmlRef.current = merged;
+      if (!onSaveReport) {
+        setSaveMsg("✅ 미디어 추가됨 · 저장을 눌러 반영하세요");
+        return;
+      }
+      const nextTitle = draftTitleRef.current.trim() || item.title || "제목 없음";
+      setSaving(true);
+      setSaveMsg("");
+      try {
+        await onSaveReport(merged, draftStatusRef.current, nextTitle);
+        setSaveMsg("✅ 이미지/동영상 저장됨");
+      } catch (error) {
+        console.error(error);
+        setSaveMsg("⚠️ 자동 저장 실패 · 저장 버튼을 눌러 주세요");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [item.title, onSaveReport],
+  );
 
   const handleDownloadPdf = React.useCallback(() => {
     if (!onDownloadPdfReport) return;
@@ -297,6 +339,15 @@ export default function GeneralInfoAiReportScreen({
 
         {saveMsg && <p className="giAiReportHint">{saveMsg}</p>}
 
+        {reportLooksTruncated ? (
+          <div className="giAiReportTruncatedWarn" role="status">
+            보고서 본문이 비어 있거나 이전에 잘린 상태입니다.{" "}
+            <strong>Source DATA</strong>에서 AI 보고서를 다시 생성하거나, 아래{" "}
+            <strong>보고서 편집</strong>에서 본문을 보충하세요. 이미지는 본문 중간 S 또는
+            [이미지]로 넣을 수 있습니다.
+          </div>
+        ) : null}
+
         <section className="giAiReportMeta">
           <div>
             <span>제목</span>
@@ -343,12 +394,15 @@ export default function GeneralInfoAiReportScreen({
               onChange={(html) => {
                 setDraftHtml((prev) => {
                   const infos = extractInfographicsFromHtml(prev);
-                  return normalizeAiReportEditorHtml(
+                  const next = normalizeAiReportEditorHtml(
                     upsertInfographicInHtml(html || "<p></p>", infos),
                   );
+                  draftHtmlRef.current = next;
+                  return next;
                 });
               }}
               onUploadImage={onUploadImage}
+              onMediaInserted={handleMediaInserted}
             />
           )}
 

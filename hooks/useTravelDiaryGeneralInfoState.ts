@@ -6,7 +6,7 @@ import { persistGeneralInfoItemsToLocalStorage, readGeneralInfoItemsFromLocalSto
 import { supabase } from "../lib/supabaseClient";
 
 
-import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, extractTitleFromPlainText, formatReportHtmlForPdf, isFullAiVerificationReport, buildAiReportFromBodyContent, hasDisplayableAiReport, salvageFactCheckHtml, pickPreferredFactCheckSummary, applyInfographicAsRepresentative, extractFirstInfographicSrc } from "../lib/generalInfoHelpers";
+import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, replaceHtmlMediaSources, buildFactCheckReportHtml, extractMediaSrcFromHtml, htmlToPlainText, dataUrlToFile, extractTitleFromPlainText, formatReportHtmlForPdf, isFullAiVerificationReport, buildAiReportFromBodyContent, hasDisplayableAiReport, salvageFactCheckHtml, pickPreferredFactCheckSummary, applyInfographicAsRepresentative, extractFirstInfographicSrc, cleanFactCheckSummaryText } from "../lib/generalInfoHelpers";
 
 
 const TRAVEL_DIARY_BUCKET = "info-photos";
@@ -1215,7 +1215,7 @@ export function useTravelDiaryGeneralInfoState({
           : Date.now();
 
     const factCheckSummary = isFullAiVerificationReport(draftWithLatestText.factCheckSummary)
-      ? draftWithLatestText.factCheckSummary
+      ? salvageFactCheckHtml(draftWithLatestText.factCheckSummary)
       : buildAiReportFromBodyContent({
           title: finalTitle,
           text: draftWithLatestText.text,
@@ -1365,12 +1365,12 @@ export function useTravelDiaryGeneralInfoState({
     }
 
     const resolveFactCheckSummaryForSave = (existingItem?: GeneralInfoItem | null) => {
-      // 1) 이미 AI Fact Check / AI 검증 보고서가 있으면 유지
+      // 1) 이미 AI Fact Check / AI 검증 보고서가 있으면 유지 (평문이면 HTML로 복원)
       if (isFullAiVerificationReport(analyzed.factCheckSummary)) {
-        return analyzed.factCheckSummary;
+        return salvageFactCheckHtml(analyzed.factCheckSummary);
       }
       if (existingItem && isFullAiVerificationReport(existingItem.factCheckSummary || "")) {
-        return String(existingItem.factCheckSummary || "");
+        return salvageFactCheckHtml(String(existingItem.factCheckSummary || ""));
       }
       // 2) Fact Check 없이 Confirm → Text 입력/편집 내용을 그대로 AI 보고서로
       return buildAiReportFromBodyContent({
@@ -1941,11 +1941,13 @@ export function useTravelDiaryGeneralInfoState({
         .find((value) => value && value !== String(data.summary || "").trim()) || "";
 
       // summary만 온 경우는 AI 검증 보고서로 쓰지 않음
+      // Fact Check「확인 내용」칸에는 HTML 태그 없이 정리된 텍스트만 넣음
+      // (Confirm/보고서 저장 시 salvageFactCheckHtml 이 HTML로 복원)
       const reportToStore =
         candidateReport && isFullAiVerificationReport(candidateReport)
-          ? buildFactCheckReportHtml(candidateReport)
+          ? cleanFactCheckSummaryText(buildFactCheckReportHtml(candidateReport))
           : candidateReport
-            ? buildFactCheckReportHtml(candidateReport)
+            ? cleanFactCheckSummaryText(buildFactCheckReportHtml(candidateReport))
             : "";
 
       setGeneralInfoDraft((prev) => ({

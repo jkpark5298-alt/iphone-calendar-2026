@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, MouseEvent } from "react";
 import {
   Bold,
+  Eraser,
   ImagePlus,
   Minus,
   Plus,
@@ -29,6 +30,7 @@ export function AiReportFormatToolbar({
   onColor,
   onHighlight,
   onInsertChar,
+  onRemoveFormat,
   onImage,
 }: {
   canUndo: boolean;
@@ -42,9 +44,10 @@ export function AiReportFormatToolbar({
   onColor: (c: string) => void;
   onHighlight: (c: string) => void;
   onInsertChar: (ch: string) => void;
+  onRemoveFormat?: () => void;
   onImage?: () => void;
 }) {
-  const keep = (e: React.MouseEvent) => e.preventDefault();
+  const keep = (e: MouseEvent) => e.preventDefault();
 
   return (
     <div className="giAiReportToolbar" aria-label="보고서 서식 도구">
@@ -68,6 +71,12 @@ export function AiReportFormatToolbar({
           •
         </span>
       </ToolBtn>
+      {onRemoveFormat && (
+        <ToolBtn onClick={onRemoveFormat} title="서식 지우기" onMouseDown={keep}>
+          <Eraser className="giAiReportToolbarIcon" />
+          <span>지우기</span>
+        </ToolBtn>
+      )}
       <ToolBtn onClick={() => onFontSizeStep(-1)} title="글자 작게" onMouseDown={keep}>
         <Minus className="giAiReportToolbarIcon" />
       </ToolBtn>
@@ -142,7 +151,7 @@ function ToolBtn({
   onClick: () => void;
   title: string;
   disabled?: boolean;
-  onMouseDown?: (e: React.MouseEvent) => void;
+  onMouseDown?: (e: MouseEvent) => void;
 }) {
   return (
     <button

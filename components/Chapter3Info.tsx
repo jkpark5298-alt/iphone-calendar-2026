@@ -8,7 +8,7 @@
 
 import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
-import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, extractGeneralInfoReportImageSrcs, makeGeneralInfoMediaItem, hasDisplayableAiReport } from "../lib/generalInfoHelpers";
+import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, extractGeneralInfoReportImageSrcs, makeGeneralInfoMediaItem, hasDisplayableAiReport, cleanFactCheckSummaryText } from "../lib/generalInfoHelpers";
 import { Card, EmptyState } from "./SharedComponents";
 
 export interface Chapter3InfoProps {
@@ -485,10 +485,24 @@ export function Chapter3Info({
 
   const handleCopyFactCheckResult = React.useCallback(() => {
     const status = String(generalInfoDraft.factCheckStatus || "확인 전").trim();
-    const summary = String(generalInfoDraft.factCheckSummary || "").trim();
+    const summary = cleanFactCheckSummaryText(generalInfoDraft.factCheckSummary);
     const combined = [`[Fact Check 상태] ${status}`, summary].filter(Boolean).join("\n\n");
     void copyPlainTextToClipboard(combined, "fact");
   }, [copyPlainTextToClipboard, generalInfoDraft.factCheckStatus, generalInfoDraft.factCheckSummary]);
+
+  const [factCleanFeedback, setFactCleanFeedback] = React.useState(false);
+
+  const handleCleanFactCheckSummary = React.useCallback(() => {
+    const raw = String(generalInfoDraft.factCheckSummary || "");
+    if (!raw.trim()) {
+      alert("정리할 확인 내용이 없습니다.");
+      return;
+    }
+    const cleaned = cleanFactCheckSummaryText(raw);
+    setGeneralInfoDraft((prev) => ({ ...prev, factCheckSummary: cleaned }));
+    setFactCleanFeedback(true);
+    window.setTimeout(() => setFactCleanFeedback(false), 1800);
+  }, [generalInfoDraft.factCheckSummary, setGeneralInfoDraft]);
 
   return (
     <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" }}>
@@ -1244,10 +1258,19 @@ export function Chapter3Info({
                 >
                   {copyFeedback === "fact" ? "✅ 복사됨" : "📋 전체 복사"}
                 </button>
+                <button
+                  type="button"
+                  className="secondaryButton smallActionButton"
+                  onClick={handleCleanFactCheckSummary}
+                  title="HTML·스타일 태그를 제거하고 본문만 정리합니다"
+                  style={{ borderColor: "rgba(125, 211, 252, 0.45)", color: "#bae6fd" }}
+                >
+                  {factCleanFeedback ? "✅ 정리됨" : "✨ 정리"}
+                </button>
               </div>
             </div>
             <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
-              Text 입력 후 <strong>AI Fact Check</strong>를 누르면 저장 전에도 바로 결과가 채워집니다.
+              Text 입력 후 <strong>AI Fact Check</strong>를 누르면 저장 전에도 바로 결과가 채워집니다. HTML이 보이면 <strong>정리</strong>를 눌러 깔끔한 텍스트로 바꾸세요.
             </p>
             <div className="generalInfoFactEditGrid">
               <label>
@@ -1267,14 +1290,36 @@ export function Chapter3Info({
                   <option value="오류 가능성">오류 가능성</option>
                 </select>
               </label>
-              <label>
-                확인 내용
+              <label className="generalInfoFactSummaryLabel">
+                <span className="generalInfoFactSummaryLabelRow">
+                  확인 내용
+                  <button
+                    type="button"
+                    className="secondaryButton smallActionButton"
+                    onClick={handleCleanFactCheckSummary}
+                    title="HTML·스타일 태그를 제거하고 본문만 정리합니다"
+                    style={{
+                      minHeight: 28,
+                      padding: "4px 10px",
+                      fontSize: 12,
+                      borderColor: "rgba(125, 211, 252, 0.45)",
+                      color: "#bae6fd",
+                    }}
+                  >
+                    {factCleanFeedback ? "✅ 정리됨" : "✨ 정리"}
+                  </button>
+                </span>
                 <textarea
                   className="generalInfoEditableTextarea"
                   value={generalInfoDraft.factCheckSummary}
-                  onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, factCheckSummary: e.target.value }))}
+                  onChange={(e) =>
+                    setGeneralInfoDraft((prev) => ({
+                      ...prev,
+                      factCheckSummary: e.target.value,
+                    }))
+                  }
                   placeholder="Fact Check 결과나 확인 필요 내용을 직접 수정하세요."
-                  rows={4}
+                  rows={10}
                 />
               </label>
             </div>

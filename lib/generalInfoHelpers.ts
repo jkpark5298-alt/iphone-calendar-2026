@@ -668,15 +668,26 @@ export const looksLikeHtmlContent = (value: string) =>
 
 export const htmlToPlainText = (html: string) =>
   String(html || "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
     .replace(/<\/div>/gi, "\n")
-    .replace(/<\/h[1-6]>/gi, "\n")
+    .replace(/<\/h[1-6]>/gi, "\n\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
     .replace(/<[^>]+>/g, "")
+    // 깨진 태그 잔여: `10px,padding-top:4px;border-top:...;color:#f8fafc;`
+    .replace(
+      /(?:^|[\n\s])(?:\d+px\s*,\s*)?(?:margin|padding(?:-[a-z]+)?|font-size|font-weight|line-height|border(?:-[a-z]+)?|color|background(?:-[a-z]+)?|letter-spacing|text-align|display|height|width)\s*:[^;\n<>]{0,80};?/gi,
+      "\n",
+    )
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
@@ -714,6 +725,17 @@ export const normalizeReportPlainText = (text: string) => {
   t = t.replace(/(\(출처:[^)]+\))\s+(?=[가-힣A-Za-z0-9「『])/g, "$1\n");
 
   return t.replace(/\n{3,}/g, "\n\n").trim();
+};
+
+/** Fact Check「확인 내용」표시/편집용 — HTML·인라인 스타일 제거 후 문단 정리 */
+export const cleanFactCheckSummaryText = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const hasHtmlOrStyleDebris =
+    looksLikeHtmlContent(raw) ||
+    /(?:margin|padding|font-size|font-weight|line-height|border-top)\s*:\s*[^;]+;/i.test(raw);
+  const plain = hasHtmlOrStyleDebris ? htmlToPlainText(raw) : raw;
+  return normalizeReportPlainText(plain);
 };
 
 const isAiVerificationReportPlain = (plain: string) =>
