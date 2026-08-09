@@ -17,6 +17,7 @@ import { AiReportImage, AiReportVideo } from "../lib/aiReportTipTapMedia";
 import {
   collectClipboardImageFiles,
   dedupeImageFiles,
+  editorHasInlineImageTrigger,
   readFilesAsDataUrls,
 } from "../lib/generalInfoHelpers";
 
@@ -45,14 +46,26 @@ type Props = {
 };
 
 const textEndsWithImageTrigger = (raw: string) => {
-  const text = String(raw || "").replace(/\u00a0/g, " ").replace(/\r/g, "");
+  const text = String(raw || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\r/g, "");
   const trimmedEnd = text.replace(/[ \t\n]+$/g, "");
   return /[Ss]$/.test(trimmedEnd);
 };
 
+/** 문서 끝 또는 커서 직전 S/s 감지 */
 const tipTapHasImageTrigger = (ed: Editor | null) => {
   if (!ed) return false;
-  return textEndsWithImageTrigger(ed.getText());
+  try {
+    if (editorHasInlineImageTrigger(ed.view.dom as HTMLElement)) return true;
+  } catch {
+    // view 미준비
+  }
+  if (textEndsWithImageTrigger(ed.getText({ blockSeparator: "\n" }))) return true;
+  const { from } = ed.state.selection;
+  const before = ed.state.doc.textBetween(Math.max(0, from - 8), from, "\n", "\n");
+  return /[ \t]*[Ss]$/.test(before.replace(/[\u200B-\u200D\uFEFF]/g, ""));
 };
 
 const isVideoFile = (file: File) =>
@@ -117,11 +130,19 @@ export function AiReportRichEditor({
   const triggerFileRef = React.useRef<HTMLInputElement | null>(null);
   const editorDomRef = React.useRef<HTMLElement | null>(null);
   const editorRef = React.useRef<Editor | null>(null);
+  const imageInsertPanelRef = React.useRef<HTMLDivElement | null>(null);
   const [showImageInsert, setShowImageInsert] = React.useState(false);
+  const [keyboardInset, setKeyboardInset] = React.useState(0);
   const [, bump] = React.useState(0);
   onChangeRef.current = onChange;
   onUploadImageRef.current = onUploadImage;
   onMediaInsertedRef.current = onMediaInserted;
+
+  const syncImageTrigger = React.useCallback((ed: Editor | null) => {
+    const next = tipTapHasImageTrigger(ed);
+    setShowImageInsert(next);
+    return next;
+  }, []);
 
   const emitHtml = React.useCallback((ed: Editor) => {
     const next = normalizeAiReportEditorHtml(ed.getHTML());
@@ -225,11 +246,11 @@ export function AiReportRichEditor({
     },
     onUpdate: ({ editor: ed }) => {
       emitHtml(ed);
-      setShowImageInsert(tipTapHasImageTrigger(ed));
+      syncImageTrigger(ed);
     },
     onSelectionUpdate: ({ editor: ed }) => {
       bump((n) => n + 1);
-      setShowImageInsert(tipTapHasImageTrigger(ed));
+      syncImageTrigger(ed);
     },
   });
 
@@ -238,6 +259,55 @@ export function AiReportRichEditor({
   React.useEffect(() => {
     editorDomRef.current = editor?.view?.dom ?? null;
   }, [editor]);
+
+  // 아이폰 키보드 높이 — 패널을 키보드·서식바 위에 고정
+  React.useEffect(() => {
+    if (!showImageInsert) {
+      setKeyboardInset(0);
+      return;
+    }
+    const update = () => {
+      const vv = window.visualViewport;
+      if (!vv) {
+        setKeyboardInset(0);
+        return;
+      }
+      setKeyboardInset(Math.max(0, window.innerHeight - (vv.height + vv.offsetTop)));
+    };
+    update();
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [showImageInsert]);
+
+  React.useEffect(() => {
+    if (!showImageInsert) return;
+    const el = imageInsertPanelRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }, [showImageInsert]);
+
+  // iOS: keyup/compositionend에서도 S 재검사
+  React.useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    const recheck = () => syncImageTrigger(editor);
+    dom.addEventListener("keyup", recheck);
+    dom.addEventListener("compositionend", recheck);
+    dom.addEventListener("input", recheck);
+    return () => {
+      dom.removeEventListener("keyup", recheck);
+      dom.removeEventListener("compositionend", recheck);
+      dom.removeEventListener("input", recheck);
+    };
+  }, [editor, syncImageTrigger]);
 
   React.useEffect(() => {
     if (!editor) return;
@@ -248,10 +318,12 @@ export function AiReportRichEditor({
       lastEmittedRef.current = incoming;
       return;
     }
+    // 외부에서 온 내용만 반영 (타이핑 중 setContent로 패널이 꺼지지 않게)
+    const edFocused = editor.isFocused;
     editor.commands.setContent(incoming, { emitUpdate: false });
     lastEmittedRef.current = incoming;
-    setShowImageInsert(tipTapHasImageTrigger(editor));
-  }, [editor, html]);
+    if (!edFocused) syncImageTrigger(editor);
+  }, [editor, html, syncImageTrigger]);
 
   const currentFontPx = (() => {
     if (!editor) return 14;
@@ -343,13 +415,18 @@ export function AiReportRichEditor({
           onImage={openImagePicker}
         />
       </div>
-      <EditorContent editor={editor} className="giAiReportEditorContent" />
 
       {showImageInsert && (
-        <div className="generalInfoTextImageInsertPanel giAiReportImageInsertPanel">
+        <div
+          ref={imageInsertPanelRef}
+          className="generalInfoTextImageInsertPanel giAiReportImageInsertPanel giAiReportImageInsertDock"
+          style={{
+            bottom: `calc(${keyboardInset}px + var(--gi-mobile-format-bar-h, 0px) + 8px)`,
+          }}
+        >
           <div className="generalInfoTextImageInsertHead">
             <strong>이미지·동영상 붙여넣기</strong>
-            <span>문자 끝 S 감지 · 보고서 본문에 들어갑니다</span>
+            <span>S 감지 · 사진첩 또는 붙여넣기</span>
             <button
               type="button"
               className="secondaryButton smallActionButton"
@@ -383,11 +460,13 @@ export function AiReportRichEditor({
               tabIndex={0}
               onPaste={handleTriggerPaste}
             >
-              📋 아이폰·PC 이미지/동영상 여기 붙여넣기 (Ctrl+V / ⌘V)
+              📋 여기 붙여넣기 (Ctrl+V / ⌘V)
             </div>
           </div>
         </div>
       )}
+
+      <EditorContent editor={editor} className="giAiReportEditorContent" />
 
       <GeneralInfoMobileFormatBubble
         active

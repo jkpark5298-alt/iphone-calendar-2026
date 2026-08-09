@@ -12407,6 +12407,31 @@ body {
   flex-shrink: 0;
 }
 
+/* S 감지 시: 키보드·서식바 바로 위에 고정 (안 보이던 문제 수정) */
+.giAiReportImageInsertPanel.giAiReportImageInsertDock {
+  position: fixed !important;
+  left: 8px !important;
+  right: 8px !important;
+  z-index: 130 !important;
+  margin: 0 !important;
+  box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.45) !important;
+  max-height: min(42vh, 280px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 761px) {
+  .giAiReportImageInsertPanel.giAiReportImageInsertDock {
+    position: sticky !important;
+    top: 0 !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    z-index: 5 !important;
+    max-height: none;
+  }
+}
+
 .giAiReportTruncatedWarn {
   margin: 0 16px 10px;
   padding: 12px 14px;
