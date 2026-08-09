@@ -11887,9 +11887,12 @@ body {
   line-height: 1.75;
   font-size: 15px;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   -webkit-user-select: text;
   user-select: text;
   cursor: text;
+  touch-action: pan-y;
 }
 
 .giAiReportBody :where(p, div, li, strong, em, b, u, h1, h2, h3, h4, h5, h6, a, td, th) {
@@ -12158,16 +12161,58 @@ body {
 @media (max-width: 760px) {
   .giAiReportScreen {
     padding: 0;
+    height: 100dvh;
+    max-height: 100dvh;
   }
   .giAiReportScreenPanel {
     border-radius: 0;
+    height: 100%;
     max-height: 100%;
+    /* iOS: 100% + safe area */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   .giAiReportMeta {
     grid-template-columns: 1fr;
+    flex-shrink: 0;
   }
   .giAiReportScreenHeader {
     flex-direction: column;
+  }
+  /* 아이폰: 중첩 overflow 대신 본문 래퍼 하나만 스크롤 */
+  .giAiReportBodyWrap {
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+  .giAiReportBody {
+    overflow: visible;
+    flex: none;
+    min-height: auto;
+  }
+  .giAiReportEditorShell {
+    overflow: visible;
+    flex: none;
+    min-height: auto;
+  }
+  .giAiReportEditorContent {
+    overflow: visible;
+    flex: none;
+    min-height: auto;
+  }
+  .giAiReportTipTap {
+    min-height: 55vh;
+  }
+  .giAiReportInfographicPanel,
+  .giAiReportFactCheckPanel {
+    overflow: visible;
+    flex: none;
+    min-height: auto;
+  }
+  .giAiReportFooter {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -12301,6 +12346,8 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   border-radius: 14px;
 }
 
@@ -12317,6 +12364,8 @@ body {
   -webkit-user-select: text;
   user-select: text;
   cursor: text;
+  /* iOS contenteditable 스크롤 보조 */
+  touch-action: pan-y;
 }
 
 .giAiReportTipTap :where(p, div, li, strong, em, b, u, h1, h2, h3, h4, h5, h6) {
