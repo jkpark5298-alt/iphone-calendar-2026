@@ -389,33 +389,48 @@ export function useTravelDiaryGeneralInfoState({
     fallbackUrl: string,
   ) => {
     const title = String(result.title || "").trim();
-    const text = String(result.text || result.description || "").trim();
-    const image = String(result.image || "").trim();
+    const description = String(result.description || "").trim();
+    const text = String(result.text || description || "").trim();
+    const image = String(result.image || "")
+      .replace(/&#x3d;/gi, "=")
+      .replace(/&amp;/g, "&")
+      .trim();
     const siteName = String(result.siteName || "").trim();
+    const metaTitle = title || siteName;
 
     if (image) {
       setGeneralInfoImageLoadFailed(false);
     }
 
-    const nextText = [generalInfoDraft.text, text].filter(Boolean).join(generalInfoDraft.text && text ? "\n\n" : "");
+    // Text 첫 줄 = 제목 규칙에 맞게, URL 메타 제목을 본문 첫 줄로 넣음
+    let bodyBlock = text;
+    if (metaTitle) {
+      const firstLine = extractTitleFromPlainText(bodyBlock);
+      if (!firstLine || firstLine !== metaTitle) {
+        bodyBlock = bodyBlock ? `${metaTitle}\n\n${bodyBlock}` : metaTitle;
+      }
+    }
+
+    const nextText = [generalInfoDraft.text, bodyBlock]
+      .filter(Boolean)
+      .join(generalInfoDraft.text && bodyBlock ? "\n\n" : "");
     const titleFromText = extractTitleFromPlainText(nextText);
 
     setGeneralInfoDraft((prev) => ({
       ...prev,
-      // Text 첫 줄이 있으면 제목으로 사용, 없으면 URL 메타 제목
-      title: titleFromText || title || siteName || prev.title || fallbackUrl,
+      title: titleFromText || metaTitle || prev.title || fallbackUrl,
       text: nextText,
       sourceUrl: String(result.url || fallbackUrl),
-      fileName: image ? title || siteName || "URL 대표 이미지" : prev.fileName,
+      fileName: image ? metaTitle || "URL 대표 이미지" : prev.fileName,
       filePreview: image || prev.filePreview,
       fileType: image ? "image" : prev.fileType,
       mediaItems: image
         ? [
             ...normalizeGeneralInfoMediaItems(prev),
-            makeGeneralInfoMediaItem(title || siteName || "URL 대표 이미지", "image", image),
+            makeGeneralInfoMediaItem(metaTitle || "URL 대표 이미지", "image", image),
           ]
         : normalizeGeneralInfoMediaItems(prev),
-      summary: text ? text.slice(0, 160) : prev.summary,
+      // 요약은 자동 생성하지 않음 — 사용자가 직접 입력
     }));
 
     resetGeneralInfoRichTextEditor(nextText, "");
@@ -757,7 +772,6 @@ export function useTravelDiaryGeneralInfoState({
       ...prev,
       title: extractTitleFromPlainText(nextText) || firstLine || prev.title || "붙여넣은 Text 자료",
       text: nextText,
-      summary: prev.summary || text.slice(0, 160),
     }));
 
     resetGeneralInfoRichTextEditor(nextText, "");
@@ -879,7 +893,6 @@ export function useTravelDiaryGeneralInfoState({
             ...prev,
             title: extractTitleFromPlainText(nextText) || extractTitleFromPlainText(text) || prev.title || "클립보드 Text 자료",
             text: nextText,
-            summary: prev.summary || text.slice(0, 160),
           }));
 
           resetGeneralInfoRichTextEditor(nextText, "");
@@ -1238,7 +1251,7 @@ export function useTravelDiaryGeneralInfoState({
       keywords: draftWithLatestText.keywords || [],
       factCheckStatus: draftWithLatestText.factCheckStatus || "확인 전",
       factCheckSummary,
-      summary: draftWithLatestText.summary || draftWithLatestText.text.slice(0, 160),
+      summary: draftWithLatestText.summary || "",
       extraNote: existingEditing?.extraNote || "",
       confirmed: false,
       createdAt: existingEditing?.confirmed === false ? existingEditing.createdAt : nowText(),

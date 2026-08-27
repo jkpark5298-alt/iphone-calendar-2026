@@ -26,21 +26,75 @@ const transformNaverBlogUrl = (url: string): string => {
   return url;
 };
 
+const decodeHtmlEntities = (value: string) =>
+  String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+      const code = Number.parseInt(hex, 16);
+      return Number.isFinite(code) ? String.fromCharCode(code) : "";
+    })
+    .replace(/&#(\d+);/g, (_, dec) => {
+      const code = Number.parseInt(dec, 10);
+      return Number.isFinite(code) ? String.fromCharCode(code) : "";
+    })
+    .trim();
+
 const getMetaContent = (html: string, patterns: RegExp[]) => {
   for (const pattern of patterns) {
     const match = html.match(pattern);
     if (match?.[1]) {
-      return match[1]
-        .replace(/&amp;/g, "&")
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .trim();
+      return decodeHtmlEntities(match[1]);
     }
   }
 
   return "";
+};
+
+/** 네이버 뉴스 등 주요 본문 영역만 추출 */
+const extractMainArticleHtml = (html: string, pageUrl: string) => {
+  const ids = /news\.naver\.com|n\.news\.naver\.com/i.test(pageUrl)
+    ? ["dic_area", "articeBody", "newsEndContents", "articleBodyContents"]
+    : ["article", "content", "main-content", "article-body"];
+
+  for (const id of ids) {
+    const open = html.match(
+      new RegExp(`<([a-z0-9]+)([^>]*\\sid=["']${id}["'][^>]*)>`, "i"),
+    );
+    if (!open || open.index == null) continue;
+    const tag = open[1].toLowerCase();
+    const start = open.index + open[0].length;
+    const slice = html.slice(start, start + 180_000);
+    const closeIdx = slice.search(new RegExp(`</${tag}\\s*>`, "i"));
+    const chunk = closeIdx !== -1 ? slice.slice(0, closeIdx) : slice.slice(0, 80_000);
+    if (chunk.replace(/<[^>]+>/g, "").trim().length > 40) {
+      return chunk;
+    }
+  }
+
+  return "";
+};
+
+const NOISE_LINE_RE =
+  /^(입력|수정|기사\s*원문|추천|반응|댓글|닫기|본문듣기(?:\s*시작)?|글자\s*크기(?:\s*변경하기)?|글자크기|가\s*\d단계|작게|보통|크게|아주크게|최대크게|성별|남성|여성|말하기\s*속도|느림|빠름|쏠쏠정보|흥미진진|공감백배|분석탁월|후속강추|텍스트\s*음성\s*변환.*|이동\s*통신망을\s*이용하여.*|Jump to content|Main menu|Navigation|Search|Donate|Create account|Log in|Personal tools|Contents|Appearance)$/i;
+
+const cleanExtractedPlainText = (raw: string) => {
+  const lines = String(raw || "")
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => {
+      if (!line) return false;
+      if (NOISE_LINE_RE.test(line)) return false;
+      if (/^<a\s/i.test(line)) return false;
+      if (/^https?:\/\//i.test(line) && line.length < 12) return false;
+      if (/^\d+$/.test(line)) return false;
+      return true;
+    });
+
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 };
 
 const stripHtmlToText = (html: string, title?: string) => {
@@ -368,19 +422,39 @@ async function buildExtractResponse(response: Response, url: string) {
       }
     }
   }
-  const image = toAbsoluteUrl(url, imageUrl);
+  const image = toAbsoluteUrl(url, decodeHtmlEntities(imageUrl));
 
-  const plainText = stripHtmlToText(clippedHtml, title).slice(0, 1200);
+  const articleHtml = extractMainArticleHtml(clippedHtml, url);
+  const articlePlain = articleHtml
+    ? cleanExtractedPlainText(stripHtmlToText(articleHtml, title).slice(0, 2500))
+    : "";
+  const fallbackPlain = cleanExtractedPlainText(
+    stripHtmlToText(clippedHtml, title).slice(0, 1200),
+  );
+
+  // 본문: 기사 영역 우선. description과 앞부분이 겹치면 중복하지 않음
+  const bodyPlain = articlePlain || fallbackPlain || description;
+  const descNorm = description.replace(/\s+/g, " ").trim();
+  const bodyNorm = bodyPlain.replace(/\s+/g, " ").trim();
+  const bodyAlreadyHasDesc =
+    !!descNorm &&
+    !!bodyNorm &&
+    bodyNorm.includes(descNorm.slice(0, Math.min(36, descNorm.length)));
+  const text = cleanExtractedPlainText(
+    bodyAlreadyHasDesc || !description
+      ? bodyPlain
+      : `${description}\n\n${bodyPlain}`,
+  ).slice(0, 2200);
 
   return NextResponse.json({
     ok: true,
     result: {
       url,
-      title,
+      title: decodeHtmlEntities(title),
       description,
       image,
       siteName,
-      text: [description, plainText].filter(Boolean).join("\n\n").slice(0, 1600),
+      text,
     },
   });
 }

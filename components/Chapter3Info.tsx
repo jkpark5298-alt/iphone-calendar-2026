@@ -219,6 +219,28 @@ export function Chapter3Info({
   const [isKeywordInputFocused, setIsKeywordInputFocused] = React.useState(false);
   const textImageFileRef = React.useRef<HTMLInputElement | null>(null);
 
+  // remount(key) 후 InitialHtml을 contentEditable에 반영 (미적용 시 URL 가져오기 본문이 비는 버그)
+  React.useEffect(() => {
+    const editor = generalInfoRichTextRef.current;
+    if (!editor) return;
+    const html = String(generalInfoRichTextInitialHtml || "");
+    if (editor.innerHTML !== html) {
+      editor.innerHTML = html;
+    }
+    const plain = String(editor.innerText || "");
+    const titleFromText = extractTitleFromPlainText(plain);
+    if (titleFromText) {
+      setGeneralInfoDraft((prev) =>
+        prev.title === titleFromText ? prev : { ...prev, title: titleFromText },
+      );
+    }
+  }, [
+    generalInfoRichTextEditorKey,
+    generalInfoRichTextInitialHtml,
+    generalInfoRichTextRef,
+    setGeneralInfoDraft,
+  ]);
+
   const collectBodyImageSrcs = React.useMemo(() => {
     const liveHtml = String(generalInfoRichTextRef.current?.innerHTML || "");
     return extractGeneralInfoBodyImageSrcs(
@@ -1013,7 +1035,7 @@ export function Chapter3Info({
         <Card
           number="2"
           title="분류 / 키워드 / 요약"
-          subtitle="분류·키워드·요약을 직접 입력한 뒤 Confirm 저장합니다."
+          subtitle="분류·키워드를 입력하고, 요약은 필요할 때만 직접 입력한 뒤 Confirm 저장합니다."
         >
           <div className="generalInfoGrid">
             <label>
