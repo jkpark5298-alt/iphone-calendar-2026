@@ -416,6 +416,15 @@ export const insertInlineMediaIntoEditor = (
   if (!uniqueItems.length) return;
 
   let insertAfter: Node | null = options?.afterNode || null;
+  if (insertAfter && insertAfter !== editor) {
+    // contentEditable 안 span/font 등 인라인 태그 안에는 block 이미지를 넣지 않고
+    // 편집기 직계 자식 기준으로 삽입해 HierarchyRequest / 본문 밖 이탈을 막는다.
+    let node: Node | null = insertAfter;
+    while (node && node.parentNode && node.parentNode !== editor) {
+      node = node.parentNode;
+    }
+    insertAfter = node && node.parentNode === editor ? node : null;
+  }
   let pendingRange = !insertAfter && options?.range ? options.range : null;
 
   uniqueItems.forEach((item) => {
@@ -458,8 +467,8 @@ export const insertInlineMediaIntoEditor = (
       editor.appendChild(block);
       insertAfter = block;
       pendingRange = null;
-    } else if (insertAfter && insertAfter.parentNode && editor.contains(insertAfter)) {
-      insertAfter.parentNode.insertBefore(block, insertAfter.nextSibling);
+    } else if (insertAfter && insertAfter.parentNode === editor) {
+      editor.insertBefore(block, insertAfter.nextSibling);
       insertAfter = block;
       pendingRange = null;
     } else if (pendingRange) {
@@ -481,8 +490,8 @@ export const insertInlineMediaIntoEditor = (
 
   const spacer = document.createElement("div");
   spacer.innerHTML = "<br>";
-  if (insertAfter && insertAfter.parentNode && editor.contains(insertAfter)) {
-    insertAfter.parentNode.insertBefore(spacer, insertAfter.nextSibling);
+  if (insertAfter && insertAfter.parentNode === editor) {
+    editor.insertBefore(spacer, insertAfter.nextSibling);
   } else {
     editor.appendChild(spacer);
   }

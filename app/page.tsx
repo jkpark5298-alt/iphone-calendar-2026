@@ -703,10 +703,21 @@ export default function HomePage() {
     return afterNode;
   }
 
+  function resolveDiaryInlineInsertAnchor(editor: HTMLElement, afterNode: Node | null) {
+    if (!afterNode || !editor.contains(afterNode)) return null;
+    let node: Node | null = afterNode;
+    while (node && node.parentNode && node.parentNode !== editor) {
+      node = node.parentNode;
+    }
+    if (!node || node === editor || node.parentNode !== editor) return null;
+    return node;
+  }
+
   function insertDiaryImageFilesFromTextTrigger(files: FileList | File[] | null) {
     if (!files || files.length === 0) return;
     const snapshot = files instanceof FileList ? Array.from(files) : [...files];
     const afterNode = removeDiaryTrailingImageTrigger();
+    commitDiaryEditorHtml();
     const list = dedupeImageFiles(snapshot);
     const imageFiles = list.filter(
       (file) =>
@@ -721,28 +732,57 @@ export default function HomePage() {
 
     void (async () => {
       try {
-        const loaded = await readFilesAsDataUrls(imageFiles);
+        const uploaded: Array<{ src: string; name: string; type: "image" | "video" }> = [];
+        for (const file of imageFiles) {
+          const isVideo =
+            file.type.startsWith("video/") || /\.(mp4|mov|webm)$/i.test(file.name || "");
+          let src = "";
+          if (isVideo) {
+            const loaded = await readFilesAsDataUrls([file]);
+            src = String(loaded[0]?.dataUrl || "").trim();
+          } else {
+            // 아이폰 원본(HEIC/고해상도)은 data URL이 커서 저장/삽입이 실패하기 쉬움 → 본문용으로 축소
+            try {
+              src = String(await makeOptimizedImageDataUrl(file) || "").trim();
+            } catch (readError) {
+              console.warn("diary inline image optimize failed, fallback read", readError);
+              const loaded = await readFilesAsDataUrls([file]);
+              src = String(loaded[0]?.dataUrl || "").trim();
+            }
+            if (src.startsWith("data:image")) {
+              src = String(await makeImageDataUrl(src, 960, 0.72, true) || src).trim();
+            }
+          }
+          if (!src) continue;
+          uploaded.push({
+            src,
+            name: file.name || (isVideo ? "본문 동영상" : "본문 이미지"),
+            type: isVideo ? "video" : "image",
+          });
+        }
+
         const editor = diaryRichTextRef.current;
-        if (editor) {
-          insertInlineMediaIntoEditor(
-            editor,
-            loaded
-              .filter((item) => item.dataUrl)
-              .map(({ file, dataUrl }) => ({
-                src: dataUrl,
-                name: file.name,
-                type: (file.type.startsWith("video/") || /\.(mp4|mov|webm)$/i.test(file.name || "")
-                  ? "video"
-                  : "image") as "image" | "video",
-              })),
-            { afterNode },
-          );
-          prepareDiaryRichEditor(editor);
+        if (!editor) {
+          alert("본문 편집기를 찾지 못했습니다. 화면을 새로고침한 뒤 다시 시도해 주세요.");
+          return;
+        }
+        if (!uploaded.length) {
+          alert("이미지를 읽지 못했습니다. JPG/PNG로 다시 선택하거나 사진 가져오기를 사용해 주세요.");
+          return;
+        }
+
+        const anchor = resolveDiaryInlineInsertAnchor(editor, afterNode);
+        insertInlineMediaIntoEditor(editor, uploaded, { afterNode: anchor });
+        prepareDiaryRichEditor(editor);
+        try {
           commitDiaryEditorHtml();
+        } catch (saveError) {
+          console.error("diary inline image save failed", saveError);
+          alert("이미지는 본문에 넣었지만 저장 공간이 부족할 수 있습니다. 사진을 줄인 뒤 다시 저장해 주세요.");
         }
       } catch (error) {
         console.error("diary inline image insert failed", error);
-        alert("이미지를 본문 TEXT에 넣지 못했습니다. 다시 시도해 주세요.");
+        alert("이미지를 본문 TEXT에 넣지 못했습니다. 용량이 큰 원본 대신 작은 사진으로 다시 시도해 주세요.");
       } finally {
         setShowDiaryTextImageInsert(false);
       }
@@ -2817,7 +2857,7 @@ export default function HomePage() {
 
     setDiaryText(nextDiaryText);
     setVoiceText(nextVoiceText);
-    localStorage.setItem(
+    setLocalStorageSafely(
       storageKey("diary", currentMonth, currentDay, year),
       JSON.stringify({ diaryText: nextDiaryText, voiceText: nextVoiceText })
     );
