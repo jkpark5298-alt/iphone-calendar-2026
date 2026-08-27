@@ -8,7 +8,7 @@
 
 import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
-import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, extractGeneralInfoReportImageSrcs, makeGeneralInfoMediaItem, hasDisplayableAiReport, cleanFactCheckSummaryText } from "../lib/generalInfoHelpers";
+import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, extractGeneralInfoReportImageSrcs, makeGeneralInfoMediaItem, hasDisplayableAiReport } from "../lib/generalInfoHelpers";
 import { Card, EmptyState } from "./SharedComponents";
 
 export interface Chapter3InfoProps {
@@ -214,7 +214,7 @@ export function Chapter3Info({
 
   const [showSourceUrlHelp, setShowSourceUrlHelp] = React.useState(false);
   const [showTextImageInsert, setShowTextImageInsert] = React.useState(false);
-  const [copyFeedback, setCopyFeedback] = React.useState<"text" | "fact" | null>(null);
+  const [copyFeedback, setCopyFeedback] = React.useState<"text" | null>(null);
   const textImageFileRef = React.useRef<HTMLInputElement | null>(null);
 
   const collectBodyImageSrcs = React.useMemo(() => {
@@ -339,17 +339,17 @@ export function Chapter3Info({
     }
   }, [insertImageFilesFromTextTrigger]);
 
-  const copyPlainTextToClipboard = React.useCallback(async (text: string, kind: "text" | "fact") => {
+  const copyPlainTextToClipboard = React.useCallback(async (text: string) => {
     const value = String(text || "").replace(/\u00a0/g, " ").trim();
     if (!value) {
-      alert(kind === "text" ? "복사할 Text가 없습니다." : "복사할 Fact Check 결과가 없습니다.");
+      alert("복사할 Text가 없습니다.");
       return;
     }
     try {
       await navigator.clipboard.writeText(value);
-      setCopyFeedback(kind);
+      setCopyFeedback("text");
       window.setTimeout(() => {
-        setCopyFeedback((prev) => (prev === kind ? null : prev));
+        setCopyFeedback((prev) => (prev === "text" ? null : prev));
       }, 1800);
     } catch {
       alert("클립보드 복사에 실패했습니다.");
@@ -361,29 +361,8 @@ export function Chapter3Info({
     const fromEditor = String(generalInfoRichTextRef.current?.innerText || "")
       .replace(/\u00a0/g, " ")
       .replace(/\n{4,}/g, "\n\n\n");
-    void copyPlainTextToClipboard(fromEditor || generalInfoDraft.text || "", "text");
+    void copyPlainTextToClipboard(fromEditor || generalInfoDraft.text || "");
   }, [copyPlainTextToClipboard, generalInfoDraft.text, generalInfoRichTextRef, syncGeneralInfoRichTextToDraft]);
-
-  const handleCopyFactCheckResult = React.useCallback(() => {
-    const status = String(generalInfoDraft.factCheckStatus || "확인 전").trim();
-    const summary = cleanFactCheckSummaryText(generalInfoDraft.factCheckSummary);
-    const combined = [`[Fact Check 상태] ${status}`, summary].filter(Boolean).join("\n\n");
-    void copyPlainTextToClipboard(combined, "fact");
-  }, [copyPlainTextToClipboard, generalInfoDraft.factCheckStatus, generalInfoDraft.factCheckSummary]);
-
-  const [factCleanFeedback, setFactCleanFeedback] = React.useState(false);
-
-  const handleCleanFactCheckSummary = React.useCallback(() => {
-    const raw = String(generalInfoDraft.factCheckSummary || "");
-    if (!raw.trim()) {
-      alert("정리할 확인 내용이 없습니다.");
-      return;
-    }
-    const cleaned = cleanFactCheckSummaryText(raw);
-    setGeneralInfoDraft((prev) => ({ ...prev, factCheckSummary: cleaned }));
-    setFactCleanFeedback(true);
-    window.setTimeout(() => setFactCleanFeedback(false), 1800);
-  }, [generalInfoDraft.factCheckSummary, setGeneralInfoDraft]);
 
   return (
     <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" }}>
@@ -427,7 +406,7 @@ export function Chapter3Info({
 
         <div className="chapterTitleBox" style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "20px" }}>
           <p style={{ margin: "4px 0 0 0" }}>
-            Fact Check된 내용을 정리·분류·저장하는 보관함입니다.
+            일반 정보를 정리·분류·저장하는 보관함입니다.
           </p>
         </div>
 
@@ -626,7 +605,6 @@ export function Chapter3Info({
             <p className="generalInfoRichTextNote">
               저장함에는 편집된 색상/강조가 함께 표시됩니다.
               문장 끝에 <strong>S</strong>를 붙이면 이미지 붙여넣기가 열리고, 선택한 이미지는 본문 TEXT 안에 들어갑니다.
-              Fact Check 결과·판정·근거는 아래 카드에서 직접 입력하세요.
             </p>
           </div>
 
@@ -649,7 +627,7 @@ export function Chapter3Info({
                 <strong>자동 입력 안내</strong>
                 <p>
                   URL을 입력한 뒤 [URL 내용 자동 가져오기]를 누르면 제목, 본문 Text,
-                  대표 이미지가 자동 입력됩니다. 이어서 분류·키워드·Fact Check를 직접 입력하세요.
+                  대표 이미지가 자동 입력됩니다. 이어서 분류·키워드·요약을 직접 입력하세요.
                 </p>
               </div>
             )}
@@ -1011,11 +989,11 @@ export function Chapter3Info({
           </div>
         </Card>
 
-        {/* Card 2: 분류 / 키워드 / Fact Check */}
+        {/* Card 2: 분류 / 키워드 / 요약 */}
         <Card
           number="2"
-          title="분류 / 키워드 / Fact Check"
-          subtitle="분류·키워드·Fact Check를 직접 입력한 뒤 Confirm 저장합니다."
+          title="분류 / 키워드 / 요약"
+          subtitle="분류·키워드·요약을 직접 입력한 뒤 Confirm 저장합니다."
         >
           <div className="generalInfoGrid">
             <label>
@@ -1097,84 +1075,6 @@ export function Chapter3Info({
               placeholder="요약 내용을 직접 입력하세요."
               rows={4}
             />
-          </div>
-
-          <div className="generalInfoResultBox generalInfoEditableResultBox">
-            <div className="generalInfoSectionTitleRow">
-              <strong>Fact Check</strong>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                  onClick={handleCopyFactCheckResult}
-                >
-                  {copyFeedback === "fact" ? "✅ 복사됨" : "📋 전체 복사"}
-                </button>
-                <button
-                  type="button"
-                  className="secondaryButton smallActionButton"
-                  onClick={handleCleanFactCheckSummary}
-                  title="HTML·스타일 태그를 제거하고 본문만 정리합니다"
-                  style={{ borderColor: "rgba(125, 211, 252, 0.45)", color: "#bae6fd" }}
-                >
-                  {factCleanFeedback ? "✅ 정리됨" : "✨ 정리"}
-                </button>
-              </div>
-            </div>
-            <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
-              외부에서 검증한 판정·근거를 여기에 직접 입력하세요. HTML이 보이면 <strong>정리</strong>를 눌러 깔끔한 텍스트로 바꾸세요.
-            </p>
-            <div className="generalInfoFactEditGrid">
-              <label>
-                상태
-                <select
-                  value={generalInfoDraft.factCheckStatus}
-                  onChange={(e) =>
-                    setGeneralInfoDraft((prev) => ({
-                      ...prev,
-                      factCheckStatus: e.target.value as GeneralInfoDraft["factCheckStatus"],
-                    }))
-                  }
-                >
-                  <option value="확인 전">확인 전</option>
-                  <option value="확인 완료">확인 완료</option>
-                  <option value="확인 필요">확인 필요</option>
-                  <option value="오류 가능성">오류 가능성</option>
-                </select>
-              </label>
-              <label className="generalInfoFactSummaryLabel">
-                <span className="generalInfoFactSummaryLabelRow">
-                  확인 내용
-                  <button
-                    type="button"
-                    className="secondaryButton smallActionButton"
-                    onClick={handleCleanFactCheckSummary}
-                    title="HTML·스타일 태그를 제거하고 본문만 정리합니다"
-                    style={{
-                      minHeight: 28,
-                      padding: "4px 10px",
-                      fontSize: 12,
-                      borderColor: "rgba(125, 211, 252, 0.45)",
-                      color: "#bae6fd",
-                    }}
-                  >
-                    {factCleanFeedback ? "✅ 정리됨" : "✨ 정리"}
-                  </button>
-                </span>
-                <textarea
-                  className="generalInfoEditableTextarea"
-                  value={generalInfoDraft.factCheckSummary}
-                  onChange={(e) =>
-                    setGeneralInfoDraft((prev) => ({
-                      ...prev,
-                      factCheckSummary: e.target.value,
-                    }))
-                  }
-                  placeholder="Fact Check 결과나 확인 필요 내용을 직접 수정하세요."
-                  rows={10}
-                />
-              </label>
-            </div>
           </div>
         </Card>
       </section>
