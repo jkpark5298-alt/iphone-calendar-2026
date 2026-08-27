@@ -57,7 +57,6 @@ export default function GeneralInfoDetailModal({
   const [editSourceUrl, setEditSourceUrl] = React.useState(item.sourceUrl || "");
   const [editPrimary, setEditPrimary] = React.useState(item.primaryCategory || "");
   const [editSecondary, setEditSecondary] = React.useState(item.secondaryCategory || "");
-  const [editThird, setEditThird] = React.useState(item.thirdCategory || "");
   const [editKeywordsText, setEditKeywordsText] = React.useState(
     (item.keywords || []).join(", "),
   );
@@ -78,7 +77,6 @@ export default function GeneralInfoDetailModal({
     setEditSourceUrl(item.sourceUrl || "");
     setEditPrimary(item.primaryCategory || "");
     setEditSecondary(item.secondaryCategory || "");
-    setEditThird(item.thirdCategory || "");
     setEditKeywordsText((item.keywords || []).join(", "));
     setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
     setBodyEditorKey((prev) => prev + 1);
@@ -109,7 +107,6 @@ export default function GeneralInfoDetailModal({
     setEditSourceUrl(item.sourceUrl || "");
     setEditPrimary(item.primaryCategory || "");
     setEditSecondary(item.secondaryCategory || "");
-    setEditThird(item.thirdCategory || "");
     setEditKeywordsText((item.keywords || []).join(", "));
     setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
     setBodyEditorKey((prev) => prev + 1);
@@ -256,7 +253,7 @@ export default function GeneralInfoDetailModal({
       sourceUrl: editSourceUrl.trim() || undefined,
       primaryCategory: editPrimary.trim() || item.primaryCategory,
       secondaryCategory: editSecondary.trim() || item.secondaryCategory,
-      thirdCategory: editThird.trim() || item.thirdCategory,
+      thirdCategory: "",
       keywords,
       text: bodyText,
       formattedTextHtml: bodyHtml,
@@ -276,7 +273,6 @@ export default function GeneralInfoDetailModal({
     editSecondary,
     editSourceUrl,
     editSummary,
-    editThird,
     editTitle,
     item,
     onSaveItemEdit,
@@ -857,16 +853,10 @@ export default function GeneralInfoDetailModal({
                   placeholder="2차 분류"
                   className="generalInfoFactCheckStatusSelect"
                 />
-                <input
-                  value={editThird}
-                  onChange={(e) => setEditThird(e.target.value)}
-                  placeholder="3차 분류"
-                  className="generalInfoFactCheckStatusSelect"
-                />
               </div>
             ) : (
               <p>
-                {[item.primaryCategory, item.secondaryCategory, item.thirdCategory]
+                {[item.primaryCategory, item.secondaryCategory]
                   .filter(Boolean)
                   .join(" > ") || "분류 없음"}
               </p>

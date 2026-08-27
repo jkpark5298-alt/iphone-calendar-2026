@@ -215,6 +215,8 @@ export function Chapter3Info({
   const [showSourceUrlHelp, setShowSourceUrlHelp] = React.useState(false);
   const [showTextImageInsert, setShowTextImageInsert] = React.useState(false);
   const [copyFeedback, setCopyFeedback] = React.useState<"text" | null>(null);
+  const [isSelectingCoverImage, setIsSelectingCoverImage] = React.useState(false);
+  const [isKeywordInputFocused, setIsKeywordInputFocused] = React.useState(false);
   const textImageFileRef = React.useRef<HTMLInputElement | null>(null);
 
   const collectBodyImageSrcs = React.useMemo(() => {
@@ -709,13 +711,27 @@ export function Chapter3Info({
                   총 {normalizeGeneralInfoMediaItems(generalInfoDraft).length}개
                 </span>
               )}
-              {normalizeGeneralInfoMediaItems(generalInfoDraft).length > 0 && (
+              {normalizeGeneralInfoMediaItems(generalInfoDraft).length > 0 ? (
                 <button
                   className="secondaryButton smallActionButton"
                   type="button"
                   onClick={handleClearGeneralInfoCoverImage}
                 >
                   전체 삭제
+                </button>
+              ) : (
+                <button
+                  className="secondaryButton smallActionButton"
+                  type="button"
+                  onClick={() => setIsSelectingCoverImage((prev) => !prev)}
+                  style={{
+                    borderColor: isSelectingCoverImage
+                      ? "rgba(125, 211, 252, 0.55)"
+                      : undefined,
+                    color: isSelectingCoverImage ? "#bae6fd" : undefined,
+                  }}
+                >
+                  {isSelectingCoverImage ? "선택 닫기" : "대표 이미지 / 자료 선택"}
                 </button>
               )}
             </div>
@@ -843,7 +859,7 @@ export function Chapter3Info({
                   );
                 })}
               </div>
-            ) : (
+            ) : isSelectingCoverImage ? (
               <div className="generalInfoNoCoverImage">
                 <strong>대표 이미지 없음</strong>
                 <p>
@@ -853,9 +869,11 @@ export function Chapter3Info({
                   또는 아래 본문 이미지에서 선택할 수 있습니다.
                 </p>
               </div>
-            )}
+            ) : null}
 
-            {collectBodyImageSrcs.length > 0 && (
+            {collectBodyImageSrcs.length > 0 &&
+              (isSelectingCoverImage ||
+                normalizeGeneralInfoMediaItems(generalInfoDraft).length > 0) && (
               <div style={{ marginTop: 14 }}>
                 <strong style={{ display: "block", marginBottom: 8, fontSize: 13, color: "#7dd3fc" }}>
                   본문 이미지에서 대표 선택
@@ -910,7 +928,9 @@ export function Chapter3Info({
               </div>
             )}
 
-            {collectReportImageSrcs.length > 0 && (
+            {collectReportImageSrcs.length > 0 &&
+              (isSelectingCoverImage ||
+                normalizeGeneralInfoMediaItems(generalInfoDraft).length > 0) && (
               <div style={{ marginTop: 14 }}>
                 <strong style={{ display: "block", marginBottom: 8, fontSize: 13, color: "#7dd3fc" }}>
                   보고서 이미지에서 대표 선택
@@ -1018,15 +1038,6 @@ export function Chapter3Info({
                 placeholder="예: 외교/해외동향"
               />
             </label>
-            <label>
-              3차 분류
-              <input
-                className="generalInfoEditableInput"
-                value={generalInfoDraft.thirdCategory}
-                onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, thirdCategory: e.target.value }))}
-                placeholder="예: 반도체 / 공급망"
-              />
-            </label>
           </div>
 
           <div className="generalInfoResultBox generalInfoKeywordInputBox">
@@ -1046,11 +1057,15 @@ export function Chapter3Info({
                 setGeneralInfoKeywordText(value);
                 setGeneralInfoDraft((prev) => ({ ...prev, keywords: parsedKeywords }));
               }}
+              onFocus={() => setIsKeywordInputFocused(true)}
+              onBlur={() => setIsKeywordInputFocused(false)}
               placeholder="예: #npm, #run, #dev 또는 npm, run, dev"
             />
-            <p className="mutedText">
-              쉼표, #, 줄바꿈으로 여러 키워드를 입력할 수 있습니다. 입력창에는 원문이 유지되고, 아래 태그에는 분리되어 표시됩니다.
-            </p>
+            {isKeywordInputFocused && (
+              <p className="mutedText">
+                쉼표, #, 줄바꿈으로 여러 키워드를 입력할 수 있습니다. 입력창에는 원문이 유지되고, 아래 태그에는 분리되어 표시됩니다.
+              </p>
+            )}
           </div>
 
           <div className="generalInfoResultBox">
