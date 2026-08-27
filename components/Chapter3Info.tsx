@@ -958,7 +958,7 @@ export function Chapter3Info({
                   보고서 이미지에서 대표 선택
                 </strong>
                 <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
-                  Fact Check/보고서에 넣은 사진을 대표로 쓸 수 있습니다.
+                  보고서에 넣은 사진을 대표로 쓸 수 있습니다.
                 </p>
                 <div
                   style={{
@@ -1144,7 +1144,7 @@ export function Chapter3Info({
               <input
                 value={generalInfoSearchTerm}
                 onChange={(e) => setGeneralInfoSearchTerm(e.target.value)}
-                placeholder="제목, 본문, URL, 분류, 키워드, 요약, Fact Check 검색"
+                placeholder="제목, 본문, URL, 분류, 키워드, 요약 검색"
                 style={{ flex: 1 }}
               />
               <button
@@ -1236,19 +1236,19 @@ export function Chapter3Info({
                     <p className="cardSummary">{item.summary || "클립보드 이미지 자료"}</p>
                   </div>
 
-                  {/* 검증 보고서 / Source DATA / 고정 */}
+                  {/* Report / Source DATA / 고정 */}
                   <div className="generalInfoCardActions">
                     {hasDisplayableAiReport(String(item.factCheckSummary || "")) && (
                       <button
                         className="generalInfoCardAiReportButton"
                         type="button"
-                        title="검증 보고서"
+                        title="Report"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleOpenGeneralInfoAiReport?.(item.id);
                         }}
                       >
-                        검증 보고서
+                        Report
                       </button>
                     )}
                     <button

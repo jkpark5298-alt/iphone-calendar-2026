@@ -1453,7 +1453,7 @@ export function useTravelDiaryGeneralInfoState({
         setGeneralInfoDetailId(null);
         setGeneralInfoDetailEditMode(false);
         setGeneralInfoAiReportId(updatedItem.id);
-        showPasteHint("✅ 수정 저장 완료 · AI 검증 보고서 화면을 열었습니다.");
+        showPasteHint("✅ 수정 저장 완료 · Report 화면을 열었습니다.");
       } else {
         showPasteHint("✅ 수정 저장 완료 · 새 일반 정보 입력 준비 완료");
       }
@@ -1479,7 +1479,7 @@ export function useTravelDiaryGeneralInfoState({
       setGeneralInfoDetailId(null);
       setGeneralInfoDetailEditMode(false);
       setGeneralInfoAiReportId(item.id);
-      showPasteHint("✅ 저장 완료 · AI 검증 보고서가 만들어졌습니다.");
+      showPasteHint("✅ 저장 완료 · Report가 만들어졌습니다.");
     } else {
       showPasteHint("✅ 저장 완료 · 새 일반 정보 입력 준비 완료");
     }
@@ -2276,7 +2276,7 @@ export function useTravelDiaryGeneralInfoState({
     if (navigator.share) {
       try {
         const payload: ShareData = {
-          title: source?.title || generalInfoReportItem?.title || "AI 검증 보고서",
+          title: source?.title || generalInfoReportItem?.title || "Report",
           text: plainText,
         };
         if (
@@ -2315,7 +2315,7 @@ export function useTravelDiaryGeneralInfoState({
   const handleDownloadGeneralInfoPdfReport = useCallback(async (item: GeneralInfoItem) => {
     const reportHtml = String(item.factCheckSummary || "").trim();
     if (!hasDisplayableAiReport(reportHtml)) {
-      showPasteHint("⚠️ PDF로 만들 보고서가 없습니다. Confirm 저장(본문→보고서) 또는 [AI 검증 보고서]를 먼저 실행하세요.");
+      showPasteHint("⚠️ PDF로 만들 보고서가 없습니다. Confirm 저장(본문→Report) 또는 [Report]를 먼저 실행하세요.");
       return;
     }
 
@@ -2362,7 +2362,7 @@ export function useTravelDiaryGeneralInfoState({
 
       container.innerHTML = `
         <div style="border-bottom: 3px solid #000; padding-bottom: 18px; margin-bottom: 22px;">
-          <h1 style="font-size: 24px; margin: 0; color: #000000; font-weight: 800;">AI 검증 보고서 PDF</h1>
+          <h1 style="font-size: 24px; margin: 0; color: #000000; font-weight: 800;">Report PDF</h1>
           <p style="font-size: 12px; color: #000000; margin: 8px 0 0 0;">일반 정보 저장함 · 작성/저장: ${created}</p>
         </div>
         <div style="margin-bottom: 18px; padding: 14px 16px; background: #ffffff; border-left: 4px solid #000000; border-radius: 8px;">
@@ -2375,7 +2375,7 @@ export function useTravelDiaryGeneralInfoState({
           ${contentHtml}
         </div>
         <div style="border-top: 1px solid #000000; margin-top: 28px; padding-top: 14px; text-align: center; font-size: 11px; color: #000000;">
-          본 PDF는 저장된 AI 검증 보고서를 변환한 것이며, 원문 자료와 함께 확인하는 것이 좋습니다.
+          본 PDF는 저장된 Report를 변환한 것이며, 원문 자료와 함께 확인하는 것이 좋습니다.
         </div>
       `;
 

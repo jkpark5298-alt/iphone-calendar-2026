@@ -17,8 +17,7 @@ import {
 } from "./AiReportInfographicPanel";
 import { normalizeAiReportEditorHtml } from "../lib/aiReportEditor";
 
-type TabId = "view" | "body" | "infographic" | "factcheck";
-type FactStatus = NonNullable<GeneralInfoItem["factCheckStatus"]>;
+type TabId = "view" | "body" | "infographic";
 
 type Props = {
   item: GeneralInfoItem;
@@ -35,11 +34,10 @@ type Props = {
 };
 
 /**
- * AI 검증 보고서 별도 화면
+ * Report 별도 화면
  * - 보기: 읽기 전용
  * - 보고서 편집: TipTap 편집
  * - 인포그래픽: 이미지 입력창(파일/붙여넣기)
- * - 팩트체크: 상태 선택 + 저장
  */
 export default function GeneralInfoAiReportScreen({
   item,
@@ -55,9 +53,6 @@ export default function GeneralInfoAiReportScreen({
     normalizeAiReportEditorHtml(String(item.factCheckSummary || "")),
   );
   const [draftTitle, setDraftTitle] = React.useState(() => String(item.title || ""));
-  const [draftStatus, setDraftStatus] = React.useState<FactStatus>(
-    item.factCheckStatus || "확인 전",
-  );
   const [saving, setSaving] = React.useState(false);
   const [saveMsg, setSaveMsg] = React.useState("");
   const [infographicUploading, setInfographicUploading] = React.useState(false);
@@ -67,20 +62,16 @@ export default function GeneralInfoAiReportScreen({
   const htmlDirty =
     normalizeAiReportEditorHtml(draftHtml) !== normalizeAiReportEditorHtml(reportHtml);
   const titleDirty = draftTitle.trim() !== String(item.title || "").trim();
-  const statusDirty = draftStatus !== (item.factCheckStatus || "확인 전");
-  const dirty = htmlDirty || titleDirty || statusDirty;
+  const dirty = htmlDirty || titleDirty;
 
   const reportLooksTruncated = React.useMemo(() => {
     const plain = htmlToPlainText(draftHtml || reportHtml).trim();
     if (!plain) return false;
-    // 제목만 있고 본문이 거의 없으면 잘린 상태로 간주
-    return plain.length < 80 && /AI 검증 보고서/i.test(plain);
+    return plain.length < 80 && /AI 검증 보고서|\bReport\b/i.test(plain);
   }, [draftHtml, reportHtml]);
 
-  const draftStatusRef = React.useRef(draftStatus);
   const draftTitleRef = React.useRef(draftTitle);
   const draftHtmlRef = React.useRef(draftHtml);
-  draftStatusRef.current = draftStatus;
   draftTitleRef.current = draftTitle;
   draftHtmlRef.current = draftHtml;
 
@@ -92,9 +83,8 @@ export default function GeneralInfoAiReportScreen({
   React.useEffect(() => {
     setDraftHtml(normalizeAiReportEditorHtml(String(item.factCheckSummary || "")));
     setDraftTitle(String(item.title || ""));
-    setDraftStatus(item.factCheckStatus || "확인 전");
     setSaveMsg("");
-  }, [item.id, item.factCheckSummary, item.title, item.factCheckStatus]);
+  }, [item.id, item.factCheckSummary, item.title]);
 
   const displayHtml = React.useMemo(() => {
     const raw = tab === "body" || tab === "infographic" ? draftHtml : reportHtml || draftHtml;
@@ -173,7 +163,7 @@ export default function GeneralInfoAiReportScreen({
     setSaving(true);
     setSaveMsg("");
     try {
-      await onSaveReport(html, draftStatus, nextTitle);
+      await onSaveReport(html, item.factCheckStatus || "확인 전", nextTitle);
       setSaveMsg("✅ 저장됨");
     } catch (error) {
       console.error(error);
@@ -182,7 +172,7 @@ export default function GeneralInfoAiReportScreen({
     } finally {
       setSaving(false);
     }
-  }, [draftHtml, draftStatus, draftTitle, item.title, onSaveReport]);
+  }, [draftHtml, draftTitle, item.factCheckStatus, item.title, onSaveReport]);
 
   const handleMediaInserted = React.useCallback(
     async (bodyHtml: string) => {
@@ -200,7 +190,7 @@ export default function GeneralInfoAiReportScreen({
       setSaving(true);
       setSaveMsg("");
       try {
-        await onSaveReport(merged, draftStatusRef.current, nextTitle);
+        await onSaveReport(merged, item.factCheckStatus || "확인 전", nextTitle);
         setSaveMsg("✅ 이미지/동영상 저장됨");
       } catch (error) {
         console.error(error);
@@ -209,7 +199,7 @@ export default function GeneralInfoAiReportScreen({
         setSaving(false);
       }
     },
-    [item.title, onSaveReport],
+    [item.factCheckStatus, item.title, onSaveReport],
   );
 
   const handleDownloadPdf = React.useCallback(() => {
@@ -217,14 +207,13 @@ export default function GeneralInfoAiReportScreen({
     const draftItem: GeneralInfoItem = {
       ...item,
       title: draftTitle.trim() || item.title,
-      factCheckStatus: draftStatus,
       factCheckSummary: normalizeAiReportEditorHtml(draftHtml) || item.factCheckSummary,
     };
     void onDownloadPdfReport(draftItem);
-  }, [draftHtml, draftStatus, draftTitle, item, onDownloadPdfReport]);
+  }, [draftHtml, draftTitle, item, onDownloadPdfReport]);
 
   const handleCopyAll = React.useCallback(async () => {
-    const title = draftTitle.trim() || item.title || "AI 검증 보고서";
+    const title = draftTitle.trim() || item.title || "Report";
     const html = normalizeAiReportEditorHtml(draftHtml || reportHtml);
     if (!html || html === "<p></p>") {
       alert("복사할 보고서 내용이 없습니다.");
@@ -250,11 +239,11 @@ export default function GeneralInfoAiReportScreen({
     hasDisplayableAiReport(normalizeAiReportEditorHtml(draftHtml) || reportHtml);
 
   return (
-    <div className="giAiReportScreen" role="dialog" aria-modal="true" aria-label="AI 검증 보고서">
+    <div className="giAiReportScreen" role="dialog" aria-modal="true" aria-label="Report">
       <div className="giAiReportScreenPanel">
         <header className="giAiReportScreenHeader">
           <div className="giAiReportScreenTitleBlock">
-            <p className="giAiReportScreenEyebrow">검증 보고서</p>
+            <p className="giAiReportScreenEyebrow">Report</p>
             <input
               className="giAiReportTitleInput giAiReportTitleInputHeader"
               value={draftTitle}
@@ -326,15 +315,6 @@ export default function GeneralInfoAiReportScreen({
           >
             인포그래픽
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "factcheck"}
-            className={tab === "factcheck" ? "active" : ""}
-            onClick={() => setTab("factcheck")}
-          >
-            팩트체크
-          </button>
         </div>
 
         {saveMsg && <p className="giAiReportHint">{saveMsg}</p>}
@@ -362,10 +342,6 @@ export default function GeneralInfoAiReportScreen({
           <div>
             <span>작성일자</span>
             <strong>{item.createdAt || "-"}</strong>
-          </div>
-          <div>
-            <span>상태</span>
-            <strong>{draftStatus || "확인 전"}</strong>
           </div>
           <div>
             <span>링크</span>
@@ -417,39 +393,6 @@ export default function GeneralInfoAiReportScreen({
               onSetRepresentative={onSetRepresentativeImage}
             />
           )}
-
-          {tab === "factcheck" && (
-            <div className="giAiReportFactCheckPanel">
-              <strong>팩트체크 상태</strong>
-              <p className="muted">
-                상태를 선택한 뒤 저장하면 보고서와 함께 반영됩니다.
-              </p>
-              <label className="giAiReportFactStatusLabel">
-                Fact Check 상태
-                <select
-                  className="giAiReportFactStatusSelect"
-                  value={draftStatus}
-                  onChange={(e) => setDraftStatus(e.target.value as FactStatus)}
-                >
-                  <option value="확인 필요">확인 필요</option>
-                  <option value="확인 완료">확인 완료</option>
-                  <option value="오류 가능성">오류 가능성</option>
-                  <option value="확인 전">확인 전</option>
-                </select>
-              </label>
-              {onSaveReport && (
-                <button
-                  type="button"
-                  className="giAiReportPrimaryBtn"
-                  disabled={saving || !dirty}
-                  onClick={() => void handleSave()}
-                  style={{ marginTop: 14 }}
-                >
-                  {saving ? "저장 중…" : "상태 · 보고서 저장"}
-                </button>
-              )}
-            </div>
-          )}
         </section>
 
         <footer className="giAiReportFooter">
@@ -493,7 +436,7 @@ export default function GeneralInfoAiReportScreen({
 function EmptyReport() {
   return (
     <div className="giAiReportEmpty">
-      아직 AI 검증 보고서 내용이 없습니다. Confirm 저장 후 다시 열어 주세요.
+      아직 Report 내용이 없습니다. Confirm 저장 후 다시 열어 주세요.
     </div>
   );
 }
