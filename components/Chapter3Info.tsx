@@ -230,7 +230,6 @@ export function Chapter3Info({
           type="button"
           className={`ch3TabBtn ${activeTab === "storage" ? "active" : ""}`}
           onClick={() => {
-            setShowTextImageInsert(false);
             setActiveTab("storage");
           }}
         >
