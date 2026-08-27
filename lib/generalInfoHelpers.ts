@@ -358,7 +358,9 @@ export const removeInlineImageTrigger = (editor: HTMLElement | null) => {
   const host =
     (textNode.parentElement?.closest("div, p, h3, h4, h5, li, section") as HTMLElement | null) ||
     textNode.parentElement;
-  return host || textNode;
+  // 편집기 자신을 afterNode로 주면 이미지가 본문 밖 형제로 들어간다.
+  if (!host || host === editor) return textNode;
+  return host;
 };
 
 /** 같은 파일을 files+items 등으로 두 번 받지 않도록 중복 제거 */
@@ -452,7 +454,11 @@ export const insertInlineMediaIntoEditor = (
     removeBtn.textContent = "×";
     block.appendChild(removeBtn);
 
-    if (insertAfter && insertAfter.parentNode) {
+    if (insertAfter === editor) {
+      editor.appendChild(block);
+      insertAfter = block;
+      pendingRange = null;
+    } else if (insertAfter && insertAfter.parentNode && editor.contains(insertAfter)) {
       insertAfter.parentNode.insertBefore(block, insertAfter.nextSibling);
       insertAfter = block;
       pendingRange = null;
@@ -475,7 +481,7 @@ export const insertInlineMediaIntoEditor = (
 
   const spacer = document.createElement("div");
   spacer.innerHTML = "<br>";
-  if (insertAfter && insertAfter.parentNode) {
+  if (insertAfter && insertAfter.parentNode && editor.contains(insertAfter)) {
     insertAfter.parentNode.insertBefore(spacer, insertAfter.nextSibling);
   } else {
     editor.appendChild(spacer);

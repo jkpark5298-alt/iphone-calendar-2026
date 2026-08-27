@@ -17,6 +17,17 @@ import {
   type PhotoBookImageExif,
 } from "../lib/photoExif";
 import { importWorkScheduleFromFile } from "../lib/workScheduleImport";
+import {
+  bindInlineImageRemoveHandler,
+  collectClipboardImageFiles,
+  dedupeImageFiles,
+  editorHasInlineImageTrigger,
+  enhanceInlineImageBlocks,
+  htmlToPlainText,
+  insertInlineMediaIntoEditor,
+  readFilesAsDataUrls,
+  removeInlineImageTrigger,
+} from "../lib/generalInfoHelpers";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
@@ -648,6 +659,7 @@ export default function HomePage() {
   const diaryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const diaryRichTextRef = useRef<HTMLDivElement | null>(null);
   const diaryTextImageFileRef = useRef<HTMLInputElement | null>(null);
+  const diaryHtmlFromEditorRef = useRef("");
   const [showDiaryTextImageInsert, setShowDiaryTextImageInsert] = useState(false);
   const infoTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const diaryEditStartRef = useRef<{ key: string; diaryText: string; voiceText: string } | null>(null);
@@ -661,36 +673,46 @@ export default function HomePage() {
   function diaryTextEndsWithImageTrigger(raw: string) {
     const text = String(raw || "").replace(/\u00a0/g, " ").replace(/\r/g, "");
     const trimmedEnd = text.replace(/[ \t\n]+$/g, "");
-    return /S$/.test(trimmedEnd);
+    return /[Ss]$/.test(trimmedEnd);
+  }
+
+  function prepareDiaryRichEditor(editor: HTMLDivElement | null) {
+    if (!editor) return;
+    enhanceInlineImageBlocks(editor);
+    bindInlineImageRemoveHandler(editor);
   }
 
   function checkDiaryTextImageTrigger() {
-    const plain = String(diaryRichTextRef.current?.innerText || "");
-    setShowDiaryTextImageInsert(diaryTextEndsWithImageTrigger(plain));
+    const editor = diaryRichTextRef.current;
+    const plain = String(editor?.innerText || "");
+    setShowDiaryTextImageInsert(
+      editorHasInlineImageTrigger(editor) || diaryTextEndsWithImageTrigger(plain),
+    );
+  }
+
+  function commitDiaryEditorHtml() {
+    const editor = diaryRichTextRef.current;
+    const html = editor?.innerHTML || "";
+    diaryHtmlFromEditorRef.current = html;
+    saveDiary(html, voiceText);
+    return html;
   }
 
   function removeDiaryTrailingImageTrigger() {
-    const editor = diaryRichTextRef.current;
-    if (!editor) return;
-    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
-    let last: Text | null = null;
-    while (walker.nextNode()) last = walker.currentNode as Text;
-    if (!last?.nodeValue) return;
-    const next = last.nodeValue.replace(/[ \t]*S[ \t]*$/, "");
-    if (next === last.nodeValue) return;
-    last.nodeValue = next;
-    saveDiary(editor.innerHTML || "", voiceText);
+    const afterNode = removeInlineImageTrigger(diaryRichTextRef.current);
+    return afterNode;
   }
 
   function insertDiaryImageFilesFromTextTrigger(files: FileList | File[] | null) {
     if (!files || files.length === 0) return;
-    removeDiaryTrailingImageTrigger();
-    const list =
-      files instanceof FileList
-        ? Array.from(files)
-        : files;
+    const snapshot = files instanceof FileList ? Array.from(files) : [...files];
+    const afterNode = removeDiaryTrailingImageTrigger();
+    const list = dedupeImageFiles(snapshot);
     const imageFiles = list.filter(
-      (file) => file.type.startsWith("image/") || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || ""),
+      (file) =>
+        file.type.startsWith("image/") ||
+        file.type.startsWith("video/") ||
+        /\.(jpe?g|png|gif|webp|heic|heif|mp4|mov|webm)$/i.test(file.name || ""),
     );
     if (!imageFiles.length) {
       alert("이미지 파일을 선택해 주세요.");
@@ -699,7 +721,6 @@ export default function HomePage() {
 
     void (async () => {
       try {
-        const { insertInlineMediaIntoEditor, readFilesAsDataUrls } = await import("../lib/generalInfoHelpers");
         const loaded = await readFilesAsDataUrls(imageFiles);
         const editor = diaryRichTextRef.current;
         if (editor) {
@@ -710,10 +731,14 @@ export default function HomePage() {
               .map(({ file, dataUrl }) => ({
                 src: dataUrl,
                 name: file.name,
-                type: "image" as const,
+                type: (file.type.startsWith("video/") || /\.(mp4|mov|webm)$/i.test(file.name || "")
+                  ? "video"
+                  : "image") as "image" | "video",
               })),
+            { afterNode },
           );
-          saveDiary(editor.innerHTML || "", voiceText);
+          prepareDiaryRichEditor(editor);
+          commitDiaryEditorHtml();
         }
       } catch (error) {
         console.error("diary inline image insert failed", error);
@@ -727,23 +752,7 @@ export default function HomePage() {
   function handleDiaryTextImageInsertPaste(event: ClipboardEvent<HTMLDivElement>) {
     event.preventDefault();
     event.stopPropagation();
-    const clipboardData = event.clipboardData;
-    const pastedFiles: File[] = [];
-    if (clipboardData?.files?.length) {
-      Array.from(clipboardData.files).forEach((file) => {
-        if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-          pastedFiles.push(file);
-        }
-      });
-    }
-    if (clipboardData?.items) {
-      Array.from(clipboardData.items).forEach((item) => {
-        if (item.kind === "file" && (item.type.startsWith("image/") || item.type.startsWith("video/"))) {
-          const file = item.getAsFile();
-          if (file) pastedFiles.push(file);
-        }
-      });
-    }
+    const pastedFiles = collectClipboardImageFiles(event.clipboardData);
     if (pastedFiles.length > 0) {
       insertDiaryImageFilesFromTextTrigger(pastedFiles);
     }
@@ -832,6 +841,17 @@ export default function HomePage() {
         return;
       }
       beginDiaryTextUndoSession();
+      const editor = diaryRichTextRef.current;
+      if (editor) {
+        editor.focus();
+        const inserted = document.execCommand("insertText", false, editor.innerText?.trim() ? `\n${text}` : text);
+        if (!inserted) {
+          editor.appendChild(document.createTextNode(editor.innerText?.trim() ? `\n${text}` : text));
+        }
+        commitDiaryEditorHtml();
+        requestAnimationFrame(checkDiaryTextImageTrigger);
+        return;
+      }
       const nextText = diaryText ? `${diaryText}\n${text}` : text;
       saveDiary(nextText, voiceText);
       requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
@@ -1904,8 +1924,20 @@ export default function HomePage() {
 
   useEffect(() => {
     if (view !== "diary") return;
-    requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
-  }, [view, diaryText, currentMonth, currentDay]);
+    requestAnimationFrame(() => {
+      resizeTextareaToContent(diaryTextareaRef.current);
+      const editor = diaryRichTextRef.current;
+      if (!editor) return;
+      const nextHtml = diaryText || "";
+      const producedByEditor = nextHtml === diaryHtmlFromEditorRef.current;
+      if (document.activeElement !== editor && !producedByEditor && editor.innerHTML !== nextHtml) {
+        editor.innerHTML = nextHtml;
+        diaryHtmlFromEditorRef.current = nextHtml;
+      }
+      prepareDiaryRichEditor(editor);
+      checkDiaryTextImageTrigger();
+    });
+  }, [view, diaryText, currentYear, currentMonth, currentDay]);
 
   useEffect(() => {
     if (view !== "info") return;
@@ -2296,6 +2328,7 @@ export default function HomePage() {
     setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);
+    diaryHtmlFromEditorRef.current = "";
     setShowDiaryTextImageInsert(false);
     setView("diary");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -5030,7 +5063,7 @@ export default function HomePage() {
         <div className="generalInfoTextBox generalInfoRichTextBox" style={{ margin: "10px 0" }}>
           <div className="generalInfoRichTextHeader">
             <strong>Text 입력 / 편집</strong>
-            <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄 편집 가능 · 문자 끝에 S를 붙이면 이미지 붙여넣기</span>
+            <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄 편집 가능 · 문자 끝에 S/s를 붙이면 이미지 붙여넣기</span>
           </div>
           <div className="generalInfoRichToolbar" aria-label="Text 편집 도구">
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("bold")}>B 굵게</button>
@@ -5046,7 +5079,9 @@ export default function HomePage() {
             key={`diary-rich-${currentYear}-${currentMonth}-${currentDay}`}
             ref={(el) => {
               diaryRichTextRef.current = el;
-              if (el && el.innerHTML === "") el.innerHTML = diaryText || "";
+              if (!el) return;
+              if (el.innerHTML === "" && diaryText) el.innerHTML = diaryText;
+              prepareDiaryRichEditor(el);
             }}
             className="generalInfoRichTextEditor"
             contentEditable
@@ -5055,23 +5090,23 @@ export default function HomePage() {
             tabIndex={0}
             data-placeholder="오늘의 기록을 남겨보세요...."
             onInput={() => {
-              const html = diaryRichTextRef.current?.innerHTML || "";
-              saveDiary(html, voiceText);
+              commitDiaryEditorHtml();
               checkDiaryTextImageTrigger();
             }}
             onKeyUp={checkDiaryTextImageTrigger}
             onBlur={() => {
-              const html = diaryRichTextRef.current?.innerHTML || "";
-              saveDiary(html, voiceText);
+              commitDiaryEditorHtml();
               checkDiaryTextImageTrigger();
             }}
             onPaste={(e) => {
-              const items = Array.from(e.clipboardData?.items || []);
-              const imageFiles = items
-                .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
-                .map((item) => item.getAsFile())
-                .filter((file): file is File => Boolean(file));
-              if (imageFiles.length > 0 && showDiaryTextImageInsert) {
+              const imageFiles = collectClipboardImageFiles(e.clipboardData);
+              const editor = diaryRichTextRef.current;
+              const plain = String(editor?.innerText || "");
+              const imageTriggerOpen =
+                showDiaryTextImageInsert ||
+                editorHasInlineImageTrigger(editor) ||
+                diaryTextEndsWithImageTrigger(plain);
+              if (imageFiles.length > 0 && imageTriggerOpen) {
                 e.preventDefault();
                 insertDiaryImageFilesFromTextTrigger(imageFiles);
                 return;
@@ -5079,7 +5114,10 @@ export default function HomePage() {
               e.preventDefault();
               const pastedText = e.clipboardData.getData("text/plain");
               if (pastedText) document.execCommand("insertText", false, pastedText);
-              requestAnimationFrame(checkDiaryTextImageTrigger);
+              requestAnimationFrame(() => {
+                commitDiaryEditorHtml();
+                checkDiaryTextImageTrigger();
+              });
             }}
             style={{
               display: "block",
@@ -5104,12 +5142,13 @@ export default function HomePage() {
             <div className="generalInfoTextImageInsertPanel">
               <div className="generalInfoTextImageInsertHead">
                 <strong>이미지 붙여넣기</strong>
-                <span>문자 끝 S 감지 · 본문 TEXT 안에 이미지가 들어갑니다</span>
+                <span>문자 끝 S/s 감지 · 본문 TEXT 안에 이미지가 들어갑니다</span>
                 <button
                   type="button"
                   className="secondaryButton smallActionButton"
                   onClick={() => {
                     removeDiaryTrailingImageTrigger();
+                    commitDiaryEditorHtml();
                     setShowDiaryTextImageInsert(false);
                   }}
                 >
@@ -5126,8 +5165,9 @@ export default function HomePage() {
                     accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png,image/*"
                     multiple
                     onChange={(e) => {
-                      insertDiaryImageFilesFromTextTrigger(e.target.files);
+                      const selected = e.target.files ? Array.from(e.target.files) : [];
                       e.target.value = "";
+                      insertDiaryImageFilesFromTextTrigger(selected);
                     }}
                   />
                 </label>
@@ -5146,10 +5186,10 @@ export default function HomePage() {
           )}
 
           <p className="generalInfoRichTextNote">
-            문장 끝에 <strong>S</strong>를 붙이면 이미지 붙여넣기(사진첩·복사 붙여넣기·파일 선택)가 열리고, 선택한 사진은 본문 TEXT 안에 들어갑니다.
+            문장 끝에 <strong>S</strong> 또는 <strong>s</strong>를 붙이면 이미지 붙여넣기(사진첩·복사 붙여넣기·파일 선택)가 열리고, 선택한 사진은 본문 TEXT 안에 들어갑니다.
           </p>
         </div>
-        <HyperlinkPreview text={diaryText} />
+        <HyperlinkPreview text={htmlToPlainText(diaryText)} />
 
         <div className="diary-photo-section" onPaste={handlePhotoPaste} tabIndex={0}>
           {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
