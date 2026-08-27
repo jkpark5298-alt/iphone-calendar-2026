@@ -39,7 +39,7 @@ interface Props {
 export default function GeneralInfoDetailModal({
   item,
   onClose,
-  onGenerateReport,
+  onGenerateReport: _onGenerateReport,
   onOpenAiReport,
   onDelete,
   onShareReport,
@@ -49,6 +49,7 @@ export default function GeneralInfoDetailModal({
   startInEditMode = false,
   onSaveItemEdit,
 }: Props) {
+  void _onGenerateReport;
   const [copyFeedback, setCopyFeedback] = React.useState<"text" | null>(null);
   const [isEditing, setIsEditing] = React.useState(Boolean(startInEditMode));
   const [editTitle, setEditTitle] = React.useState(item.title || "");
@@ -282,12 +283,9 @@ export default function GeneralInfoDetailModal({
   ]);
 
   const handleAiReportAction = React.useCallback(() => {
-    if (hasAiReport) {
-      onOpenAiReport?.(item.id);
-      return;
-    }
-    void onGenerateReport(item);
-  }, [hasAiReport, item, onGenerateReport, onOpenAiReport]);
+    // 일반정보수집에서는 AI 생성 대신 수동 보고서 편집 화면만 연다.
+    onOpenAiReport?.(item.id);
+  }, [item, onOpenAiReport]);
 
   if (!item) return null;
 
@@ -411,7 +409,7 @@ export default function GeneralInfoDetailModal({
         >
           <section className="generalInfoDetailSection generalInfoAiReportEntrySection">
             <div className="generalInfoSectionTitleRow">
-              <strong>AI 검증 보고서</strong>
+              <strong>검증 보고서</strong>
               <span
                 className="miniTag"
                 style={{
@@ -452,13 +450,13 @@ export default function GeneralInfoDetailModal({
                   fontWeight: 700,
                 }}
               >
-                📄 AI 검증 보고서 작성 중…
+                📄 보고서 준비 중…
               </div>
             ) : (
               <p className="mutedText" style={{ margin: "8px 0 10px", fontSize: 13 }}>
                 {hasAiReport
-                  ? "저장된 AI 검증 보고서를 열어 편집·팩트체크·PDF 저장할 수 있습니다."
-                  : "아직 보고서가 없습니다. 생성하면 AI 보고서 화면으로 이동합니다."}
+                  ? "저장된 검증 보고서를 열어 편집·팩트체크·PDF 저장할 수 있습니다."
+                  : "아직 보고서가 없습니다. 보고서 작성으로 직접 입력할 수 있습니다."}
               </p>
             )}
             <button
@@ -470,8 +468,8 @@ export default function GeneralInfoDetailModal({
               {isGeneratingReport
                 ? "작성 중…"
                 : hasAiReport
-                  ? "AI 보고서 열기"
-                  : "AI 보고서 생성"}
+                  ? "보고서 열기"
+                  : "보고서 작성"}
             </button>
           </section>
 
@@ -701,10 +699,10 @@ export default function GeneralInfoDetailModal({
             {reportImageSrcs.length > 0 && (
               <div className="generalInfoBodyImagePickBox" style={{ marginTop: 14 }}>
                 <strong style={{ display: "block", marginBottom: 8, fontSize: 13, color: "#7dd3fc" }}>
-                  AI 보고서 이미지에서 대표 선택
+                  보고서 이미지에서 대표 선택
                 </strong>
                 <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
-                  AI 검증 보고서(Fact Check)에 넣은 사진을 대표 이미지로 쓸 수 있습니다.
+                  Fact Check/보고서에 넣은 사진을 대표 이미지로 쓸 수 있습니다.
                 </p>
                 <div
                   style={{
@@ -946,8 +944,8 @@ export default function GeneralInfoDetailModal({
               {isGeneratingReport
                 ? "작성 중…"
                 : hasAiReport
-                  ? "AI 보고서 열기"
-                  : "AI 검증 보고서"}
+                  ? "보고서 열기"
+                  : "보고서 작성"}
             </button>
           )}
           {onDelete && !isEditing && (

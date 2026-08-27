@@ -9,6 +9,12 @@ import {
 } from "../../../lib/apiSecurity";
 import { normalizeReportPlainText } from "../../../lib/generalInfoHelpers";
 
+/**
+ * Fact Check / AI 검증 보고서 API.
+ * 이 앱의 일반정보수집 UI에서는 비활성화했지만,
+ * 다른 앱에서 Bearer APP_API_TOKEN / GENERAL_INFO_API_TOKEN 으로 호출 가능합니다.
+ */
+
 type FactCheckRequest = {
   title?: string;
   text?: string;

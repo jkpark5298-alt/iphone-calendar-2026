@@ -6,6 +6,12 @@ import {
   getServerGeminiApiKey,
 } from "../../../lib/apiSecurity";
 
+/**
+ * 일반정보 AI 자동분류 API.
+ * 이 앱 UI에서는 비활성화했지만, 다른 앱에서 Bearer APP_API_TOKEN /
+ * GENERAL_INFO_API_TOKEN 으로 호출해 재사용할 수 있습니다.
+ */
+
 type GeneralInfoAnalyzeRequest = {
   title?: string;
   text?: string;

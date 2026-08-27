@@ -254,7 +254,7 @@ export default function GeneralInfoAiReportScreen({
       <div className="giAiReportScreenPanel">
         <header className="giAiReportScreenHeader">
           <div className="giAiReportScreenTitleBlock">
-            <p className="giAiReportScreenEyebrow">AI 검증 보고서</p>
+            <p className="giAiReportScreenEyebrow">검증 보고서</p>
             <input
               className="giAiReportTitleInput giAiReportTitleInputHeader"
               value={draftTitle}
@@ -342,8 +342,8 @@ export default function GeneralInfoAiReportScreen({
         {reportLooksTruncated ? (
           <div className="giAiReportTruncatedWarn" role="status">
             보고서 본문이 비어 있거나 이전에 잘린 상태입니다.{" "}
-            <strong>Source DATA</strong>에서 AI 보고서를 다시 생성하거나, 아래{" "}
-            <strong>보고서 편집</strong>에서 본문을 보충하세요. 이미지는 본문 중간 S 또는
+            <strong>Source DATA</strong>에서 보고서를 다시 열거나, 아래{" "}
+            <strong>보고서 편집</strong>에서 본문을 직접 보충하세요. 이미지는 본문 중간 S 또는
             [이미지]로 넣을 수 있습니다.
           </div>
         ) : null}

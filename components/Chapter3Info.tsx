@@ -2,7 +2,7 @@
 
 /**
  * Chapter3Info.tsx
- * Chapter 3 — 일반 정보 수집 / 분류 / 저장
+ * Chapter 3 — 일반 정보 수집 / 분류 / 저장 (수동 Fact Check 정리함)
  * TravelDiaryApp의 "info" 탭 JSX 분리
  */
 
@@ -55,8 +55,9 @@ export interface Chapter3InfoProps {
   handleClearGeneralInfoCoverImage: () => void;
   handleRemoveGeneralInfoMediaItem: (index: number) => void;
   uploadInlineImageFile?: (file: File) => Promise<string>;
-  handleAnalyzeGeneralInfoDraft: () => void;
-  isAnalyzingGeneralInfo: boolean;
+  // AI 기능은 일반정보수집에서 비활성화(다른 앱/API에서 재사용). 핸들러는 선택.
+  handleAnalyzeGeneralInfoDraft?: () => void;
+  isAnalyzingGeneralInfo?: boolean;
   handleFactCheckGeneralInfoDraft?: () => void;
   isRunningGeneralInfoFactCheck?: boolean;
   geminiApiPacketStatus?: "available" | "depleted";
@@ -117,10 +118,10 @@ export function Chapter3Info({
   handleClearGeneralInfoCoverImage,
   handleRemoveGeneralInfoMediaItem,
   uploadInlineImageFile,
-  handleAnalyzeGeneralInfoDraft,
-  isAnalyzingGeneralInfo,
-  handleFactCheckGeneralInfoDraft,
-  isRunningGeneralInfoFactCheck = false,
+  handleAnalyzeGeneralInfoDraft: _handleAnalyzeGeneralInfoDraft,
+  isAnalyzingGeneralInfo: _isAnalyzingGeneralInfo = false,
+  handleFactCheckGeneralInfoDraft: _handleFactCheckGeneralInfoDraft,
+  isRunningGeneralInfoFactCheck: _isRunningGeneralInfoFactCheck = false,
   geminiApiPacketStatus = "available",
   handleConfirmGeneralInfo,
   handleSaveTemporaryGeneralInfoDraft,
@@ -144,7 +145,6 @@ export function Chapter3Info({
   const activeTab = generalInfoActiveTab;
   const setActiveTab = setGeneralInfoActiveTab;
   const [memoEditIndex, setMemoEditIndex] = React.useState<number | null>(null);
-  const [isApiGuideOpen, setIsApiGuideOpen] = React.useState(false);
 
   // 미디어 아이템 메모 업데이트
   const handleUpdateMediaMemo = React.useCallback((index: number, memo: string) => {
@@ -237,131 +237,12 @@ export function Chapter3Info({
     return extractGeneralInfoReportImageSrcs(generalInfoDraft.factCheckSummary);
   }, [generalInfoDraft.factCheckSummary]);
 
-  const isGeminiPacketDepleted = geminiApiPacketStatus === "depleted";
-
-  const renderApiKeyGuideButton = () => (
-    <button
-      type="button"
-      onClick={() => setIsApiGuideOpen((prev) => !prev)}
-      title={
-        isGeminiPacketDepleted
-          ? "GEMINI_API_KEY 패킷(크레딧) 부족"
-          : "GEMINI_API_KEY 패킷 사용 가능"
-      }
-      style={{
-        padding: "4px 10px",
-        fontSize: "12px",
-        borderRadius: "6px",
-        background: isGeminiPacketDepleted
-          ? "rgba(248, 113, 113, 0.18)"
-          : "rgba(74, 222, 128, 0.15)",
-        color: isGeminiPacketDepleted ? "#f87171" : "#4ade80",
-        border: isGeminiPacketDepleted
-          ? "1px solid rgba(248, 113, 113, 0.45)"
-          : "1px solid rgba(74, 222, 128, 0.3)",
-        cursor: "pointer",
-        fontWeight: "bold",
-      }}
-    >
-      {isGeminiPacketDepleted ? "● API 패킷 부족" : "● API 패킷 있음"}
-    </button>
-  );
-
-  const renderApiKeyGuideBox = () =>
-    isApiGuideOpen ? (
-      <div
-        className="geminiKeyBox"
-        style={{
-          marginBottom: "20px",
-          padding: "15px 18px",
-          borderRadius: "14px",
-          border: isGeminiPacketDepleted
-            ? "1px solid rgba(248, 113, 113, 0.45)"
-            : "1px solid rgba(74, 222, 128, 0.35)",
-          background: isGeminiPacketDepleted
-            ? "rgba(248, 113, 113, 0.08)"
-            : "rgba(22, 163, 74, 0.06)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-          <strong
-            style={{
-              color: isGeminiPacketDepleted ? "#f87171" : "#86efac",
-              fontSize: "14px",
-            }}
-          >
-            {isGeminiPacketDepleted
-              ? "빨간불 · API 패킷 부족"
-              : "초록불 · API 패킷 있음 (서버 GEMINI_API_KEY)"}
-          </strong>
-          <button
-            type="button"
-            className="secondaryButton smallActionButton"
-            onClick={() => setIsApiGuideOpen(false)}
-          >
-            닫기
-          </button>
-        </div>
-        {isGeminiPacketDepleted ? (
-          <p style={{ fontSize: "12px", color: "#fca5a5", margin: 0, lineHeight: 1.55, fontWeight: 700 }}>
-            Fact Check / AI 검증 보고서 작성 시 Gemini API 패킷(크레딧)이 부족합니다.
-            Google AI Studio에서 크레딧을 충전한 뒤 다시 시도하거나, 수동 Fact Check를 작성하세요.
-          </p>
-        ) : (
-          <p style={{ fontSize: "12px", color: "#86efac", margin: 0, lineHeight: 1.55 }}>
-            GEMINI_API_KEY 패킷이 있어 AI 분류·Fact Check·보고서 작성이 가능합니다.
-          </p>
-        )}
-        <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0, lineHeight: 1.55 }}>
-          앱에 키를 직접 입력하지 않습니다. Vercel Environment Variables에 등록된 키로
-          아래 기능이 동작합니다.
-        </p>
-        <ul
-          style={{
-            margin: 0,
-            paddingLeft: "18px",
-            fontSize: "12px",
-            color: "#cbd5e1",
-            lineHeight: 1.7,
-          }}
-        >
-          <li>
-            <strong
-              style={{ color: isGeminiPacketDepleted ? "#f87171" : "#4ade80" }}
-            >
-              GEMINI_API_KEY
-            </strong>{" "}
-            — OCR, 자동 분류, 요약, Fact Check, AI 검증 보고서
-            <span
-              style={{
-                color: isGeminiPacketDepleted ? "#f87171" : "#4ade80",
-                fontWeight: 800,
-              }}
-            >
-              {isGeminiPacketDepleted ? " · 패킷 부족" : " · 패킷 있음"}
-            </span>
-          </li>
-          <li>
-            <strong style={{ color: "#7dd3fc" }}>KMA_SERVICE_KEY</strong> — 날씨 정보
-          </li>
-          <li>
-            <strong style={{ color: "#7dd3fc" }}>GOOGLE_CALENDAR_ICS_URL</strong> — 구글
-            캘린더 일정 연동
-          </li>
-          <li>
-            <strong style={{ color: "#7dd3fc" }}>NEXT_PUBLIC_SUPABASE_URL / ANON_KEY</strong>{" "}
-            — 일반정보·일기·사진 저장·동기화
-          </li>
-        </ul>
-        <p style={{ fontSize: "11px", color: "#64748b", margin: 0, lineHeight: 1.5 }}>
-          신호등: 초록=패킷 있음 / 빨강=패킷 부족. 팩트체크·AI 보고서 성공 시 초록,
-          크레딧 소진 응답 시 빨강으로 바뀝니다.
-        </p>
-      </div>
-    ) : null;
+  // 일반정보수집은 수동 Fact Check 정리함 — AI/패킷 UI 비표시 (API는 다른 앱에서 재사용)
+  void geminiApiPacketStatus;
+  void _handleAnalyzeGeneralInfoDraft;
+  void _isAnalyzingGeneralInfo;
+  void _handleFactCheckGeneralInfoDraft;
+  void _isRunningGeneralInfoFactCheck;
 
   const textEndsWithImageTrigger = React.useCallback((raw: string) => {
     const text = String(raw || "").replace(/\u00a0/g, " ").replace(/\r/g, "");
@@ -527,7 +408,7 @@ export function Chapter3Info({
         </button>
       </div>
 
-      {/* ===== 정보 수집 탭 (입력 + AI 분류) ===== */}
+      {/* ===== 정보 수집 탭 (입력 + 수동 Fact Check) ===== */}
       {activeTab === "collect" && (
       <section className="leftColumn generalInfoLeftColumn" style={{ position: "relative", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
         {/* Scroll to Top Button */}
@@ -545,14 +426,10 @@ export function Chapter3Info({
         >맨 위로 ↑</button>
 
         <div className="chapterTitleBox" style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            {renderApiKeyGuideButton()}
-          </div>
           <p style={{ margin: "4px 0 0 0" }}>
-            일반 정보 수집하고 AI 분류, Fact Check, 검색 기능 수행
+            Fact Check된 내용을 정리·분류·저장하는 보관함입니다. (AI 자동분석은 사용하지 않습니다)
           </p>
         </div>
-        {renderApiKeyGuideBox()}
 
         <Card
           number="1"
@@ -682,7 +559,7 @@ export function Chapter3Info({
                 handleGeneralInfoRichPaste(event);
                 requestAnimationFrame(checkTextImageTrigger);
               }}
-              data-placeholder="기사 내용, 보고서 요약, 복사한 텍스트, 메모를 입력하세요."
+              data-placeholder="검증된 내용, 보고서 요약, 복사한 텍스트, 메모를 입력하세요."
               style={{
                 display: "block",
                 width: "100%",
@@ -747,9 +624,9 @@ export function Chapter3Info({
             )}
 
             <p className="generalInfoRichTextNote">
-              AI 분석에는 서식을 제외한 순수 Text가 사용되고, 저장함에는 편집된 색상/강조가 함께 표시됩니다.
+              저장함에는 편집된 색상/강조가 함께 표시됩니다.
               문장 끝에 <strong>S</strong>를 붙이면 이미지 붙여넣기가 열리고, 선택한 이미지는 본문 TEXT 안에 들어갑니다.
-              Text 입력 후 아래 <strong>AI Fact Check</strong> 버튼으로 바로 검증할 수 있습니다.
+              Fact Check 결과·판정·근거는 아래 카드에서 직접 입력하세요.
             </p>
           </div>
 
@@ -772,7 +649,7 @@ export function Chapter3Info({
                 <strong>자동 입력 안내</strong>
                 <p>
                   URL을 입력한 뒤 [URL 내용 자동 가져오기]를 누르면 제목, 본문 Text,
-                  대표 이미지가 자동 입력됩니다. 이후 [AI 자동분류]로 분류와 키워드를 생성하세요.
+                  대표 이미지가 자동 입력됩니다. 이어서 분류·키워드·Fact Check를 직접 입력하세요.
                 </p>
               </div>
             )}
@@ -819,7 +696,7 @@ export function Chapter3Info({
           <div className="generalInfoUploadBox">
             <div>
               <strong>이미지 / 동영상 자료</strong>
-              <p>이미지+Text, 동영상+Text, URL+Text 조합으로 저장할 수 있습니다. 동영상 AI 분석은 2차 단계에서 연결합니다.</p>
+              <p>이미지+Text, 동영상+Text, URL+Text 조합으로 저장할 수 있습니다.</p>
             </div>
             <label className="primaryLabel">
               이미지/동영상 선택
@@ -1058,10 +935,10 @@ export function Chapter3Info({
             {collectReportImageSrcs.length > 0 && (
               <div style={{ marginTop: 14 }}>
                 <strong style={{ display: "block", marginBottom: 8, fontSize: 13, color: "#7dd3fc" }}>
-                  AI 보고서 이미지에서 대표 선택
+                  보고서 이미지에서 대표 선택
                 </strong>
                 <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
-                  AI 검증 보고서(Fact Check)에 넣은 사진을 대표로 쓸 수 있습니다.
+                  Fact Check/보고서에 넣은 사진을 대표로 쓸 수 있습니다.
                 </p>
                 <div
                   style={{
@@ -1115,22 +992,6 @@ export function Chapter3Info({
           </div>
 
           <div className="generalInfoActionRow">
-            <button
-              className="primaryButton"
-              onClick={handleAnalyzeGeneralInfoDraft}
-              disabled={isAnalyzingGeneralInfo || isRunningGeneralInfoFactCheck}
-            >
-              {isAnalyzingGeneralInfo ? "🤖 Gemini 분석 중..." : "🤖 AI 자동분류"}
-            </button>
-            <button
-              className="secondaryButton"
-              type="button"
-              onClick={() => handleFactCheckGeneralInfoDraft?.()}
-              disabled={isAnalyzingGeneralInfo || isRunningGeneralInfoFactCheck || !handleFactCheckGeneralInfoDraft}
-              style={{ borderColor: "rgba(250, 204, 21, 0.45)", color: "#fde68a" }}
-            >
-              {isRunningGeneralInfoFactCheck ? "🔍 Fact Check 중..." : "🔍 AI Fact Check"}
-            </button>
             <button className="gradientButton" onClick={handleConfirmGeneralInfo}>
               {generalInfoEditingId ? "수정 저장" : "Confirm 저장"}
             </button>
@@ -1150,11 +1011,11 @@ export function Chapter3Info({
           </div>
         </Card>
 
-        {/* Card 2: AI 분류 / 키워드 / Fact Check */}
+        {/* Card 2: 분류 / 키워드 / Fact Check */}
         <Card
           number="2"
-          title="AI 분류 / 키워드 / Fact Check"
-          subtitle="자동분류 결과를 확인하고 필요하면 수정한 뒤 Confirm 저장합니다."
+          title="분류 / 키워드 / Fact Check"
+          subtitle="분류·키워드·Fact Check를 직접 입력한 뒤 Confirm 저장합니다."
         >
           <div className="generalInfoGrid">
             <label>
@@ -1163,7 +1024,7 @@ export function Chapter3Info({
                 value={generalInfoDraft.primaryCategory}
                 onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, primaryCategory: e.target.value }))}
               >
-                <option value="">자동분류 전</option>
+                <option value="">분류 선택</option>
                 {generalInfoCategories.map((category) => (
                   <option key={category} value={category}>{category}</option>
                 ))}
@@ -1215,14 +1076,14 @@ export function Chapter3Info({
           </div>
 
           <div className="generalInfoResultBox">
-            <strong>AI 키워드</strong>
+            <strong>키워드</strong>
             <div className="miniTags">
               {generalInfoDraft.keywords.length > 0 ? (
                 generalInfoDraft.keywords.map((kw) => (
                   <span key={kw}>#{String(kw).replace(/^#+/, "")}</span>
                 ))
               ) : (
-                <span>자동분류 후 표시됩니다.</span>
+                <span>위에서 키워드를 입력하면 표시됩니다.</span>
               )}
             </div>
           </div>
@@ -1233,7 +1094,7 @@ export function Chapter3Info({
               className="generalInfoEditableTextarea"
               value={generalInfoDraft.summary}
               onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, summary: e.target.value }))}
-              placeholder="자동분류 후 요약이 표시됩니다. 필요하면 직접 수정하세요."
+              placeholder="요약 내용을 직접 입력하세요."
               rows={4}
             />
           </div>
@@ -1242,15 +1103,6 @@ export function Chapter3Info({
             <div className="generalInfoSectionTitleRow">
               <strong>Fact Check</strong>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="secondaryButton smallActionButton"
-                  onClick={() => handleFactCheckGeneralInfoDraft?.()}
-                  disabled={isRunningGeneralInfoFactCheck || isAnalyzingGeneralInfo || !handleFactCheckGeneralInfoDraft}
-                  style={{ borderColor: "rgba(250, 204, 21, 0.45)", color: "#fde68a" }}
-                >
-                  {isRunningGeneralInfoFactCheck ? "작성 중…" : "🔍 AI Fact Check"}
-                </button>
                 <button
                   type="button"
                   className="secondaryButton smallActionButton generalInfoCopyAllBtn"
@@ -1270,7 +1122,7 @@ export function Chapter3Info({
               </div>
             </div>
             <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
-              Text 입력 후 <strong>AI Fact Check</strong>를 누르면 저장 전에도 바로 결과가 채워집니다. HTML이 보이면 <strong>정리</strong>를 눌러 깔끔한 텍스트로 바꾸세요.
+              외부에서 검증한 판정·근거를 여기에 직접 입력하세요. HTML이 보이면 <strong>정리</strong>를 눌러 깔끔한 텍스트로 바꾸세요.
             </p>
             <div className="generalInfoFactEditGrid">
               <label>
@@ -1447,19 +1299,19 @@ export function Chapter3Info({
                     <p className="cardSummary">{item.summary || "클립보드 이미지 자료"}</p>
                   </div>
 
-                  {/* AI 검증 보고서 / Source DATA / 고정 */}
+                  {/* 검증 보고서 / Source DATA / 고정 */}
                   <div className="generalInfoCardActions">
                     {hasDisplayableAiReport(String(item.factCheckSummary || "")) && (
                       <button
                         className="generalInfoCardAiReportButton"
                         type="button"
-                        title="AI 검증 보고서"
+                        title="검증 보고서"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleOpenGeneralInfoAiReport?.(item.id);
                         }}
                       >
-                        AI 검증 보고서
+                        검증 보고서
                       </button>
                     )}
                     <button
