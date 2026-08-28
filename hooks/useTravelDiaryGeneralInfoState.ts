@@ -56,6 +56,8 @@ export function useTravelDiaryGeneralInfoState({
   const [isExtractingGeneralInfoUrl, setIsExtractingGeneralInfoUrl] = useState(false);
   const [generalInfoDetailId, setGeneralInfoDetailId] = useState<number | null>(null);
   const [generalInfoAiReportId, setGeneralInfoAiReportId] = useState<number | null>(null);
+  const generalInfoAiReportIdRef = useRef<number | null>(null);
+  generalInfoAiReportIdRef.current = generalInfoAiReportId;
   const [generalInfoDetailEditMode, setGeneralInfoDetailEditMode] = useState(false);
   const [generalInfoActiveTab, setGeneralInfoActiveTab] = useState<"storage" | "collect">("storage");
   const [generalInfoEditingId, setGeneralInfoEditingId] = useState<number | null>(null);
@@ -142,10 +144,8 @@ export function useTravelDiaryGeneralInfoState({
                 mediaItems: mergedMediaItems,
                 formattedTextHtml:
                   data.item.formattedTextHtml || prevItem.formattedTextHtml || "",
-                factCheckSummary: pickPreferredFactCheckSummary(
-                  data.item.factCheckSummary,
-                  prevItem.factCheckSummary,
-                ),
+                // PUT 직후는 방금 저장한 로컬 보고서를 유지 (서버/길이 비교가 수정본을 되돌려 저장이 안 된 것처럼 보이던 문제)
+                factCheckSummary: prevItem.factCheckSummary || data.item.factCheckSummary,
                 isPinned: prevItem.isPinned || data.item.isPinned
               };
             }
@@ -264,6 +264,7 @@ export function useTravelDiaryGeneralInfoState({
                 mediaItems = localItem.mediaItems;
               }
 
+              const openReportId = generalInfoAiReportIdRef.current;
               map.set(remoteItem.id, {
                 ...remoteItem,
                 isPinned,
@@ -271,10 +272,13 @@ export function useTravelDiaryGeneralInfoState({
                 filePreview: remoteItem.filePreview || localItem.filePreview,
                 formattedTextHtml:
                   remoteItem.formattedTextHtml || localItem.formattedTextHtml || "",
-                factCheckSummary: pickPreferredFactCheckSummary(
-                  remoteItem.factCheckSummary,
-                  localItem.factCheckSummary,
-                ),
+                factCheckSummary:
+                  openReportId === remoteItem.id && localItem.factCheckSummary
+                    ? localItem.factCheckSummary
+                    : pickPreferredFactCheckSummary(
+                        remoteItem.factCheckSummary,
+                        localItem.factCheckSummary,
+                      ),
               });
             } else {
               map.set(remoteItem.id, remoteItem);
@@ -1684,12 +1688,15 @@ export function useTravelDiaryGeneralInfoState({
     title?: string,
   ) => {
     const targetItem = generalInfoItems.find((item) => item.id === itemId);
-    if (!targetItem) return;
+    if (!targetItem) {
+      showPasteHint("⚠️ 저장할 보고서를 찾지 못했습니다.");
+      throw new Error("저장할 보고서를 찾지 못했습니다.");
+    }
 
     let trimmed = salvageFactCheckHtml(String(text || "").trim());
     if (!trimmed) {
       showPasteHint("⚠️ Fact Check 내용을 입력해 주세요.");
-      return;
+      throw new Error("저장할 보고서 내용이 없습니다.");
     }
 
     if (extractMediaSrcFromHtml(trimmed).some((src) => src.startsWith("data:"))) {
@@ -1697,17 +1704,16 @@ export function useTravelDiaryGeneralInfoState({
       const inlineUpload = await uploadInlineDataUrlsInHtml(trimmed, `factcheck-${itemId}`);
       trimmed = inlineUpload.html;
       if (!inlineUpload.ok) {
-        showPasteHint(
-          `⚠️ 이미지 ${inlineUpload.failed}장 업로드 실패로 저장을 취소했습니다. 본문은 그대로 있으니 다시 저장해 주세요.`,
-        );
-        return;
+        const message = `이미지 ${inlineUpload.failed}장 업로드 실패로 저장을 취소했습니다. 본문은 그대로 있으니 다시 저장해 주세요.`;
+        showPasteHint(`⚠️ ${message}`);
+        throw new Error(message);
       }
     }
 
     trimmed = salvageFactCheckHtml(trimmed);
     if (!trimmed) {
       showPasteHint("⚠️ 저장할 보고서 본문이 없습니다.");
-      return;
+      throw new Error("저장할 보고서 본문이 없습니다.");
     }
 
     const nextTitle =

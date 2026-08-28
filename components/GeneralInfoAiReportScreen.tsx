@@ -56,6 +56,8 @@ export default function GeneralInfoAiReportScreen({
   const [saving, setSaving] = React.useState(false);
   const [saveMsg, setSaveMsg] = React.useState("");
   const [infographicUploading, setInfographicUploading] = React.useState(false);
+  const getEditorHtmlRef = React.useRef<(() => string) | null>(null);
+  const prevItemIdRef = React.useRef(item.id);
 
   const reportHtml = String(item.factCheckSummary || "").trim();
   const hasReport = hasDisplayableAiReport(reportHtml) || hasDisplayableAiReport(draftHtml);
@@ -81,10 +83,13 @@ export default function GeneralInfoAiReportScreen({
   );
 
   React.useEffect(() => {
+    const itemChanged = prevItemIdRef.current !== item.id;
+    prevItemIdRef.current = item.id;
+    if (!itemChanged && dirty) return;
     setDraftHtml(normalizeAiReportEditorHtml(String(item.factCheckSummary || "")));
     setDraftTitle(String(item.title || ""));
-    setSaveMsg("");
-  }, [item.id, item.factCheckSummary, item.title]);
+    if (itemChanged) setSaveMsg("");
+  }, [item.id, item.factCheckSummary, item.title, dirty]);
 
   const displayHtml = React.useMemo(() => {
     const raw = tab === "body" || tab === "infographic" ? draftHtml : reportHtml || draftHtml;
@@ -154,7 +159,13 @@ export default function GeneralInfoAiReportScreen({
 
   const handleSave = React.useCallback(async () => {
     if (!onSaveReport) return;
-    const html = normalizeAiReportEditorHtml(draftHtml);
+    const liveBody = getEditorHtmlRef.current?.();
+    const infos = extractInfographicsFromHtml(draftHtmlRef.current);
+    const html = normalizeAiReportEditorHtml(
+      liveBody
+        ? upsertInfographicInHtml(liveBody, infos)
+        : draftHtmlRef.current || draftHtml,
+    );
     if (!html || html === "<p></p>") {
       alert("저장할 보고서 내용이 없습니다.");
       return;
@@ -164,6 +175,8 @@ export default function GeneralInfoAiReportScreen({
     setSaveMsg("");
     try {
       await onSaveReport(html, item.factCheckStatus || "확인 전", nextTitle);
+      setDraftHtml(html);
+      draftHtmlRef.current = html;
       setSaveMsg("✅ 저장됨");
     } catch (error) {
       console.error(error);
@@ -275,7 +288,7 @@ export default function GeneralInfoAiReportScreen({
               <button
                 type="button"
                 className="giAiReportPrimaryBtn"
-                disabled={saving || !dirty}
+                disabled={saving}
                 onClick={() => void handleSave()}
               >
                 {saving ? "저장 중…" : dirty ? "저장" : "저장됨"}
@@ -364,9 +377,13 @@ export default function GeneralInfoAiReportScreen({
             </>
           )}
 
-          {tab === "body" && (
+          <div style={{ display: tab === "body" ? "block" : "none" }}>
+            <p className="giAiReportHint" style={{ margin: "0 0 8px" }}>
+              수정한 뒤 위쪽 <strong>저장</strong> 또는 아래 <strong>보고서 저장</strong>을 누르세요.
+            </p>
             <AiReportRichEditor
               html={stripInfographicsFromHtml(draftHtml || "<p></p>")}
+              getHtmlRef={getEditorHtmlRef}
               onChange={(html) => {
                 setDraftHtml((prev) => {
                   const infos = extractInfographicsFromHtml(prev);
@@ -380,7 +397,7 @@ export default function GeneralInfoAiReportScreen({
               onUploadImage={onUploadImage}
               onMediaInserted={handleMediaInserted}
             />
-          )}
+          </div>
 
           {tab === "infographic" && (
             <AiReportInfographicPanel
@@ -418,7 +435,7 @@ export default function GeneralInfoAiReportScreen({
             <button
               type="button"
               className="giAiReportPrimaryBtn"
-              disabled={saving || !dirty}
+              disabled={saving}
               onClick={() => void handleSave()}
             >
               {saving ? "저장 중…" : "보고서 저장"}

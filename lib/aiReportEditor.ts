@@ -87,5 +87,7 @@ export function normalizeAiReportEditorHtml(html: string): string {
   if (!trimmed || trimmed === "<p><br></p>" || trimmed === "<p></p>" || trimmed === "<br>") {
     return "<p></p>";
   }
-  return rewriteDarkAiReportTextColors(trimmed);
+  // 사용자가 고른 글자색(빨강/파랑 등)을 저장·재오픈 시 그대로 유지한다.
+  // 예전에는 다크 배경용으로 어두운 색을 #e2e8f0으로 바꿔 버려, 보고서 편집 색이 사라졌다.
+  return trimmed;
 }

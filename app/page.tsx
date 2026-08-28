@@ -8836,6 +8836,7 @@ ${photo.memoText}
           }
           startInEditMode={infoState.generalInfoDetailEditMode}
           onSaveItemEdit={infoState.handleSaveGeneralInfoDetailEdit}
+          onUploadInlineImage={infoState.uploadGeneralInfoInlineImageFile}
         />
       )}
   

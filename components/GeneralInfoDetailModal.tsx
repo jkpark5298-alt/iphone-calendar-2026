@@ -16,6 +16,9 @@ import {
   extractGeneralInfoBodyImageSrcs,
   extractGeneralInfoReportImageSrcs,
   looksLikeHtmlContent,
+  editorHasInlineImageTrigger,
+  removeInlineImageTrigger,
+  insertInlineMediaIntoEditor,
 } from "../lib/generalInfoHelpers";
 import type { GeneralInfoMediaItem } from "../lib/generalInfoHelpers";
 import React from "react";
@@ -34,6 +37,7 @@ interface Props {
   needsManualFactCheck?: boolean;
   startInEditMode?: boolean;
   onSaveItemEdit?: (item: GeneralInfoItem) => void | Promise<void>;
+  onUploadInlineImage?: (file: File) => Promise<string>;
 }
 
 export default function GeneralInfoDetailModal({
@@ -48,6 +52,7 @@ export default function GeneralInfoDetailModal({
   needsManualFactCheck = false,
   startInEditMode = false,
   onSaveItemEdit,
+  onUploadInlineImage,
 }: Props) {
   void needsManualFactCheck;
   void _onGenerateReport;
@@ -68,7 +73,10 @@ export default function GeneralInfoDetailModal({
   );
   const bodyRichTextRef = React.useRef<HTMLDivElement | null>(null);
   const coverImageFileRef = React.useRef<HTMLInputElement | null>(null);
+  const bodyImageFileRef = React.useRef<HTMLInputElement | null>(null);
+  const bodyImageInsertPanelRef = React.useRef<HTMLDivElement | null>(null);
   const detailBodyRef = React.useRef<HTMLDivElement | null>(null);
+  const [showBodyImageInsert, setShowBodyImageInsert] = React.useState(false);
 
   const hasAiReport = hasDisplayableAiReport(String(item?.factCheckSummary || ""));
 
@@ -89,7 +97,139 @@ export default function GeneralInfoDetailModal({
     bodyRichTextRef.current.innerHTML = getGeneralInfoFormattedHtml(item);
     enhanceInlineImageBlocks(bodyRichTextRef.current);
     bindInlineImageRemoveHandler(bodyRichTextRef.current);
+    setShowBodyImageInsert(false);
   }, [isEditing, bodyEditorKey, item]);
+
+  const textEndsWithImageTrigger = React.useCallback((raw: string) => {
+    const text = String(raw || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/\r/g, "");
+    const trimmedEnd = text.replace(/[ \t\n]+$/g, "");
+    return /[Ss]$/.test(trimmedEnd);
+  }, []);
+
+  const checkBodyImageTrigger = React.useCallback(() => {
+    const editor = bodyRichTextRef.current;
+    const plain = String(editor?.innerText || "");
+    setShowBodyImageInsert(
+      editorHasInlineImageTrigger(editor) || textEndsWithImageTrigger(plain),
+    );
+  }, [textEndsWithImageTrigger]);
+
+  const insertBodyImageFiles = React.useCallback(
+    (files: FileList | File[] | null) => {
+      if (!files || (files instanceof FileList ? files.length === 0 : files.length === 0)) return;
+      const afterNode = removeInlineImageTrigger(bodyRichTextRef.current);
+      const list = dedupeImageFiles(files instanceof FileList ? Array.from(files) : files);
+      const mediaFiles = list.filter(
+        (file) =>
+          file.type.startsWith("image/") ||
+          file.type.startsWith("video/") ||
+          /\.(jpe?g|png|gif|webp|heic|heif|mp4|mov|webm|m4v)$/i.test(file.name || ""),
+      );
+      if (!mediaFiles.length) {
+        alert("이미지/동영상 파일을 선택해 주세요.");
+        return;
+      }
+
+      void (async () => {
+        try {
+          const editor = bodyRichTextRef.current;
+          if (!editor) return;
+
+          const uploaded: Array<{ src: string; name: string; type: "image" | "video" }> = [];
+          for (const [index, file] of mediaFiles.entries()) {
+            const isVideo =
+              file.type.startsWith("video/") || /\.(mp4|mov|webm|m4v)$/i.test(file.name || "");
+            let src = "";
+            if (!isVideo && onUploadInlineImage) {
+              try {
+                src = String((await onUploadInlineImage(file)) || "").trim();
+              } catch (error) {
+                console.error("body inline image upload failed", error);
+              }
+            }
+            if (!src) {
+              const loaded = await readFilesAsDataUrls([file]);
+              src = String(loaded[0]?.dataUrl || "").trim();
+            }
+            if (!src) continue;
+            uploaded.push({
+              src,
+              name: file.name || `inline-${index + 1}`,
+              type: isVideo ? "video" : "image",
+            });
+          }
+
+          if (!uploaded.length) {
+            alert("이미지를 넣지 못했습니다. 다시 시도해 주세요.");
+            return;
+          }
+
+          insertInlineMediaIntoEditor(editor, uploaded, { afterNode });
+          enhanceInlineImageBlocks(editor);
+          bindInlineImageRemoveHandler(editor);
+          setBodyImageTick((prev) => prev + 1);
+        } catch (error) {
+          console.error("inline image insert failed", error);
+          alert("이미지를 본문 TEXT에 넣지 못했습니다. 다시 시도해 주세요.");
+        } finally {
+          setShowBodyImageInsert(false);
+        }
+      })();
+    },
+    [onUploadInlineImage],
+  );
+
+  const handleBodyImageInsertPaste = React.useCallback(
+    (event: React.ClipboardEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const pastedFiles = collectClipboardImageFiles(event.clipboardData);
+      if (pastedFiles.length > 0) {
+        insertBodyImageFiles(pastedFiles);
+      }
+    },
+    [insertBodyImageFiles],
+  );
+
+  const handleBodyEditorPaste = React.useCallback(
+    (event: React.ClipboardEvent<HTMLDivElement>) => {
+      const pastedFiles = collectClipboardImageFiles(event.clipboardData);
+      if (pastedFiles.length > 0) {
+        event.preventDefault();
+        insertBodyImageFiles(pastedFiles);
+        return;
+      }
+      requestAnimationFrame(checkBodyImageTrigger);
+    },
+    [checkBodyImageTrigger, insertBodyImageFiles],
+  );
+
+  React.useEffect(() => {
+    if (!isEditing) return;
+    const editor = bodyRichTextRef.current;
+    if (!editor) return;
+    const recheck = () => checkBodyImageTrigger();
+    editor.addEventListener("keyup", recheck);
+    editor.addEventListener("compositionend", recheck);
+    editor.addEventListener("input", recheck);
+    return () => {
+      editor.removeEventListener("keyup", recheck);
+      editor.removeEventListener("compositionend", recheck);
+      editor.removeEventListener("input", recheck);
+    };
+  }, [isEditing, bodyEditorKey, checkBodyImageTrigger]);
+
+  React.useEffect(() => {
+    if (!showBodyImageInsert) return;
+    const el = bodyImageInsertPanelRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }, [showBodyImageInsert]);
 
   React.useEffect(() => {
     if (detailBodyRef.current) {
@@ -111,6 +251,7 @@ export default function GeneralInfoDetailModal({
     setEditKeywordsText((item.keywords || []).join(", "));
     setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
     setBodyEditorKey((prev) => prev + 1);
+    setShowBodyImageInsert(false);
     setIsEditing(false);
   }, [item]);
 
@@ -266,6 +407,7 @@ export default function GeneralInfoDetailModal({
     if (onSaveItemEdit) {
       await onSaveItemEdit(updated);
     }
+    setShowBodyImageInsert(false);
     setIsEditing(false);
   }, [
     editKeywordsText,
@@ -401,7 +543,7 @@ export default function GeneralInfoDetailModal({
           ref={detailBodyRef}
           style={{ display: "flex", flexDirection: "column" }}
         >
-          <section className="generalInfoDetailSection generalInfoAiReportEntrySection">
+          <section className="generalInfoDetailSection generalInfoAiReportEntrySection" style={{ order: 0 }}>
             <div className="generalInfoSectionTitleRow">
               <strong>Report</strong>
               <span
@@ -459,7 +601,7 @@ export default function GeneralInfoDetailModal({
             </button>
           </section>
 
-          <section className="generalInfoDetailSection">
+          <section className="generalInfoDetailSection" style={{ order: 3 }}>
             <div className="generalInfoSectionTitleRow">
               <strong>대표 이미지 / 자료</strong>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -741,7 +883,7 @@ export default function GeneralInfoDetailModal({
             )}
           </section>
 
-          <section className="generalInfoDetailSection">
+          <section className="generalInfoDetailSection" style={{ order: 1 }}>
             <strong>요약</strong>
             {isEditing ? (
               <textarea
@@ -767,7 +909,7 @@ export default function GeneralInfoDetailModal({
             )}
           </section>
 
-          <section className="generalInfoDetailSection">
+          <section className="generalInfoDetailSection" style={{ order: 2 }}>
             <div className="generalInfoSectionTitleRow">
               <strong>본문 TEXT</strong>
               {!isEditing && (
@@ -781,34 +923,89 @@ export default function GeneralInfoDetailModal({
               )}
             </div>
             {isEditing ? (
-              <div
-                key={bodyEditorKey}
-                ref={bodyRichTextRef}
-                className="generalInfoRichTextEditor"
-                contentEditable
-                suppressContentEditableWarning
-                role="textbox"
-                tabIndex={0}
-                onInput={() => setBodyImageTick((prev) => prev + 1)}
-                data-placeholder="본문 TEXT를 수정하세요. 이미지에 ×로 삭제할 수 있습니다."
-                style={{
-                  display: "block",
-                  width: "100%",
-                  minHeight: 180,
-                  maxHeight: 420,
-                  overflowY: "auto",
-                  boxSizing: "border-box",
-                  borderRadius: 14,
-                  border: "1px solid rgba(56, 189, 248, 0.45)",
-                  background: "#020617",
-                  color: "#e2e8f0",
-                  padding: "14px 15px",
-                  fontSize: 14,
-                  lineHeight: 1.75,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
-              />
+              <>
+                <div
+                  key={bodyEditorKey}
+                  ref={bodyRichTextRef}
+                  className="generalInfoRichTextEditor"
+                  contentEditable
+                  suppressContentEditableWarning
+                  role="textbox"
+                  tabIndex={0}
+                  onInput={() => {
+                    setBodyImageTick((prev) => prev + 1);
+                    checkBodyImageTrigger();
+                  }}
+                  onKeyUp={checkBodyImageTrigger}
+                  onCompositionEnd={checkBodyImageTrigger}
+                  onPaste={handleBodyEditorPaste}
+                  data-placeholder="본문 TEXT를 수정하세요. 문장 끝에 S를 붙이면 이미지를 넣을 수 있습니다."
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    minHeight: 180,
+                    maxHeight: 420,
+                    overflowY: "auto",
+                    boxSizing: "border-box",
+                    borderRadius: 14,
+                    border: "1px solid rgba(56, 189, 248, 0.45)",
+                    background: "#020617",
+                    color: "#e2e8f0",
+                    padding: "14px 15px",
+                    fontSize: 14,
+                    lineHeight: 1.75,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                />
+                {showBodyImageInsert && (
+                  <div ref={bodyImageInsertPanelRef} className="generalInfoTextImageInsertPanel">
+                    <div className="generalInfoTextImageInsertHead">
+                      <strong>이미지 붙여넣기</strong>
+                      <span>S 감지 · 사진첩 또는 복사 붙여넣기 · 본문 TEXT 안에 들어갑니다</span>
+                      <button
+                        type="button"
+                        className="secondaryButton smallActionButton"
+                        onClick={() => {
+                          removeInlineImageTrigger(bodyRichTextRef.current);
+                          setShowBodyImageInsert(false);
+                        }}
+                      >
+                        닫기
+                      </button>
+                    </div>
+                    <div className="generalInfoTextImageInsertActions">
+                      <label className="primaryLabel generalInfoTextImageFileLabel">
+                        🖼 사진첩 · 파일 선택
+                        <input
+                          ref={bodyImageFileRef}
+                          type="file"
+                          accept="image/*,image/heic,image/heif,video/*"
+                          multiple
+                          onChange={(e) => {
+                            insertBodyImageFiles(e.target.files);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                      <div
+                        className="generalInfoTextImagePasteZone"
+                        contentEditable
+                        suppressContentEditableWarning
+                        role="textbox"
+                        tabIndex={0}
+                        onPaste={handleBodyImageInsertPaste}
+                      >
+                        📋 아이폰·PC 이미지 여기 붙여넣기 (Ctrl+V / ⌘V)
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <p className="mutedText" style={{ margin: "8px 0 0", fontSize: 12 }}>
+                  문장 끝에 <strong>S</strong> 또는 <strong>s</strong>를 붙이면 사진첩·복사 붙여넣기가
+                  열리고, 선택한 이미지는 본문 TEXT 안에 들어갑니다.
+                </p>
+              </>
             ) : item.text || item.formattedTextHtml ? (
               <div
                 className="generalInfoFormattedTextView"
@@ -821,7 +1018,7 @@ export default function GeneralInfoDetailModal({
             )}
           </section>
 
-          <section className="generalInfoDetailSection">
+          <section className="generalInfoDetailSection" style={{ order: 4 }}>
             <strong>분류</strong>
             {isEditing ? (
               <div style={{ display: "grid", gap: 8 }}>
@@ -853,7 +1050,7 @@ export default function GeneralInfoDetailModal({
             )}
           </section>
 
-          <section className="generalInfoDetailSection">
+          <section className="generalInfoDetailSection" style={{ order: 5 }}>
             <strong>키워드</strong>
             {isEditing ? (
               <input
@@ -874,7 +1071,7 @@ export default function GeneralInfoDetailModal({
             )}
           </section>
 
-          <section className="generalInfoDetailSection">
+          <section className="generalInfoDetailSection" style={{ order: 6 }}>
             <strong>출처 URL</strong>
             {isEditing ? (
               <input

@@ -43,6 +43,8 @@ type Props = {
   onUploadImage?: (file: File) => Promise<string>;
   /** 이미지/동영상 삽입 직후 자동 저장용 */
   onMediaInserted?: (html: string) => void | Promise<void>;
+  /** 저장 시 편집기 최신 HTML을 읽기 위한 콜백 보관 */
+  getHtmlRef?: React.MutableRefObject<(() => string) | null>;
 };
 
 const textEndsWithImageTrigger = (raw: string) => {
@@ -121,6 +123,7 @@ export function AiReportRichEditor({
   onChange,
   onUploadImage,
   onMediaInserted,
+  getHtmlRef,
 }: Props) {
   const onChangeRef = React.useRef(onChange);
   const onUploadImageRef = React.useRef(onUploadImage);
@@ -137,6 +140,17 @@ export function AiReportRichEditor({
   onChangeRef.current = onChange;
   onUploadImageRef.current = onUploadImage;
   onMediaInsertedRef.current = onMediaInserted;
+
+  React.useEffect(() => {
+    if (!getHtmlRef) return;
+    getHtmlRef.current = () => {
+      const ed = editorRef.current;
+      return ed ? normalizeAiReportEditorHtml(ed.getHTML()) : lastEmittedRef.current;
+    };
+    return () => {
+      getHtmlRef.current = null;
+    };
+  }, [getHtmlRef]);
 
   const syncImageTrigger = React.useCallback((ed: Editor | null) => {
     const next = tipTapHasImageTrigger(ed);
@@ -222,7 +236,7 @@ export function AiReportRichEditor({
       }),
       Underline,
       TextStyle,
-      Color,
+      Color.configure({ types: ["textStyle"] }),
       Highlight.configure({ multicolor: true }),
       FontSize,
       AiReportImage,
@@ -351,7 +365,11 @@ export function AiReportRichEditor({
       ed.chain().focus().setFontSize(`${next}px`).run();
       return;
     }
-    if (command === "foreColor" && value) {
+    if (command === "foreColor") {
+      if (!value || value === "inherit" || value === "unset") {
+        ed.chain().focus().unsetColor().run();
+        return;
+      }
       ed.chain().focus().setColor(value).run();
       return;
     }
@@ -408,7 +426,13 @@ export function AiReportRichEditor({
             const next = stepAiReportFontSize(currentFontPx, delta);
             editor.chain().focus().setFontSize(`${next}px`).run();
           }}
-          onColor={(color) => editor.chain().focus().setColor(color).run()}
+          onColor={(color) => {
+            if (!color) {
+              editor.chain().focus().unsetColor().run();
+              return;
+            }
+            editor.chain().focus().setColor(color).run();
+          }}
           onHighlight={(bg) => editor.chain().focus().toggleHighlight({ color: bg }).run()}
           onInsertChar={(ch) => editor.chain().focus().insertContent(ch).run()}
           onRemoveFormat={() => editor.chain().focus().unsetAllMarks().run()}
@@ -444,7 +468,7 @@ export function AiReportRichEditor({
               <input
                 ref={triggerFileRef}
                 type="file"
-                accept="image/*,video/*"
+                accept="image/*,image/heic,image/heif,video/*"
                 multiple
                 onChange={(e) => {
                   void insertMediaFiles(e.target.files, { removeTrigger: true });
@@ -480,7 +504,7 @@ export function AiReportRichEditor({
       <input
         ref={fileRef}
         type="file"
-        accept="image/*,video/*"
+        accept="image/*,image/heic,image/heif,video/*"
         multiple
         style={{ display: "none" }}
         onChange={(e) => {

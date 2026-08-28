@@ -551,6 +551,7 @@ export function Chapter3Info({
               tabIndex={0}
               onInput={checkTextImageTrigger}
               onKeyUp={checkTextImageTrigger}
+              onCompositionEnd={checkTextImageTrigger}
               onBlur={(e) => {
                 // 포커스가 버튼으로 이동할 때는 sync 생략 (버튼 핸들러가 직접 최신 텍스트를 읽음)
                 const rel = e.relatedTarget as HTMLElement | null;
@@ -559,6 +560,12 @@ export function Chapter3Info({
                 checkTextImageTrigger();
               }}
               onPaste={(event) => {
+                const pastedFiles = collectClipboardImageFiles(event.clipboardData);
+                if (pastedFiles.length > 0) {
+                  event.preventDefault();
+                  insertImageFilesFromTextTrigger(pastedFiles);
+                  return;
+                }
                 handleGeneralInfoRichPaste(event);
                 requestAnimationFrame(checkTextImageTrigger);
               }}
@@ -604,7 +611,7 @@ export function Chapter3Info({
                     <input
                       ref={textImageFileRef}
                       type="file"
-                      accept="image/*,video/*"
+                      accept="image/*,image/heic,image/heif,video/*"
                       multiple
                       onChange={(e) => {
                         insertImageFilesFromTextTrigger(e.target.files);

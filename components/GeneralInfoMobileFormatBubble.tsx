@@ -255,7 +255,7 @@ export function GeneralInfoMobileFormatBubble({
             title={c.label}
             onMouseDown={keep}
             onTouchStart={keep}
-            onClick={() => onCommand("foreColor", c.color)}
+            onClick={() => onCommand("foreColor", c.id === "default" ? "" : c.color)}
             style={{ background: c.color }}
           />
         ))}
