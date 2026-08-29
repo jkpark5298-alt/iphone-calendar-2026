@@ -302,6 +302,16 @@ function storageKey(type: string, month: number, day: number, year: number = 202
   return `iphone-diary-${year}-${type}-${pad(month)}-${pad(day)}`;
 }
 
+function diaryPendingStorageKey(month: number, day: number, year: number = 2026) {
+  return `${storageKey("diary", month, day, year)}-pending`;
+}
+
+function isDiaryEditorBlank(editor: HTMLElement | null) {
+  if (!editor) return true;
+  const liveText = String(editor.innerText || "").replace(/\u00a0/g, " ").trim();
+  return !liveText && !editor.querySelector("img, video");
+}
+
 function weatherStorageKey(month: number, day: number, year: number = 2026) {
   if (year === 2026) {
     return `iphone-diary-2026-weather-${pad(month)}-${pad(day)}`;
@@ -660,6 +670,7 @@ export default function HomePage() {
   const diaryRichTextRef = useRef<HTMLDivElement | null>(null);
   const diaryTextImageFileRef = useRef<HTMLInputElement | null>(null);
   const diaryHtmlFromEditorRef = useRef("");
+  const diarySaveGenRef = useRef(0);
   const [showDiaryTextImageInsert, setShowDiaryTextImageInsert] = useState(false);
   const infoTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const diaryEditStartRef = useRef<{ key: string; diaryText: string; voiceText: string } | null>(null);
@@ -741,16 +752,28 @@ export default function HomePage() {
             const loaded = await readFilesAsDataUrls([file]);
             src = String(loaded[0]?.dataUrl || "").trim();
           } else {
-            // 아이폰 원본(HEIC/고해상도)은 data URL이 커서 저장/삽입이 실패하기 쉬움 → 본문용으로 축소
-            try {
-              src = String(await makeOptimizedImageDataUrl(file) || "").trim();
-            } catch (readError) {
-              console.warn("diary inline image optimize failed, fallback read", readError);
-              const loaded = await readFilesAsDataUrls([file]);
-              src = String(loaded[0]?.dataUrl || "").trim();
-            }
-            if (src.startsWith("data:image")) {
-              src = String(await makeImageDataUrl(src, 960, 0.72, true) || src).trim();
+            // data URL을 본문에 넣으면 저장이 실패하고 앱을 나갔다 오면 글이 사라짐 → Storage URL 사용
+            const uploadedItem = await uploadPhotoToSupabase(
+              file,
+              "diary-photos",
+              currentMonth,
+              currentDay,
+              Date.now() % 100000,
+              currentYear,
+            );
+            if (uploadedItem?.url) {
+              src = uploadedItem.url;
+            } else {
+              try {
+                src = String(await makeOptimizedImageDataUrl(file) || "").trim();
+              } catch (readError) {
+                console.warn("diary inline image optimize failed, fallback read", readError);
+                const loaded = await readFilesAsDataUrls([file]);
+                src = String(loaded[0]?.dataUrl || "").trim();
+              }
+              if (src.startsWith("data:image")) {
+                src = String(await makeImageDataUrl(src, 960, 0.72, true) || src).trim();
+              }
             }
           }
           if (!src) continue;
@@ -917,7 +940,7 @@ export default function HomePage() {
   }
 
   async function loadDiaryEntryFromSupabase(month: number, day: number, year: number = currentYear) {
-    if (!isSupabaseConfigured || !supabase) return null;
+    if (!isSupabaseConfigured || !supabase) return { status: "skipped" as const };
 
     const { data, error } = await supabase
       .from("diary_entries")
@@ -927,10 +950,13 @@ export default function HomePage() {
 
     if (error) {
       console.warn("Supabase diary load error:", error.message);
-      return null;
+      return { status: "error" as const };
     }
 
-    return data as { diary_text?: string | null; voice_text?: string | null; weather?: any } | null;
+    return {
+      status: "ok" as const,
+      data: data as { diary_text?: string | null; voice_text?: string | null; weather?: any } | null,
+    };
   }
 
   async function loadInfoEntryFromSupabase(month: number, day: number, year: number = currentYear) {
@@ -1233,10 +1259,10 @@ export default function HomePage() {
 
 
 
-  function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string, year: number = currentYear) {
-    if (!isSupabaseConfigured || !supabase) return;
+  async function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string, year: number = currentYear) {
+    if (!isSupabaseConfigured || !supabase) return true;
 
-    void supabase
+    const { error } = await supabase
       .from("diary_entries")
       .upsert(
         {
@@ -1246,10 +1272,13 @@ export default function HomePage() {
           updated_at: new Date().toISOString(),
         },
         { onConflict: "entry_date" }
-      )
-      .then(({ error }) => {
-        if (error) console.warn("Supabase diary save error:", error.message);
-      });
+      );
+
+    if (error) {
+      console.warn("Supabase diary save error:", error.message);
+      return false;
+    }
+    return true;
   }
 
   function saveInfoEntryToSupabase(month: number, day: number, nextInfoText: string, year: number = currentYear) {
@@ -1794,19 +1823,25 @@ export default function HomePage() {
     let isActive = true;
     const photoKey = key(currentMonth, currentDay, currentYear);
 
-    // Supabase가 설정된 상태에서는 서버 데이터를 우선합니다.
-    // 예전 localStorage 데이터가 기기마다 달라서 아이폰/PC가 다르게 보이는 문제를 방지합니다.
-    if (isSupabaseConfigured && supabase) {
+    let localDiaryText = "";
+    let localVoiceText = "";
+    try {
+      const raw = localStorage.getItem(storageKey("diary", currentMonth, currentDay, currentYear));
+      const data = raw ? JSON.parse(raw) : {};
+      localDiaryText = data.diaryText || "";
+      localVoiceText = data.voiceText || "";
+      setDiaryText(localDiaryText);
+      setVoiceText(localVoiceText);
+      diaryHtmlFromEditorRef.current = localDiaryText;
+    } catch {
       setDiaryText("");
       setVoiceText("");
+    }
+
+    if (isSupabaseConfigured && supabase) {
       setPhotos(prev => ({ ...prev, [photoKey]: [] }));
     } else {
       try {
-        const raw = localStorage.getItem(storageKey("diary", currentMonth, currentDay, currentYear));
-        const data = raw ? JSON.parse(raw) : {};
-        setDiaryText(data.diaryText || "");
-        setVoiceText(data.voiceText || "");
-
         const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay, currentYear));
         const items = rawPhotos ? JSON.parse(rawPhotos) : [];
         setPhotos(prev => ({ ...prev, [photoKey]: items }));
@@ -1828,25 +1863,24 @@ export default function HomePage() {
           }
         }
       } catch {
-        setDiaryText("");
-        setVoiceText("");
+        // 로컬 사진/날씨만 실패한 경우 본문은 유지
       }
     }
 
-    loadDiaryEntryFromSupabase(currentMonth, currentDay, currentYear).then(remoteData => {
+    const pendingKey = diaryPendingStorageKey(currentMonth, currentDay, currentYear);
+    const pendingLocalSave = (() => {
+      try {
+        return localStorage.getItem(pendingKey) === "true";
+      } catch {
+        return false;
+      }
+    })();
+
+    loadDiaryEntryFromSupabase(currentMonth, currentDay, currentYear).then(remoteResult => {
       if (!isActive) return;
 
-      const remoteDiaryText = remoteData?.diary_text || "";
-      const remoteVoiceText = remoteData?.voice_text || "";
-      setDiaryText(remoteDiaryText);
-      setVoiceText(remoteVoiceText);
-      localStorage.setItem(
-        storageKey("diary", currentMonth, currentDay, currentYear),
-        JSON.stringify({ diaryText: remoteDiaryText, voiceText: remoteVoiceText })
-      );
-
-      const remoteWeather = remoteData?.weather;
-      if (remoteWeather && typeof remoteWeather === "object") {
+      const applyRemoteWeather = (remoteWeather: any) => {
+        if (!remoteWeather || typeof remoteWeather !== "object") return;
         if (isWeatherForSelectedDate(remoteWeather, currentMonth, currentDay, currentYear)) {
           setWeather(remoteWeather.weather || "확인 필요");
           setTemp(remoteWeather.temperature || "-");
@@ -1859,7 +1893,47 @@ export default function HomePage() {
           setWeatherTime("-");
           setWeatherSource("기상청");
         }
+      };
+
+      const retryLocalDiarySave = () => {
+        if (!localDiaryText && !localVoiceText) return;
+        void saveDiaryEntryToSupabase(currentMonth, currentDay, localDiaryText, localVoiceText, currentYear).then((success) => {
+          if (!success) return;
+          try {
+            localStorage.removeItem(pendingKey);
+          } catch {
+            // ignore
+          }
+        });
+      };
+
+      if (remoteResult.status !== "ok") {
+        if (pendingLocalSave) retryLocalDiarySave();
+        return;
       }
+
+      if (pendingLocalSave) {
+        retryLocalDiarySave();
+        applyRemoteWeather(remoteResult.data?.weather);
+        return;
+      }
+
+      if (!remoteResult.data && (localDiaryText || localVoiceText)) {
+        retryLocalDiarySave();
+        return;
+      }
+
+      const remoteDiaryText = remoteResult.data?.diary_text || "";
+      const remoteVoiceText = remoteResult.data?.voice_text || "";
+      setDiaryText(remoteDiaryText);
+      setVoiceText(remoteVoiceText);
+      diaryHtmlFromEditorRef.current = remoteDiaryText;
+      localStorage.setItem(
+        storageKey("diary", currentMonth, currentDay, currentYear),
+        JSON.stringify({ diaryText: remoteDiaryText, voiceText: remoteVoiceText })
+      );
+
+      applyRemoteWeather(remoteResult.data?.weather);
     });
 
     loadDiaryPhotosFromSupabase(currentMonth, currentDay, currentYear).then(remoteItems => {
@@ -1970,7 +2044,17 @@ export default function HomePage() {
       if (!editor) return;
       const nextHtml = diaryText || "";
       const producedByEditor = nextHtml === diaryHtmlFromEditorRef.current;
-      if (document.activeElement !== editor && !producedByEditor && editor.innerHTML !== nextHtml) {
+      const editorBlank = isDiaryEditorBlank(editor);
+      const savedHasMedia = /<img|<video/i.test(nextHtml);
+      const liveHasMedia = Boolean(editor.querySelector("img, video"));
+      const shouldRestore =
+        Boolean(nextHtml) &&
+        (
+          editor.innerHTML !== nextHtml && (document.activeElement !== editor || editorBlank || !producedByEditor)
+          || (editorBlank && nextHtml)
+          || (savedHasMedia && !liveHasMedia)
+        );
+      if (shouldRestore) {
         editor.innerHTML = nextHtml;
         diaryHtmlFromEditorRef.current = nextHtml;
       }
@@ -1978,6 +2062,51 @@ export default function HomePage() {
       checkDiaryTextImageTrigger();
     });
   }, [view, diaryText, currentYear, currentMonth, currentDay]);
+
+  useEffect(() => {
+    const persistDiaryOnHide = () => {
+      if (view !== "diary") return;
+      const editor = diaryRichTextRef.current;
+      if (!editor) return;
+      const html = editor.innerHTML || "";
+      if (html === diaryHtmlFromEditorRef.current) return;
+      diaryHtmlFromEditorRef.current = html;
+      saveDiary(html, voiceText);
+    };
+
+    const restoreDiaryOnShow = () => {
+      if (view !== "diary") return;
+      const editor = diaryRichTextRef.current;
+      if (!editor) return;
+      const saved = diaryHtmlFromEditorRef.current || diaryText;
+      if (!saved) return;
+      const editorBlank = isDiaryEditorBlank(editor);
+      const savedHasMedia = /<img|<video/i.test(saved);
+      const liveHasMedia = Boolean(editor.querySelector("img, video"));
+      if (editorBlank || (savedHasMedia && !liveHasMedia)) {
+        editor.innerHTML = saved;
+        diaryHtmlFromEditorRef.current = saved;
+        prepareDiaryRichEditor(editor);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") persistDiaryOnHide();
+      if (document.visibilityState === "visible") restoreDiaryOnShow();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", persistDiaryOnHide);
+    window.addEventListener("pageshow", restoreDiaryOnShow);
+    window.addEventListener("focus", restoreDiaryOnShow);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", persistDiaryOnHide);
+      window.removeEventListener("pageshow", restoreDiaryOnShow);
+      window.removeEventListener("focus", restoreDiaryOnShow);
+    };
+  }, [view, diaryText, voiceText]);
 
   useEffect(() => {
     if (view !== "info") return;
@@ -2861,7 +2990,22 @@ export default function HomePage() {
       storageKey("diary", currentMonth, currentDay, year),
       JSON.stringify({ diaryText: nextDiaryText, voiceText: nextVoiceText })
     );
-    saveDiaryEntryToSupabase(currentMonth, currentDay, nextDiaryText, nextVoiceText, year);
+    if (!isSupabaseConfigured || !supabase) return;
+    const pendingKey = diaryPendingStorageKey(currentMonth, currentDay, year);
+    const saveGen = ++diarySaveGenRef.current;
+    try {
+      localStorage.setItem(pendingKey, "true");
+    } catch {
+      // pending 표시 실패해도 저장은 시도
+    }
+    void saveDiaryEntryToSupabase(currentMonth, currentDay, nextDiaryText, nextVoiceText, year).then((success) => {
+      if (!success || saveGen !== diarySaveGenRef.current) return;
+      try {
+        localStorage.removeItem(pendingKey);
+      } catch {
+        // ignore
+      }
+    });
   }
 
   function saveInfo(nextInfoText: string, year: number = currentYear) {
