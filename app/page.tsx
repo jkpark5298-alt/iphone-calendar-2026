@@ -671,7 +671,10 @@ export default function HomePage() {
   const diaryTextImageFileRef = useRef<HTMLInputElement | null>(null);
   const diaryHtmlFromEditorRef = useRef("");
   const diarySaveGenRef = useRef(0);
+  const diaryPhotoLoadGenRef = useRef(0);
+  const diaryPhotoSavingRef = useRef(false);
   const [showDiaryTextImageInsert, setShowDiaryTextImageInsert] = useState(false);
+  const [diaryPhotoSaving, setDiaryPhotoSaving] = useState(false);
   const infoTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const diaryEditStartRef = useRef<{ key: string; diaryText: string; voiceText: string } | null>(null);
   const infoEditStartRef = useRef<{ key: string; infoText: string } | null>(null);
@@ -1822,6 +1825,7 @@ export default function HomePage() {
 
     let isActive = true;
     const photoKey = key(currentMonth, currentDay, currentYear);
+    const photoLoadGen = ++diaryPhotoLoadGenRef.current;
 
     let localDiaryText = "";
     let localVoiceText = "";
@@ -1838,14 +1842,17 @@ export default function HomePage() {
       setVoiceText("");
     }
 
-    if (isSupabaseConfigured && supabase) {
-      setPhotos(prev => ({ ...prev, [photoKey]: [] }));
-    } else {
-      try {
-        const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay, currentYear));
-        const items = rawPhotos ? JSON.parse(rawPhotos) : [];
-        setPhotos(prev => ({ ...prev, [photoKey]: items }));
+    let localPhotoItems: PhotoItem[] = [];
+    try {
+      const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay, currentYear));
+      localPhotoItems = rawPhotos ? JSON.parse(rawPhotos) : [];
+    } catch {
+      localPhotoItems = [];
+    }
+    setPhotos(prev => ({ ...prev, [photoKey]: localPhotoItems }));
 
+    if (!isSupabaseConfigured || !supabase) {
+      try {
         const rawWeather = localStorage.getItem(weatherStorageKey(currentMonth, currentDay, currentYear));
         if (rawWeather) {
           const cachedWeather = JSON.parse(rawWeather);
@@ -1937,15 +1944,17 @@ export default function HomePage() {
     });
 
     loadDiaryPhotosFromSupabase(currentMonth, currentDay, currentYear).then(remoteItems => {
-      if (!isActive || !remoteItems) return;
+      if (!isActive || photoLoadGen !== diaryPhotoLoadGenRef.current || !remoteItems) return;
+      if (remoteItems.length === 0 && localPhotoItems.length > 0) return;
 
       setPhotos(prev => ({ ...prev, [photoKey]: remoteItems }));
       setLocalStorageSafely(storageKey("photos", currentMonth, currentDay, currentYear), JSON.stringify(remoteItems));
 
       const calendarIndex = remoteItems.findIndex(item => item.isCalendarPhoto);
-      if (calendarIndex >= 0) {
-        const nextCalendarPhotos = { ...calendarPhotos, [photoKey]: remoteItems[calendarIndex].url };
-        const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes, [photoKey]: calendarIndex };
+      const thumbIndex = calendarIndex >= 0 ? calendarIndex : (remoteItems[0] ? 0 : -1);
+      if (thumbIndex >= 0) {
+        const nextCalendarPhotos = { ...calendarPhotos, [photoKey]: remoteItems[thumbIndex].url };
+        const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes, [photoKey]: thumbIndex };
         setCalendarPhotos(nextCalendarPhotos);
         setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
         setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
@@ -3079,8 +3088,13 @@ export default function HomePage() {
 
   async function makeOptimizedImageDataUrl(file: File) {
     const originalDataUrl = await readImageFileAsDataUrl(file);
-    if (!file.type.startsWith("image/")) return originalDataUrl;
-    return makeImageDataUrl(originalDataUrl, 1200, 0.85);
+    const looksLikeImage =
+      file.type.startsWith("image/") ||
+      !file.type ||
+      file.type === "application/octet-stream" ||
+      /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || "");
+    if (!looksLikeImage) return originalDataUrl;
+    return makeImageDataUrl(originalDataUrl, 1200, 0.85, true);
   }
 
   async function makeCalendarThumbDataUrl(dataUrl: string) {
@@ -4007,68 +4021,93 @@ export default function HomePage() {
 
   async function savePhotoFiles(files: File[]) {
     if (!files.length) return;
+    if (diaryPhotoSavingRef.current) {
+      alert("사진을 저장하는 중입니다. 잠시만 기다려 주세요.");
+      return;
+    }
 
-    const k = key(currentMonth, currentDay, currentYear);
-    const previousItems = photos[k] || [];
-    const previousCalendarPhotos = { ...calendarPhotos };
-    const previousCalendarPhotoIndexes = { ...calendarPhotoIndexes };
-    const newItems: PhotoItem[] = [];
+    diaryPhotoSavingRef.current = true;
+    setDiaryPhotoSaving(true);
+    diaryPhotoLoadGenRef.current += 1;
 
-    for (const [offset, file] of files.entries()) {
-      const sortOrder = previousItems.length + offset;
-      const uploadedItem = await uploadPhotoToSupabase(file, "diary-photos", currentMonth, currentDay, sortOrder, currentYear);
+    try {
+      const k = key(currentMonth, currentDay, currentYear);
+      const previousItems = photos[k] || [];
+      const previousCalendarPhotos = { ...calendarPhotos };
+      const previousCalendarPhotoIndexes = { ...calendarPhotoIndexes };
+      const durableFiles = await makeDurableImageFiles(files);
+      const sourceFiles = durableFiles.length > 0 ? durableFiles : files;
+      const newItems: PhotoItem[] = [];
 
-      if (uploadedItem) {
-        newItems.push(uploadedItem);
-        await saveDiaryPhotoRecordToSupabase(currentMonth, currentDay, uploadedItem, sortOrder, previousItems.length === 0 && offset === 0, currentYear);
-      } else {
-        newItems.push({
-          url: await makeOptimizedImageDataUrl(file),
-          name: file.name,
-          tag: tag(currentMonth, currentDay, currentYear),
-          extraTag: "",
-          memo: "",
-          size: "360",
-          memoWidth: "360",
-          memoHeight: "110",
-        });
+      for (const [offset, file] of sourceFiles.entries()) {
+        const sortOrder = previousItems.length + offset;
+        try {
+          const uploadedItem = await uploadPhotoToSupabase(file, "diary-photos", currentMonth, currentDay, sortOrder, currentYear);
+
+          if (uploadedItem) {
+            newItems.push(uploadedItem);
+            await saveDiaryPhotoRecordToSupabase(currentMonth, currentDay, uploadedItem, sortOrder, previousItems.length === 0 && offset === 0, currentYear);
+          } else {
+            newItems.push({
+              url: await makeOptimizedImageDataUrl(file),
+              name: file.name,
+              tag: tag(currentMonth, currentDay, currentYear),
+              extraTag: "",
+              memo: "",
+              size: "360",
+              memoWidth: "360",
+              memoHeight: "110",
+            });
+          }
+        } catch (error) {
+          console.warn("diary photo save failed", error);
+        }
       }
+
+      if (!newItems.length) {
+        alert("사진을 가져오지 못했습니다. JPG/PNG로 다시 선택해 주세요.");
+        return;
+      }
+
+      registerUndo({
+        label: "일기장 사진 추가",
+        target: "diaryPhotos",
+        photoKey: k,
+        year: currentYear,
+        month: currentMonth,
+        day: currentDay,
+        previousData: JSON.stringify(previousItems),
+        previousCalendarPhotos: JSON.stringify(previousCalendarPhotos),
+        previousCalendarPhotoIndexes: JSON.stringify(previousCalendarPhotoIndexes),
+      });
+
+      const nextPhotosForDay = [...previousItems, ...newItems];
+      const nextPhotos = { ...photos, [k]: nextPhotosForDay };
+      const nextCalendarPhotos = { ...calendarPhotos };
+      const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes };
+
+      if (!nextCalendarPhotos[k]) {
+        nextCalendarPhotos[k] = await makeCalendarThumbDataUrl(newItems[0].url);
+        nextCalendarPhotoIndexes[k] = previousItems.length;
+      }
+
+      setPhotos(nextPhotos);
+      setCalendarPhotos(nextCalendarPhotos);
+      setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
+      savePhotos(currentMonth, currentDay, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes, currentYear);
+    } catch (error) {
+      console.warn("savePhotoFiles failed", error);
+      alert("사진을 가져오지 못했습니다. JPG/PNG로 다시 선택해 주세요.");
+    } finally {
+      diaryPhotoSavingRef.current = false;
+      setDiaryPhotoSaving(false);
     }
-
-    if (!newItems.length) return;
-
-    registerUndo({
-      label: "일기장 사진 추가",
-      target: "diaryPhotos",
-      photoKey: k,
-      year: currentYear,
-      month: currentMonth,
-      day: currentDay,
-      previousData: JSON.stringify(previousItems),
-      previousCalendarPhotos: JSON.stringify(previousCalendarPhotos),
-      previousCalendarPhotoIndexes: JSON.stringify(previousCalendarPhotoIndexes),
-    });
-
-    const nextPhotosForDay = [...previousItems, ...newItems];
-    const nextPhotos = { ...photos, [k]: nextPhotosForDay };
-    const nextCalendarPhotos = { ...calendarPhotos };
-    const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes };
-
-    if (!nextCalendarPhotos[k]) {
-      nextCalendarPhotos[k] = await makeCalendarThumbDataUrl(newItems[0].url);
-      nextCalendarPhotoIndexes[k] = previousItems.length;
-    }
-
-    setPhotos(nextPhotos);
-    setCalendarPhotos(nextCalendarPhotos);
-    setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
-    savePhotos(currentMonth, currentDay, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes, currentYear);
   }
 
   async function addPhotos(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []) as File[];
-    await savePhotoFiles(files);
     event.target.value = "";
+    await savePhotoFiles(files);
   }
 
   async function handlePhotoPaste(event: ClipboardEvent<HTMLDivElement>) {
@@ -4128,6 +4167,7 @@ export default function HomePage() {
   async function deletePhoto(k: string, index: number) {
     const items = photos[k] || [];
     if (!items[index]) return;
+    diaryPhotoLoadGenRef.current += 1;
 
     const deletingItem = items[index];
     const deletedUrl = deletingItem.url;
@@ -5226,13 +5266,13 @@ export default function HomePage() {
           </div>
           <div className="diary-photo-button-group">
             <div className="button-row diary-photo-import-row diary-photo-row-primary">
-              <label className="soft-btn compact-photo-btn">
+              <label className="soft-btn compact-photo-btn diary-photo-file-label">
                 📷 사진찍기
-                <input className="hidden-input" type="file" accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png" capture="environment" multiple onChange={addPhotos} />
+                <input type="file" accept="image/*,.heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png" capture="environment" multiple onChange={addPhotos} />
               </label>
-              <label className="soft-btn compact-photo-btn">
+              <label className="soft-btn compact-photo-btn diary-photo-file-label">
                 🖼 사진 가져오기
-                <input className="hidden-input" type="file" accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png" multiple onChange={addPhotos} />
+                <input type="file" accept="image/*,.heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png" multiple onChange={addPhotos} />
               </label>
               <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
             </div>
@@ -5376,7 +5416,8 @@ export default function HomePage() {
         <HyperlinkPreview text={htmlToPlainText(diaryText)} />
 
         <div className="diary-photo-section" onPaste={handlePhotoPaste} tabIndex={0}>
-          {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
+          {diaryPhotoSaving && <div className="empty-photo diary-empty-photo">사진을 저장하는 중입니다...</div>}
+          {dayPhotos.length === 0 && !diaryPhotoSaving && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
           <div className={`diary-photo-grid-safe diary-photo-gallery ${diaryPhotoCountClass}`}>
             {dayPhotos.map((photo, index) => {
               const isRepPhoto = calendarPhotoIndexes[k] === index || 
