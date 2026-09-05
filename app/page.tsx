@@ -670,7 +670,7 @@ export default function HomePage() {
   const diaryRichTextRef = useRef<HTMLDivElement | null>(null);
   const diaryTextImageFileRef = useRef<HTMLInputElement | null>(null);
   const diaryHtmlFromEditorRef = useRef("");
-  const diarySaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const diarySaveTimerRef = useRef<number | null>(null);
   const diaryComposingRef = useRef(false);
   const diaryEditorFocusedRef = useRef(false);
   const diarySaveGenRef = useRef(0);
