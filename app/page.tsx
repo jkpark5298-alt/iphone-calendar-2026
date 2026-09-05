@@ -670,6 +670,9 @@ export default function HomePage() {
   const diaryRichTextRef = useRef<HTMLDivElement | null>(null);
   const diaryTextImageFileRef = useRef<HTMLInputElement | null>(null);
   const diaryHtmlFromEditorRef = useRef("");
+  const diarySaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const diaryComposingRef = useRef(false);
+  const diaryEditorFocusedRef = useRef(false);
   const diarySaveGenRef = useRef(0);
   const diaryPhotoLoadGenRef = useRef(0);
   const diaryPhotoSavingRef = useRef(false);
@@ -704,11 +707,30 @@ export default function HomePage() {
     );
   }
 
-  function commitDiaryEditorHtml() {
+  function commitDiaryEditorHtml(options?: { immediate?: boolean }) {
     const editor = diaryRichTextRef.current;
     const html = editor?.innerHTML || "";
     diaryHtmlFromEditorRef.current = html;
-    saveDiary(html, voiceText);
+
+    const flush = () => {
+      diarySaveTimerRef.current = null;
+      const latest = diaryRichTextRef.current?.innerHTML || diaryHtmlFromEditorRef.current;
+      diaryHtmlFromEditorRef.current = latest;
+      saveDiary(latest, voiceText);
+    };
+
+    if (options?.immediate) {
+      if (diarySaveTimerRef.current) {
+        window.clearTimeout(diarySaveTimerRef.current);
+        diarySaveTimerRef.current = null;
+      }
+      flush();
+      return html;
+    }
+
+    if (diaryComposingRef.current) return html;
+    if (diarySaveTimerRef.current) window.clearTimeout(diarySaveTimerRef.current);
+    diarySaveTimerRef.current = window.setTimeout(flush, 400);
     return html;
   }
 
@@ -731,7 +753,7 @@ export default function HomePage() {
     if (!files || files.length === 0) return;
     const snapshot = files instanceof FileList ? Array.from(files) : [...files];
     const afterNode = removeDiaryTrailingImageTrigger();
-    commitDiaryEditorHtml();
+    commitDiaryEditorHtml({ immediate: true });
     const list = dedupeImageFiles(snapshot);
     const imageFiles = list.filter(
       (file) =>
@@ -801,7 +823,7 @@ export default function HomePage() {
         insertInlineMediaIntoEditor(editor, uploaded, { afterNode: anchor });
         prepareDiaryRichEditor(editor);
         try {
-          commitDiaryEditorHtml();
+          commitDiaryEditorHtml({ immediate: true });
         } catch (saveError) {
           console.error("diary inline image save failed", saveError);
           alert("이미지는 본문에 넣었지만 저장 공간이 부족할 수 있습니다. 사진을 줄인 뒤 다시 저장해 주세요.");
@@ -914,7 +936,7 @@ export default function HomePage() {
         if (!inserted) {
           editor.appendChild(document.createTextNode(editor.innerText?.trim() ? `\n${text}` : text));
         }
-        commitDiaryEditorHtml();
+        commitDiaryEditorHtml({ immediate: true });
         requestAnimationFrame(checkDiaryTextImageTrigger);
         return;
       }
@@ -1903,8 +1925,10 @@ export default function HomePage() {
       };
 
       const retryLocalDiarySave = () => {
-        if (!localDiaryText && !localVoiceText) return;
-        void saveDiaryEntryToSupabase(currentMonth, currentDay, localDiaryText, localVoiceText, currentYear).then((success) => {
+        const liveHtml = diaryRichTextRef.current?.innerHTML || localDiaryText;
+        const liveVoice = voiceText || localVoiceText;
+        if (!liveHtml && !liveVoice) return;
+        void saveDiaryEntryToSupabase(currentMonth, currentDay, liveHtml, liveVoice, currentYear).then((success) => {
           if (!success) return;
           try {
             localStorage.removeItem(pendingKey);
@@ -1915,11 +1939,31 @@ export default function HomePage() {
       };
 
       if (remoteResult.status !== "ok") {
-        if (pendingLocalSave) retryLocalDiarySave();
+        const pendingOnError = (() => {
+          try {
+            return localStorage.getItem(pendingKey) === "true";
+          } catch {
+            return pendingLocalSave;
+          }
+        })();
+        if (pendingOnError || diaryEditorFocusedRef.current) retryLocalDiarySave();
         return;
       }
 
-      if (pendingLocalSave) {
+      const pendingNow = (() => {
+        try {
+          return localStorage.getItem(pendingKey) === "true";
+        } catch {
+          return pendingLocalSave;
+        }
+      })();
+      const liveHtml = diaryRichTextRef.current?.innerHTML || "";
+      const liveHasEdits =
+        diaryEditorFocusedRef.current &&
+        liveHtml !== "" &&
+        liveHtml !== localDiaryText;
+
+      if (pendingNow || liveHasEdits) {
         retryLocalDiarySave();
         applyRemoteWeather(remoteResult.data?.weather);
         return;
@@ -1932,6 +1976,11 @@ export default function HomePage() {
 
       const remoteDiaryText = remoteResult.data?.diary_text || "";
       const remoteVoiceText = remoteResult.data?.voice_text || "";
+      if (diaryEditorFocusedRef.current && liveHtml && liveHtml !== remoteDiaryText) {
+        retryLocalDiarySave();
+        applyRemoteWeather(remoteResult.data?.weather);
+        return;
+      }
       setDiaryText(remoteDiaryText);
       setVoiceText(remoteVoiceText);
       diaryHtmlFromEditorRef.current = remoteDiaryText;
@@ -2052,22 +2101,27 @@ export default function HomePage() {
       const editor = diaryRichTextRef.current;
       if (!editor) return;
       const nextHtml = diaryText || "";
-      const producedByEditor = nextHtml === diaryHtmlFromEditorRef.current;
       const editorBlank = isDiaryEditorBlank(editor);
+      const editorFocused = document.activeElement === editor || diaryEditorFocusedRef.current;
       const savedHasMedia = /<img|<video/i.test(nextHtml);
       const liveHasMedia = Boolean(editor.querySelector("img, video"));
+      if (editorFocused && !editorBlank && !(savedHasMedia && !liveHasMedia)) {
+        checkDiaryTextImageTrigger();
+        return;
+      }
+      const producedByEditor = nextHtml === diaryHtmlFromEditorRef.current;
       const shouldRestore =
         Boolean(nextHtml) &&
         (
-          editor.innerHTML !== nextHtml && (document.activeElement !== editor || editorBlank || !producedByEditor)
+          editor.innerHTML !== nextHtml && (!editorFocused || editorBlank || !producedByEditor)
           || (editorBlank && nextHtml)
           || (savedHasMedia && !liveHasMedia)
         );
       if (shouldRestore) {
         editor.innerHTML = nextHtml;
         diaryHtmlFromEditorRef.current = nextHtml;
+        prepareDiaryRichEditor(editor);
       }
-      prepareDiaryRichEditor(editor);
       checkDiaryTextImageTrigger();
     });
   }, [view, diaryText, currentYear, currentMonth, currentDay]);
@@ -2075,18 +2129,15 @@ export default function HomePage() {
   useEffect(() => {
     const persistDiaryOnHide = () => {
       if (view !== "diary") return;
-      const editor = diaryRichTextRef.current;
-      if (!editor) return;
-      const html = editor.innerHTML || "";
-      if (html === diaryHtmlFromEditorRef.current) return;
-      diaryHtmlFromEditorRef.current = html;
-      saveDiary(html, voiceText);
+      if (!diaryRichTextRef.current) return;
+      commitDiaryEditorHtml({ immediate: true });
     };
 
     const restoreDiaryOnShow = () => {
       if (view !== "diary") return;
       const editor = diaryRichTextRef.current;
       if (!editor) return;
+      if (document.activeElement === editor && !isDiaryEditorBlank(editor)) return;
       const saved = diaryHtmlFromEditorRef.current || diaryText;
       if (!saved) return;
       const editorBlank = isDiaryEditorBlank(editor);
@@ -2484,6 +2535,7 @@ export default function HomePage() {
   }
 
   function openCalendar(month = currentMonth) {
+    if (view === "diary") commitDiaryEditorHtml({ immediate: true });
     setCurrentMonth(month);
     setView("calendar");
   }
@@ -2503,10 +2555,13 @@ export default function HomePage() {
   }
 
   function openDiary(month: number, day: number, year: number = currentYear) {
+    if (view === "diary") commitDiaryEditorHtml({ immediate: true });
     setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);
     diaryHtmlFromEditorRef.current = "";
+    diaryEditorFocusedRef.current = false;
+    diaryComposingRef.current = false;
     setShowDiaryTextImageInsert(false);
     setView("diary");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2518,6 +2573,7 @@ export default function HomePage() {
     year: number = currentYear,
     subView: "generalInfo" | "photobook" = "generalInfo"
   ) {
+    if (view === "diary") commitDiaryEditorHtml({ immediate: true });
     setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);
@@ -5303,9 +5359,11 @@ export default function HomePage() {
             key={`diary-rich-${currentYear}-${currentMonth}-${currentDay}`}
             ref={(el) => {
               diaryRichTextRef.current = el;
-              if (!el) return;
-              if (el.innerHTML === "" && diaryText) el.innerHTML = diaryText;
-              prepareDiaryRichEditor(el);
+              if (!el || diaryEditorFocusedRef.current) return;
+              if (el.innerHTML === "" && diaryText) {
+                el.innerHTML = diaryText;
+                prepareDiaryRichEditor(el);
+              }
             }}
             className="generalInfoRichTextEditor"
             contentEditable
@@ -5313,13 +5371,27 @@ export default function HomePage() {
             role="textbox"
             tabIndex={0}
             data-placeholder="오늘의 기록을 남겨보세요...."
+            onFocus={() => {
+              diaryEditorFocusedRef.current = true;
+              beginDiaryTextUndoSession();
+            }}
             onInput={() => {
               commitDiaryEditorHtml();
               checkDiaryTextImageTrigger();
             }}
             onKeyUp={checkDiaryTextImageTrigger}
+            onCompositionStart={() => {
+              diaryComposingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              diaryComposingRef.current = false;
+              commitDiaryEditorHtml({ immediate: true });
+              checkDiaryTextImageTrigger();
+            }}
             onBlur={() => {
-              commitDiaryEditorHtml();
+              diaryEditorFocusedRef.current = false;
+              diaryComposingRef.current = false;
+              commitDiaryEditorHtml({ immediate: true });
               checkDiaryTextImageTrigger();
             }}
             onPaste={(e) => {
@@ -5339,7 +5411,7 @@ export default function HomePage() {
               const pastedText = e.clipboardData.getData("text/plain");
               if (pastedText) document.execCommand("insertText", false, pastedText);
               requestAnimationFrame(() => {
-                commitDiaryEditorHtml();
+                commitDiaryEditorHtml({ immediate: true });
                 checkDiaryTextImageTrigger();
               });
             }}
@@ -5372,7 +5444,7 @@ export default function HomePage() {
                   className="secondaryButton smallActionButton"
                   onClick={() => {
                     removeDiaryTrailingImageTrigger();
-                    commitDiaryEditorHtml();
+                    commitDiaryEditorHtml({ immediate: true });
                     setShowDiaryTextImageInsert(false);
                   }}
                 >
