@@ -82,12 +82,13 @@ type CalendarMarkItem = {
 };
 
 type SearchResult = {
-  type: "diary" | "info";
+  type: "diary" | "info" | "information" | "general";
   entryDate: string;
   year: number;
   month: number;
   day: number;
   text: string;
+  itemId?: string;
 };
 type GoogleScheduleItem = {
   title: string;
@@ -1579,106 +1580,50 @@ export default function HomePage() {
       return;
     }
 
-    if (!isSupabaseConfigured || !supabase) {
-      setSearchResults([]);
-      setSearchStatus("Supabase 연결 후 검색할 수 있습니다.");
-      return;
-    }
-
     setSearchStatus("검색 중...");
-    const pattern = `%${keyword}%`;
 
-    const [diaryRes, infoCardsRes, infoMemoRes] = await Promise.all([
-      supabase
-        .from("diary_entries")
-        .select("entry_date, diary_text, voice_text")
-        .or(`diary_text.ilike.${pattern},voice_text.ilike.${pattern}`)
-        .order("entry_date", { ascending: true }),
-      supabase
-        .from("info_text_cards")
-        .select("entry_date, content")
-        .ilike("content", pattern)
-        .order("entry_date", { ascending: true }),
-      supabase
-        .from("info_photos")
-        .select("entry_date, caption")
-        .ilike("caption", pattern)
-        .order("entry_date", { ascending: true }),
-    ]);
+    const nextResults: SearchResult[] = [];
 
-    const errors = [diaryRes.error, infoCardsRes.error, infoMemoRes.error].filter(Boolean);
-    if (errors.length) {
-      console.warn("Supabase search error:", errors.map(error => error?.message).join(" / "));
+    try {
+      const response = await fetch(`/api/search?q=${encodeURIComponent(keyword)}`, {
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        console.warn("search api failed:", payload?.error || response.statusText);
+        if (!Array.isArray(payload?.results)) {
+          setSearchResults([]);
+          setSearchStatus(payload?.status || "검색 중 오류가 발생했습니다.");
+          return;
+        }
+      }
+      for (const row of payload?.results || []) {
+        nextResults.push({
+          type: row.type,
+          entryDate: row.entryDate,
+          year: Number(row.year),
+          month: Number(row.month),
+          day: Number(row.day),
+          text: String(row.text || ""),
+          itemId: row.itemId ? String(row.itemId) : undefined,
+        });
+      }
+      if (Array.isArray(payload?.warnings) && payload.warnings.length) {
+        console.warn("search api warnings:", payload.warnings.join(" / "));
+      }
+    } catch (error) {
+      console.warn("search api network error:", error);
       setSearchResults([]);
       setSearchStatus("검색 중 오류가 발생했습니다.");
       return;
     }
 
-    const nextResults: SearchResult[] = [];
-
-    (diaryRes.data || []).forEach((row: any) => {
-      const date = monthDayFromEntryDate(row.entry_date);
-      if (!date) return;
-      const text = [row.diary_text, row.voice_text].filter(Boolean).join(" / ");
-      nextResults.push({
-        type: "diary",
-        entryDate: row.entry_date,
-        year: date.year,
-        month: date.month,
-        day: date.day,
-        text: text || "일기장 검색 결과",
-      });
-    });
-
-    (infoCardsRes.data || []).forEach((row: any) => {
-      const date = monthDayFromEntryDate(row.entry_date);
-      if (!date) return;
-      
-      let cardText = row.content || "";
-      if (cardText.startsWith("{")) {
-        try {
-          const parsed = JSON.parse(cardText);
-          cardText = `[인스타 정보 - ${parsed.category}] #${parsed.keyword} / ${parsed.originalText}`;
-        } catch (e) {}
-      }
-      
-      nextResults.push({
-        type: "info",
-        entryDate: row.entry_date,
-        year: date.year,
-        month: date.month,
-        day: date.day,
-        text: cardText || "인스타 주요 정보 검색 결과",
-      });
-    });
-
-    (infoMemoRes.data || []).forEach((row: any) => {
-      const date = monthDayFromEntryDate(row.entry_date);
-      if (!date) return;
-      
-      let captionText = row.caption || "";
-      if (captionText.startsWith("{")) {
-        try {
-          const parsed = JSON.parse(captionText);
-          captionText = `[포토북] #${parsed.keyword} / ${parsed.memo}`;
-        } catch (e) {}
-      }
-      
-      nextResults.push({
-        type: "info",
-        entryDate: row.entry_date,
-        year: date.year,
-        month: date.month,
-        day: date.day,
-        text: captionText || "포토북 사진 메모 검색 결과",
-      });
-    });
-
+    // 로컬 상태(일정·근무·구글)는 API에 없으므로 클라이언트에서 병합
     Object.entries(schedules).forEach(([scheduleKey, items]) => {
       const { year, month, day } = parseScheduleKey(scheduleKey);
       if (!month || !day) return;
 
-      items.forEach(item => {
+      items.forEach((item) => {
         const scheduleText = `${item.startTime ? `${item.startTime} ` : ""}${item.title}`;
         const searchText = [scheduleText, item.repeat, item.endDate].filter(Boolean).join(" / ");
         if (!searchText.toLowerCase().includes(keyword.toLowerCase())) return;
@@ -1694,8 +1639,45 @@ export default function HomePage() {
       });
     });
 
-    googleSchedules.forEach(item => {
-      const googleText = [item.title, item.start, item.end, item.allDay ? "종일" : ""].filter(Boolean).join(" / ");
+    Object.entries(calendarMarks).forEach(([markKey, marks]) => {
+      const parts = String(markKey).split("-").map(Number);
+      let year = currentYear;
+      let month = 0;
+      let day = 0;
+      if (parts.length === 2) {
+        month = parts[0];
+        day = parts[1];
+        year = 2026;
+      } else if (parts.length >= 3) {
+        year = parts[0];
+        month = parts[1];
+        day = parts[2];
+      }
+      if (!month || !day) return;
+      const kw = keyword.toLowerCase();
+      marks.forEach((mark) => {
+        const label = formatCalendarMarkText(mark.type, mark.plus);
+        const hit =
+          mark.type === keyword ||
+          label === keyword ||
+          String(mark.type).toLowerCase().includes(kw) ||
+          label.toLowerCase().includes(kw);
+        if (!hit) return;
+        nextResults.push({
+          type: "diary",
+          entryDate: entryDate(month, day, year),
+          year,
+          month,
+          day,
+          text: `근무 표시 · ${label}`,
+        });
+      });
+    });
+
+    googleSchedules.forEach((item) => {
+      const googleText = [item.title, item.start, item.end, item.allDay ? "종일" : ""]
+        .filter(Boolean)
+        .join(" / ");
       if (!googleText.toLowerCase().includes(keyword.toLowerCase())) return;
 
       nextResults.push({
@@ -1709,14 +1691,49 @@ export default function HomePage() {
     });
 
     const unique = new Map<string, SearchResult>();
-    nextResults.forEach(result => {
-      const uniqueKey = `${result.type}-${result.entryDate}-${result.text.slice(0, 40)}`;
+    nextResults.forEach((result) => {
+      const uniqueKey = `${result.type}-${result.itemId || result.entryDate}-${result.text.slice(0, 40)}`;
       if (!unique.has(uniqueKey)) unique.set(uniqueKey, result);
     });
 
-    const results = Array.from(unique.values()).slice(0, 30);
+    const results = Array.from(unique.values()).slice(0, 50);
     setSearchResults(results);
     setSearchStatus(results.length ? `${results.length}개 검색 결과` : "검색 결과가 없습니다.");
+  }
+
+  function openSearchResult(result: SearchResult) {
+    if (result.type === "diary") {
+      openDiary(result.month, result.day, result.year);
+      return;
+    }
+    if (result.type === "info") {
+      openInfo(result.month, result.day, result.year, "photobook");
+      return;
+    }
+    if (result.type === "information") {
+      const url = result.itemId
+        ? getInformationAppItemUrl(result.itemId)
+        : getInformationAppDayUrl(result.entryDate);
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (result.type === "general") {
+      openInfo(result.month, result.day, result.year, "generalInfo");
+      infoState.setGeneralInfoActiveTab("storage");
+      if (result.itemId) {
+        const idNum = Number(result.itemId);
+        if (Number.isFinite(idNum) && idNum > 0) {
+          infoState.handleOpenGeneralInfoDetail(idNum);
+        }
+      }
+    }
+  }
+
+  function searchResultLabel(result: SearchResult) {
+    if (result.type === "diary") return "일기장";
+    if (result.type === "info") return "정보보관소";
+    if (result.type === "information") return "정보함";
+    return "일반정보";
   }
 
   async function loadGoogleSchedulesForDay(month: number, day: number, year: number = currentYear) {
@@ -5289,7 +5306,7 @@ export default function HomePage() {
               value={searchKeyword}
               onChange={e => setSearchKeyword(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") void searchDiaryAndInfo(); }}
-              placeholder="일기장/정보보관소 검색어 입력"
+              placeholder="일기장·일정·정보함·일반정보 검색"
             />
             <button type="button" className="soft-btn" onClick={() => void searchDiaryAndInfo()}>검색</button>
           </div>
@@ -5299,11 +5316,13 @@ export default function HomePage() {
               {searchResults.map((result, index) => (
                 <button
                   type="button"
-                  key={`${result.type}-${result.entryDate}-${index}`}
+                  key={`${result.type}-${result.itemId || result.entryDate}-${index}`}
                   className="calendar-search-result"
-                  onClick={() => result.type === "diary" ? openDiary(result.month, result.day) : openInfo(result.month, result.day)}
+                  onClick={() => openSearchResult(result)}
                 >
-                  <strong>{result.type === "diary" ? "일기장" : "정보보관소"} · {pad(result.month)}/{pad(result.day)}</strong>
+                  <strong>
+                    {searchResultLabel(result)} · {pad(result.month)}/{pad(result.day)}
+                  </strong>
                   <span>{result.text.length > 70 ? `${result.text.slice(0, 70)}...` : result.text}</span>
                 </button>
               ))}
