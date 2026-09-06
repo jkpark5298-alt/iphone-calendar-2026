@@ -2,14 +2,18 @@
 
 /**
  * Chapter3Info.tsx
- * Chapter 3 — 일반 정보 수집 / 분류 / 저장 (수동 Fact Check 정리함)
+ * Chapter 3 — 일반 정보 수집 / 키워드·요약 / 저장
  * TravelDiaryApp의 "info" 탭 JSX 분리
  */
 
 import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
-import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, extractGeneralInfoReportImageSrcs, makeGeneralInfoMediaItem, hasDisplayableAiReport } from "../lib/generalInfoHelpers";
+import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, makeGeneralInfoMediaItem, hasDisplayableAiReport } from "../lib/generalInfoHelpers";
+import { stepCollectFontSize } from "../lib/collectFormatPalette";
 import { Card, EmptyState } from "./SharedComponents";
+import { CollectFormatToolbar } from "./CollectFormatToolbar";
+import { HandwritingModal } from "./HandwritingModal";
+import { TextToImageModal } from "./TextToImageModal";
 
 export interface Chapter3InfoProps {
   // Gemini API Key
@@ -48,22 +52,14 @@ export interface Chapter3InfoProps {
   handleResetGeneralInfoDraft: () => void;
   handleCollectGeneralInfoFromClipboard: () => void;
   isCollectingGeneralInfoClipboard: boolean;
-  handleExtractGeneralInfoUrl: () => void;
-  isExtractingGeneralInfoUrl: boolean;
   handleGeneralInfoFileUpload: (files: FileList | null) => void;
   handleGeneralInfoIphonePasteZonePaste: (event: React.ClipboardEvent<HTMLDivElement>) => void;
   handleClearGeneralInfoCoverImage: () => void;
   handleRemoveGeneralInfoMediaItem: (index: number) => void;
   uploadInlineImageFile?: (file: File) => Promise<string>;
-  // AI 기능은 일반정보수집에서 비활성화(다른 앱/API에서 재사용). 핸들러는 선택.
-  handleAnalyzeGeneralInfoDraft?: () => void;
-  isAnalyzingGeneralInfo?: boolean;
-  handleFactCheckGeneralInfoDraft?: () => void;
-  isRunningGeneralInfoFactCheck?: boolean;
-  geminiApiPacketStatus?: "available" | "depleted";
   handleConfirmGeneralInfo: () => void;
-  handleSaveTemporaryGeneralInfoDraft: () => void;
   handleCancelEditGeneralInfo: () => void;
+  generalInfoAutoSaveStatus?: string;
 
   // 저장함
   generalInfoItems: GeneralInfoItem[];
@@ -78,8 +74,7 @@ export interface Chapter3InfoProps {
   loadGeneralInfoItemsFromSupabase: () => Promise<void>;
   generalInfoSupabaseStatus: string;
 
-  // 카테고리 & 헬퍼
-  generalInfoCategories: string[];
+  // 헬퍼
   normalizeGeneralInfoMediaItems: (draft: GeneralInfoDraft) => GeneralInfoMediaItem[];
   getGeneralInfoDisplayMediaItems: (item: GeneralInfoItem) => GeneralInfoMediaItem[];
   onOpenStorageImage?: (url: string, fileName?: string) => void;
@@ -105,27 +100,20 @@ export function Chapter3Info({
   syncGeneralInfoRichTextToDraft,
   handleGeneralInfoRichPaste,
   handleGeneralInfoRichCommand,
-  getGeneralInfoToolbarButtonStyle,
-  makeGeneralInfoHtmlFromText,
+  getGeneralInfoToolbarButtonStyle: _getGeneralInfoToolbarButtonStyle,
+  makeGeneralInfoHtmlFromText: _makeGeneralInfoHtmlFromText,
   handleUndoGeneralInfoDraft,
   handleResetGeneralInfoDraft,
   handleCollectGeneralInfoFromClipboard,
   isCollectingGeneralInfoClipboard,
-  handleExtractGeneralInfoUrl,
-  isExtractingGeneralInfoUrl,
   handleGeneralInfoFileUpload,
   handleGeneralInfoIphonePasteZonePaste,
   handleClearGeneralInfoCoverImage,
   handleRemoveGeneralInfoMediaItem,
   uploadInlineImageFile,
-  handleAnalyzeGeneralInfoDraft: _handleAnalyzeGeneralInfoDraft,
-  isAnalyzingGeneralInfo: _isAnalyzingGeneralInfo = false,
-  handleFactCheckGeneralInfoDraft: _handleFactCheckGeneralInfoDraft,
-  isRunningGeneralInfoFactCheck: _isRunningGeneralInfoFactCheck = false,
-  geminiApiPacketStatus = "available",
   handleConfirmGeneralInfo,
-  handleSaveTemporaryGeneralInfoDraft,
   handleCancelEditGeneralInfo,
+  generalInfoAutoSaveStatus = "",
   generalInfoItems,
   filteredGeneralInfoItems,
   generalInfoSearchTerm,
@@ -137,11 +125,18 @@ export function Chapter3Info({
   handleTogglePinGeneralInfo,
   loadGeneralInfoItemsFromSupabase,
   generalInfoSupabaseStatus,
-  generalInfoCategories,
   normalizeGeneralInfoMediaItems,
   getGeneralInfoDisplayMediaItems,
   onOpenStorageImage,
 }: Chapter3InfoProps) {
+  void _geminiApiKey;
+  void _setGeminiApiKey;
+  void isGeneralInfoMobileLayout;
+  void _getGeneralInfoToolbarButtonStyle;
+  void _makeGeneralInfoHtmlFromText;
+  void generalInfoItems;
+  void generalInfoDetailId;
+
   const activeTab = generalInfoActiveTab;
   const setActiveTab = setGeneralInfoActiveTab;
   const [memoEditIndex, setMemoEditIndex] = React.useState<number | null>(null);
@@ -212,11 +207,13 @@ export function Chapter3Info({
     });
   }, [normalizeGeneralInfoMediaItems, setGeneralInfoDraft]);
 
-  const [showSourceUrlHelp, setShowSourceUrlHelp] = React.useState(false);
   const [showTextImageInsert, setShowTextImageInsert] = React.useState(false);
   const [copyFeedback, setCopyFeedback] = React.useState<"text" | null>(null);
   const [isSelectingCoverImage, setIsSelectingCoverImage] = React.useState(false);
   const [isKeywordInputFocused, setIsKeywordInputFocused] = React.useState(false);
+  const [showHandwritingModal, setShowHandwritingModal] = React.useState(false);
+  const [showTextToImageModal, setShowTextToImageModal] = React.useState(false);
+  const [collectFontSizePx, setCollectFontSizePx] = React.useState(15);
   const textImageFileRef = React.useRef<HTMLInputElement | null>(null);
 
   // remount(key) 후 InitialHtml을 contentEditable에 반영 (미적용 시 URL 가져오기 본문이 비는 버그)
@@ -231,7 +228,7 @@ export function Chapter3Info({
     const titleFromText = extractTitleFromPlainText(plain);
     if (titleFromText) {
       setGeneralInfoDraft((prev) =>
-        prev.title === titleFromText ? prev : { ...prev, title: titleFromText },
+        prev.title.trim() ? prev : { ...prev, title: titleFromText },
       );
     }
   }, [
@@ -257,17 +254,6 @@ export function Chapter3Info({
     showTextImageInsert,
   ]);
 
-  const collectReportImageSrcs = React.useMemo(() => {
-    return extractGeneralInfoReportImageSrcs(generalInfoDraft.factCheckSummary);
-  }, [generalInfoDraft.factCheckSummary]);
-
-  // 일반정보수집은 수동 Fact Check 정리함 — AI/패킷 UI 비표시 (API는 다른 앱에서 재사용)
-  void geminiApiPacketStatus;
-  void _handleAnalyzeGeneralInfoDraft;
-  void _isAnalyzingGeneralInfo;
-  void _handleFactCheckGeneralInfoDraft;
-  void _isRunningGeneralInfoFactCheck;
-
   const textEndsWithImageTrigger = React.useCallback((raw: string) => {
     const text = String(raw || "").replace(/\u00a0/g, " ").replace(/\r/g, "");
     const trimmedEnd = text.replace(/[ \t\n]+$/g, "");
@@ -288,10 +274,11 @@ export function Chapter3Info({
     const titleFromText = extractTitleFromPlainText(plain);
     if (titleFromText) {
       setGeneralInfoDraft((prev) =>
-        prev.title === titleFromText ? prev : { ...prev, title: titleFromText },
+        prev.title.trim() ? prev : { ...prev, title: titleFromText },
       );
     }
-  }, [generalInfoRichTextRef, textEndsWithImageTrigger, setGeneralInfoDraft]);
+    syncGeneralInfoRichTextToDraft();
+  }, [generalInfoRichTextRef, textEndsWithImageTrigger, setGeneralInfoDraft, syncGeneralInfoRichTextToDraft]);
 
   const insertImageFilesFromTextTrigger = React.useCallback((files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
@@ -388,6 +375,51 @@ export function Chapter3Info({
     void copyPlainTextToClipboard(fromEditor || generalInfoDraft.text || "");
   }, [copyPlainTextToClipboard, generalInfoDraft.text, generalInfoRichTextRef, syncGeneralInfoRichTextToDraft]);
 
+  const insertDataUrlIntoEditor = React.useCallback(
+    (dataUrl: string, name: string) => {
+      const editor = generalInfoRichTextRef.current;
+      if (!editor || !dataUrl) return;
+      removeTrailingImageTrigger();
+      insertInlineMediaIntoEditor(editor, [{ src: dataUrl, name, type: "image" }]);
+      syncGeneralInfoRichTextToDraft();
+      setShowTextImageInsert(false);
+    },
+    [generalInfoRichTextRef, removeTrailingImageTrigger, syncGeneralInfoRichTextToDraft],
+  );
+
+  const handleCollectPasteImage = React.useCallback(async () => {
+    try {
+      if (!navigator.clipboard?.read) {
+        alert("이 브라우저는 클립보드 이미지 읽기를 지원하지 않습니다. 본문에 직접 붙여넣기 하세요.");
+        return;
+      }
+      const items = await navigator.clipboard.read();
+      const files: File[] = [];
+      for (const item of items) {
+        const type = item.types.find((t) => t.startsWith("image/"));
+        if (!type) continue;
+        const blob = await item.getType(type);
+        files.push(new File([blob], `clipboard-${Date.now()}.png`, { type }));
+      }
+      if (!files.length) {
+        alert("클립보드에서 이미지를 찾지 못했습니다. 이미지를 복사한 뒤 다시 눌러 주세요.");
+        return;
+      }
+      insertImageFilesFromTextTrigger(files);
+    } catch {
+      alert("클립보드 접근에 실패했습니다. 본문 칸에 Ctrl+V / ⌘V로 붙여넣기 하세요.");
+    }
+  }, [insertImageFilesFromTextTrigger]);
+
+  const handleCollectFontSizeStep = React.useCallback(
+    (delta: number) => {
+      const next = stepCollectFontSize(collectFontSizePx, delta);
+      setCollectFontSizePx(next);
+      handleGeneralInfoRichCommand("fontSizePx", String(next));
+    },
+    [collectFontSizePx, handleGeneralInfoRichCommand],
+  );
+
   return (
     <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" }}>
       {/* ===== 탭 버튼 ===== */}
@@ -411,7 +443,7 @@ export function Chapter3Info({
         </button>
       </div>
 
-      {/* ===== 정보 수집 탭 (입력 + 수동 Fact Check) ===== */}
+      {/* ===== 정보 수집 탭 ===== */}
       {activeTab === "collect" && (
       <section className="leftColumn generalInfoLeftColumn" style={{ position: "relative", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
         {/* Scroll to Top Button */}
@@ -430,14 +462,14 @@ export function Chapter3Info({
 
         <div className="chapterTitleBox" style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "20px" }}>
           <p style={{ margin: "4px 0 0 0" }}>
-            일반 정보를 정리·분류·저장하는 보관함입니다.
+            일반 정보를 입력하고 키워드·요약과 함께 저장하는 보관함입니다.
           </p>
         </div>
 
         <Card
           number="1"
           title="일반 정보 수집"
-          subtitle="Text / 이미지 / 동영상 / URL을 단독 또는 복수로 입력합니다."
+          subtitle="Text / 이미지 / 동영상을 단독 또는 복수로 입력합니다."
           actions={
             <>
               <button
@@ -468,8 +500,8 @@ export function Chapter3Info({
             <div className="generalInfoEditNotice">
               <strong>수정 모드</strong>
               <p>
-                저장된 일반 정보를 불러왔습니다. 제목, URL, Text, 이미지, 분류를
-                수정한 뒤 [수정 저장]을 누르세요.
+                저장된 일반 정보를 불러왔습니다. 제목, Text, 이미지, 키워드·요약을
+                수정한 뒤 [저장]을 누르세요.
               </p>
             </div>
           )}
@@ -478,12 +510,14 @@ export function Chapter3Info({
             정보 제목
             <input
               value={generalInfoDraft.title}
-              readOnly
-              placeholder="Text 입력 첫 줄이 제목으로 사용됩니다"
-              title="Text 입력 / 편집의 첫 줄이 제목입니다"
+              onChange={(e) =>
+                setGeneralInfoDraft((prev) => ({ ...prev, title: e.target.value }))
+              }
+              placeholder="제목을 입력하세요 (비우면 Text 첫 줄이 자동 반영)"
+              title="직접 수정할 수 있습니다. 비어 있으면 Text 첫 줄이 제목으로 사용됩니다."
             />
             <span className="mutedText" style={{ display: "block", marginTop: 6, fontSize: 12 }}>
-              Text 입력 / 편집 <strong>첫 줄</strong>이 제목으로 자동 반영됩니다.
+              제목을 직접 수정할 수 있습니다. 비어 있으면 Text 입력 <strong>첫 줄</strong>이 자동 반영됩니다.
             </span>
           </label>
 
@@ -500,51 +534,48 @@ export function Chapter3Info({
                   {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
                 </button>
               </div>
-              <span>아래 큰 입력칸에 내용을 입력하세요. 줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄 편집 가능</span>
+              <span>아래 큰 입력칸에 내용을 입력하세요. 줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능</span>
             </div>
 
-            <div
-              className="generalInfoRichToolbar"
-              aria-label="Text 편집 도구"
-            >
-              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("bold")}>B 굵게</button>
-              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("underline")}>U 밑줄</button>
-              <button
-                type="button"
-                style={getGeneralInfoToolbarButtonStyle()}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleGeneralInfoRichCommand("removeFormat")}
-              >
-                서식 지우기
-              </button>
-              <button type="button" className="generalInfoRichColorDefault" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#e2e8f0")}>● 기본</button>
-              <button type="button" className="generalInfoRichColorRed" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#f87171")}>● 빨강</button>
-              <button type="button" className="generalInfoRichColorYellow" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#facc15")}>● 노랑</button>
-              <button type="button" className="generalInfoRichColorBlue" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#60a5fa")}>● 파랑</button>
-              <button type="button" className="generalInfoRichColorGreen" onMouseDown={(e) => e.preventDefault()} onClick={() => handleGeneralInfoRichCommand("foreColor", "#4ade80")}>● 초록</button>
-            </div>
-            <div
-              className="generalInfoRichToolbar generalInfoCircledNumberToolbar"
-              aria-label="원형 번호 삽입"
-            >
-              {["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"].map((mark) => (
-                <button
-                  key={mark}
-                  type="button"
-                  className="generalInfoCircledNumberBtn"
-                  title={`${mark} 삽입`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleGeneralInfoRichCommand("insertText", mark)}
-                >
-                  {mark}
-                </button>
-              ))}
-            </div>
+            <CollectFormatToolbar
+              onUndo={() => handleGeneralInfoRichCommand("undo")}
+              onRedo={() => handleGeneralInfoRichCommand("redo")}
+              onBold={() => handleGeneralInfoRichCommand("bold")}
+              onUnderline={() => handleGeneralInfoRichCommand("underline")}
+              onFontSize={(px) => {
+                setCollectFontSizePx(px);
+                handleGeneralInfoRichCommand("fontSizePx", String(px));
+              }}
+              onFontSizeStep={handleCollectFontSizeStep}
+              onColor={(c) => handleGeneralInfoRichCommand("foreColor", c)}
+              onHighlight={(c) => handleGeneralInfoRichCommand("highlight", c)}
+              onInsertChar={(ch) => handleGeneralInfoRichCommand("insertText", ch)}
+              onImage={() => {
+                setShowTextImageInsert(true);
+                window.setTimeout(() => textImageFileRef.current?.click(), 0);
+              }}
+              onPasteImage={() => {
+                void handleCollectPasteImage();
+              }}
+              onTextImage={() => setShowTextToImageModal(true)}
+              onHandwriting={() => setShowHandwritingModal(true)}
+            />
+            <input
+              ref={textImageFileRef}
+              type="file"
+              accept="image/*,image/heic,image/heif,video/*"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => {
+                insertImageFilesFromTextTrigger(e.target.files);
+                e.target.value = "";
+              }}
+            />
 
             <div
               key={generalInfoRichTextEditorKey}
               ref={generalInfoRichTextRef}
-              className="generalInfoRichTextEditor"
+              className="generalInfoRichTextEditor collectPaperEditor"
               contentEditable
               suppressContentEditableWarning
               role="textbox"
@@ -569,7 +600,7 @@ export function Chapter3Info({
                 handleGeneralInfoRichPaste(event);
                 requestAnimationFrame(checkTextImageTrigger);
               }}
-              data-placeholder="검증된 내용, 보고서 요약, 복사한 텍스트, 메모를 입력하세요."
+              data-placeholder="복사한 텍스트, 메모, 정리할 내용을 입력하세요."
               style={{
                 display: "block",
                 width: "100%",
@@ -578,9 +609,9 @@ export function Chapter3Info({
                 overflowY: "auto",
                 boxSizing: "border-box",
                 borderRadius: 14,
-                border: "1px solid rgba(56, 189, 248, 0.45)",
-                background: "#020617",
-                color: "#e2e8f0",
+                border: "1px solid #e2e8f0",
+                background: "#ffffff",
+                color: "#1a2430",
                 padding: "14px 15px",
                 fontSize: 15,
                 lineHeight: 1.8,
@@ -609,7 +640,6 @@ export function Chapter3Info({
                   <label className="primaryLabel generalInfoTextImageFileLabel">
                     🖼 사진첩 · 파일 선택
                     <input
-                      ref={textImageFileRef}
                       type="file"
                       accept="image/*,image/heic,image/heif,video/*"
                       multiple
@@ -639,55 +669,11 @@ export function Chapter3Info({
             </p>
           </div>
 
-          <div className="generalInfoSourceUrlBlock">
-            <div className="generalInfoSourceUrlLabelRow">
-              <label className="generalInfoFieldLabel" style={{ flex: 1, marginBottom: 0 }}>
-                출처 URL
-              </label>
-              <button
-                type="button"
-                className={`secondaryButton smallActionButton ${showSourceUrlHelp ? "activeHelpBtn" : ""}`}
-                onClick={() => setShowSourceUrlHelp((prev) => !prev)}
-                aria-expanded={showSourceUrlHelp}
-              >
-                {showSourceUrlHelp ? "설명 닫기" : "설명"}
-              </button>
-            </div>
-            {showSourceUrlHelp && (
-              <div className="generalInfoAutoGuide">
-                <strong>자동 입력 안내</strong>
-                <p>
-                  URL을 입력한 뒤 [URL 내용 자동 가져오기]를 누르면 제목, 본문 Text,
-                  대표 이미지가 자동 입력됩니다. 이어서 분류·키워드·요약을 직접 입력하세요.
-                </p>
-              </div>
-            )}
-            <input
-              value={generalInfoDraft.sourceUrl}
-              onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, sourceUrl: e.target.value }))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleExtractGeneralInfoUrl();
-                }
-              }}
-              placeholder="https://..."
-            />
-            <button
-              className="secondaryButton urlExtractButton"
-              type="button"
-              onClick={handleExtractGeneralInfoUrl}
-              disabled={isExtractingGeneralInfoUrl}
-            >
-              {isExtractingGeneralInfoUrl ? "URL 가져오는 중..." : "URL 내용 자동 가져오기"}
-            </button>
-          </div>
-
           <div className="generalInfoClipboardBox">
             <div>
               <strong>복사 붙여넣기 자동 수집</strong>
               <p>
-                외부 앱이나 웹페이지에서 복사한 Text, URL, 이미지를 자동으로
+                외부 앱이나 웹페이지에서 복사한 Text, 이미지를 자동으로
                 일반 정보 입력칸에 반영합니다.
               </p>
             </div>
@@ -705,7 +691,7 @@ export function Chapter3Info({
           <div className="generalInfoUploadBox">
             <div>
               <strong>이미지 / 동영상 자료</strong>
-              <p>이미지+Text, 동영상+Text, URL+Text 조합으로 저장할 수 있습니다.</p>
+              <p>이미지+Text, 동영상+Text 조합으로 저장할 수 있습니다.</p>
             </div>
             <label className="primaryLabel">
               이미지/동영상 선택
@@ -728,7 +714,7 @@ export function Chapter3Info({
             onPaste={handleGeneralInfoIphonePasteZonePaste}
             style={{ textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", padding: "15px", cursor: "pointer" }}
           >
-            <strong>📱 아이폰 이미지/인스타 링크 붙여넣기</strong>
+            <strong>📱 아이폰 이미지 붙여넣기</strong>
           </div>
 
           {/* 대표 이미지 */}
@@ -892,7 +878,7 @@ export function Chapter3Info({
               <div className="generalInfoNoCoverImage">
                 <strong>대표 이미지 없음</strong>
                 <p>
-                  URL에서 대표 이미지를 찾지 못했거나 아직 이미지를 추가하지 않았습니다.
+                  아직 이미지를 추가하지 않았습니다.
                   웹페이지나 사진앱에서 이미지를 복사한 뒤
                   [클립보드에서 일반 정보 붙여넣기]를 누르면 대표 이미지로 등록됩니다.
                   또는 아래 본문 이미지에서 선택할 수 있습니다.
@@ -956,119 +942,15 @@ export function Chapter3Info({
                 </div>
               </div>
             )}
-
-            {collectReportImageSrcs.length > 0 &&
-              (isSelectingCoverImage ||
-                normalizeGeneralInfoMediaItems(generalInfoDraft).length > 0) && (
-              <div style={{ marginTop: 14 }}>
-                <strong style={{ display: "block", marginBottom: 8, fontSize: 13, color: "#7dd3fc" }}>
-                  보고서 이미지에서 대표 선택
-                </strong>
-                <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
-                  보고서에 넣은 사진을 대표로 쓸 수 있습니다.
-                </p>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
-                    gap: 10,
-                  }}
-                >
-                  {collectReportImageSrcs.map((src, index) => {
-                    const coverItems = normalizeGeneralInfoMediaItems(generalInfoDraft);
-                    const isRep =
-                      coverItems[0] &&
-                      (coverItems[0].preview === src || coverItems[0].fileUrl === src);
-                    return (
-                      <div
-                        key={`collect-report-img-${index}`}
-                        style={{
-                          border: isRep
-                            ? "2px solid #facc15"
-                            : "1px solid rgba(148, 163, 184, 0.28)",
-                          borderRadius: 12,
-                          overflow: "hidden",
-                          background: "rgba(2, 6, 23, 0.55)",
-                        }}
-                      >
-                        <img
-                          src={src}
-                          alt={`보고서 이미지 ${index + 1}`}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            height: 96,
-                            objectFit: "cover",
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="secondaryButton smallActionButton"
-                          style={{ width: "100%", borderRadius: 0, fontSize: 11 }}
-                          disabled={Boolean(isRep)}
-                          onClick={() => handleSetHtmlImageAsRepresentative(src, "보고서 이미지")}
-                        >
-                          {isRep ? "★ 대표" : "★ 대표로 설정"}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="generalInfoActionRow">
-            <button className="gradientButton" onClick={handleConfirmGeneralInfo}>
-              {generalInfoEditingId ? "수정 저장" : "Confirm 저장"}
-            </button>
-            <button
-              className="secondaryButton"
-              type="button"
-              onClick={handleSaveTemporaryGeneralInfoDraft}
-              style={{ background: "rgba(122, 184, 255, 0.12)", color: "#7ab8ff", border: "1px solid rgba(122, 184, 255, 0.25)" }}
-            >
-              💾 임시 저장
-            </button>
-            {generalInfoEditingId && (
-              <button className="secondaryButton" type="button" onClick={handleCancelEditGeneralInfo}>
-                수정 취소
-              </button>
-            )}
           </div>
         </Card>
 
-        {/* Card 2: 분류 / 키워드 / 요약 */}
+        {/* Card 2: 키워드 / 요약 */}
         <Card
           number="2"
-          title="분류 / 키워드 / 요약"
-          subtitle="분류·키워드를 입력하고, 요약은 필요할 때만 직접 입력한 뒤 Confirm 저장합니다."
+          title="키워드 / 요약"
+          subtitle="키워드와 요약을 직접 입력하세요. 입력 내용은 자동 저장됩니다."
         >
-          <div className="generalInfoGrid">
-            <label>
-              1차 분류
-              <select
-                value={generalInfoDraft.primaryCategory}
-                onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, primaryCategory: e.target.value }))}
-              >
-                <option value="">분류 선택</option>
-                {generalInfoCategories.map((category) => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-                {!generalInfoCategories.includes("기타") && <option value="기타">기타</option>}
-              </select>
-            </label>
-            <label>
-              2차 분류
-              <input
-                className="generalInfoEditableInput"
-                value={generalInfoDraft.secondaryCategory}
-                onChange={(e) => setGeneralInfoDraft((prev) => ({ ...prev, secondaryCategory: e.target.value }))}
-                placeholder="예: 외교/해외동향"
-              />
-            </label>
-          </div>
-
           <div className="generalInfoResultBox generalInfoKeywordInputBox">
             <strong>키워드 직접 입력</strong>
             <input
@@ -1120,6 +1002,26 @@ export function Chapter3Info({
               rows={4}
             />
           </div>
+
+          <div className="generalInfoActionRow">
+            <button className="gradientButton" type="button" onClick={handleConfirmGeneralInfo}>
+              {generalInfoEditingId ? "수정 저장" : "저장"}
+            </button>
+            {generalInfoEditingId && (
+              <button className="secondaryButton" type="button" onClick={handleCancelEditGeneralInfo}>
+                수정 취소
+              </button>
+            )}
+          </div>
+          {generalInfoAutoSaveStatus ? (
+            <p className="mutedText" style={{ margin: "8px 0 0", fontSize: 12 }}>
+              {generalInfoAutoSaveStatus}
+            </p>
+          ) : (
+            <p className="mutedText" style={{ margin: "8px 0 0", fontSize: 12 }}>
+              입력 내용은 이 기기에 자동 저장됩니다. [저장]을 누르면 정보 창고에 보관됩니다.
+            </p>
+          )}
         </Card>
       </section>
       )} {/* end activeTab === "collect" */}
@@ -1151,7 +1053,7 @@ export function Chapter3Info({
               <input
                 value={generalInfoSearchTerm}
                 onChange={(e) => setGeneralInfoSearchTerm(e.target.value)}
-                placeholder="제목, 본문, URL, 분류, 키워드, 요약 검색"
+                placeholder="제목, 본문, 키워드, 요약 검색"
                 style={{ flex: 1 }}
               />
               <button
@@ -1288,6 +1190,26 @@ export function Chapter3Info({
         </Card>
       </aside>
       )} {/* end activeTab === "storage" */}
+
+      {showHandwritingModal && (
+        <HandwritingModal
+          onCancel={() => setShowHandwritingModal(false)}
+          onInsert={(dataUrl) => {
+            insertDataUrlIntoEditor(dataUrl, `handwriting-${Date.now()}.png`);
+            setShowHandwritingModal(false);
+          }}
+        />
+      )}
+      {showTextToImageModal && (
+        <TextToImageModal
+          initialText={String(generalInfoRichTextRef.current?.innerText || generalInfoDraft.text || "").slice(0, 800)}
+          onCancel={() => setShowTextToImageModal(false)}
+          onInsert={(dataUrl) => {
+            insertDataUrlIntoEditor(dataUrl, `text-image-${Date.now()}.png`);
+            setShowTextToImageModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }

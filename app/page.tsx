@@ -7523,20 +7523,14 @@ ${photo.memoText}
               handleResetGeneralInfoDraft={infoState.handleResetGeneralInfoDraft}
               handleCollectGeneralInfoFromClipboard={infoState.handleCollectGeneralInfoFromClipboard}
               isCollectingGeneralInfoClipboard={infoState.isCollectingGeneralInfoClipboard}
-              handleExtractGeneralInfoUrl={infoState.handleExtractGeneralInfoUrl}
-              isExtractingGeneralInfoUrl={infoState.isExtractingGeneralInfoUrl}
               handleGeneralInfoFileUpload={infoState.handleGeneralInfoFileUpload}
               handleGeneralInfoIphonePasteZonePaste={infoState.handleGeneralInfoIphonePasteZonePaste}
               handleClearGeneralInfoCoverImage={infoState.handleClearGeneralInfoCoverImage}
               handleRemoveGeneralInfoMediaItem={infoState.handleRemoveGeneralInfoMediaItem}
               uploadInlineImageFile={infoState.uploadGeneralInfoInlineImageFile}
-              handleAnalyzeGeneralInfoDraft={infoState.handleAnalyzeGeneralInfoDraft}
-              isAnalyzingGeneralInfo={infoState.isAnalyzingGeneralInfo}
-              handleFactCheckGeneralInfoDraft={infoState.handleFactCheckGeneralInfoDraft}
-              isRunningGeneralInfoFactCheck={infoState.isRunningGeneralInfoFactCheck}
-              geminiApiPacketStatus={infoState.geminiApiPacketStatus}
               handleConfirmGeneralInfo={infoState.handleConfirmGeneralInfo}
               handleCancelEditGeneralInfo={infoState.handleCancelEditGeneralInfo}
+              generalInfoAutoSaveStatus={infoState.generalInfoAutoSaveStatus}
               generalInfoItems={infoState.generalInfoItems}
               filteredGeneralInfoItems={infoState.filteredGeneralInfoItems}
               generalInfoSearchTerm={infoState.generalInfoSearchTerm}
@@ -7550,10 +7544,8 @@ ${photo.memoText}
               handleTogglePinGeneralInfo={infoState.handleTogglePinGeneralInfo}
               loadGeneralInfoItemsFromSupabase={infoState.loadGeneralInfoItemsFromSupabase}
               generalInfoSupabaseStatus={infoState.generalInfoSupabaseStatus}
-              generalInfoCategories={infoState.generalInfoCategories}
               normalizeGeneralInfoMediaItems={infoState.normalizeGeneralInfoMediaItems}
               getGeneralInfoDisplayMediaItems={infoState.getGeneralInfoDisplayMediaItems}
-              handleSaveTemporaryGeneralInfoDraft={infoState.handleSaveTemporaryGeneralInfoDraft}
               onOpenStorageImage={openStorageImage}
             />
           ) : (

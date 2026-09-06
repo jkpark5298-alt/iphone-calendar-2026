@@ -68,6 +68,8 @@ export function useTravelDiaryGeneralInfoState({
   generalInfoSupabaseStatusRef.current = generalInfoSupabaseStatus;
   const [generalInfoDraftBackup, setGeneralInfoDraftBackup] = useState<GeneralInfoDraft | null>(null);
   const [isAnalyzingGeneralInfo, setIsAnalyzingGeneralInfo] = useState(false);
+  const [generalInfoAutoSaveStatus, setGeneralInfoAutoSaveStatus] = useState("");
+  const generalInfoDraftRestoreDoneRef = useRef(false);
 
   // AI 보고서 및 Fact Check
   const [generalInfoReportItem, setGeneralInfoReportItem] = useState<GeneralInfoItem | null>(null);
@@ -361,6 +363,10 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoKeywordText("");
     setGeneralInfoDraft(initialGeneralInfoDraft);
     resetGeneralInfoRichTextEditor("", "");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("travel_diary_general_info_temp_draft");
+    }
+    setGeneralInfoAutoSaveStatus("");
     showPasteHint("🧹 일반 정보 현재 입력을 삭제했습니다. 필요하면 [직전 입력 되돌리기]로 복원할 수 있습니다.");
   }, [backupCurrentGeneralInfoDraft, resetGeneralInfoRichTextEditor, showPasteHint]);
 
@@ -533,7 +539,46 @@ export function useTravelDiaryGeneralInfoState({
   }), []);
 
   const handleGeneralInfoRichCommand = useCallback((command: string, value?: string) => {
-    generalInfoRichTextRef.current?.focus();
+    const editor = generalInfoRichTextRef.current;
+    editor?.focus();
+
+    const wrapSelectionWithSpan = (styles: Record<string, string>) => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return false;
+      const range = selection.getRangeAt(0);
+      if (range.collapsed) {
+        const span = document.createElement("span");
+        Object.assign(span.style, styles);
+        span.appendChild(document.createTextNode("\u200b"));
+        range.insertNode(span);
+        range.setStart(span.firstChild!, 1);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return true;
+      }
+      try {
+        const span = document.createElement("span");
+        Object.assign(span.style, styles);
+        range.surroundContents(span);
+        return true;
+      } catch {
+        document.execCommand("styleWithCSS", false, "true");
+        if (styles.fontSize) {
+          document.execCommand("fontSize", false, "7");
+          editor?.querySelectorAll('font[size="7"]').forEach((node) => {
+            const el = node as HTMLElement;
+            const span = document.createElement("span");
+            span.style.fontSize = styles.fontSize!;
+            while (el.firstChild) span.appendChild(el.firstChild);
+            el.replaceWith(span);
+          });
+          return true;
+        }
+        return false;
+      }
+    };
+
     if (command === "insertText" && value) {
       const ok = document.execCommand("insertText", false, value);
       if (!ok) {
@@ -545,10 +590,21 @@ export function useTravelDiaryGeneralInfoState({
           range.collapse(false);
           selection.removeAllRanges();
           selection.addRange(range);
-        } else if (generalInfoRichTextRef.current) {
-          generalInfoRichTextRef.current.appendChild(document.createTextNode(value));
+        } else if (editor) {
+          editor.appendChild(document.createTextNode(value));
         }
       }
+    } else if (command === "fontSizePx" && value) {
+      wrapSelectionWithSpan({ fontSize: `${value}px` });
+    } else if (command === "highlight" && value) {
+      document.execCommand("styleWithCSS", false, "true");
+      const ok =
+        document.execCommand("hiliteColor", false, value) ||
+        document.execCommand("backColor", false, value);
+      if (!ok) wrapSelectionWithSpan({ backgroundColor: value });
+    } else if (command === "foreColor" && value) {
+      document.execCommand("styleWithCSS", false, "true");
+      document.execCommand("foreColor", false, value);
     } else {
       document.execCommand(command, false, value);
     }
@@ -737,38 +793,6 @@ export function useTravelDiaryGeneralInfoState({
 
     backupCurrentGeneralInfoDraft();
 
-    const urlMatch = text.match(/https?:\/\/\S+/i);
-    const firstUrl = urlMatch?.[0]?.replace(/[),.\]]+$/g, "") || "";
-
-    if (firstUrl) {
-      setGeneralInfoDraft((prev) => ({
-        ...prev,
-        sourceUrl: firstUrl,
-        text:
-          text === firstUrl
-            ? prev.text
-            : [prev.text, text].filter(Boolean).join(prev.text ? "\n\n" : ""),
-        title:
-          extractTitleFromPlainText(
-            text === firstUrl
-              ? prev.text
-              : [prev.text, text].filter(Boolean).join(prev.text ? "\n\n" : ""),
-          ) ||
-          extractTitleFromPlainText(text) ||
-          prev.title ||
-          "URL 자료",
-      }));
-
-      try {
-        await extractGeneralInfoUrl(firstUrl);
-        showPasteHint("✅ URL을 붙여넣어 자동 수집했습니다.");
-      } catch (error) {
-        console.error("travel-diary pasted url extract failed", error);
-        showPasteHint("⚠️ URL은 입력했지만 자동 가져오기는 실패했습니다.");
-      }
-      return;
-    }
-
     const firstLine = extractTitleFromPlainText(text);
     const nextText = [generalInfoDraft.text, text].filter(Boolean).join(generalInfoDraft.text ? "\n\n" : "");
 
@@ -781,7 +805,7 @@ export function useTravelDiaryGeneralInfoState({
     resetGeneralInfoRichTextEditor(nextText, "");
 
     showPasteHint("✅ Text를 일반 정보 자료로 붙여넣었습니다.");
-  }, [generalInfoDraft.text, backupCurrentGeneralInfoDraft, extractGeneralInfoUrl, resetGeneralInfoRichTextEditor, showPasteHint]);
+  }, [generalInfoDraft.text, backupCurrentGeneralInfoDraft, resetGeneralInfoRichTextEditor, showPasteHint]);
 
   const handleGeneralInfoManualPaste = useCallback(async (
     event: React.ClipboardEvent<HTMLTextAreaElement>,
@@ -862,48 +886,17 @@ export function useTravelDiaryGeneralInfoState({
       const text = clipboardText.trim();
 
       if (text) {
-        const urlMatch = text.match(/https?:\/\/\S+/i);
-        const firstUrl = urlMatch?.[0]?.replace(/[),.\]]+$/g, "") || "";
+        const nextText = [generalInfoDraft.text, text].filter(Boolean).join(generalInfoDraft.text ? "\n\n" : "");
+        setGeneralInfoDraft((prev) => ({
+          ...prev,
+          title: extractTitleFromPlainText(nextText) || extractTitleFromPlainText(text) || prev.title || "클립보드 Text 자료",
+          text: nextText,
+        }));
 
-        if (firstUrl) {
-          setGeneralInfoDraft((prev) => {
-            const nextText =
-              text === firstUrl
-                ? prev.text
-                : [prev.text, text].filter(Boolean).join(prev.text ? "\n\n" : "");
-            return {
-              ...prev,
-              sourceUrl: firstUrl,
-              text: nextText,
-              title:
-                extractTitleFromPlainText(nextText) ||
-                extractTitleFromPlainText(text) ||
-                prev.title ||
-                "URL 자료",
-            };
-          });
+        resetGeneralInfoRichTextEditor(nextText, "");
 
-          try {
-            await extractGeneralInfoUrl(firstUrl);
-            handled = true;
-            showPasteHint("✅ 클립보드 URL을 자동 수집했습니다.");
-          } catch (error) {
-            handled = true;
-            showPasteHint(`⚠️ URL 자동 가져오기는 실패했습니다: ${error instanceof Error ? error.message : String(error)}`);
-          }
-        } else {
-          const nextText = [generalInfoDraft.text, text].filter(Boolean).join(generalInfoDraft.text ? "\n\n" : "");
-          setGeneralInfoDraft((prev) => ({
-            ...prev,
-            title: extractTitleFromPlainText(nextText) || extractTitleFromPlainText(text) || prev.title || "클립보드 Text 자료",
-            text: nextText,
-          }));
-
-          resetGeneralInfoRichTextEditor(nextText, "");
-
-          handled = true;
-          showPasteHint("✅ 클립보드 Text를 일반 정보 자료로 추가했습니다.");
-        }
+        handled = true;
+        showPasteHint("✅ 클립보드 Text를 일반 정보 자료로 추가했습니다.");
       }
 
       if (!handled) {
@@ -915,7 +908,7 @@ export function useTravelDiaryGeneralInfoState({
     } finally {
       setIsCollectingGeneralInfoClipboard(false);
     }
-  }, [generalInfoDraft.text, backupCurrentGeneralInfoDraft, extractGeneralInfoUrl, resetGeneralInfoRichTextEditor, showPasteHint]);
+  }, [generalInfoDraft.text, backupCurrentGeneralInfoDraft, resetGeneralInfoRichTextEditor, showPasteHint]);
 
   const handleClearGeneralInfoCoverImage = useCallback(() => {
     setGeneralInfoImageLoadFailed(false);
@@ -1233,11 +1226,7 @@ export function useTravelDiaryGeneralInfoState({
 
     const factCheckSummary = isFullAiVerificationReport(draftWithLatestText.factCheckSummary)
       ? salvageFactCheckHtml(draftWithLatestText.factCheckSummary)
-      : buildAiReportFromBodyContent({
-          title: finalTitle,
-          text: draftWithLatestText.text,
-          formattedTextHtml: richHtml,
-        });
+      : draftWithLatestText.factCheckSummary || "";
 
     const tempItem: GeneralInfoItem = {
       id: targetId,
@@ -1304,14 +1293,7 @@ export function useTravelDiaryGeneralInfoState({
       ? { ...generalInfoDraft, text: latestText }
       : generalInfoDraft;
 
-    const analyzed =
-      draftWithLatestText.primaryCategory ||
-      draftWithLatestText.secondaryCategory ||
-      draftWithLatestText.thirdCategory ||
-      draftWithLatestText.summary ||
-      draftWithLatestText.keywords.length > 0
-        ? draftWithLatestText
-        : mockAnalyzeGeneralInfo(draftWithLatestText);
+    const analyzed = draftWithLatestText;
 
     const inputTypes: GeneralInfoItem["inputTypes"] = [];
     const draftMediaItems = normalizeGeneralInfoMediaItems(analyzed);
@@ -1382,19 +1364,13 @@ export function useTravelDiaryGeneralInfoState({
     }
 
     const resolveFactCheckSummaryForSave = (existingItem?: GeneralInfoItem | null) => {
-      // 1) 이미 AI Fact Check / AI 검증 보고서가 있으면 유지 (평문이면 HTML로 복원)
       if (isFullAiVerificationReport(analyzed.factCheckSummary)) {
         return salvageFactCheckHtml(analyzed.factCheckSummary);
       }
       if (existingItem && isFullAiVerificationReport(existingItem.factCheckSummary || "")) {
         return salvageFactCheckHtml(String(existingItem.factCheckSummary || ""));
       }
-      // 2) Fact Check 없이 Confirm → Text 입력/편집 내용을 그대로 AI 보고서로
-      return buildAiReportFromBodyContent({
-        title: finalTitle,
-        text: analyzed.text,
-        formattedTextHtml: richHtml,
-      });
+      return existingItem?.factCheckSummary || analyzed.factCheckSummary || "";
     };
 
     const item: GeneralInfoItem = {
@@ -1453,14 +1429,7 @@ export function useTravelDiaryGeneralInfoState({
       resetGeneralInfoRichTextEditor("", "");
       localStorage.removeItem("travel_diary_general_info_temp_draft");
       setGeneralInfoActiveTab("storage");
-      if (hasDisplayableAiReport(String(updatedItem.factCheckSummary || ""))) {
-        setGeneralInfoDetailId(null);
-        setGeneralInfoDetailEditMode(false);
-        setGeneralInfoAiReportId(updatedItem.id);
-        showPasteHint("✅ 수정 저장 완료 · Report 화면을 열었습니다.");
-      } else {
-        showPasteHint("✅ 수정 저장 완료 · 새 일반 정보 입력 준비 완료");
-      }
+      showPasteHint("✅ 수정 저장 완료 · 정보 창고에 보관했습니다.");
       return;
     }
 
@@ -1479,14 +1448,7 @@ export function useTravelDiaryGeneralInfoState({
     resetGeneralInfoRichTextEditor("", "");
     localStorage.removeItem("travel_diary_general_info_temp_draft");
     setGeneralInfoActiveTab("storage");
-    if (hasDisplayableAiReport(String(item.factCheckSummary || ""))) {
-      setGeneralInfoDetailId(null);
-      setGeneralInfoDetailEditMode(false);
-      setGeneralInfoAiReportId(item.id);
-      showPasteHint("✅ 저장 완료 · Report가 만들어졌습니다.");
-    } else {
-      showPasteHint("✅ 저장 완료 · 새 일반 정보 입력 준비 완료");
-    }
+    showPasteHint("✅ 저장 완료 · 정보 창고에 보관했습니다.");
   }, [
     generalInfoDraft,
     generalInfoEditingId,
@@ -1576,8 +1538,7 @@ export function useTravelDiaryGeneralInfoState({
       return nextItems;
     });
 
-    setGeneralInfoDetailEditMode(false);
-    showPasteHint("✅ 일반 정보 수정을 저장했습니다.");
+    // Source 수정 화면은 자동 저장 후에도 편집 유지 (닫기로만 종료)
     await syncGeneralInfoItemToSupabase(nextItem, "PUT");
   }, [
     generalInfoItems,
@@ -2606,14 +2567,58 @@ export function useTravelDiaryGeneralInfoState({
             if (parsed.richTextHtml !== undefined) {
               resetGeneralInfoRichTextEditor(parsed.draft.text || "", parsed.richTextHtml);
             }
-            showPasteHint("📂 이전에 임시 저장된 내용을 불러왔습니다.");
+            showPasteHint("📂 이전에 자동 저장된 내용을 불러왔습니다.");
           }
         } catch (e) {
           console.error("Failed to parse temp draft", e);
         }
       }
     }
+    generalInfoDraftRestoreDoneRef.current = true;
   }, [resetGeneralInfoRichTextEditor, showPasteHint]);
+
+  // 수집 초안 자동 저장 (이 기기 localStorage)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const timer = window.setTimeout(() => {
+      if (!generalInfoDraftRestoreDoneRef.current) return;
+      const hasContent =
+        Boolean(generalInfoDraft.title.trim()) ||
+        Boolean(generalInfoDraft.text.trim()) ||
+        Boolean(generalInfoDraft.sourceUrl.trim()) ||
+        Boolean(generalInfoDraft.summary.trim()) ||
+        generalInfoDraft.keywords.length > 0 ||
+        normalizeGeneralInfoMediaItems(generalInfoDraft).length > 0;
+      if (!hasContent) {
+        localStorage.removeItem("travel_diary_general_info_temp_draft");
+        setGeneralInfoAutoSaveStatus("");
+        return;
+      }
+      const html = getCurrentGeneralInfoRichTextHtml();
+      localStorage.setItem(
+        "travel_diary_general_info_temp_draft",
+        JSON.stringify({
+          draft: { ...generalInfoDraft, formattedTextHtml: html || generalInfoDraft.formattedTextHtml },
+          keywordText: generalInfoKeywordText,
+          richTextHtml: html,
+          editingId: generalInfoEditingId,
+        }),
+      );
+      setGeneralInfoAutoSaveStatus(
+        `💾 자동 저장 ${new Date().toLocaleTimeString("ko-KR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })}`,
+      );
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [
+    generalInfoDraft,
+    generalInfoEditingId,
+    generalInfoKeywordText,
+    getCurrentGeneralInfoRichTextHtml,
+  ]);
 
   // Tab visibility change and periodic (30s) polling sync from Supabase
   useEffect(() => {
@@ -2654,6 +2659,7 @@ export function useTravelDiaryGeneralInfoState({
 
   const handleOpenGeneralInfoDetail = useCallback((itemId: number) => {
     setGeneralInfoAiReportId(null);
+    setGeneralInfoDetailEditMode(true);
     setGeneralInfoDetailId(itemId);
     setGeneralInfoActiveTab("storage");
   }, []);
@@ -2712,6 +2718,7 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoSupabaseStatus,
     generalInfoDraftBackup,
     setGeneralInfoDraftBackup,
+    generalInfoAutoSaveStatus,
     isAnalyzingGeneralInfo,
     setIsAnalyzingGeneralInfo,
     generalInfoReportItem,

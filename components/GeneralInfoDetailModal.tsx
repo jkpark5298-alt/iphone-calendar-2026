@@ -22,7 +22,10 @@ import {
 } from "../lib/generalInfoHelpers";
 import type { GeneralInfoMediaItem } from "../lib/generalInfoHelpers";
 import React from "react";
-import { generalInfoCategories } from "../lib/generalInfoMock";
+import { CollectFormatToolbar } from "./CollectFormatToolbar";
+import { HandwritingModal } from "./HandwritingModal";
+import { TextToImageModal } from "./TextToImageModal";
+import { stepCollectFontSize } from "../lib/collectFormatPalette";
 
 interface Props {
   item: GeneralInfoItem;
@@ -46,7 +49,7 @@ export default function GeneralInfoDetailModal({
   onGenerateReport: _onGenerateReport,
   onOpenAiReport,
   onDelete,
-  onShareReport,
+  onShareReport: _onShareReport,
   onOpenStorageImage,
   isGeneratingReport = false,
   needsManualFactCheck = false,
@@ -56,11 +59,11 @@ export default function GeneralInfoDetailModal({
 }: Props) {
   void needsManualFactCheck;
   void _onGenerateReport;
+  void _onShareReport;
   const [copyFeedback, setCopyFeedback] = React.useState<"text" | null>(null);
   const [isEditing, setIsEditing] = React.useState(Boolean(startInEditMode));
   const [editTitle, setEditTitle] = React.useState(item.title || "");
   const [editSummary, setEditSummary] = React.useState(item.summary || "");
-  const [editSourceUrl, setEditSourceUrl] = React.useState(item.sourceUrl || "");
   const [editPrimary, setEditPrimary] = React.useState(item.primaryCategory || "");
   const [editSecondary, setEditSecondary] = React.useState(item.secondaryCategory || "");
   const [editKeywordsText, setEditKeywordsText] = React.useState(
@@ -77,19 +80,29 @@ export default function GeneralInfoDetailModal({
   const bodyImageInsertPanelRef = React.useRef<HTMLDivElement | null>(null);
   const detailBodyRef = React.useRef<HTMLDivElement | null>(null);
   const [showBodyImageInsert, setShowBodyImageInsert] = React.useState(false);
+  const [showHandwritingModal, setShowHandwritingModal] = React.useState(false);
+  const [showTextToImageModal, setShowTextToImageModal] = React.useState(false);
+  const [collectFontSizePx, setCollectFontSizePx] = React.useState(15);
+  const [autoSaveStatus, setAutoSaveStatus] = React.useState("");
+  const [autoSaveTick, setAutoSaveTick] = React.useState(0);
+  const restoreDoneRef = React.useRef(false);
+  const toolbarFileRef = React.useRef<HTMLInputElement | null>(null);
 
   const hasAiReport = hasDisplayableAiReport(String(item?.factCheckSummary || ""));
 
   React.useEffect(() => {
     setEditTitle(item.title || "");
     setEditSummary(item.summary || "");
-    setEditSourceUrl(item.sourceUrl || "");
     setEditPrimary(item.primaryCategory || "");
     setEditSecondary(item.secondaryCategory || "");
     setEditKeywordsText((item.keywords || []).join(", "));
     setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
     setBodyEditorKey((prev) => prev + 1);
-    setIsEditing(Boolean(startInEditMode));
+    setIsEditing(true);
+    restoreDoneRef.current = false;
+    window.setTimeout(() => {
+      restoreDoneRef.current = true;
+    }, 400);
   }, [item.id, item.factCheckSummary, item.factCheckStatus, startInEditMode]);
 
   React.useEffect(() => {
@@ -237,24 +250,6 @@ export default function GeneralInfoDetailModal({
     }
   }, [item?.id, hasAiReport]);
 
-  const beginEditing = React.useCallback(() => {
-    setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
-    setIsEditing(true);
-  }, [item]);
-
-  const cancelEditing = React.useCallback(() => {
-    setEditTitle(item.title || "");
-    setEditSummary(item.summary || "");
-    setEditSourceUrl(item.sourceUrl || "");
-    setEditPrimary(item.primaryCategory || "");
-    setEditSecondary(item.secondaryCategory || "");
-    setEditKeywordsText((item.keywords || []).join(", "));
-    setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
-    setBodyEditorKey((prev) => prev + 1);
-    setShowBodyImageInsert(false);
-    setIsEditing(false);
-  }, [item]);
-
   const persistRepresentativeMedia = React.useCallback(
     async (nextMedia: GeneralInfoMediaItem[]) => {
       setEditMediaItems(nextMedia);
@@ -378,7 +373,8 @@ export default function GeneralInfoDetailModal({
     return extractGeneralInfoReportImageSrcs(String(item.factCheckSummary || ""));
   }, [item.factCheckSummary]);
 
-  const saveAllEdits = React.useCallback(async () => {
+  const saveAllEdits = React.useCallback(async (opts?: { keepEditing?: boolean }) => {
+    const keepEditing = opts?.keepEditing !== false;
     const bodyHtml = String(bodyRichTextRef.current?.innerHTML || item.formattedTextHtml || "").trim();
     const bodyText = htmlToPlainText(bodyHtml) || String(item.text || "");
     const keywords = editKeywordsText
@@ -392,7 +388,7 @@ export default function GeneralInfoDetailModal({
       ...item,
       title: editTitle.trim() || item.title,
       summary: editSummary.trim(),
-      sourceUrl: editSourceUrl.trim() || undefined,
+      sourceUrl: item.sourceUrl,
       primaryCategory: editPrimary.trim() || item.primaryCategory,
       secondaryCategory: editSecondary.trim() || item.secondaryCategory,
       thirdCategory: "",
@@ -408,23 +404,174 @@ export default function GeneralInfoDetailModal({
       await onSaveItemEdit(updated);
     }
     setShowBodyImageInsert(false);
-    setIsEditing(false);
+    if (!keepEditing) setIsEditing(false);
   }, [
     editKeywordsText,
     editMediaItems,
     editPrimary,
     editSecondary,
-    editSourceUrl,
     editSummary,
     editTitle,
     item,
     onSaveItemEdit,
   ]);
 
+  // Source 수정 자동 저장 (수집 화면과 동일하게 debounce)
+  React.useEffect(() => {
+    if (!isEditing || !onSaveItemEdit) return;
+    const timer = window.setTimeout(() => {
+      if (!restoreDoneRef.current) return;
+      void (async () => {
+        try {
+          await saveAllEdits({ keepEditing: true });
+          setAutoSaveStatus(
+            `💾 자동 저장 ${new Date().toLocaleTimeString("ko-KR", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}`,
+          );
+        } catch (error) {
+          console.error(error);
+          setAutoSaveStatus("⚠️ 자동 저장 실패");
+        }
+      })();
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [
+    autoSaveTick,
+    bodyImageTick,
+    editKeywordsText,
+    editMediaItems,
+    editSummary,
+    editTitle,
+    isEditing,
+    onSaveItemEdit,
+    saveAllEdits,
+  ]);
+
+  const runBodyRichCommand = React.useCallback((command: string, value?: string) => {
+    const editor = bodyRichTextRef.current;
+    editor?.focus();
+
+    const wrapSelectionWithSpan = (styles: Record<string, string>) => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return false;
+      const range = selection.getRangeAt(0);
+      if (range.collapsed) {
+        const span = document.createElement("span");
+        Object.assign(span.style, styles);
+        span.appendChild(document.createTextNode("\u200b"));
+        range.insertNode(span);
+        range.setStart(span.firstChild!, 1);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return true;
+      }
+      try {
+        const span = document.createElement("span");
+        Object.assign(span.style, styles);
+        range.surroundContents(span);
+        return true;
+      } catch {
+        document.execCommand("styleWithCSS", false, "true");
+        if (styles.fontSize) {
+          document.execCommand("fontSize", false, "7");
+          editor?.querySelectorAll('font[size="7"]').forEach((node) => {
+            const el = node as HTMLElement;
+            const span = document.createElement("span");
+            span.style.fontSize = styles.fontSize!;
+            while (el.firstChild) span.appendChild(el.firstChild);
+            el.replaceWith(span);
+          });
+          return true;
+        }
+        return false;
+      }
+    };
+
+    if (command === "insertText" && value) {
+      const ok = document.execCommand("insertText", false, value);
+      if (!ok) {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(document.createTextNode(value));
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
+    } else if (command === "fontSizePx" && value) {
+      wrapSelectionWithSpan({ fontSize: `${value}px` });
+    } else if (command === "highlight" && value) {
+      document.execCommand("styleWithCSS", false, "true");
+      const ok =
+        document.execCommand("hiliteColor", false, value) ||
+        document.execCommand("backColor", false, value);
+      if (!ok) wrapSelectionWithSpan({ backgroundColor: value });
+    } else if (command === "foreColor" && value) {
+      document.execCommand("styleWithCSS", false, "true");
+      document.execCommand("foreColor", false, value);
+    } else {
+      document.execCommand(command, false, value);
+    }
+    setBodyImageTick((prev) => prev + 1);
+    setAutoSaveTick((prev) => prev + 1);
+  }, []);
+
+  const insertDataUrlIntoBody = React.useCallback(
+    (dataUrl: string, name: string) => {
+      const editor = bodyRichTextRef.current;
+      if (!editor || !dataUrl) return;
+      removeInlineImageTrigger(editor);
+      insertInlineMediaIntoEditor(editor, [{ src: dataUrl, name, type: "image" }]);
+      enhanceInlineImageBlocks(editor);
+      bindInlineImageRemoveHandler(editor);
+      setShowBodyImageInsert(false);
+      setBodyImageTick((prev) => prev + 1);
+      setAutoSaveTick((prev) => prev + 1);
+    },
+    [],
+  );
+
+  const handleToolbarPasteImage = React.useCallback(async () => {
+    try {
+      if (!navigator.clipboard?.read) {
+        alert("이 브라우저는 클립보드 이미지 읽기를 지원하지 않습니다. 본문에 직접 붙여넣기 하세요.");
+        return;
+      }
+      const items = await navigator.clipboard.read();
+      const files: File[] = [];
+      for (const clipboardItem of items) {
+        const type = clipboardItem.types.find((t) => t.startsWith("image/"));
+        if (!type) continue;
+        const blob = await clipboardItem.getType(type);
+        files.push(new File([blob], `clipboard-${Date.now()}.png`, { type }));
+      }
+      if (!files.length) {
+        alert("클립보드에서 이미지를 찾지 못했습니다.");
+        return;
+      }
+      insertBodyImageFiles(files);
+    } catch {
+      alert("클립보드 접근에 실패했습니다. 본문 칸에 Ctrl+V / ⌘V로 붙여넣기 하세요.");
+    }
+  }, [insertBodyImageFiles]);
+
   const handleAiReportAction = React.useCallback(() => {
-    // 일반정보수집에서는 AI 생성 대신 수동 보고서 편집 화면만 연다.
-    onOpenAiReport?.(item.id);
-  }, [item, onOpenAiReport]);
+    // 저장 후 Report 화면 열기
+    void (async () => {
+      try {
+        await saveAllEdits({ keepEditing: true });
+      } catch {
+        /* ignore */
+      }
+      onOpenAiReport?.(item.id);
+    })();
+  }, [item.id, onOpenAiReport, saveAllEdits]);
 
   if (!item) return null;
 
@@ -474,64 +621,12 @@ export default function GeneralInfoDetailModal({
       >
         <div className="modalHeader">
           <div style={{ flex: 1, minWidth: 0 }}>
-            <span>Source DATA{isEditing ? " · 수정" : ""}</span>
-            {isEditing ? (
-              <input
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="제목"
-                style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: 6,
-                  boxSizing: "border-box",
-                  borderRadius: 10,
-                  border: "1px solid rgba(56, 189, 248, 0.45)",
-                  background: "#020617",
-                  color: "#e2e8f0",
-                  padding: "10px 12px",
-                  fontSize: 16,
-                  fontWeight: 700,
-                }}
-              />
-            ) : (
-              <h3>
-                {item.confirmed === false && (
-                  <span className="generalInfoTempBadge" style={{ marginRight: 8 }}>
-                    임시저장
-                  </span>
-                )}
-                {item.title}
-              </h3>
-            )}
+            <span>Source DATA · 수정</span>
+            <p className="mutedText" style={{ margin: "4px 0 0", fontSize: 12 }}>
+              일반 정보 수집과 같은 형식으로 수정합니다. 입력 내용은 자동 저장됩니다.
+            </p>
           </div>
           <div className="generalInfoDetailHeaderActions">
-            {isEditing ? (
-              <>
-                <button
-                  className="primaryButton smallActionButton"
-                  type="button"
-                  onClick={() => void saveAllEdits()}
-                >
-                  변경 저장
-                </button>
-                <button
-                  className="secondaryButton smallActionButton"
-                  type="button"
-                  onClick={cancelEditing}
-                >
-                  편집 취소
-                </button>
-              </>
-            ) : (
-              <button
-                className="primaryButton smallActionButton"
-                type="button"
-                onClick={beginEditing}
-              >
-                ✏️ 수정
-              </button>
-            )}
             <button className="iconButton" type="button" onClick={onClose}>
               ×
             </button>
@@ -543,65 +638,171 @@ export default function GeneralInfoDetailModal({
           ref={detailBodyRef}
           style={{ display: "flex", flexDirection: "column" }}
         >
-          <section className="generalInfoDetailSection generalInfoAiReportEntrySection" style={{ order: 0 }}>
-            <div className="generalInfoSectionTitleRow">
-              <strong>Report</strong>
-              <span
-                className="miniTag"
-                style={{
-                  padding: "5px 10px",
-                  borderRadius: "999px",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  background: hasAiReport
-                    ? "rgba(74, 222, 128, 0.12)"
-                    : "rgba(56, 189, 248, 0.12)",
-                  border: hasAiReport
-                    ? "1px solid rgba(74, 222, 128, 0.35)"
-                    : "1px solid rgba(56, 189, 248, 0.3)",
-                  color: hasAiReport ? "#86efac" : "#7dd3fc",
-                }}
-              >
-                {hasAiReport ? "있음" : "없음"}
-              </span>
-            </div>
-            {isGeneratingReport ? (
-              <div
-                style={{
-                  marginTop: 8,
-                  padding: "12px 14px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(56, 189, 248, 0.35)",
-                  background: "rgba(14, 165, 233, 0.08)",
-                  color: "#bae6fd",
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
-                📄 보고서 준비 중…
-              </div>
-            ) : (
-              <p className="mutedText" style={{ margin: "8px 0 10px", fontSize: 13 }}>
-                {hasAiReport
-                  ? "저장된 Report를 열어 편집·PDF 저장할 수 있습니다."
-                  : "아직 Report가 없습니다. Report 작성으로 직접 입력할 수 있습니다."}
-              </p>
-            )}
-            <button
-              type="button"
-              className="primaryButton"
-              disabled={isGeneratingReport}
-              onClick={handleAiReportAction}
-            >
-              {isGeneratingReport
-                ? "작성 중…"
-                : hasAiReport
-                  ? "Report 열기"
-                  : "Report 작성"}
-            </button>
+          <section className="generalInfoDetailSection" style={{ order: 0 }}>
+            <strong>정보 제목</strong>
+            <input
+              value={editTitle}
+              onChange={(e) => {
+                setEditTitle(e.target.value);
+                setAutoSaveTick((prev) => prev + 1);
+              }}
+              placeholder="제목을 입력하세요"
+              style={{
+                display: "block",
+                width: "100%",
+                marginTop: 6,
+                boxSizing: "border-box",
+                borderRadius: 10,
+                border: "1px solid rgba(56, 189, 248, 0.45)",
+                background: "#020617",
+                color: "#e2e8f0",
+                padding: "10px 12px",
+                fontSize: 16,
+                fontWeight: 700,
+              }}
+            />
           </section>
 
-          <section className="generalInfoDetailSection" style={{ order: 3 }}>
+          <section className="generalInfoDetailSection" style={{ order: 1 }}>
+            <div className="generalInfoSectionTitleRow">
+              <strong>Text 입력 / 편집</strong>
+              <button
+                type="button"
+                className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                onClick={() =>
+                  void copyPlainText(
+                    String(bodyRichTextRef.current?.innerText || item.text || ""),
+                  )
+                }
+              >
+                {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
+              </button>
+            </div>
+            <p className="mutedText" style={{ margin: "0 0 8px", fontSize: 12 }}>
+              줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능
+            </p>
+            <CollectFormatToolbar
+              onUndo={() => runBodyRichCommand("undo")}
+              onRedo={() => runBodyRichCommand("redo")}
+              onBold={() => runBodyRichCommand("bold")}
+              onUnderline={() => runBodyRichCommand("underline")}
+              onFontSize={(px) => {
+                setCollectFontSizePx(px);
+                runBodyRichCommand("fontSizePx", String(px));
+              }}
+              onFontSizeStep={(delta) => {
+                const next = stepCollectFontSize(collectFontSizePx, delta);
+                setCollectFontSizePx(next);
+                runBodyRichCommand("fontSizePx", String(next));
+              }}
+              onColor={(c) => runBodyRichCommand("foreColor", c)}
+              onHighlight={(c) => runBodyRichCommand("highlight", c)}
+              onInsertChar={(ch) => runBodyRichCommand("insertText", ch)}
+              onImage={() => {
+                setShowBodyImageInsert(true);
+                window.setTimeout(() => toolbarFileRef.current?.click(), 0);
+              }}
+              onPasteImage={() => {
+                void handleToolbarPasteImage();
+              }}
+              onTextImage={() => setShowTextToImageModal(true)}
+              onHandwriting={() => setShowHandwritingModal(true)}
+            />
+            <input
+              ref={toolbarFileRef}
+              type="file"
+              accept="image/*,image/heic,image/heif,video/*"
+              multiple
+              hidden
+              onChange={(e) => {
+                insertBodyImageFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <div
+              key={bodyEditorKey}
+              ref={bodyRichTextRef}
+              className="generalInfoRichTextEditor collectPaperEditor"
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              tabIndex={0}
+              onInput={() => {
+                setBodyImageTick((prev) => prev + 1);
+                setAutoSaveTick((prev) => prev + 1);
+                checkBodyImageTrigger();
+              }}
+              onKeyUp={checkBodyImageTrigger}
+              onCompositionEnd={checkBodyImageTrigger}
+              onPaste={handleBodyEditorPaste}
+              data-placeholder="본문 TEXT를 수정하세요. 문장 끝에 S를 붙이면 이미지를 넣을 수 있습니다."
+              style={{
+                display: "block",
+                width: "100%",
+                minHeight: 220,
+                maxHeight: 480,
+                overflowY: "auto",
+                boxSizing: "border-box",
+                borderRadius: 14,
+                border: "1px solid #e2e8f0",
+                background: "#ffffff",
+                color: "#1a2430",
+                padding: "14px 15px",
+                fontSize: 15,
+                lineHeight: 1.8,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            />
+            {showBodyImageInsert && (
+              <div ref={bodyImageInsertPanelRef} className="generalInfoTextImageInsertPanel">
+                <div className="generalInfoTextImageInsertHead">
+                  <strong>이미지 붙여넣기</strong>
+                  <span>S 감지 · 사진첩 또는 복사 붙여넣기</span>
+                  <button
+                    type="button"
+                    className="secondaryButton smallActionButton"
+                    onClick={() => {
+                      removeInlineImageTrigger(bodyRichTextRef.current);
+                      setShowBodyImageInsert(false);
+                    }}
+                  >
+                    닫기
+                  </button>
+                </div>
+                <div className="generalInfoTextImageInsertActions">
+                  <label className="primaryLabel generalInfoTextImageFileLabel">
+                    🖼 사진첩 · 파일 선택
+                    <input
+                      ref={bodyImageFileRef}
+                      type="file"
+                      accept="image/*,image/heic,image/heif,video/*"
+                      multiple
+                      onChange={(e) => {
+                        insertBodyImageFiles(e.target.files);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <div
+                    className="generalInfoTextImagePasteZone"
+                    contentEditable
+                    suppressContentEditableWarning
+                    role="textbox"
+                    tabIndex={0}
+                    onPaste={handleBodyImageInsertPaste}
+                  >
+                    📋 아이폰·PC 이미지 여기 붙여넣기 (Ctrl+V / ⌘V)
+                  </div>
+                </div>
+              </div>
+            )}
+            <p className="mutedText" style={{ margin: "8px 0 0", fontSize: 12 }}>
+              문장 끝에 <strong>S</strong>를 붙이면 이미지 붙여넣기가 열립니다.
+            </p>
+          </section>
+
+          <section className="generalInfoDetailSection" style={{ order: 2 }}>
             <div className="generalInfoSectionTitleRow">
               <strong>대표 이미지 / 자료</strong>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -631,7 +832,7 @@ export default function GeneralInfoDetailModal({
                     이미지 추가
                   </button>
                 )}
-                {isEditing && mediaItems.length > 0 && (
+                {mediaItems.length > 0 && (
                   <button
                     type="button"
                     className="secondaryButton smallActionButton dangerSmallButton"
@@ -882,15 +1083,51 @@ export default function GeneralInfoDetailModal({
               </div>
             )}
           </section>
-
-          <section className="generalInfoDetailSection" style={{ order: 1 }}>
-            <strong>요약</strong>
-            {isEditing ? (
+          <section className="generalInfoDetailSection" style={{ order: 3 }}>
+            <strong>키워드 / 요약</strong>
+            <p className="mutedText" style={{ margin: "4px 0 10px", fontSize: 12 }}>
+              키워드와 요약을 직접 입력하세요. 입력 내용은 자동 저장됩니다.
+            </p>
+            <div className="generalInfoResultBox generalInfoKeywordInputBox" style={{ marginBottom: 10 }}>
+              <strong>키워드 직접 입력</strong>
+              <input
+                value={editKeywordsText}
+                onChange={(e) => {
+                  setEditKeywordsText(e.target.value);
+                  setAutoSaveTick((prev) => prev + 1);
+                }}
+                placeholder="예: #npm, #run, #dev 또는 npm, run, dev"
+                className="generalInfoFactCheckStatusSelect"
+                style={{ width: "100%" }}
+              />
+            </div>
+            <div className="generalInfoResultBox" style={{ marginBottom: 10 }}>
+              <strong>키워드</strong>
+              <div className="miniTags">
+                {editKeywordsText
+                  .split(/[,，#\n]+/)
+                  .map((k) => k.trim().replace(/^#+/, ""))
+                  .filter(Boolean).length > 0 ? (
+                  editKeywordsText
+                    .split(/[,，#\n]+/)
+                    .map((k) => k.trim().replace(/^#+/, ""))
+                    .filter(Boolean)
+                    .map((keyword) => <span key={keyword}>#{keyword}</span>)
+                ) : (
+                  <span>위에서 키워드를 입력하면 표시됩니다.</span>
+                )}
+              </div>
+            </div>
+            <div className="generalInfoResultBox generalInfoEditableResultBox">
+              <strong>요약</strong>
               <textarea
                 value={editSummary}
-                onChange={(e) => setEditSummary(e.target.value)}
+                onChange={(e) => {
+                  setEditSummary(e.target.value);
+                  setAutoSaveTick((prev) => prev + 1);
+                }}
                 rows={4}
-                placeholder="요약을 입력하세요"
+                placeholder="요약 내용을 직접 입력하세요."
                 style={{
                   width: "100%",
                   boxSizing: "border-box",
@@ -904,228 +1141,35 @@ export default function GeneralInfoDetailModal({
                   resize: "vertical",
                 }}
               />
-            ) : (
-              <p>{item.summary || "요약 없음"}</p>
-            )}
-          </section>
-
-          <section className="generalInfoDetailSection" style={{ order: 2 }}>
-            <div className="generalInfoSectionTitleRow">
-              <strong>본문 TEXT</strong>
-              {!isEditing && (
-                <button
-                  type="button"
-                  className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                  onClick={() => void copyPlainText(item.text || "")}
-                >
-                  {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
-                </button>
-              )}
             </div>
-            {isEditing ? (
-              <>
-                <div
-                  key={bodyEditorKey}
-                  ref={bodyRichTextRef}
-                  className="generalInfoRichTextEditor"
-                  contentEditable
-                  suppressContentEditableWarning
-                  role="textbox"
-                  tabIndex={0}
-                  onInput={() => {
-                    setBodyImageTick((prev) => prev + 1);
-                    checkBodyImageTrigger();
-                  }}
-                  onKeyUp={checkBodyImageTrigger}
-                  onCompositionEnd={checkBodyImageTrigger}
-                  onPaste={handleBodyEditorPaste}
-                  data-placeholder="본문 TEXT를 수정하세요. 문장 끝에 S를 붙이면 이미지를 넣을 수 있습니다."
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    minHeight: 180,
-                    maxHeight: 420,
-                    overflowY: "auto",
-                    boxSizing: "border-box",
-                    borderRadius: 14,
-                    border: "1px solid rgba(56, 189, 248, 0.45)",
-                    background: "#020617",
-                    color: "#e2e8f0",
-                    padding: "14px 15px",
-                    fontSize: 14,
-                    lineHeight: 1.75,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                />
-                {showBodyImageInsert && (
-                  <div ref={bodyImageInsertPanelRef} className="generalInfoTextImageInsertPanel">
-                    <div className="generalInfoTextImageInsertHead">
-                      <strong>이미지 붙여넣기</strong>
-                      <span>S 감지 · 사진첩 또는 복사 붙여넣기 · 본문 TEXT 안에 들어갑니다</span>
-                      <button
-                        type="button"
-                        className="secondaryButton smallActionButton"
-                        onClick={() => {
-                          removeInlineImageTrigger(bodyRichTextRef.current);
-                          setShowBodyImageInsert(false);
-                        }}
-                      >
-                        닫기
-                      </button>
-                    </div>
-                    <div className="generalInfoTextImageInsertActions">
-                      <label className="primaryLabel generalInfoTextImageFileLabel">
-                        🖼 사진첩 · 파일 선택
-                        <input
-                          ref={bodyImageFileRef}
-                          type="file"
-                          accept="image/*,image/heic,image/heif,video/*"
-                          multiple
-                          onChange={(e) => {
-                            insertBodyImageFiles(e.target.files);
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
-                      <div
-                        className="generalInfoTextImagePasteZone"
-                        contentEditable
-                        suppressContentEditableWarning
-                        role="textbox"
-                        tabIndex={0}
-                        onPaste={handleBodyImageInsertPaste}
-                      >
-                        📋 아이폰·PC 이미지 여기 붙여넣기 (Ctrl+V / ⌘V)
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <p className="mutedText" style={{ margin: "8px 0 0", fontSize: 12 }}>
-                  문장 끝에 <strong>S</strong> 또는 <strong>s</strong>를 붙이면 사진첩·복사 붙여넣기가
-                  열리고, 선택한 이미지는 본문 TEXT 안에 들어갑니다.
-                </p>
-              </>
-            ) : item.text || item.formattedTextHtml ? (
-              <div
-                className="generalInfoFormattedTextView"
-                dangerouslySetInnerHTML={{
-                  __html: getGeneralInfoFormattedHtml(item),
-                }}
-              />
-            ) : (
-              <pre>본문 TEXT 없음</pre>
-            )}
-          </section>
-
-          <section className="generalInfoDetailSection" style={{ order: 4 }}>
-            <strong>분류</strong>
-            {isEditing ? (
-              <div style={{ display: "grid", gap: 8 }}>
-                <select
-                  value={editPrimary}
-                  onChange={(e) => setEditPrimary(e.target.value)}
-                  className="generalInfoFactCheckStatusSelect"
-                >
-                  <option value="">1차 분류</option>
-                  {generalInfoCategories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={editSecondary}
-                  onChange={(e) => setEditSecondary(e.target.value)}
-                  placeholder="2차 분류"
-                  className="generalInfoFactCheckStatusSelect"
-                />
-              </div>
-            ) : (
-              <p>
-                {[item.primaryCategory, item.secondaryCategory]
-                  .filter(Boolean)
-                  .join(" > ") || "분류 없음"}
-              </p>
-            )}
-          </section>
-
-          <section className="generalInfoDetailSection" style={{ order: 5 }}>
-            <strong>키워드</strong>
-            {isEditing ? (
-              <input
-                value={editKeywordsText}
-                onChange={(e) => setEditKeywordsText(e.target.value)}
-                placeholder="키워드를 쉼표로 구분"
-                className="generalInfoFactCheckStatusSelect"
-                style={{ width: "100%" }}
-              />
-            ) : (
-              <div className="miniTags">
-                {item.keywords.length > 0 ? (
-                  item.keywords.map((keyword) => <span key={keyword}>{keyword}</span>)
-                ) : (
-                  <span>키워드 없음</span>
-                )}
-              </div>
-            )}
-          </section>
-
-          <section className="generalInfoDetailSection" style={{ order: 6 }}>
-            <strong>출처 URL</strong>
-            {isEditing ? (
-              <input
-                value={editSourceUrl}
-                onChange={(e) => setEditSourceUrl(e.target.value)}
-                placeholder="https://"
-                className="generalInfoFactCheckStatusSelect"
-                style={{ width: "100%" }}
-              />
-            ) : item.sourceUrl ? (
-              <a
-                href={item.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  wordBreak: "break-all",
-                  overflowWrap: "anywhere",
-                  display: "inline-block",
-                  maxWidth: "100%",
-                }}
+            <div className="generalInfoActionRow" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="gradientButton"
+                disabled={isGeneratingReport}
+                onClick={handleAiReportAction}
               >
-                {item.sourceUrl}
-              </a>
+                {isGeneratingReport
+                  ? "작성 중…"
+                  : hasAiReport
+                    ? "Report 열기"
+                    : "Report 작성"}
+              </button>
+            </div>
+            {autoSaveStatus ? (
+              <p className="mutedText" style={{ margin: "8px 0 0", fontSize: 12 }}>
+                {autoSaveStatus}
+              </p>
             ) : (
-              <p>출처 URL 없음</p>
+              <p className="mutedText" style={{ margin: "8px 0 0", fontSize: 12 }}>
+                입력 내용은 자동 저장됩니다. [Report]를 누르면 보고서 화면을 엽니다.
+              </p>
             )}
           </section>
         </div>
 
         <div className="modalFooter">
-          {item.factCheckSummary && onShareReport && !isEditing && (
-            <button
-              className="secondaryButton"
-              type="button"
-              onClick={() => onShareReport(item)}
-            >
-              공유하기
-            </button>
-          )}
-          {!isEditing && (
-            <button
-              className="secondaryButton"
-              type="button"
-              disabled={isGeneratingReport}
-              onClick={handleAiReportAction}
-            >
-              {isGeneratingReport
-                ? "작성 중…"
-                : hasAiReport
-                  ? "Report 열기"
-                  : "Report 작성"}
-            </button>
-          )}
-          {onDelete && !isEditing && (
+          {onDelete && (
             <button
               className="secondaryButton"
               style={{ color: "#ef4444" }}
@@ -1143,6 +1187,26 @@ export default function GeneralInfoDetailModal({
           </button>
         </div>
       </div>
+
+      {showHandwritingModal && (
+        <HandwritingModal
+          onCancel={() => setShowHandwritingModal(false)}
+          onInsert={(dataUrl) => {
+            insertDataUrlIntoBody(dataUrl, `handwriting-${Date.now()}.png`);
+            setShowHandwritingModal(false);
+          }}
+        />
+      )}
+      {showTextToImageModal && (
+        <TextToImageModal
+          initialText={String(bodyRichTextRef.current?.innerText || item.text || "").slice(0, 800)}
+          onCancel={() => setShowTextToImageModal(false)}
+          onInsert={(dataUrl) => {
+            insertDataUrlIntoBody(dataUrl, `text-image-${Date.now()}.png`);
+            setShowTextToImageModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }

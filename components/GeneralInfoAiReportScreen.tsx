@@ -356,10 +356,6 @@ export default function GeneralInfoAiReportScreen({
             <span>작성일자</span>
             <strong>{item.createdAt || "-"}</strong>
           </div>
-          <div>
-            <span>링크</span>
-            <strong>{item.sourceUrl || "직접 입력"}</strong>
-          </div>
         </section>
 
         <section className="giAiReportBodyWrap">
