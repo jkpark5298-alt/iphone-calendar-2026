@@ -619,6 +619,42 @@ textarea {
 .schedule-orange { background: #ffb35c; }
 .schedule-navy { background: #4464ad; color: #fff; }
 .schedule-purple { background: #b58cff; }
+.information-chip-list {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 5px;
+}
+.information-chip {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 5px;
+  padding: 3px 5px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+  color: #0f172a;
+  background: #e0f2fe;
+  border: 1px solid rgba(14, 165, 233, 0.35);
+}
+.information-chip-giftcard { background: #fef3c7; border-color: rgba(245, 158, 11, 0.4); }
+.information-chip-interest { background: #dcfce7; border-color: rgba(34, 197, 94, 0.35); }
+.information-chip-card { background: #ede9fe; border-color: rgba(139, 92, 246, 0.35); }
+.information-chip-delivery { background: #ffedd5; border-color: rgba(249, 115, 22, 0.4); }
+.information-chip-general { background: #e0f2fe; border-color: rgba(14, 165, 233, 0.35); }
+.information-chip-more {
+  background: rgba(148, 163, 184, 0.25);
+  border-color: rgba(148, 163, 184, 0.4);
+  color: #334155;
+  text-align: center;
+}
 .schedule-page {
   max-width: 720px;
   margin: 0 auto;
@@ -780,13 +816,13 @@ textarea {
 }
 
 
-/* ì¶ê° ìì : ê³µí´ì¼ ê¸°ë³¸ ë¹¨ê°ì í´ì , ì§ì  ì§ì  ë ì§ë§ ë¹¨ê°ì */
+/* Ã¬Â¶ÂÃªÂ°Â Ã¬ÂÂÃ¬Â Â: ÃªÂ³ÂµÃ­ÂÂ´Ã¬ÂÂ¼ ÃªÂ¸Â°Ã«Â³Â¸ Ã«Â¹Â¨ÃªÂ°ÂÃ¬ÂÂ Ã­ÂÂ´Ã¬Â Â, Ã¬Â§ÂÃ¬Â Â Ã¬Â§ÂÃ¬Â Â Ã«ÂÂ Ã¬Â§ÂÃ«Â§Â Ã«Â¹Â¨ÃªÂ°ÂÃ¬ÂÂ */
 .holiday-neutral {
   color: #8f8f8f !important;
   font-weight: 700;
 }
 
-/* 오늘은 일자 숫자 원이 아니라 셀 전체를 노란색으로 감싼다 */
+/* ì¤ëì ì¼ì ì«ì ìì´ ìëë¼ ì ì ì²´ë¥¼ ë¸ëìì¼ë¡ ê°ì¼ë¤ */
 .today-day {
   box-shadow: inset 0 0 0 2.5px #f5c518;
   z-index: 3;
@@ -1257,7 +1293,7 @@ textarea {
   background: #0f1110;
 }
 .photo-size-control .manual-size-head span::after {
-  content: " ì¡°ì ";
+  content: " Ã¬Â¡Â°Ã¬Â Â";
 }
 
 /* Touch/mouse frame resize for diary and info photos */
@@ -1309,7 +1345,7 @@ textarea {
 }
 
 .photo-resize-handle::before {
-  content: "â";
+  content: "Ã¢ÂÂ";
   color: #53675e;
   font-size: 18px;
   font-weight: 900;
@@ -1401,7 +1437,7 @@ textarea {
   z-index: 5;
 }
 .memo-resize-handle::before {
-  content: "â";
+  content: "Ã¢ÂÂ";
   color: #53675e;
   font-size: 18px;
   font-weight: 900;
@@ -1443,7 +1479,7 @@ textarea {
   cursor: nwse-resize;
 }
 .memo-resize-handle::before {
-  content: "â";
+  content: "Ã¢ÂÂ";
   line-height: 42px;
 }
 .resizable-memo-frame .photo-memo-box,
@@ -1500,7 +1536,7 @@ textarea {
   box-shadow: 0 0 0 1px rgba(83, 103, 94, 0.25);
 }
 .card-resize-handle::before {
-  content: "â";
+  content: "Ã¢ÂÂ";
   color: #53675e;
   font-size: 22px;
   font-weight: 900;
@@ -1873,7 +1909,7 @@ textarea {
   font-size: 16px;
 }
 
-/* 오늘 날짜: 셀 전체 노란 테두리 (숫자 원 표시 없음). 글자색은 빨간 날짜와 충돌하지 않게 유지 */
+/* ì¤ë ë ì§: ì ì ì²´ ë¸ë íëë¦¬ (ì«ì ì íì ìì). ê¸ììì ë¹¨ê° ë ì§ì ì¶©ëíì§ ìê² ì ì§ */
 .today-day .today-num {
   background: transparent !important;
   color: inherit !important;
@@ -1893,7 +1929,7 @@ textarea {
   letter-spacing: -0.04em;
 }
 
-/* ì¼ê¸°ì¥ ì¬ì§: ì«ì/ì¢ì° ì´ë ìì´ ì¥ìì ë°ë¼ ìë í¬ê¸° ë°°ì¹ */
+/* Ã¬ÂÂ¼ÃªÂ¸Â°Ã¬ÂÂ¥ Ã¬ÂÂ¬Ã¬Â§Â: Ã¬ÂÂ«Ã¬ÂÂ/Ã¬Â¢ÂÃ¬ÂÂ° Ã¬ÂÂ´Ã«ÂÂ Ã¬ÂÂÃ¬ÂÂ´ Ã¬ÂÂ¥Ã¬ÂÂÃ¬ÂÂ Ã«ÂÂ°Ã«ÂÂ¼ Ã¬ÂÂÃ«ÂÂ Ã­ÂÂ¬ÃªÂ¸Â° Ã«Â°Â°Ã¬Â¹Â */
 .diary-photo-grid-safe.count-1 {
   grid-template-columns: 1fr !important;
 }
@@ -1918,7 +1954,7 @@ textarea {
   max-height: 420px;
 }
 
-/* ì ë³´ë³´ê´ì ìë¨ ë²í¼ì´ ìì´í°ìì ë°ì¼ë¡ ë²ì´ëì§ ìëë¡ ì ë¦¬ */
+/* Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂÃ«ÂÂ¨ Ã«Â²ÂÃ­ÂÂ¼Ã¬ÂÂ´ Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ°Ã¬ÂÂÃ¬ÂÂ Ã«Â°ÂÃ¬ÂÂ¼Ã«Â¡Â Ã«Â²ÂÃ¬ÂÂ´Ã«ÂÂÃ¬Â§Â Ã¬ÂÂÃ«ÂÂÃ«Â¡Â Ã¬Â ÂÃ«Â¦Â¬ */
 .info-nav-row {
   width: 100%;
   flex-wrap: wrap !important;
@@ -2032,7 +2068,7 @@ textarea {
   background: transparent !important;
 }
 
-/* ì¼ê¸°ì¥ ì¬ì§ì ì¥ìì ë°ë¼ ê°ì¥ í¬ê² ë³´ì´ëë¡ ìë ë°°ì¹ */
+/* Ã¬ÂÂ¼ÃªÂ¸Â°Ã¬ÂÂ¥ Ã¬ÂÂ¬Ã¬Â§ÂÃ¬ÂÂ Ã¬ÂÂ¥Ã¬ÂÂÃ¬ÂÂ Ã«ÂÂ°Ã«ÂÂ¼ ÃªÂ°ÂÃ¬ÂÂ¥ Ã­ÂÂ¬ÃªÂ²Â Ã«Â³Â´Ã¬ÂÂ´Ã«ÂÂÃ«Â¡Â Ã¬ÂÂÃ«ÂÂ Ã«Â°Â°Ã¬Â¹Â */
 .diary-photo-grid-safe.count-1 {
   grid-template-columns: 1fr !important;
 }
@@ -2058,7 +2094,7 @@ textarea {
   max-height: 220px !important;
 }
 
-/* ì ë³´ë³´ê´ì ìë¨ ë²í¼ í ì¤ ì ì§: ìì´í°ììë ê¸ìì í¨ë© ì¶ì */
+/* Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂÃ«ÂÂ¨ Ã«Â²ÂÃ­ÂÂ¼ Ã­ÂÂ Ã¬Â¤Â Ã¬ÂÂ Ã¬Â§Â: Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ°Ã¬ÂÂÃ¬ÂÂÃ«ÂÂ ÃªÂ¸ÂÃ¬ÂÂÃ¬ÂÂ Ã­ÂÂ¨Ã«ÂÂ© Ã¬Â¶ÂÃ¬ÂÂ */
 .info-nav-row {
   display: flex !important;
   align-items: center !important;
@@ -2086,7 +2122,7 @@ textarea {
   font-size: 15px !important;
 }
 
-/* ì ë³´ë³´ê´ì ì¬ì§ë ì¥ìì ë°ë¼ ë³´ê¸° ì¢ì í¬ê¸° ì ì§ */
+/* Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂ¬Ã¬Â§ÂÃ«ÂÂ Ã¬ÂÂ¥Ã¬ÂÂÃ¬ÂÂ Ã«ÂÂ°Ã«ÂÂ¼ Ã«Â³Â´ÃªÂ¸Â° Ã¬Â¢ÂÃ¬ÂÂ Ã­ÂÂ¬ÃªÂ¸Â° Ã¬ÂÂ Ã¬Â§Â */
 .info-photo-grid-safe.count-1 .info-photo-card-safe img { max-height: 520px !important; }
 .info-photo-grid-safe.count-2 .info-photo-card-safe img { max-height: 360px !important; }
 .info-photo-grid-safe.count-3 .info-photo-card-safe img { max-height: 260px !important; }
@@ -2120,12 +2156,12 @@ textarea {
 }
 
 
-/* 2026-05-25: ìºë¦°ë ìë¨ ë ì§ë ì¤ë ì¼ê¸°ì¥ ì´ë, ì¼ê¸°ì¥ ì¬ì§ ê³µê° ìµì í */
+/* 2026-05-25: Ã¬ÂºÂÃ«Â¦Â°Ã«ÂÂ Ã¬ÂÂÃ«ÂÂ¨ Ã«ÂÂ Ã¬Â§ÂÃ«ÂÂ Ã¬ÂÂ¤Ã«ÂÂ Ã¬ÂÂ¼ÃªÂ¸Â°Ã¬ÂÂ¥ Ã¬ÂÂ´Ã«ÂÂ, Ã¬ÂÂ¼ÃªÂ¸Â°Ã¬ÂÂ¥ Ã¬ÂÂ¬Ã¬Â§Â ÃªÂ³ÂµÃªÂ°Â Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ */
 .calendar-top-actions .today-circle {
   cursor: pointer;
 }
 
-/* ì¼ê¸°ì¥ ì¬ì§ ìì­ì ì¬ì§ ì¥ìì ë§ì¶° ê°ì¥ í¬ê² ë³´ì´ëë¡ ìë ë°°ì¹ */
+/* Ã¬ÂÂ¼ÃªÂ¸Â°Ã¬ÂÂ¥ Ã¬ÂÂ¬Ã¬Â§Â Ã¬ÂÂÃ¬ÂÂ­Ã¬ÂÂ Ã¬ÂÂ¬Ã¬Â§Â Ã¬ÂÂ¥Ã¬ÂÂÃ¬ÂÂ Ã«Â§ÂÃ¬Â¶Â° ÃªÂ°ÂÃ¬ÂÂ¥ Ã­ÂÂ¬ÃªÂ²Â Ã«Â³Â´Ã¬ÂÂ´Ã«ÂÂÃ«Â¡Â Ã¬ÂÂÃ«ÂÂ Ã«Â°Â°Ã¬Â¹Â */
 .diary-photo-panel {
   display: flex;
   flex-direction: column;
@@ -2178,7 +2214,7 @@ textarea {
   min-height: 255px;
 }
 
-/* 3ì¥ì ì²« ì¬ì§ì í¬ê², ëë¨¸ì§ 2ì¥ì ìëì ë°°ì¹íì¬ ì¬ì§ ê³µê°ì ê½ ì¬ì© */
+/* 3Ã¬ÂÂ¥Ã¬ÂÂ Ã¬Â²Â« Ã¬ÂÂ¬Ã¬Â§ÂÃ¬ÂÂ Ã­ÂÂ¬ÃªÂ²Â, Ã«ÂÂÃ«Â¨Â¸Ã¬Â§Â 2Ã¬ÂÂ¥Ã¬ÂÂ Ã¬ÂÂÃ«ÂÂÃ¬ÂÂ Ã«Â°Â°Ã¬Â¹ÂÃ­ÂÂÃ¬ÂÂ¬ Ã¬ÂÂ¬Ã¬Â§Â ÃªÂ³ÂµÃªÂ°ÂÃ¬ÂÂ ÃªÂ½Â Ã¬ÂÂ¬Ã¬ÂÂ© */
 .diary-photo-grid-safe.count-3 {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
@@ -2197,7 +2233,7 @@ textarea {
   min-height: 245px;
 }
 
-/* 5ì¥ ì´ìë 2ì´ ê¸°ì¤ì¼ë¡ ì¬ì§ì í¬ê² ì ì§ */
+/* 5Ã¬ÂÂ¥ Ã¬ÂÂ´Ã¬ÂÂÃ«ÂÂ 2Ã¬ÂÂ´ ÃªÂ¸Â°Ã¬Â¤ÂÃ¬ÂÂ¼Ã«Â¡Â Ã¬ÂÂ¬Ã¬Â§ÂÃ¬ÂÂ Ã­ÂÂ¬ÃªÂ²Â Ã¬ÂÂ Ã¬Â§Â */
 .diary-photo-grid-safe:not(.count-1):not(.count-2):not(.count-3):not(.count-4) {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
@@ -2387,7 +2423,7 @@ textarea {
 }
 
 
-/* 2026-05-25: ìë ëì´ + ì¬ì§ ì ì²´ ë³´ê¸° ì¤ì¬ ë³´ì */
+/* 2026-05-25: Ã¬ÂÂÃ«ÂÂ Ã«ÂÂÃ¬ÂÂ´ + Ã¬ÂÂ¬Ã¬Â§Â Ã¬Â ÂÃ¬Â²Â´ Ã«Â³Â´ÃªÂ¸Â° Ã¬Â¤ÂÃ¬ÂÂ¬ Ã«Â³Â´Ã¬ÂÂ */
 .diary-full-textarea {
   min-height: 180px !important;
   height: auto;
@@ -2429,7 +2465,7 @@ textarea {
   max-height: 520px !important;
 }
 
-/* ì ë³´ë³´ê´ì ì¬ì§ì²©í ë³´ê¸°: ì¹´ë íëë¦¬ ì ê±°, ì¬ë°± ìµìí, í° ì´ë¯¸ì§ */
+/* Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂ¬Ã¬Â§ÂÃ¬Â²Â©Ã­ÂÂ Ã«Â³Â´ÃªÂ¸Â°: Ã¬Â¹Â´Ã«ÂÂ Ã­ÂÂÃ«ÂÂÃ«Â¦Â¬ Ã¬Â ÂÃªÂ±Â°, Ã¬ÂÂ¬Ã«Â°Â± Ã¬ÂµÂÃ¬ÂÂÃ­ÂÂ, Ã­ÂÂ° Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â */
 .info-photo-grid-safe {
   gap: 6px !important;
   margin-top: 10px !important;
@@ -2494,7 +2530,7 @@ textarea {
 }
 
 
-/* 2026-05-25: ì£¼ì ì ë³´ ë³´ê´ì ìë ¥ì¹¸ ìë ëì´ + ì¬ì§ ìì­ ìì° ëì´ */
+/* 2026-05-25: Ã¬Â£Â¼Ã¬ÂÂ Ã¬Â ÂÃ«Â³Â´ Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂÃ«Â Â¥Ã¬Â¹Â¸ Ã¬ÂÂÃ«ÂÂ Ã«ÂÂÃ¬ÂÂ´ + Ã¬ÂÂ¬Ã¬Â§Â Ã¬ÂÂÃ¬ÂÂ­ Ã¬ÂÂÃ¬ÂÂ° Ã«ÂÂÃ¬ÂÂ´ */
 .info-main-textarea {
   width: 100%;
   min-height: 180px !important;
@@ -2687,7 +2723,7 @@ textarea {
 }
 
 
-/* 2026-05-25: ì ë³´ë³´ê´ì ì¬ì§ ë©ëª¨ë ê¸°ë³¸ í¬ê¸° ì ì§, ì í ì ì ì²´ ë´ì© íì */
+/* 2026-05-25: Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂ¬Ã¬Â§Â Ã«Â©ÂÃ«ÂªÂ¨Ã«ÂÂ ÃªÂ¸Â°Ã«Â³Â¸ Ã­ÂÂ¬ÃªÂ¸Â° Ã¬ÂÂ Ã¬Â§Â, Ã¬ÂÂ Ã­ÂÂ Ã¬ÂÂ Ã¬Â ÂÃ¬Â²Â´ Ã«ÂÂ´Ã¬ÂÂ© Ã­ÂÂÃ¬ÂÂ */
 .info-photo-note-safe {
   min-height: 74px !important;
   max-height: 74px !important;
@@ -2714,7 +2750,7 @@ textarea {
 }
 
 
-/* 2026-05-25: ì ë³´ë³´ê´ì ì¬ì§ ë©ëª¨ ê¸°ë³¸ ë³´ê¸°ììë í­ì ë©ëª¨ ì²« ì¤ë¶í° ë³´ì´ëë¡ ê³ ì  */
+/* 2026-05-25: Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂ¬Ã¬Â§Â Ã«Â©ÂÃ«ÂªÂ¨ ÃªÂ¸Â°Ã«Â³Â¸ Ã«Â³Â´ÃªÂ¸Â°Ã¬ÂÂÃ¬ÂÂÃ«ÂÂ Ã­ÂÂ­Ã¬ÂÂ Ã«Â©ÂÃ«ÂªÂ¨ Ã¬Â²Â« Ã¬Â¤ÂÃ«Â¶ÂÃ­ÂÂ° Ã«Â³Â´Ã¬ÂÂ´Ã«ÂÂÃ«Â¡Â ÃªÂ³Â Ã¬Â Â */
 .info-photo-note-safe {
   line-height: 1.45 !important;
   white-space: pre-wrap !important;
@@ -4162,7 +4198,7 @@ textarea {
   margin-bottom: 12px !important;
 }
 
-/* [â ì´ì ì¼]                         [ë¤ìì¼ â] */
+/* [Ã¢ÂÂ Ã¬ÂÂ´Ã¬Â ÂÃ¬ÂÂ¼]                         [Ã«ÂÂ¤Ã¬ÂÂÃ¬ÂÂ¼ Ã¢ÂÂ] */
 .diary-date-nav-row {
   width: 100% !important;
   display: flex !important;
@@ -4177,7 +4213,7 @@ textarea {
   flex: 0 0 auto !important;
 }
 
-/* 2026. 05. 26 (í) [ìºë¦°ë] [ì ë³´ ì´ë] í í */
+/* 2026. 05. 26 (Ã­ÂÂ) [Ã¬ÂºÂÃ«Â¦Â°Ã«ÂÂ] [Ã¬Â ÂÃ«Â³Â´ Ã¬ÂÂ´Ã«ÂÂ] Ã­ÂÂ Ã­ÂÂ */
 .diary-title-nav-row {
   width: 100% !important;
   display: grid !important;
@@ -4211,7 +4247,7 @@ textarea {
   flex: 0 0 auto !important;
 }
 
-/* ë ì¨ â ì¼ì  â ì¬ì§ë²í¼ â ë³¸ë¬¸ â ì¬ì§ â ìì± */
+/* Ã«ÂÂ Ã¬ÂÂ¨ Ã¢ÂÂ Ã¬ÂÂ¼Ã¬Â Â Ã¢ÂÂ Ã¬ÂÂ¬Ã¬Â§ÂÃ«Â²ÂÃ­ÂÂ¼ Ã¢ÂÂ Ã«Â³Â¸Ã«Â¬Â¸ Ã¢ÂÂ Ã¬ÂÂ¬Ã¬Â§Â Ã¢ÂÂ Ã¬ÂÂÃ¬ÂÂ± */
 .diary-top-row {
   display: flex !important;
   flex-direction: column !important;
@@ -4336,7 +4372,7 @@ textarea {
   }
 }
 
-/* ìì£¼ ì¢ì íë©´ììë ì ëª© ì¤ë§ ìì íê² 2ì¤ íì© */
+/* Ã¬ÂÂÃ¬Â£Â¼ Ã¬Â¢ÂÃ¬ÂÂ Ã­ÂÂÃ«Â©Â´Ã¬ÂÂÃ¬ÂÂÃ«ÂÂ Ã¬Â ÂÃ«ÂªÂ© Ã¬Â¤ÂÃ«Â§Â Ã¬ÂÂÃ¬Â ÂÃ­ÂÂÃªÂ²Â 2Ã¬Â¤Â Ã­ÂÂÃ¬ÂÂ© */
 @media (max-width: 360px) {
   .diary-title-nav-row {
     grid-template-columns: 1fr !important;
@@ -4360,7 +4396,7 @@ textarea {
   margin-bottom: 10px !important;
 }
 
-/* 1í: ì´ì ì¼ / ë ì§+ìì¼ / ë¤ìì¼ */
+/* 1Ã­ÂÂ: Ã¬ÂÂ´Ã¬Â ÂÃ¬ÂÂ¼ / Ã«ÂÂ Ã¬Â§Â+Ã¬ÂÂÃ¬ÂÂ¼ / Ã«ÂÂ¤Ã¬ÂÂÃ¬ÂÂ¼ */
 .info-date-nav-one-line {
   width: 100% !important;
   display: grid !important;
@@ -4381,7 +4417,7 @@ textarea {
   text-overflow: clip !important;
 }
 
-/* 2í: ì£¼ìì ë³´ë³´ê´ì / ì´ë¯¸ì§ ë¶ì¬ë£ê¸° / ìê° ìºë¦°ë */
+/* 2Ã­ÂÂ: Ã¬Â£Â¼Ã¬ÂÂÃ¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ / Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã«Â¶ÂÃ¬ÂÂ¬Ã«ÂÂ£ÃªÂ¸Â° / Ã¬ÂÂÃªÂ°Â Ã¬ÂºÂÃ«Â¦Â°Ã«ÂÂ */
 .info-title-one-line {
   width: 100% !important;
   display: grid !important;
@@ -4412,7 +4448,7 @@ textarea {
   white-space: nowrap !important;
 }
 
-/* 3í: 26 / ì¼ê¸° / ì¬ì§ ê°ì ¸ì¤ê¸° / ì¹Â·ìº¡ì² ë¶ì¬ë£ê¸° */
+/* 3Ã­ÂÂ: 26 / Ã¬ÂÂ¼ÃªÂ¸Â° / Ã¬ÂÂ¬Ã¬Â§Â ÃªÂ°ÂÃ¬Â Â¸Ã¬ÂÂ¤ÃªÂ¸Â° / Ã¬ÂÂ¹ÃÂ·Ã¬ÂºÂ¡Ã¬Â²Â Ã«Â¶ÂÃ¬ÂÂ¬Ã«ÂÂ£ÃªÂ¸Â° */
 .info-action-one-line {
   width: 100% !important;
   display: grid !important;
@@ -4450,7 +4486,7 @@ textarea {
   margin-bottom: 8px !important;
 }
 
-/* ì¬ì§ 2ì´ ê³ ì  */
+/* Ã¬ÂÂ¬Ã¬Â§Â 2Ã¬ÂÂ´ ÃªÂ³Â Ã¬Â Â */
 .info-photo-grid-safe {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -4477,7 +4513,7 @@ textarea {
   display: block !important;
 }
 
-/* ìì´í° ìì¶ */
+/* Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ° Ã¬ÂÂÃ¬Â¶Â */
 @media (max-width: 820px) {
   .info-head-one-line {
     gap: 7px !important;
@@ -4539,7 +4575,7 @@ textarea {
   }
 }
 
-/* ìì£¼ ì¢ì íë©´ ìì ì¥ì¹ */
+/* Ã¬ÂÂÃ¬Â£Â¼ Ã¬Â¢ÂÃ¬ÂÂ Ã­ÂÂÃ«Â©Â´ Ã¬ÂÂÃ¬Â ÂÃ¬ÂÂ¥Ã¬Â¹Â */
 @media (max-width: 370px) {
   .info-title-one-line {
     grid-template-columns: 1fr auto !important;
@@ -5142,7 +5178,7 @@ body {
   }
 
   body.ios-keyboard-editing::before {
-    content: "ìë ¥ í¸ì§ ì¤";
+    content: "Ã¬ÂÂÃ«Â Â¥ Ã­ÂÂ¸Ã¬Â§Â Ã¬Â¤Â";
     position: fixed;
     z-index: 9998;
     left: 14px;
@@ -5389,10 +5425,10 @@ body {
 }
 
 /* ==========================================
-   ì ë³´ë³´ê´ì ê°í¸: ì¸ì¤í ì£¼ì ì ë³´ & í¬í ë¶
+   Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ ÃªÂ°ÂÃ­ÂÂ¸: Ã¬ÂÂ¸Ã¬ÂÂ¤Ã­ÂÂ Ã¬Â£Â¼Ã¬ÂÂ Ã¬Â ÂÃ«Â³Â´ & Ã­ÂÂ¬Ã­ÂÂ Ã«Â¶Â
    ========================================== */
 
-/* íì í­ ì í */
+/* Ã­ÂÂÃ¬ÂÂ Ã­ÂÂ­ Ã¬Â ÂÃ­ÂÂ */
 .info-subview-tabs {
   display: flex;
   width: 100%;
@@ -5427,7 +5463,7 @@ body {
   border-radius: 6px 6px 0 0;
 }
 
-/* ë¡ë© ì¤ë²ë ì´ */
+/* Ã«Â¡ÂÃ«ÂÂ© Ã¬ÂÂ¤Ã«Â²ÂÃ«Â ÂÃ¬ÂÂ´ */
 .insta-loading-overlay {
   position: absolute;
   top: 0;
@@ -5458,7 +5494,7 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* API í¤ íë¬ */
+/* API Ã­ÂÂ¤ Ã­ÂÂÃ«ÂÂ¬ */
 .api-key-panel {
   display: flex;
   align-items: center;
@@ -5509,7 +5545,7 @@ body {
   color: #ff6363;
 }
 
-/* ìë ¥ ì¹´ë */
+/* Ã¬ÂÂÃ«Â Â¥ Ã¬Â¹Â´Ã«ÂÂ */
 .insta-input-card {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -5529,7 +5565,7 @@ body {
   padding-left: 8px;
 }
 
-/* ì´ë¯¸ì§ ëë/ë¶ì¬ë£ê¸° ìì­ */
+/* Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã«ÂÂÃ«ÂÂ/Ã«Â¶ÂÃ¬ÂÂ¬Ã«ÂÂ£ÃªÂ¸Â° Ã¬ÂÂÃ¬ÂÂ­ */
 .insta-paste-zone {
   min-height: 120px;
   border: 2.5px dashed rgba(255, 255, 255, 0.18);
@@ -5619,7 +5655,7 @@ body {
   background: #ff2d2d;
 }
 
-/* OCR ì¸ëì¼ì´í° */
+/* OCR Ã¬ÂÂ¸Ã«ÂÂÃ¬Â¼ÂÃ¬ÂÂ´Ã­ÂÂ° */
 .ocr-result-indicator {
   background: rgba(98, 177, 155, 0.08);
   border: 1px solid rgba(98, 177, 155, 0.25);
@@ -5639,7 +5675,7 @@ body {
   margin-right: 6px;
 }
 
-/* ìë ¥ íë */
+/* Ã¬ÂÂÃ«Â Â¥ Ã­ÂÂÃ«ÂÂ */
 .input-group {
   margin-bottom: 15px;
   display: flex;
@@ -5689,7 +5725,7 @@ body {
   color: #fff;
 }
 
-/* ì¹´íê³ ë¦¬ ì í ìì½ ë²í¼ */
+/* Ã¬Â¹Â´Ã­ÂÂÃªÂ³Â Ã«Â¦Â¬ Ã¬ÂÂ Ã­ÂÂ Ã¬ÂÂÃ¬ÂÂ½ Ã«Â²ÂÃ­ÂÂ¼ */
 .category-selection {
   margin-bottom: 18px;
 }
@@ -5723,7 +5759,7 @@ body {
   font-weight: 800;
 }
 
-/* í¤ìë ë° ë¯¸ë¦¬ë³´ê¸° ì´ */
+/* Ã­ÂÂ¤Ã¬ÂÂÃ«ÂÂ Ã«Â°Â Ã«Â¯Â¸Ã«Â¦Â¬Ã«Â³Â´ÃªÂ¸Â° Ã¬ÂÂ´ */
 .meta-row {
   display: flex;
   flex-wrap: wrap;
@@ -5775,7 +5811,7 @@ body {
   color: #ffd04b;
 }
 
-/* í¼ ì¡ì */
+/* Ã­ÂÂ¼ Ã¬ÂÂ¡Ã¬ÂÂ */
 .form-actions {
   display: flex;
   justify-content: flex-end;
@@ -5793,7 +5829,7 @@ body {
   color: #fff !important;
 }
 
-/* ì¸ì¤í ì¹´ë ì¹ì */
+/* Ã¬ÂÂ¸Ã¬ÂÂ¤Ã­ÂÂ Ã¬Â¹Â´Ã«ÂÂ Ã¬ÂÂ¹Ã¬ÂÂ */
 .insta-cards-section, .photobook-cards-section {
   margin-top: 30px;
 }
@@ -5814,14 +5850,14 @@ body {
   border-radius: 8px;
 }
 
-/* ì¹´ë ê·¸ë¦¬ë */
+/* Ã¬Â¹Â´Ã«ÂÂ ÃªÂ·Â¸Ã«Â¦Â¬Ã«ÂÂ */
 .insta-cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
 }
 
-/* ì¸ì¤í ì¹´ë ì¤íì¼ */
+/* Ã¬ÂÂ¸Ã¬ÂÂ¤Ã­ÂÂ Ã¬Â¹Â´Ã«ÂÂ Ã¬ÂÂ¤Ã­ÂÂÃ¬ÂÂ¼ */
 .insta-card {
   background: rgba(255, 255, 255, 0.04);
   border: 1.5px solid rgba(255, 255, 255, 0.08);
@@ -5862,22 +5898,22 @@ body {
   color: #fff;
 }
 
-/* ì¹´íê³ ë¦¬ íê·¸ ìì êµ¬ë¶ */
-.category-tag[data-cat="ì ì¹"] { background: #ff4d4d; color: #fff; }
-.category-tag[data-cat="ê²½ì "] { background: #ffd04b; color: #000; }
-.category-tag[data-cat="ì¬í"] { background: #3399ff; color: #fff; }
-.category-tag[data-cat="ì°ì"] { background: #a862ff; color: #fff; }
-.category-tag[data-cat="ê¸°ì "] { background: #26e6a4; color: #000; }
-.category-tag[data-cat="êµ­ì "] { background: #ff9f40; color: #fff; }
-.category-tag[data-cat="íì "] { background: #5bc0de; color: #fff; }
-.category-tag[data-cat="êµì¡"] { background: #5cb85c; color: #fff; }
-.category-tag[data-cat="ë¬¸í"] { background: #e05bbf; color: #fff; }
-.category-tag[data-cat="ìì "] { background: #f0ad4e; color: #fff; }
-.category-tag[data-cat="ê³¼í"] { background: #777777; color: #fff; }
-.category-tag[data-cat="ì¸êµ"] { background: #4b0082; color: #fff; }
-.category-tag[data-cat="êµ­ë°©"] { background: #556b2f; color: #fff; }
-.category-tag[data-cat="ìë³´"] { background: #2f4f4f; color: #fff; }
-.category-tag[data-cat="ê¸°í"] { background: #9fa6b2; color: #fff; }
+/* Ã¬Â¹Â´Ã­ÂÂÃªÂ³Â Ã«Â¦Â¬ Ã­ÂÂÃªÂ·Â¸ Ã¬ÂÂÃ¬ÂÂ ÃªÂµÂ¬Ã«Â¶Â */
+.category-tag[data-cat="Ã¬Â ÂÃ¬Â¹Â"] { background: #ff4d4d; color: #fff; }
+.category-tag[data-cat="ÃªÂ²Â½Ã¬Â Â"] { background: #ffd04b; color: #000; }
+.category-tag[data-cat="Ã¬ÂÂ¬Ã­ÂÂ"] { background: #3399ff; color: #fff; }
+.category-tag[data-cat="Ã¬ÂÂ°Ã¬ÂÂ"] { background: #a862ff; color: #fff; }
+.category-tag[data-cat="ÃªÂ¸Â°Ã¬ÂÂ "] { background: #26e6a4; color: #000; }
+.category-tag[data-cat="ÃªÂµÂ­Ã¬Â Â"] { background: #ff9f40; color: #fff; }
+.category-tag[data-cat="Ã­ÂÂÃ¬Â Â"] { background: #5bc0de; color: #fff; }
+.category-tag[data-cat="ÃªÂµÂÃ¬ÂÂ¡"] { background: #5cb85c; color: #fff; }
+.category-tag[data-cat="Ã«Â¬Â¸Ã­ÂÂ"] { background: #e05bbf; color: #fff; }
+.category-tag[data-cat="Ã¬ÂÂÃ¬ÂÂ "] { background: #f0ad4e; color: #fff; }
+.category-tag[data-cat="ÃªÂ³Â¼Ã­ÂÂ"] { background: #777777; color: #fff; }
+.category-tag[data-cat="Ã¬ÂÂ¸ÃªÂµÂ"] { background: #4b0082; color: #fff; }
+.category-tag[data-cat="ÃªÂµÂ­Ã«Â°Â©"] { background: #556b2f; color: #fff; }
+.category-tag[data-cat="Ã¬ÂÂÃ«Â³Â´"] { background: #2f4f4f; color: #fff; }
+.category-tag[data-cat="ÃªÂ¸Â°Ã­ÂÂ"] { background: #9fa6b2; color: #fff; }
 
 .card-image-wrapper {
   max-height: 200px;
@@ -5930,7 +5966,7 @@ body {
   white-space: pre-wrap;
 }
 
-/* í©í¸ì²´í¬ ë¦¬í¬í¸ ë°ì¤ */
+/* Ã­ÂÂ©Ã­ÂÂ¸Ã¬Â²Â´Ã­ÂÂ¬ Ã«Â¦Â¬Ã­ÂÂ¬Ã­ÂÂ¸ Ã«Â°ÂÃ¬ÂÂ¤ */
 .fact-check-box {
   background: rgba(0, 112, 243, 0.05);
   border-left: 3.5px solid #0070f3;
@@ -5972,7 +6008,7 @@ body {
   color: #fff;
 }
 
-/* ì¹´ë ì¡ì ë²í¼ */
+/* Ã¬Â¹Â´Ã«ÂÂ Ã¬ÂÂ¡Ã¬ÂÂ Ã«Â²ÂÃ­ÂÂ¼ */
 .card-actions {
   display: flex;
   border-top: 1.5px solid rgba(255, 255, 255, 0.05);
@@ -6020,7 +6056,7 @@ body {
 }
 
 /* ==========================================
-   í¬í ë¶ ë·° ëìì¸
+   Ã­ÂÂ¬Ã­ÂÂ Ã«Â¶Â Ã«Â·Â° Ã«ÂÂÃ¬ÂÂÃ¬ÂÂ¸
    ========================================== */
 .photobook-grid {
   display: grid;
@@ -6089,7 +6125,7 @@ body {
   background: rgba(0,0,0,0.12);
 }
 
-/* ì¸ì ì ì¸ ìì­ */
+/* Ã¬ÂÂ¸Ã¬ÂÂ Ã¬Â ÂÃ¬ÂÂ¸ Ã¬ÂÂÃ¬ÂÂ­ */
 @media print {
   .no-print {
     display: none !important;
@@ -6097,7 +6133,7 @@ body {
 }
 
 /* ==========================================
-   ì ë³´ë³´ê´ì 3ë¨ ë ì´ìì ê°í¸
+   Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ 3Ã«ÂÂ¨ Ã«Â ÂÃ¬ÂÂ´Ã¬ÂÂÃ¬ÂÂ ÃªÂ°ÂÃ­ÂÂ¸
    ========================================== */
 .info-layout-3col {
   display: grid;
@@ -6314,7 +6350,7 @@ body {
   box-sizing: border-box;
 }
 
-/* 3ë¨ ë ì´ìì ëª¨ë°ì¼ ë°ìí */
+/* 3Ã«ÂÂ¨ Ã«Â ÂÃ¬ÂÂ´Ã¬ÂÂÃ¬ÂÂ Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ Ã«Â°ÂÃ¬ÂÂÃ­ÂÂ */
 @media (max-width: 900px) {
   .info-layout-3col {
     grid-template-columns: 1fr;
@@ -6326,7 +6362,7 @@ body {
 }
 
 /* ==========================================
-   ì ë³´ë³´ê´ì 2ì»¬ë¼ ë ì´ìì ë° í¸ë² ì¤ ì¤íì¼
+   Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ 2Ã¬Â»Â¬Ã«ÂÂ¼ Ã«Â ÂÃ¬ÂÂ´Ã¬ÂÂÃ¬ÂÂ Ã«Â°Â Ã­ÂÂ¸Ã«Â²Â Ã¬Â¤Â Ã¬ÂÂ¤Ã­ÂÂÃ¬ÂÂ¼
    ========================================== */
 .info-layout-2col {
   display: grid;
@@ -6357,7 +6393,7 @@ body {
   box-sizing: border-box;
 }
 
-/* ì¬ì´ëë° ìì´í í */
+/* Ã¬ÂÂ¬Ã¬ÂÂ´Ã«ÂÂÃ«Â°Â Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ Ã­ÂÂ */
 .info-sidebar-item-row {
   width: 100%;
   display: flex;
@@ -6373,7 +6409,7 @@ body {
   text-align: left;
   box-sizing: border-box;
   color: #fff;
-  position: relative; /* í¸ë² ì¤ ìì¹ ê¸°ì¤ */
+  position: relative; /* Ã­ÂÂ¸Ã«Â²Â Ã¬Â¤Â Ã¬ÂÂÃ¬Â¹Â ÃªÂ¸Â°Ã¬Â¤Â */
 }
 
 .info-sidebar-item-row:hover {
@@ -6388,12 +6424,12 @@ body {
   font-weight: bold;
 }
 
-/* ì¸ë¤ì¼ */
+/* Ã¬ÂÂ¸Ã«ÂÂ¤Ã¬ÂÂ¼ */
 .info-sidebar-thumb {
   width: 48px;
   height: 48px;
   border-radius: 6px;
-  overflow: visible; /* í¸ë² ì¤ íìì´ ë°ì¼ë¡ íì´ëìì¼ íë¯ë¡ visible */
+  overflow: visible; /* Ã­ÂÂ¸Ã«Â²Â Ã¬Â¤Â Ã­ÂÂÃ¬ÂÂÃ¬ÂÂ´ Ã«Â°ÂÃ¬ÂÂ¼Ã«Â¡Â Ã­ÂÂÃ¬ÂÂ´Ã«ÂÂÃ¬ÂÂÃ¬ÂÂ¼ Ã­ÂÂÃ«Â¯ÂÃ«Â¡Â visible */
   background: rgba(0, 0, 0, 0.2);
   display: flex;
   align-items: center;
@@ -6414,7 +6450,7 @@ body {
   font-size: 20px;
 }
 
-/* ë©í ì ë³´ */
+/* Ã«Â©ÂÃ­ÂÂ Ã¬Â ÂÃ«Â³Â´ */
 .info-sidebar-meta {
   flex: 1;
   display: flex;
@@ -6443,12 +6479,12 @@ body {
   display: block;
 }
 
-/* í¸ë² ì¤ íë¦¬ë·° ì¤íì¼ */
+/* Ã­ÂÂ¸Ã«Â²Â Ã¬Â¤Â Ã­ÂÂÃ«Â¦Â¬Ã«Â·Â° Ã¬ÂÂ¤Ã­ÂÂÃ¬ÂÂ¼ */
 .info-sidebar-hover-zoom {
   display: none;
   position: absolute;
   top: 50%;
-  right: 60px; /* ì¸ë¤ì¼ ê¸°ì¤ ì¼ìª½ ë°©í¥ì¼ë¡ íì */
+  right: 60px; /* Ã¬ÂÂ¸Ã«ÂÂ¤Ã¬ÂÂ¼ ÃªÂ¸Â°Ã¬Â¤Â Ã¬ÂÂ¼Ã¬ÂªÂ½ Ã«Â°Â©Ã­ÂÂ¥Ã¬ÂÂ¼Ã«Â¡Â Ã­ÂÂÃ¬ÂÂ */
   transform: translateY(-50%) scale(0.95);
   width: 220px;
   height: 220px;
@@ -6463,14 +6499,14 @@ body {
   transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* í¸ë² ì íì ëì°ê¸° */
+/* Ã­ÂÂ¸Ã«Â²Â Ã¬ÂÂ Ã­ÂÂÃ¬ÂÂ Ã«ÂÂÃ¬ÂÂ°ÃªÂ¸Â° */
 .info-sidebar-item-row:hover .info-sidebar-hover-zoom {
   display: block;
   opacity: 1;
   transform: translateY(-50%) scale(1);
 }
 
-/* 2ì»¬ë¼ ë°ìí ëª¨ë°ì¼ */
+/* 2Ã¬Â»Â¬Ã«ÂÂ¼ Ã«Â°ÂÃ¬ÂÂÃ­ÂÂ Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ */
 @media (max-width: 900px) {
   .info-box {
     width: 100% !important;
@@ -6510,18 +6546,18 @@ body {
     padding: 10px !important;
   }
 
-  /* ëª¨ë°ì¼ í°ì¹ íê²½ììë ì¤ëìí  ì ìë í¸ë² ì¤ì ìì í ë¹íì±í */
+  /* Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ Ã­ÂÂ°Ã¬Â¹Â Ã­ÂÂÃªÂ²Â½Ã¬ÂÂÃ¬ÂÂÃ«ÂÂ Ã¬ÂÂ¤Ã«ÂÂÃ¬ÂÂÃ­ÂÂ  Ã¬ÂÂ Ã¬ÂÂÃ«ÂÂ Ã­ÂÂ¸Ã«Â²Â Ã¬Â¤ÂÃ¬ÂÂ Ã¬ÂÂÃ¬Â ÂÃ­ÂÂ Ã«Â¹ÂÃ­ÂÂÃ¬ÂÂ±Ã­ÂÂ */
   .info-sidebar-hover-zoom {
     display: none !important;
   }
 
-  /* ì¹´íê³ ë¦¬ ìì½ ë²í¼ ëª¨ë°ì¼ ìµì í */
+  /* Ã¬Â¹Â´Ã­ÂÂÃªÂ³Â Ã«Â¦Â¬ Ã¬ÂÂÃ¬ÂÂ½ Ã«Â²ÂÃ­ÂÂ¼ Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ */
   .category-pill {
     padding: 4px 8px !important;
     font-size: 11px !important;
   }
 
-  /* í¤ë ì ë ¬ ëª¨ë°ì¼ ìµì í */
+  /* Ã­ÂÂ¤Ã«ÂÂ Ã¬Â ÂÃ«Â Â¬ Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ */
   .info-head-one-line {
     flex-direction: column !important;
     align-items: stretch !important;
@@ -6540,7 +6576,7 @@ body {
     margin-top: 5px !important;
   }
 
-  /* ì¸ì¤í/í¬í ë¶ í­ ë²í¼ ìµì í */
+  /* Ã¬ÂÂ¸Ã¬ÂÂ¤Ã­ÂÂ/Ã­ÂÂ¬Ã­ÂÂ Ã«Â¶Â Ã­ÂÂ­ Ã«Â²ÂÃ­ÂÂ¼ Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ */
   .info-subview-tabs {
     flex-direction: column !important;
     width: 100% !important;
@@ -6553,7 +6589,7 @@ body {
     text-align: center !important;
   }
 
-  /* ì´ë¯¸ì§ ë° í¼ íë í¬ê¸° ì í */
+  /* Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã«Â°Â Ã­ÂÂ¼ Ã­ÂÂÃ«ÂÂ Ã­ÂÂ¬ÃªÂ¸Â° Ã¬Â ÂÃ­ÂÂ */
   .info-detail-view {
     width: 100% !important;
     max-width: 100% !important;
@@ -6631,14 +6667,14 @@ body {
 }
 
 /* ==========================================
-   í¬í ì¨ë² íë¦°í¸ ë° ì¸ì ìµì í (PDF ì ì¥)
+   Ã­ÂÂ¬Ã­ÂÂ Ã¬ÂÂ¨Ã«Â²Â Ã­ÂÂÃ«Â¦Â°Ã­ÂÂ¸ Ã«Â°Â Ã¬ÂÂ¸Ã¬ÂÂ Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ (PDF Ã¬Â ÂÃ¬ÂÂ¥)
    ========================================== */
 @media print {
-  /* ê¸°ë³¸ì ì¼ë¡ ëª¨ë  ì± ë ì´ìì ììë¥¼ ì¨ê¹ëë¤ */
+  /* ÃªÂ¸Â°Ã«Â³Â¸Ã¬Â ÂÃ¬ÂÂ¼Ã«Â¡Â Ã«ÂªÂ¨Ã«ÂÂ  Ã¬ÂÂ± Ã«Â ÂÃ¬ÂÂ´Ã¬ÂÂÃ¬ÂÂ Ã¬ÂÂÃ¬ÂÂÃ«Â¥Â¼ Ã¬ÂÂ¨ÃªÂ¹ÂÃ«ÂÂÃ«ÂÂ¤ */
   body * {
     visibility: hidden !important;
   }
-  /* í¬í ì¨ë² ëª¨ë¬ê³¼ ê·¸ ìì ììë§ íìí©ëë¤ */
+  /* Ã­ÂÂ¬Ã­ÂÂ Ã¬ÂÂ¨Ã«Â²Â Ã«ÂªÂ¨Ã«ÂÂ¬ÃªÂ³Â¼ ÃªÂ·Â¸ Ã¬ÂÂÃ¬ÂÂ Ã¬ÂÂÃ¬ÂÂÃ«Â§Â Ã­ÂÂÃ¬ÂÂÃ­ÂÂ©Ã«ÂÂÃ«ÂÂ¤ */
   .photo-album-modal-overlay,
   .photo-album-modal-overlay * {
     visibility: visible !important;
@@ -6671,19 +6707,19 @@ body {
     padding: 0 !important;
     overflow-y: visible !important;
   }
-  /* ì¸ì ì ì© í¤ë íì´í íì */
+  /* Ã¬ÂÂ¸Ã¬ÂÂ Ã¬Â ÂÃ¬ÂÂ© Ã­ÂÂ¤Ã«ÂÂ Ã­ÂÂÃ¬ÂÂ´Ã­ÂÂ Ã­ÂÂÃ¬ÂÂ */
   .print-only-header {
     display: block !important;
     color: #000 !important;
   }
-  /* ì¨ë² ë´ì ê²ì ê²°ê³¼ê° 2/3ì»¬ë¼ ì ë ¬ì ì ì§íëë¡ ì¤ì  */
+  /* Ã¬ÂÂ¨Ã«Â²Â Ã«ÂÂ´Ã¬ÂÂ ÃªÂ²ÂÃ¬ÂÂ ÃªÂ²Â°ÃªÂ³Â¼ÃªÂ°Â 2/3Ã¬Â»Â¬Ã«ÂÂ¼ Ã¬Â ÂÃ«Â Â¬Ã¬ÂÂ Ã¬ÂÂ Ã¬Â§ÂÃ­ÂÂÃ«ÂÂÃ«Â¡Â Ã¬ÂÂ¤Ã¬Â Â */
   .album-grid {
     display: grid !important;
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 20px !important;
     background: #fff !important;
   }
-  /* ê° í¬í ì¨ë² ì¹´ëê° íì´ì§ ëì¤ì ìë¦¬ì§ ìëë¡ ì¤ì  */
+  /* ÃªÂ°Â Ã­ÂÂ¬Ã­ÂÂ Ã¬ÂÂ¨Ã«Â²Â Ã¬Â¹Â´Ã«ÂÂÃªÂ°Â Ã­ÂÂÃ¬ÂÂ´Ã¬Â§Â Ã«ÂÂÃ¬Â¤ÂÃ¬ÂÂ Ã¬ÂÂÃ«Â¦Â¬Ã¬Â§Â Ã¬ÂÂÃ«ÂÂÃ«Â¡Â Ã¬ÂÂ¤Ã¬Â Â */
   .album-photo-card {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
@@ -6707,7 +6743,7 @@ body {
     color: #333 !important;
   }
 
-  /* ì¸ì¤í ì ë³´ë¶ ëª¨ë¬ê³¼ ê·¸ ìì ìì íì */
+  /* Ã¬ÂÂ¸Ã¬ÂÂ¤Ã­ÂÂ Ã¬Â ÂÃ«Â³Â´Ã«Â¶Â Ã«ÂªÂ¨Ã«ÂÂ¬ÃªÂ³Â¼ ÃªÂ·Â¸ Ã¬ÂÂÃ¬ÂÂ Ã¬ÂÂÃ¬ÂÂ Ã­ÂÂÃ¬ÂÂ */
   .info-book-modal-overlay,
   .info-book-modal-overlay * {
     visibility: visible !important;
@@ -6773,7 +6809,7 @@ body {
     color: #444 !important;
   }
 
-  /* íë©´ UI ì»¨í¸ë¡¤ë¬ ì¨ê¸°ê¸° */
+  /* Ã­ÂÂÃ«Â©Â´ UI Ã¬Â»Â¨Ã­ÂÂ¸Ã«Â¡Â¤Ã«ÂÂ¬ Ã¬ÂÂ¨ÃªÂ¸Â°ÃªÂ¸Â° */
   .no-print {
     display: none !important;
   }
@@ -7009,7 +7045,7 @@ body {
   }
 }
 
-/* êµ¬ë²ì  generalInfoCardActions â ì¹´ë ì¸ë¶(inline detail) ìì­ìë§ ì ì© */
+/* ÃªÂµÂ¬Ã«Â²ÂÃ¬Â Â generalInfoCardActions Ã¢ÂÂ Ã¬Â¹Â´Ã«ÂÂ Ã¬ÂÂ¸Ã«Â¶Â(inline detail) Ã¬ÂÂÃ¬ÂÂ­Ã¬ÂÂÃ«Â§Â Ã¬Â ÂÃ¬ÂÂ© */
 .generalInfoInlineDetail .generalInfoCardActions {
   display: flex;
   justify-content: space-between;
@@ -7097,7 +7133,7 @@ body {
   color: #f1f5f9 !important;
 }
 
-/* PC: ë´ë¶ ì¤í¬ë¡¤ì ë³¸ë¬¸ì´ ê°ëì§ ìì â ìì¸ ëª¨ë¬ ì¤í¬ë¡¤ë¡ ì ì²´ ë³´ê³ ì íì¸ */
+/* PC: Ã«ÂÂ´Ã«Â¶Â Ã¬ÂÂ¤Ã­ÂÂ¬Ã«Â¡Â¤Ã¬ÂÂ Ã«Â³Â¸Ã«Â¬Â¸Ã¬ÂÂ´ ÃªÂ°ÂÃ«ÂÂÃ¬Â§Â Ã¬ÂÂÃ¬ÂÂ Ã¢ÂÂ Ã¬ÂÂÃ¬ÂÂ¸ Ã«ÂªÂ¨Ã«ÂÂ¬ Ã¬ÂÂ¤Ã­ÂÂ¬Ã«Â¡Â¤Ã«Â¡Â Ã¬Â ÂÃ¬Â²Â´ Ã«Â³Â´ÃªÂ³Â Ã¬ÂÂ Ã­ÂÂÃ¬ÂÂ¸ */
 @media (min-width: 761px) {
   .generalInfoDetailModal {
     width: min(920px, calc(100vw - 40px));
@@ -7218,7 +7254,7 @@ body {
     width: 100%;
   }
 
-  /* ìì¸ë³´ê¸° ì ëª© ì ë³µì¬ ë²í¼ì ê°ë¡ 100% ê¸ì§ â ì ëª© ì¸ë¡ê¹¨ì§ ë°©ì§ */
+  /* Ã¬ÂÂÃ¬ÂÂ¸Ã«Â³Â´ÃªÂ¸Â° Ã¬Â ÂÃ«ÂªÂ© Ã¬ÂÂ Ã«Â³ÂµÃ¬ÂÂ¬ Ã«Â²ÂÃ­ÂÂ¼Ã¬ÂÂ ÃªÂ°ÂÃ«Â¡Â 100% ÃªÂ¸ÂÃ¬Â§Â Ã¢ÂÂ Ã¬Â ÂÃ«ÂªÂ© Ã¬ÂÂ¸Ã«Â¡ÂÃªÂ¹Â¨Ã¬Â§Â Ã«Â°Â©Ã¬Â§Â */
   .generalInfoSectionTitleRow .smallActionButton,
   .generalInfoFactCheckToolbar .smallActionButton {
     width: auto;
@@ -7452,7 +7488,7 @@ body {
 }
 
 @media print {
-  /* 1. íë©´ ì ì²´ ê°ì¶ê¸° ë° ë°°ê²½ì ì´ê¸°í */
+  /* 1. Ã­ÂÂÃ«Â©Â´ Ã¬Â ÂÃ¬Â²Â´ ÃªÂ°ÂÃ¬Â¶ÂÃªÂ¸Â° Ã«Â°Â Ã«Â°Â°ÃªÂ²Â½Ã¬ÂÂ Ã¬Â´ÂÃªÂ¸Â°Ã­ÂÂ */
   html, body, .pageShell {
     background: white !important;
     color: black !important;
@@ -7463,12 +7499,12 @@ body {
     margin: 0 !important;
   }
   
-  /* 2. ì¸ì ë¹ëì ì¨ê¹ ì²ë¦¬ */
+  /* 2. Ã¬ÂÂ¸Ã¬ÂÂ Ã«Â¹ÂÃ«ÂÂÃ¬ÂÂ Ã¬ÂÂ¨ÃªÂ¹Â Ã¬Â²ÂÃ«Â¦Â¬ */
   .reportNoPrint {
     display: none !important;
   }
   
-  /* 3. ê³ ì  ì¤ë²ë ì´ í´ì  ë° ì ì²´ ì¸ì íë¦ ì ì© */
+  /* 3. ÃªÂ³Â Ã¬Â Â Ã¬ÂÂ¤Ã«Â²ÂÃ«Â ÂÃ¬ÂÂ´ Ã­ÂÂ´Ã¬Â Â Ã«Â°Â Ã¬Â ÂÃ¬Â²Â´ Ã¬ÂÂ¸Ã¬ÂÂ Ã­ÂÂÃ«Â¦Â Ã¬Â ÂÃ¬ÂÂ© */
   .overlay {
     position: static !important;
     background: transparent !important;
@@ -7505,7 +7541,7 @@ body {
     border: 0 !important;
   }
   
-  /* 6. ì¸ì ì ì© í¤ë ìì */
+  /* 6. Ã¬ÂÂ¸Ã¬ÂÂ Ã¬Â ÂÃ¬ÂÂ© Ã­ÂÂ¤Ã«ÂÂ Ã¬ÂÂÃ¬ÂÂ */
   .reportPrintHeader {
     border-bottom: 2px solid #000 !important;
     padding-bottom: 12px;
@@ -7529,7 +7565,7 @@ body {
     color: #475569 !important;
   }
   
-  /* 7. ë³´ê³ ì ë´ì© ì¸ì ë ì´ìì */
+  /* 7. Ã«Â³Â´ÃªÂ³Â Ã¬ÂÂ Ã«ÂÂ´Ã¬ÂÂ© Ã¬ÂÂ¸Ã¬ÂÂ Ã«Â ÂÃ¬ÂÂ´Ã¬ÂÂÃ¬ÂÂ */
   .generalInfoReportPreview {
     max-height: none !important;
     overflow: visible !important;
@@ -7606,7 +7642,7 @@ body {
     color: black !important;
   }
   
-  /* ë§í¬ë¤ì´ íì´í¬ê·¸ëí¼ ì¸ì ìµì í */
+  /* Ã«Â§ÂÃ­ÂÂ¬Ã«ÂÂ¤Ã¬ÂÂ´ Ã­ÂÂÃ¬ÂÂ´Ã­ÂÂ¬ÃªÂ·Â¸Ã«ÂÂÃ­ÂÂ¼ Ã¬ÂÂ¸Ã¬ÂÂ Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ */
   .report-markdown-body h3.report-h1,
   .report-markdown-body h4.report-h2,
   .report-markdown-body h5.report-h3 {
@@ -7930,6 +7966,23 @@ body {
   border-radius: 999px !important;
 }
 
+.generalInfoCopyAppActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.generalInfoCopyAppActions .secondaryButton {
+  flex: 0 0 auto;
+  width: auto !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  white-space: nowrap;
+  border-radius: 999px !important;
+}
+
 .generalInfoFactCheckPanel {
   display: grid;
   gap: 12px;
@@ -7977,10 +8030,10 @@ body {
 }
 
 /* ==========================================
-   ì´ë¯¸ì§ ë©ëª¨ ê¸°ë¥ ì¤íì¼
+   Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã«Â©ÂÃ«ÂªÂ¨ ÃªÂ¸Â°Ã«ÂÂ¥ Ã¬ÂÂ¤Ã­ÂÂÃ¬ÂÂ¼
    ========================================== */
 
-/* ëëíí¸ ë¯¸ëì´ ì¹´ë ì¸ë¤ì¼ ëí¼ */
+/* Ã«ÂÂÃ«ÂÂÃ­ÂÂÃ­ÂÂ¸ Ã«Â¯Â¸Ã«ÂÂÃ¬ÂÂ´ Ã¬Â¹Â´Ã«ÂÂ Ã¬ÂÂ¸Ã«ÂÂ¤Ã¬ÂÂ¼ Ã«ÂÂÃ­ÂÂ¼ */
 .generalInfoDraftMediaThumb {
   position: relative;
   cursor: pointer;
@@ -8014,7 +8067,7 @@ body {
   color: #e0f2fe;
 }
 
-/* ë©ëª¨ í¸ì§ ìì­ */
+/* Ã«Â©ÂÃ«ÂªÂ¨ Ã­ÂÂ¸Ã¬Â§Â Ã¬ÂÂÃ¬ÂÂ­ */
 .generalInfoMediaMemoEdit {
   margin-top: 6px;
   display: flex;
@@ -8069,7 +8122,7 @@ body {
   font-weight: 600;
 }
 
-/* ì ì¥ë ë©ëª¨ íì */
+/* Ã¬Â ÂÃ¬ÂÂ¥Ã«ÂÂ Ã«Â©ÂÃ«ÂªÂ¨ Ã­ÂÂÃ¬ÂÂ */
 .generalInfoMediaMemoDisplay {
   margin-top: 6px;
   background: rgba(2, 6, 23, 0.5);
@@ -8116,7 +8169,7 @@ body {
   color: #f87171;
 }
 
-/* íì¼ëª + ì­ì  */
+/* Ã­ÂÂÃ¬ÂÂ¼Ã«ÂªÂ + Ã¬ÂÂ­Ã¬Â Â */
 .generalInfoDraftMediaFooter {
   display: flex;
   align-items: center;
@@ -8134,7 +8187,7 @@ body {
   flex: 1;
 }
 
-/* ìì¸ë³´ê¸° ëª¨ë¬ ë©ëª¨ */
+/* Ã¬ÂÂÃ¬ÂÂ¸Ã«Â³Â´ÃªÂ¸Â° Ã«ÂªÂ¨Ã«ÂÂ¬ Ã«Â©ÂÃ«ÂªÂ¨ */
 .generalInfoDetailMediaMemo {
   display: flex;
   align-items: flex-start;
@@ -8161,7 +8214,7 @@ body {
 }
 
 /* ==========================================
-   Card ì»´í¬ëí¸ ê¸°ë³¸ í¤ë â ë²í¸+ì ëª© í ì¤
+   Card Ã¬Â»Â´Ã­ÂÂ¬Ã«ÂÂÃ­ÂÂ¸ ÃªÂ¸Â°Ã«Â³Â¸ Ã­ÂÂ¤Ã«ÂÂ Ã¢ÂÂ Ã«Â²ÂÃ­ÂÂ¸+Ã¬Â ÂÃ«ÂªÂ© Ã­ÂÂ Ã¬Â¤Â
    ========================================== */
 .cardHeader {
   display: flex;
@@ -8243,7 +8296,7 @@ body {
 }
 
 /* ==========================================
-   ì ë³´ë³´ê´ì í­ ë²í¼
+   Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã­ÂÂ­ Ã«Â²ÂÃ­ÂÂ¼
    ========================================== */
 .ch3TabBar {
   display: flex;
@@ -8277,7 +8330,7 @@ body {
 }
 
 /* ==========================================
-   ì ë³´ì ì¥í¨ ì¹´ë â ê°ë¡í (ì´ë¯¸ì§ 2/5 Â· ì ëª© 2/5 Â· ë²í¼ 1/5)
+   Ã¬Â ÂÃ«Â³Â´Ã¬Â ÂÃ¬ÂÂ¥Ã­ÂÂ¨ Ã¬Â¹Â´Ã«ÂÂ Ã¢ÂÂ ÃªÂ°ÂÃ«Â¡ÂÃ­ÂÂ (Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â 2/5 ÃÂ· Ã¬Â ÂÃ«ÂªÂ© 2/5 ÃÂ· Ã«Â²ÂÃ­ÂÂ¼ 1/5)
    ========================================== */
 .generalInfoList {
   display: flex;
@@ -8319,7 +8372,7 @@ body {
   }
 }
 
-/* ì´ë¯¸ì§ ìì­ â 2/5, ì¹´ë ì ì²´ ëì´ì ë§ê² ì±ì */
+/* Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã¬ÂÂÃ¬ÂÂ­ Ã¢ÂÂ 2/5, Ã¬Â¹Â´Ã«ÂÂ Ã¬Â ÂÃ¬Â²Â´ Ã«ÂÂÃ¬ÂÂ´Ã¬ÂÂ Ã«Â§ÂÃªÂ²Â Ã¬Â±ÂÃ¬ÂÂ */
 .generalInfoCardThumbnail {
   width: 100%;
   height: 100%;
@@ -8342,7 +8395,7 @@ body {
   font-size: 26px;
 }
 
-/* ì ëª©/ë ì§/ìì½ ìì­ â 2/5 */
+/* Ã¬Â ÂÃ«ÂªÂ©/Ã«ÂÂ Ã¬Â§Â/Ã¬ÂÂÃ¬ÂÂ½ Ã¬ÂÂÃ¬ÂÂ­ Ã¢ÂÂ 2/5 */
 .generalInfoCardContent {
   padding: 8px 10px;
   min-width: 0;
@@ -8401,7 +8454,7 @@ body {
   line-height: 1.3;
 }
 
-/* ë²í¼ ìì­ â 1/5 */
+/* Ã«Â²ÂÃ­ÂÂ¼ Ã¬ÂÂÃ¬ÂÂ­ Ã¢ÂÂ 1/5 */
 .generalInfoCardActions {
   display: flex;
   flex-direction: column;
@@ -8467,8 +8520,8 @@ body {
 }
 
 /* ==========================================
-   í¬í ë¶ ì¸ë±ì¤ ì¹´ë â ì¼ë° ì ì¥í¨ ì ë³´ ì°½ê³ ì ëì¼í ê°ë¡í 3ì»¬ë¼
-   (ì´ë¯¸ì§ 2fr | í¤ìë/ë ì§/ë¶ë¥ 2fr | ë²í¼ 1fr)
+   Ã­ÂÂ¬Ã­ÂÂ Ã«Â¶Â Ã¬ÂÂ¸Ã«ÂÂ±Ã¬ÂÂ¤ Ã¬Â¹Â´Ã«ÂÂ Ã¢ÂÂ Ã¬ÂÂ¼Ã«Â°Â Ã¬Â ÂÃ¬ÂÂ¥Ã­ÂÂ¨ Ã¬Â ÂÃ«Â³Â´ Ã¬Â°Â½ÃªÂ³Â Ã¬ÂÂ Ã«ÂÂÃ¬ÂÂ¼Ã­ÂÂ ÃªÂ°ÂÃ«Â¡ÂÃ­ÂÂ 3Ã¬Â»Â¬Ã«ÂÂ¼
+   (Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â 2fr | Ã­ÂÂ¤Ã¬ÂÂÃ«ÂÂ/Ã«ÂÂ Ã¬Â§Â/Ã«Â¶ÂÃ«Â¥Â 2fr | Ã«Â²ÂÃ­ÂÂ¼ 1fr)
    ========================================== */
 .pbIndexList {
   display: flex;
@@ -8549,7 +8602,7 @@ body {
   margin-top: 0;
 }
 
-/* ââ ì¬ì§ ì»¬ë¼ (2fr) â generalInfoCardThumbnailê³¼ ëì¼ ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Ã¬ÂÂ¬Ã¬Â§Â Ã¬Â»Â¬Ã«ÂÂ¼ (2fr) Ã¢ÂÂ generalInfoCardThumbnailÃªÂ³Â¼ Ã«ÂÂÃ¬ÂÂ¼ Ã¢ÂÂÃ¢ÂÂ */
 .pbIndexCardPhoto {
   width: 100%;
   height: 100%;
@@ -8574,7 +8627,7 @@ body {
   opacity: 0.5;
 }
 
-/* ââ ì ë³´ ì»¬ë¼ (2fr) â generalInfoCardContentì ëì¼ ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Ã¬Â ÂÃ«Â³Â´ Ã¬Â»Â¬Ã«ÂÂ¼ (2fr) Ã¢ÂÂ generalInfoCardContentÃ¬ÂÂ Ã«ÂÂÃ¬ÂÂ¼ Ã¢ÂÂÃ¢ÂÂ */
 .pbIndexCardInfo {
   padding: 8px 10px;
   min-width: 0;
@@ -8613,7 +8666,7 @@ body {
   line-height: 1.3;
 }
 
-/* ââ ì¡ì ì»¬ë¼ (1fr) â generalInfoCardActionsì ëì¼ ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Ã¬ÂÂ¡Ã¬ÂÂ Ã¬Â»Â¬Ã«ÂÂ¼ (1fr) Ã¢ÂÂ generalInfoCardActionsÃ¬ÂÂ Ã«ÂÂÃ¬ÂÂ¼ Ã¢ÂÂÃ¢ÂÂ */
 .pbIndexCardActions {
   display: flex;
   flex-direction: column;
@@ -8677,7 +8730,7 @@ body {
   opacity: 0.82;
 }
 
-/* ââ ìë¨ ê³ ì  ë²í¼ ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Ã¬ÂÂÃ«ÂÂ¨ ÃªÂ³Â Ã¬Â Â Ã«Â²ÂÃ­ÂÂ¼ Ã¢ÂÂÃ¢ÂÂ */
 .pbIndexCardBtnPin {
   width: 100%;
   padding: 5px 4px;
@@ -8701,7 +8754,7 @@ body {
   font-weight: 700;
 }
 
-/* ââ í ë°°ì§ (ì´ë¯¸ì§ ì ì¤ë²ë ì´) ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Ã­ÂÂ Ã«Â°Â°Ã¬Â§Â (Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã¬ÂÂ Ã¬ÂÂ¤Ã«Â²ÂÃ«Â ÂÃ¬ÂÂ´) Ã¢ÂÂÃ¢ÂÂ */
 .pbIndexCardPhoto {
   position: relative;
 }
@@ -9061,13 +9114,13 @@ body {
   pointer-events: none;
 }
 
-/* ââ íë ì¹´ë ê°ì¡° íëë¦¬ ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Ã­ÂÂÃ«ÂÂ Ã¬Â¹Â´Ã«ÂÂ ÃªÂ°ÂÃ¬Â¡Â° Ã­ÂÂÃ«ÂÂÃ«Â¦Â¬ Ã¢ÂÂÃ¢ÂÂ */
 .pbIndexCardPinned {
   border-color: rgba(251, 191, 36, 0.5) !important;
   background: rgba(251, 191, 36, 0.05) !important;
 }
 
-/* ââ êµ¬ í´ëì¤ â íìí¸í ââ */
+/* Ã¢ÂÂÃ¢ÂÂ ÃªÂµÂ¬ Ã­ÂÂ´Ã«ÂÂÃ¬ÂÂ¤ Ã¢ÂÂ Ã­ÂÂÃ¬ÂÂÃ­ÂÂ¸Ã­ÂÂ Ã¢ÂÂÃ¢ÂÂ */
 .pbIndexCardContent { display: none; }
 
 .generalInfoCardPinButton.pinned {
@@ -9983,7 +10036,7 @@ body {
     border-radius: 14px !important;
   }
 
-  /* ì¹´ë ë´ ë²í¼ ìì­ â ê°ë¡ ê·¸ë¦¬ë ì ì§ */
+  /* Ã¬Â¹Â´Ã«ÂÂ Ã«ÂÂ´ Ã«Â²ÂÃ­ÂÂ¼ Ã¬ÂÂÃ¬ÂÂ­ Ã¢ÂÂ ÃªÂ°ÂÃ«Â¡Â ÃªÂ·Â¸Ã«Â¦Â¬Ã«ÂÂ Ã¬ÂÂ Ã¬Â§Â */
   .generalInfoCard .generalInfoCardActions {
     display: flex !important;
     flex-direction: column !important;
@@ -10424,7 +10477,7 @@ body {
   z-index: 50 !important;
 }
 
-/* ìì´í°/ëª¨ë°ì¼: stickyê° ë³¸ë¬¸Â·ì»¤ìë¥¼ ë®ì§ ìëë¡ ê³ ì  í´ì  */
+/* Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ°/Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼: stickyÃªÂ°Â Ã«Â³Â¸Ã«Â¬Â¸ÃÂ·Ã¬Â»Â¤Ã¬ÂÂÃ«Â¥Â¼ Ã«ÂÂ®Ã¬Â§Â Ã¬ÂÂÃ«ÂÂÃ«Â¡Â ÃªÂ³Â Ã¬Â Â Ã­ÂÂ´Ã¬Â Â */
 @media (max-width: 760px) {
   .generalInfoRichToolbar {
     position: relative !important;
@@ -10464,7 +10517,7 @@ body {
   touch-action: manipulation !important;
 }
 
-/* í¤ë³´ë ë°ë¡ ì ê³ ì  ë */
+/* Ã­ÂÂ¤Ã«Â³Â´Ã«ÂÂ Ã«Â°ÂÃ«Â¡Â Ã¬ÂÂ ÃªÂ³Â Ã¬Â Â Ã«ÂÂ */
 .generalInfoMobileFormatBubble.generalInfoMobileFormatDock {
   left: 8px !important;
   right: 8px !important;
@@ -10704,7 +10757,7 @@ body {
     border-radius: 8px !important;
   }
 
-  /* AI ê²ì¦ë³´ê³ ì: ëª¨ë°ì¼ì íë¡í ìì ë° ì¬ì© (grid ê·ì¹ë³´ë¤ ë¤ì ë¬ì¼ í¨) */
+  /* AI ÃªÂ²ÂÃ¬Â¦ÂÃ«Â³Â´ÃªÂ³Â Ã¬ÂÂ: Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼Ã¬ÂÂ Ã­ÂÂÃ«Â¡ÂÃ­ÂÂ Ã¬ÂÂÃ¬ÂÂ Ã«Â°Â Ã¬ÂÂ¬Ã¬ÂÂ© (grid ÃªÂ·ÂÃ¬Â¹ÂÃ«Â³Â´Ã«ÂÂ¤ Ã«ÂÂ¤Ã¬ÂÂ Ã«ÂÂ¬Ã¬ÂÂ¼ Ã­ÂÂ¨) */
   .generalInfoFactDesktopToolbar {
     display: none !important;
   }
@@ -11252,7 +11305,7 @@ body {
     align-items: stretch !important;
   }
   
-  /* Left column: ìì§/ë¶ë¥ Card section */
+  /* Left column: Ã¬ÂÂÃ¬Â§Â/Ã«Â¶ÂÃ«Â¥Â Card section */
   .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > section.generalInfoLeftColumn {
     height: 100% !important;
     max-height: 100% !important;
@@ -11261,7 +11314,7 @@ body {
     box-sizing: border-box !important;
   }
   
-  /* Right column: ì ì¥í¨/ê²ì aside */
+  /* Right column: Ã¬Â ÂÃ¬ÂÂ¥Ã­ÂÂ¨/ÃªÂ²ÂÃ¬ÂÂ aside */
   .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
     height: 100% !important;
     max-height: 100% !important;
@@ -11406,7 +11459,7 @@ body {
    Redesigned Elements for General Info & Photo Book Layouts
    ========================================== */
 
-/* 1. Redesign scroll-to-top button to dark rounded pill "ë§¨ ìë¡ â" style */
+/* 1. Redesign scroll-to-top button to dark rounded pill "Ã«Â§Â¨ Ã¬ÂÂÃ«Â¡Â Ã¢ÂÂ" style */
 .scroll-to-top-btn {
   width: auto !important;
   height: auto !important;
@@ -11549,8 +11602,8 @@ body {
   }
   
   /* ==========================================
-     í¬í ë¶ ì¸ë±ì¤ ì¹´ë â ëª¨ë°ì¼ (ìì´í° ë±)
-     ì¼ë° ì ì¥í¨ ì ë³´ ì°½ê³ ì ëì¼í ë°ìí
+     Ã­ÂÂ¬Ã­ÂÂ Ã«Â¶Â Ã¬ÂÂ¸Ã«ÂÂ±Ã¬ÂÂ¤ Ã¬Â¹Â´Ã«ÂÂ Ã¢ÂÂ Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ (Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ° Ã«ÂÂ±)
+     Ã¬ÂÂ¼Ã«Â°Â Ã¬Â ÂÃ¬ÂÂ¥Ã­ÂÂ¨ Ã¬Â ÂÃ«Â³Â´ Ã¬Â°Â½ÃªÂ³Â Ã¬ÂÂ Ã«ÂÂÃ¬ÂÂ¼Ã­ÂÂ Ã«Â°ÂÃ¬ÂÂÃ­ÂÂ
      ========================================== */
   .pbIndexCard {
     grid-template-columns: 2fr 2fr 1fr !important;
@@ -11585,7 +11638,7 @@ body {
   }
 }
 
-/* ===== ì¼ë° ì ë³´ ìì§ ê°í¸ (ê³µì¥ í­ / S ì´ë¯¸ì§ / URL ì¤ëª) ===== */
+/* ===== Ã¬ÂÂ¼Ã«Â°Â Ã¬Â ÂÃ«Â³Â´ Ã¬ÂÂÃ¬Â§Â ÃªÂ°ÂÃ­ÂÂ¸ (ÃªÂ³ÂµÃ¬ÂÂ¥ Ã­ÂÂ­ / S Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â / URL Ã¬ÂÂ¤Ã«ÂªÂ) ===== */
 .generalInfoFactoryHint {
   margin-top: 8px;
   padding: 16px 18px;
@@ -11752,7 +11805,7 @@ body {
   }
 }
 
-/* ===== AI ê²ì¦ ë³´ê³ ì ë³ë íë©´ (ë¤í¬ Â· ê¸°ì¡´ AI ë³´ê³ ì í¤) ===== */
+/* ===== AI ÃªÂ²ÂÃ¬Â¦Â Ã«Â³Â´ÃªÂ³Â Ã¬ÂÂ Ã«Â³ÂÃ«ÂÂ Ã­ÂÂÃ«Â©Â´ (Ã«ÂÂ¤Ã­ÂÂ¬ ÃÂ· ÃªÂ¸Â°Ã¬Â¡Â´ AI Ã«Â³Â´ÃªÂ³Â Ã¬ÂÂ Ã­ÂÂ¤) ===== */
 .giAiReportScreen {
   position: fixed;
   inset: 0;
@@ -12254,7 +12307,7 @@ body {
   .giAiReportScreenHeader {
     flex-direction: column;
   }
-  /* ìì´í°: ì¤ì²© overflow ëì  ë³¸ë¬¸ ëí¼ íëë§ ì¤í¬ë¡¤ */
+  /* Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ°: Ã¬Â¤ÂÃ¬Â²Â© overflow Ã«ÂÂÃ¬ÂÂ  Ã«Â³Â¸Ã«Â¬Â¸ Ã«ÂÂÃ­ÂÂ¼ Ã­ÂÂÃ«ÂÂÃ«Â§Â Ã¬ÂÂ¤Ã­ÂÂ¬Ã«Â¡Â¤ */
   .giAiReportBodyWrap {
     overflow-x: hidden;
     overflow-y: auto;
@@ -12292,7 +12345,7 @@ body {
   }
 }
 
-/* ===== AI ë³´ê³ ì TipTap í¸ì§ê¸° (ë¤í¬) ===== */
+/* ===== AI Ã«Â³Â´ÃªÂ³Â Ã¬ÂÂ TipTap Ã­ÂÂ¸Ã¬Â§ÂÃªÂ¸Â° (Ã«ÂÂ¤Ã­ÂÂ¬) ===== */
 .giAiReportEditorShell {
   display: flex;
   flex-direction: column;
@@ -12440,7 +12493,7 @@ body {
   -webkit-user-select: text;
   user-select: text;
   cursor: text;
-  /* iOS contenteditable ì¤í¬ë¡¤ ë³´ì¡° */
+  /* iOS contenteditable Ã¬ÂÂ¤Ã­ÂÂ¬Ã«Â¡Â¤ Ã«Â³Â´Ã¬Â¡Â° */
   touch-action: pan-y;
 }
 
@@ -12470,7 +12523,7 @@ body {
   flex-shrink: 0;
 }
 
-/* S ê°ì§ ì: í¤ë³´ëÂ·ììë° ë°ë¡ ìì ê³ ì  (ì ë³´ì´ë ë¬¸ì  ìì ) */
+/* S ÃªÂ°ÂÃ¬Â§Â Ã¬ÂÂ: Ã­ÂÂ¤Ã«Â³Â´Ã«ÂÂÃÂ·Ã¬ÂÂÃ¬ÂÂÃ«Â°Â Ã«Â°ÂÃ«Â¡Â Ã¬ÂÂÃ¬ÂÂ ÃªÂ³Â Ã¬Â Â (Ã¬ÂÂ Ã«Â³Â´Ã¬ÂÂ´Ã«ÂÂ Ã«Â¬Â¸Ã¬Â Â Ã¬ÂÂÃ¬Â Â) */
 .giAiReportImageInsertPanel.giAiReportImageInsertDock {
   position: fixed !important;
   left: 8px !important;
@@ -12578,7 +12631,7 @@ body {
     font-size: 16px;
     min-height: 55vh;
     padding-bottom: calc(28px + var(--gi-mobile-format-bar-h, 0px));
-    /* builder ë³¸ë¬¸ ìë ¥ê³¼ ê°ì ë°ì ì§ë©´ì í¤ë³´ë ì ìì ë° */
+    /* builder Ã«Â³Â¸Ã«Â¬Â¸ Ã¬ÂÂÃ«Â Â¥ÃªÂ³Â¼ ÃªÂ°ÂÃ¬ÂÂ Ã«Â°ÂÃ¬ÂÂ Ã¬Â§ÂÃ«Â©Â´Ã¬ÂÂ Ã­ÂÂ¤Ã«Â³Â´Ã«ÂÂ Ã¬ÂÂ Ã¬ÂÂÃ¬ÂÂ Ã«Â°Â */
     background: #f4f5f7;
     color: #1e293b;
     border-color: rgba(148, 163, 184, 0.55);
@@ -12592,7 +12645,7 @@ body {
   .giAiReportTipTap :where(p, div, li, strong, em, b, u) {
     color: inherit;
   }
-  /* ë¤í¬ì©ì¼ë¡ ì ì¥ë ë°ì ê¸ììì ë°ì ì§ë©´ìì ê²ê² */
+  /* Ã«ÂÂ¤Ã­ÂÂ¬Ã¬ÂÂ©Ã¬ÂÂ¼Ã«Â¡Â Ã¬Â ÂÃ¬ÂÂ¥Ã«ÂÂ Ã«Â°ÂÃ¬ÂÂ ÃªÂ¸ÂÃ¬ÂÂÃ¬ÂÂÃ¬ÂÂ Ã«Â°ÂÃ¬ÂÂ Ã¬Â§ÂÃ«Â©Â´Ã¬ÂÂÃ¬ÂÂ ÃªÂ²ÂÃªÂ²Â */
   .giAiReportTipTap [style*="color: #e2e8f0"],
   .giAiReportTipTap [style*="color:#e2e8f0"],
   .giAiReportTipTap [style*="color: #f8fafc"],
@@ -12604,7 +12657,7 @@ body {
   }
 }
 
-/* ===== builder FormatToolbar ÀÌ½Ä (ÀÏ¹Ý Á¤º¸ ¼öÁý) ===== */
+/* ===== builder FormatToolbar ÃÃÂ½Ã (ÃÃÂ¹Ã ÃÂ¤ÂºÂ¸ Â¼Ã¶ÃÃ½) ===== */
 .collectFormatToolbar {
   display: flex;
   flex-wrap: wrap;
@@ -12901,7 +12954,7 @@ body {
   height: auto;
 }
 
-/* builder º»¹® Áö¸é: ¹àÀº ÆíÁý±â (±ÛÀÚ¡¤Çü±¤ °¡µ¶¼º) */
+/* builder ÂºÂ»Â¹Â® ÃÃ¶Â¸Ã©: Â¹Ã ÃÂº ÃÃ­ÃÃ½Â±Ã¢ (Â±ÃÃÃÂ¡Â¤ÃÃ¼Â±Â¤ Â°Â¡ÂµÂ¶Â¼Âº) */
 .generalInfoRichTextEditor.collectPaperEditor {
   border: 1px solid #e2e8f0 !important;
   background: #ffffff !important;

@@ -10,6 +10,13 @@ import { ChangeEvent, ClipboardEvent, useCallback, useEffect, useMemo, useRef, u
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateApi";
 import {
+  getInformationAppDayUrl,
+  getInformationAppItemUrl,
+  groupInformationEntriesByDay,
+  loadInformationEntriesForMonth,
+  type InformationCalendarItem,
+} from "../lib/informationEntries";
+import {
   enrichPhotoBookImageExifs,
   extractPhotoExif,
   getPhotoBookExifViewLines,
@@ -489,6 +496,7 @@ export default function HomePage() {
   const [redDates, setRedDates] = useState<Record<number, number[]>>({});
   const [redDateInput, setRedDateInput] = useState("");
   const [calendarMarks, setCalendarMarks] = useState<Record<string, CalendarMarkItem[]>>({});
+  const [informationByDay, setInformationByDay] = useState<Record<string, InformationCalendarItem[]>>({});
   const [markDateInput, setMarkDateInput] = useState("");
   const [markType, setMarkType] = useState<CalendarMarkType>("C");
   const [markPlus, setMarkPlus] = useState(false);
@@ -2027,6 +2035,18 @@ export default function HomePage() {
       isActive = false;
     };
   }, [view, currentMonth, currentDay, currentYear]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const items = await loadInformationEntriesForMonth(currentYear, currentMonth);
+      if (cancelled) return;
+      setInformationByDay(groupInformationEntriesByDay(items, currentYear, currentMonth));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentYear, currentMonth, view]);
 
   useEffect(() => {
     // Supabase에서 먼저 불러오고, 실패하면 localStorage fallback
@@ -5173,6 +5193,39 @@ export default function HomePage() {
               ))}
             </div>
           )}
+          {(() => {
+            const iso = entryDate(currentMonth, day, currentYear);
+            const infoItems = (informationByDay[iso] || []).filter((item) => !item.checked);
+            if (!infoItems.length) return null;
+            return (
+              <div className="information-chip-list" aria-label={`${currentMonth}월 ${day}일 정보함`}>
+                {infoItems.slice(0, 3).map((item) => (
+                  <a
+                    key={item.id}
+                    className={`information-chip information-chip-${item.category}`}
+                    href={getInformationAppItemUrl(item.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(event) => event.stopPropagation()}
+                    title={item.summary || item.title}
+                  >
+                    {item.title}
+                  </a>
+                ))}
+                {infoItems.length > 3 && (
+                  <a
+                    className="information-chip information-chip-more"
+                    href={getInformationAppDayUrl(iso)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    +{infoItems.length - 3}
+                  </a>
+                )}
+              </div>
+            );
+          })()}
         </div>
       );
     }

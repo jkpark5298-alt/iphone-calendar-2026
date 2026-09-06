@@ -10,6 +10,7 @@ import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
 import { insertInlineMediaIntoEditor, readFilesAsDataUrls, enhanceInlineImageBlocks, bindInlineImageRemoveHandler, editorHasInlineImageTrigger, removeInlineImageTrigger, dedupeImageFiles, collectClipboardImageFiles, extractTitleFromPlainText, extractGeneralInfoBodyImageSrcs, makeGeneralInfoMediaItem, hasDisplayableAiReport } from "../lib/generalInfoHelpers";
 import { stepCollectFontSize } from "../lib/collectFormatPalette";
+import { openExternalApp, type ExternalAppTarget } from "../lib/openExternalApp";
 import { Card, EmptyState } from "./SharedComponents";
 import { CollectFormatToolbar } from "./CollectFormatToolbar";
 import { HandwritingModal } from "./HandwritingModal";
@@ -350,11 +351,19 @@ export function Chapter3Info({
     }
   }, [insertImageFilesFromTextTrigger]);
 
+  const getGeneralInfoBodyPlainText = React.useCallback(() => {
+    syncGeneralInfoRichTextToDraft();
+    const fromEditor = String(generalInfoRichTextRef.current?.innerText || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\n{4,}/g, "\n\n\n");
+    return (fromEditor || generalInfoDraft.text || "").replace(/\u00a0/g, " ").trim();
+  }, [generalInfoDraft.text, generalInfoRichTextRef, syncGeneralInfoRichTextToDraft]);
+
   const copyPlainTextToClipboard = React.useCallback(async (text: string) => {
     const value = String(text || "").replace(/\u00a0/g, " ").trim();
     if (!value) {
       alert("복사할 Text가 없습니다.");
-      return;
+      return false;
     }
     try {
       await navigator.clipboard.writeText(value);
@@ -362,18 +371,25 @@ export function Chapter3Info({
       window.setTimeout(() => {
         setCopyFeedback((prev) => (prev === "text" ? null : prev));
       }, 1800);
+      return true;
     } catch {
       alert("클립보드 복사에 실패했습니다.");
+      return false;
     }
   }, []);
 
   const handleCopyGeneralInfoText = React.useCallback(() => {
-    syncGeneralInfoRichTextToDraft();
-    const fromEditor = String(generalInfoRichTextRef.current?.innerText || "")
-      .replace(/\u00a0/g, " ")
-      .replace(/\n{4,}/g, "\n\n\n");
-    void copyPlainTextToClipboard(fromEditor || generalInfoDraft.text || "");
-  }, [copyPlainTextToClipboard, generalInfoDraft.text, generalInfoRichTextRef, syncGeneralInfoRichTextToDraft]);
+    void copyPlainTextToClipboard(getGeneralInfoBodyPlainText());
+  }, [copyPlainTextToClipboard, getGeneralInfoBodyPlainText]);
+
+  const handleCopyBodyAndOpenApp = React.useCallback(
+    async (target: ExternalAppTarget) => {
+      const ok = await copyPlainTextToClipboard(getGeneralInfoBodyPlainText());
+      if (!ok) return;
+      openExternalApp(target);
+    },
+    [copyPlainTextToClipboard, getGeneralInfoBodyPlainText],
+  );
 
   const insertDataUrlIntoEditor = React.useCallback(
     (dataUrl: string, name: string) => {
@@ -526,15 +542,36 @@ export function Chapter3Info({
             <div className="generalInfoRichTextHeader">
               <div className="generalInfoSectionTitleRow">
                 <strong>Text 입력 / 편집</strong>
-                <button
-                  type="button"
-                  className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                  onClick={handleCopyGeneralInfoText}
-                >
-                  {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
-                </button>
+                <div className="generalInfoCopyAppActions">
+                  <button
+                    type="button"
+                    className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                    onClick={handleCopyGeneralInfoText}
+                  >
+                    {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondaryButton smallActionButton"
+                    title="본문 TEXT를 복사한 뒤 Gemini 앱을 엽니다"
+                    onClick={() => void handleCopyBodyAndOpenApp("gemini")}
+                  >
+                    ✦ Gemini
+                  </button>
+                  <button
+                    type="button"
+                    className="secondaryButton smallActionButton"
+                    title="본문 TEXT를 복사한 뒤 Daglo(다글로) 앱을 엽니다"
+                    onClick={() => void handleCopyBodyAndOpenApp("daglo")}
+                  >
+                    Daglo
+                  </button>
+                </div>
               </div>
-              <span>아래 큰 입력칸에 내용을 입력하세요. 줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능</span>
+              <span>
+                아래 큰 입력칸에 내용을 입력하세요. 줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능.
+                Gemini / Daglo 버튼은 본문을 복사한 뒤 해당 앱으로 이동합니다.
+              </span>
             </div>
 
             <CollectFormatToolbar
