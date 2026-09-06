@@ -19,6 +19,10 @@ import {
   editorHasInlineImageTrigger,
   removeInlineImageTrigger,
   insertInlineMediaIntoEditor,
+  splitSummaryParagraphs,
+  joinSummaryParagraphs,
+  splitBodyParagraphHtml,
+  joinBodyParagraphHtml,
 } from "../lib/generalInfoHelpers";
 import type { GeneralInfoMediaItem } from "../lib/generalInfoHelpers";
 import React from "react";
@@ -63,7 +67,9 @@ export default function GeneralInfoDetailModal({
   const [copyFeedback, setCopyFeedback] = React.useState<"text" | null>(null);
   const [isEditing, setIsEditing] = React.useState(Boolean(startInEditMode));
   const [editTitle, setEditTitle] = React.useState(item.title || "");
-  const [editSummary, setEditSummary] = React.useState(item.summary || "");
+  const [editSummaries, setEditSummaries] = React.useState<string[]>(() =>
+    splitSummaryParagraphs(item.summary || ""),
+  );
   const [editPrimary, setEditPrimary] = React.useState(item.primaryCategory || "");
   const [editSecondary, setEditSecondary] = React.useState(item.secondaryCategory || "");
   const [editKeywordsText, setEditKeywordsText] = React.useState(
@@ -71,10 +77,24 @@ export default function GeneralInfoDetailModal({
   );
   const [bodyImageTick, setBodyImageTick] = React.useState(0);
   const [bodyEditorKey, setBodyEditorKey] = React.useState(0);
+  const [bodyParas, setBodyParas] = React.useState<Array<{ id: number; html: string }>>(() =>
+    splitBodyParagraphHtml(getGeneralInfoFormattedHtml(item)).map((html, index) => ({
+      id: index + 1,
+      html,
+    })),
+  );
   const [editMediaItems, setEditMediaItems] = React.useState<GeneralInfoMediaItem[]>(() =>
     getGeneralInfoDisplayMediaItems(item),
   );
-  const bodyRichTextRef = React.useRef<HTMLDivElement | null>(null);
+  const bodyParaRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
+  const bodyParasRef = React.useRef(bodyParas);
+  bodyParasRef.current = bodyParas;
+  const focusedBodyParaIdRef = React.useRef<number | null>(bodyParas[0]?.id ?? null);
+  const nextBodyParaIdRef = React.useRef((bodyParas[bodyParas.length - 1]?.id ?? 0) + 1);
+  const pendingBodyHtmlRef = React.useRef<string[] | null>(
+    bodyParas.map((para) => para.html),
+  );
+  const bodyParagraphListRef = React.useRef<HTMLDivElement | null>(null);
   const coverImageFileRef = React.useRef<HTMLInputElement | null>(null);
   const bodyImageFileRef = React.useRef<HTMLInputElement | null>(null);
   const bodyImageInsertPanelRef = React.useRef<HTMLDivElement | null>(null);
@@ -90,13 +110,49 @@ export default function GeneralInfoDetailModal({
 
   const hasAiReport = hasDisplayableAiReport(String(item?.factCheckSummary || ""));
 
+  const getActiveBodyEditor = React.useCallback(() => {
+    const focusedId = focusedBodyParaIdRef.current;
+    if (focusedId != null && bodyParaRefs.current[focusedId]) {
+      return bodyParaRefs.current[focusedId];
+    }
+    const first = bodyParasRef.current[0];
+    if (first && bodyParaRefs.current[first.id]) {
+      return bodyParaRefs.current[first.id];
+    }
+    const remaining = Object.values(bodyParaRefs.current).find(Boolean);
+    return remaining || null;
+  }, []);
+
+  const collectAllBodyHtml = React.useCallback(() => {
+    const htmls = bodyParasRef.current.map((para) =>
+      String(bodyParaRefs.current[para.id]?.innerHTML || ""),
+    );
+    return joinBodyParagraphHtml(htmls);
+  }, []);
+
+  const collectAllBodyText = React.useCallback(() => {
+    return bodyParasRef.current
+      .map((para) => String(bodyParaRefs.current[para.id]?.innerText || ""))
+      .join("\n\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }, []);
+
   React.useEffect(() => {
     setEditTitle(item.title || "");
-    setEditSummary(item.summary || "");
+    setEditSummaries(splitSummaryParagraphs(item.summary || ""));
     setEditPrimary(item.primaryCategory || "");
     setEditSecondary(item.secondaryCategory || "");
     setEditKeywordsText((item.keywords || []).join(", "));
     setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
+    const parts = splitBodyParagraphHtml(getGeneralInfoFormattedHtml(item));
+    pendingBodyHtmlRef.current = parts;
+    const nextParas = parts.map((html) => ({
+      id: nextBodyParaIdRef.current++,
+      html,
+    }));
+    setBodyParas(nextParas);
+    focusedBodyParaIdRef.current = nextParas[0]?.id ?? null;
     setBodyEditorKey((prev) => prev + 1);
     setIsEditing(true);
     restoreDoneRef.current = false;
@@ -106,12 +162,21 @@ export default function GeneralInfoDetailModal({
   }, [item.id, item.factCheckSummary, item.factCheckStatus, startInEditMode]);
 
   React.useEffect(() => {
-    if (!isEditing || !bodyRichTextRef.current) return;
-    bodyRichTextRef.current.innerHTML = getGeneralInfoFormattedHtml(item);
-    enhanceInlineImageBlocks(bodyRichTextRef.current);
-    bindInlineImageRemoveHandler(bodyRichTextRef.current);
-    setShowBodyImageInsert(false);
-  }, [isEditing, bodyEditorKey, item]);
+    if (!isEditing) return;
+    const parts = pendingBodyHtmlRef.current;
+    if (!parts) return;
+    const frame = window.requestAnimationFrame(() => {
+      bodyParasRef.current.forEach((para, index) => {
+        const editor = bodyParaRefs.current[para.id];
+        if (!editor) return;
+        editor.innerHTML = parts[index] || "";
+        enhanceInlineImageBlocks(editor);
+        bindInlineImageRemoveHandler(editor);
+      });
+      setShowBodyImageInsert(false);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isEditing, bodyEditorKey]);
 
   const textEndsWithImageTrigger = React.useCallback((raw: string) => {
     const text = String(raw || "")
@@ -123,17 +188,17 @@ export default function GeneralInfoDetailModal({
   }, []);
 
   const checkBodyImageTrigger = React.useCallback(() => {
-    const editor = bodyRichTextRef.current;
+    const editor = getActiveBodyEditor();
     const plain = String(editor?.innerText || "");
     setShowBodyImageInsert(
       editorHasInlineImageTrigger(editor) || textEndsWithImageTrigger(plain),
     );
-  }, [textEndsWithImageTrigger]);
+  }, [getActiveBodyEditor, textEndsWithImageTrigger]);
 
   const insertBodyImageFiles = React.useCallback(
     (files: FileList | File[] | null) => {
       if (!files || (files instanceof FileList ? files.length === 0 : files.length === 0)) return;
-      const afterNode = removeInlineImageTrigger(bodyRichTextRef.current);
+      const afterNode = removeInlineImageTrigger(getActiveBodyEditor());
       const list = dedupeImageFiles(files instanceof FileList ? Array.from(files) : files);
       const mediaFiles = list.filter(
         (file) =>
@@ -148,7 +213,7 @@ export default function GeneralInfoDetailModal({
 
       void (async () => {
         try {
-          const editor = bodyRichTextRef.current;
+          const editor = getActiveBodyEditor();
           if (!editor) return;
 
           const uploaded: Array<{ src: string; name: string; type: "image" | "video" }> = [];
@@ -192,7 +257,7 @@ export default function GeneralInfoDetailModal({
         }
       })();
     },
-    [onUploadInlineImage],
+    [getActiveBodyEditor, onUploadInlineImage],
   );
 
   const handleBodyImageInsertPaste = React.useCallback(
@@ -222,18 +287,18 @@ export default function GeneralInfoDetailModal({
 
   React.useEffect(() => {
     if (!isEditing) return;
-    const editor = bodyRichTextRef.current;
-    if (!editor) return;
+    const root = bodyParagraphListRef.current;
+    if (!root) return;
     const recheck = () => checkBodyImageTrigger();
-    editor.addEventListener("keyup", recheck);
-    editor.addEventListener("compositionend", recheck);
-    editor.addEventListener("input", recheck);
+    root.addEventListener("keyup", recheck);
+    root.addEventListener("compositionend", recheck);
+    root.addEventListener("input", recheck);
     return () => {
-      editor.removeEventListener("keyup", recheck);
-      editor.removeEventListener("compositionend", recheck);
-      editor.removeEventListener("input", recheck);
+      root.removeEventListener("keyup", recheck);
+      root.removeEventListener("compositionend", recheck);
+      root.removeEventListener("input", recheck);
     };
-  }, [isEditing, bodyEditorKey, checkBodyImageTrigger]);
+  }, [isEditing, bodyEditorKey, bodyParas.length, checkBodyImageTrigger]);
 
   React.useEffect(() => {
     if (!showBodyImageInsert) return;
@@ -361,13 +426,13 @@ export default function GeneralInfoDetailModal({
   );
 
   const bodyImageSrcs = React.useMemo(() => {
-    const liveBodyHtml = isEditing ? String(bodyRichTextRef.current?.innerHTML || "") : "";
+    const liveBodyHtml = isEditing ? collectAllBodyHtml() : "";
     return extractGeneralInfoBodyImageSrcs(
       liveBodyHtml,
       item.formattedTextHtml,
       looksLikeHtmlContent(item.text || "") ? item.text : "",
     );
-  }, [isEditing, item.formattedTextHtml, item.text, bodyEditorKey, bodyImageTick]);
+  }, [isEditing, item.formattedTextHtml, item.text, bodyEditorKey, bodyImageTick, collectAllBodyHtml]);
 
   const reportImageSrcs = React.useMemo(() => {
     return extractGeneralInfoReportImageSrcs(String(item.factCheckSummary || ""));
@@ -375,7 +440,7 @@ export default function GeneralInfoDetailModal({
 
   const saveAllEdits = React.useCallback(async (opts?: { keepEditing?: boolean }) => {
     const keepEditing = opts?.keepEditing !== false;
-    const bodyHtml = String(bodyRichTextRef.current?.innerHTML || item.formattedTextHtml || "").trim();
+    const bodyHtml = collectAllBodyHtml() || String(item.formattedTextHtml || "").trim();
     const bodyText = htmlToPlainText(bodyHtml) || String(item.text || "");
     const keywords = editKeywordsText
       .split(/[,，#\n]+/)
@@ -387,7 +452,7 @@ export default function GeneralInfoDetailModal({
     const updated: GeneralInfoItem = {
       ...item,
       title: editTitle.trim() || item.title,
-      summary: editSummary.trim(),
+      summary: joinSummaryParagraphs(editSummaries),
       sourceUrl: item.sourceUrl,
       primaryCategory: editPrimary.trim() || item.primaryCategory,
       secondaryCategory: editSecondary.trim() || item.secondaryCategory,
@@ -406,11 +471,12 @@ export default function GeneralInfoDetailModal({
     setShowBodyImageInsert(false);
     if (!keepEditing) setIsEditing(false);
   }, [
+    collectAllBodyHtml,
     editKeywordsText,
     editMediaItems,
     editPrimary,
     editSecondary,
-    editSummary,
+    editSummaries,
     editTitle,
     item,
     onSaveItemEdit,
@@ -443,15 +509,61 @@ export default function GeneralInfoDetailModal({
     bodyImageTick,
     editKeywordsText,
     editMediaItems,
-    editSummary,
+    editSummaries,
     editTitle,
     isEditing,
     onSaveItemEdit,
     saveAllEdits,
   ]);
 
+  const updateSummaryParagraph = React.useCallback((index: number, value: string) => {
+    setEditSummaries((prev) => prev.map((part, i) => (i === index ? value : part)));
+    setAutoSaveTick((tick) => tick + 1);
+  }, []);
+
+  const addSummaryParagraph = React.useCallback(() => {
+    setEditSummaries((prev) => [...prev, ""]);
+    setAutoSaveTick((tick) => tick + 1);
+  }, []);
+
+  const removeSummaryParagraph = React.useCallback((index: number) => {
+    setEditSummaries((prev) => {
+      if (prev.length <= 1) return [""];
+      return prev.filter((_, i) => i !== index);
+    });
+    setAutoSaveTick((tick) => tick + 1);
+  }, []);
+
+  const addBodyParagraph = React.useCallback(() => {
+    const id = nextBodyParaIdRef.current++;
+    setBodyParas((prev) => [...prev, { id, html: "" }]);
+    focusedBodyParaIdRef.current = id;
+    setAutoSaveTick((tick) => tick + 1);
+    window.setTimeout(() => {
+      bodyParaRefs.current[id]?.focus();
+    }, 0);
+  }, []);
+
+  const removeBodyParagraph = React.useCallback((id: number) => {
+    setBodyParas((prev) => {
+      if (prev.length <= 1) {
+        const only = prev[0];
+        const editor = only ? bodyParaRefs.current[only.id] : null;
+        if (editor) editor.innerHTML = "";
+        return prev;
+      }
+      delete bodyParaRefs.current[id];
+      const next = prev.filter((para) => para.id !== id);
+      if (focusedBodyParaIdRef.current === id) {
+        focusedBodyParaIdRef.current = next[0]?.id ?? null;
+      }
+      return next;
+    });
+    setAutoSaveTick((tick) => tick + 1);
+  }, []);
+
   const runBodyRichCommand = React.useCallback((command: string, value?: string) => {
-    const editor = bodyRichTextRef.current;
+    const editor = getActiveBodyEditor();
     editor?.focus();
 
     const wrapSelectionWithSpan = (styles: Record<string, string>) => {
@@ -520,11 +632,11 @@ export default function GeneralInfoDetailModal({
     }
     setBodyImageTick((prev) => prev + 1);
     setAutoSaveTick((prev) => prev + 1);
-  }, []);
+  }, [getActiveBodyEditor]);
 
   const insertDataUrlIntoBody = React.useCallback(
     (dataUrl: string, name: string) => {
-      const editor = bodyRichTextRef.current;
+      const editor = getActiveBodyEditor();
       if (!editor || !dataUrl) return;
       removeInlineImageTrigger(editor);
       insertInlineMediaIntoEditor(editor, [{ src: dataUrl, name, type: "image" }]);
@@ -534,7 +646,7 @@ export default function GeneralInfoDetailModal({
       setBodyImageTick((prev) => prev + 1);
       setAutoSaveTick((prev) => prev + 1);
     },
-    [],
+    [getActiveBodyEditor],
   );
 
   const handleToolbarPasteImage = React.useCallback(async () => {
@@ -665,21 +777,79 @@ export default function GeneralInfoDetailModal({
 
           <section className="generalInfoDetailSection" style={{ order: 1 }}>
             <div className="generalInfoSectionTitleRow">
-              <strong>Text 입력 / 편집</strong>
+              <strong>요약</strong>
               <button
                 type="button"
-                className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                onClick={() =>
-                  void copyPlainText(
-                    String(bodyRichTextRef.current?.innerText || item.text || ""),
-                  )
-                }
+                className="secondaryButton smallActionButton"
+                onClick={addSummaryParagraph}
               >
-                {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
+                요약 추가
               </button>
             </div>
             <p className="mutedText" style={{ margin: "0 0 8px", fontSize: 12 }}>
-              줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능
+              단락별로 요약을 작성할 수 있습니다. [요약 추가]로 단락을 늘릴 수 있습니다.
+            </p>
+            <div className="generalInfoSummaryParagraphList">
+              {editSummaries.map((paragraph, index) => (
+                <div className="generalInfoSummaryParagraph" key={`summary-${index}`}>
+                  <div className="generalInfoSummaryParagraphHead">
+                    <span>요약 {index + 1}</span>
+                    {editSummaries.length > 1 && (
+                      <button
+                        type="button"
+                        className="secondaryButton smallActionButton dangerSmallButton"
+                        onClick={() => removeSummaryParagraph(index)}
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    value={paragraph}
+                    onChange={(e) => updateSummaryParagraph(index, e.target.value)}
+                    rows={3}
+                    placeholder="이 단락의 요약 내용을 입력하세요."
+                    className="generalInfoEditableTextarea"
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      borderRadius: 10,
+                      border: "1px solid rgba(148, 163, 184, 0.35)",
+                      background: "#020617",
+                      color: "#e2e8f0",
+                      padding: "10px 12px",
+                      fontSize: 13,
+                      lineHeight: 1.6,
+                      resize: "vertical",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="generalInfoDetailSection" style={{ order: 2 }}>
+            <div className="generalInfoSectionTitleRow">
+              <strong>Text 입력 / 편집</strong>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="secondaryButton smallActionButton"
+                  onClick={addBodyParagraph}
+                >
+                  단락 추가
+                </button>
+                <button
+                  type="button"
+                  className="secondaryButton smallActionButton generalInfoCopyAllBtn"
+                  onClick={() => void copyPlainText(collectAllBodyText() || item.text || "")}
+                >
+                  {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
+                </button>
+              </div>
+            </div>
+            <p className="mutedText" style={{ margin: "0 0 8px", fontSize: 12 }}>
+              단락별로 본문을 작성할 수 있습니다. [단락 추가]로 칸을 늘릴 수 있습니다. 줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능
             </p>
             <CollectFormatToolbar
               onUndo={() => runBodyRichCommand("undo")}
@@ -721,39 +891,65 @@ export default function GeneralInfoDetailModal({
             />
             <div
               key={bodyEditorKey}
-              ref={bodyRichTextRef}
-              className="generalInfoRichTextEditor collectPaperEditor"
-              contentEditable
-              suppressContentEditableWarning
-              role="textbox"
-              tabIndex={0}
-              onInput={() => {
-                setBodyImageTick((prev) => prev + 1);
-                setAutoSaveTick((prev) => prev + 1);
-                checkBodyImageTrigger();
-              }}
-              onKeyUp={checkBodyImageTrigger}
-              onCompositionEnd={checkBodyImageTrigger}
-              onPaste={handleBodyEditorPaste}
-              data-placeholder="본문 TEXT를 수정하세요. 문장 끝에 S를 붙이면 이미지를 넣을 수 있습니다."
-              style={{
-                display: "block",
-                width: "100%",
-                minHeight: 220,
-                maxHeight: 480,
-                overflowY: "auto",
-                boxSizing: "border-box",
-                borderRadius: 14,
-                border: "1px solid #e2e8f0",
-                background: "#ffffff",
-                color: "#1a2430",
-                padding: "14px 15px",
-                fontSize: 15,
-                lineHeight: 1.8,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            />
+              ref={bodyParagraphListRef}
+              className="generalInfoBodyParagraphList"
+            >
+              {bodyParas.map((para, index) => (
+                <div className="generalInfoBodyParagraph" key={para.id}>
+                  <div className="generalInfoSummaryParagraphHead">
+                    <span>단락 {index + 1}</span>
+                    {bodyParas.length > 1 && (
+                      <button
+                        type="button"
+                        className="secondaryButton smallActionButton dangerSmallButton"
+                        onClick={() => removeBodyParagraph(para.id)}
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                  <div
+                    ref={(el) => {
+                      bodyParaRefs.current[para.id] = el;
+                    }}
+                    className="generalInfoRichTextEditor collectPaperEditor"
+                    contentEditable
+                    suppressContentEditableWarning
+                    role="textbox"
+                    tabIndex={0}
+                    onFocus={() => {
+                      focusedBodyParaIdRef.current = para.id;
+                    }}
+                    onInput={() => {
+                      setBodyImageTick((prev) => prev + 1);
+                      setAutoSaveTick((prev) => prev + 1);
+                      checkBodyImageTrigger();
+                    }}
+                    onKeyUp={checkBodyImageTrigger}
+                    onCompositionEnd={checkBodyImageTrigger}
+                    onPaste={handleBodyEditorPaste}
+                    data-placeholder="이 단락의 본문을 입력하세요. 문장 끝에 S를 붙이면 이미지를 넣을 수 있습니다."
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      minHeight: 140,
+                      maxHeight: 360,
+                      overflowY: "auto",
+                      boxSizing: "border-box",
+                      borderRadius: 14,
+                      border: "1px solid #e2e8f0",
+                      background: "#ffffff",
+                      color: "#1a2430",
+                      padding: "14px 15px",
+                      fontSize: 15,
+                      lineHeight: 1.8,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
             {showBodyImageInsert && (
               <div ref={bodyImageInsertPanelRef} className="generalInfoTextImageInsertPanel">
                 <div className="generalInfoTextImageInsertHead">
@@ -763,7 +959,7 @@ export default function GeneralInfoDetailModal({
                     type="button"
                     className="secondaryButton smallActionButton"
                     onClick={() => {
-                      removeInlineImageTrigger(bodyRichTextRef.current);
+                      removeInlineImageTrigger(getActiveBodyEditor());
                       setShowBodyImageInsert(false);
                     }}
                   >
@@ -802,7 +998,7 @@ export default function GeneralInfoDetailModal({
             </p>
           </section>
 
-          <section className="generalInfoDetailSection" style={{ order: 2 }}>
+          <section className="generalInfoDetailSection" style={{ order: 3 }}>
             <div className="generalInfoSectionTitleRow">
               <strong>대표 이미지 / 자료</strong>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1083,10 +1279,10 @@ export default function GeneralInfoDetailModal({
               </div>
             )}
           </section>
-          <section className="generalInfoDetailSection" style={{ order: 3 }}>
-            <strong>키워드 / 요약</strong>
+          <section className="generalInfoDetailSection" style={{ order: 4 }}>
+            <strong>키워드</strong>
             <p className="mutedText" style={{ margin: "4px 0 10px", fontSize: 12 }}>
-              키워드와 요약을 직접 입력하세요. 입력 내용은 자동 저장됩니다.
+              키워드를 직접 입력하세요. 입력 내용은 자동 저장됩니다.
             </p>
             <div className="generalInfoResultBox generalInfoKeywordInputBox" style={{ marginBottom: 10 }}>
               <strong>키워드 직접 입력</strong>
@@ -1117,30 +1313,6 @@ export default function GeneralInfoDetailModal({
                   <span>위에서 키워드를 입력하면 표시됩니다.</span>
                 )}
               </div>
-            </div>
-            <div className="generalInfoResultBox generalInfoEditableResultBox">
-              <strong>요약</strong>
-              <textarea
-                value={editSummary}
-                onChange={(e) => {
-                  setEditSummary(e.target.value);
-                  setAutoSaveTick((prev) => prev + 1);
-                }}
-                rows={4}
-                placeholder="요약 내용을 직접 입력하세요."
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  borderRadius: 10,
-                  border: "1px solid rgba(148, 163, 184, 0.35)",
-                  background: "#020617",
-                  color: "#e2e8f0",
-                  padding: "10px 12px",
-                  fontSize: 13,
-                  lineHeight: 1.6,
-                  resize: "vertical",
-                }}
-              />
             </div>
             <div className="generalInfoActionRow" style={{ marginTop: 12 }}>
               <button
@@ -1199,7 +1371,7 @@ export default function GeneralInfoDetailModal({
       )}
       {showTextToImageModal && (
         <TextToImageModal
-          initialText={String(bodyRichTextRef.current?.innerText || item.text || "").slice(0, 800)}
+          initialText={String(collectAllBodyText() || item.text || "").slice(0, 800)}
           onCancel={() => setShowTextToImageModal(false)}
           onInsert={(dataUrl) => {
             insertDataUrlIntoBody(dataUrl, `text-image-${Date.now()}.png`);

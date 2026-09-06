@@ -77,6 +77,47 @@ export const getGeneralInfoCategoryPath = (item: GeneralInfoItem) =>
     .filter(Boolean)
     .join(" > ") || "분류 미정";
 
+export const splitSummaryParagraphs = (summary: string): string[] => {
+  const text = String(summary || "")
+    .replace(/\r\n/g, "\n")
+    .trim();
+  if (!text) return [""];
+  const parts = text
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length > 0 ? parts : [""];
+};
+
+export const joinSummaryParagraphs = (paragraphs: string[]): string =>
+  paragraphs
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+
+export const BODY_PARAGRAPH_CLASS = "gi-body-paragraph";
+
+export const splitBodyParagraphHtml = (html: string): string[] => {
+  const raw = String(html || "").trim();
+  if (!raw) return [""];
+  if (typeof document === "undefined") return [raw];
+  const holder = document.createElement("div");
+  holder.innerHTML = raw;
+  const marked = Array.from(holder.children).filter((el) =>
+    el.classList.contains(BODY_PARAGRAPH_CLASS),
+  ) as HTMLElement[];
+  if (marked.length > 0) {
+    return marked.map((el) => el.innerHTML);
+  }
+  return [raw];
+};
+
+export const joinBodyParagraphHtml = (paragraphs: string[]): string =>
+  paragraphs
+    .map((html) => String(html || "").trim())
+    .map((html) => `<div class="${BODY_PARAGRAPH_CLASS}">${html || "<br>"}</div>`)
+    .join("");
+
 export const getGeneralInfoFactLabel = (item: GeneralInfoItem) => {
   if (item.factCheckStatus === "확인 완료") return "✅ Fact Check 완료";
   if (item.factCheckStatus === "확인 필요") return "⚠️ 확인 필요";
