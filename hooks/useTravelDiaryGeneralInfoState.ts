@@ -2633,10 +2633,9 @@ export function useTravelDiaryGeneralInfoState({
 
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
-        console.log("Periodic background sync: loading general info items from Supabase...");
         void loadGeneralInfoItemsFromSupabase();
       }
-    }, 30000);
+    }, 300000);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);

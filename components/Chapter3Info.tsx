@@ -1151,7 +1151,12 @@ export function Chapter3Info({
                       <img
                         src={getGeneralInfoDisplayMediaItems(item)[0].preview}
                         alt={item.title}
-                        onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          img.onerror = null;
+                          img.removeAttribute("src");
+                          img.style.display = "none";
+                        }}
                         onClick={(e) => {
                           if (!onOpenStorageImage) return;
                           const media = getGeneralInfoDisplayMediaItems(item)[0];

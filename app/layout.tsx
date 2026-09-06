@@ -4,6 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "2026년 아이폰 캘린더",
   description: "2026년 아이폰 캘린더 및 일기장",
+  robots: { index: false, follow: false },
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [

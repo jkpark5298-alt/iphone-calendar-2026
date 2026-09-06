@@ -1849,12 +1849,12 @@ export default function HomePage() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", handleFocus);
 
-    // 30초 주기 자동 폴링 — PC/아이폰 간 실시간에 가까운 동기화
+    // 5분 주기 동기화 — 화면이 보일 때만 (Edge Request 폭주 방지)
     const pollingInterval = setInterval(() => {
       if (document.visibilityState === "visible") {
         syncSchedulesFromSupabase();
       }
-    }, 30000);
+    }, 300000);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
