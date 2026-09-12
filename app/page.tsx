@@ -24,6 +24,9 @@ import {
   type PhotoBookImageExif,
 } from "../lib/photoExif";
 import { importWorkScheduleFromFile } from "../lib/workScheduleImport";
+import { PhotobookPersonAlbumGallery, PhotobookPersonAlbumScreen } from "../components/PhotobookPersonAlbumGallery";
+import { keepPersonPhotosFromDeletedItems } from "../lib/client-photobook-person-album";
+import { isPersonAlbumCategory, type PhotobookPersonSource } from "../lib/photobook-person-album";
 import {
   bindInlineImageRemoveHandler,
   collectClipboardImageFiles,
@@ -646,7 +649,7 @@ export default function HomePage() {
   const [photoBookInputImageMemos, setPhotoBookInputImageMemos] = useState<string[]>([]);
   const [photoBookInputImageExifs, setPhotoBookInputImageExifs] = useState<PhotoBookImageExif[]>([]);
   const [pbMemoEditIdx, setPbMemoEditIdx] = useState<number | null>(null);
-  const [photoBookTab, setPhotoBookTab] = useState<"index" | "register">("index");
+  const [photoBookTab, setPhotoBookTab] = useState<"index" | "register" | "person-album">("index");
 
   // Restructured Info Repository states for global notes catalog
   const [allInstaCards, setAllInstaCards] = useState<InstaInfoCard[]>([]);
@@ -6918,12 +6921,39 @@ function MarkDateView() {
     setPhotoBookTab("index");
   }
 
+
+  function toPhotobookPersonSource(photo: PhotoItem): PhotobookPersonSource | null {
+    if (!photo.id) return null;
+    const parsed = parsePhotoBookMemo(photo.memo || "");
+    const imageUrls = [
+      photo.url,
+      ...((parsed.additionalImages || []).map((img) => img.url).filter(Boolean)),
+    ].filter(Boolean);
+    return {
+      id: photo.id,
+      keyword: parsed.keyword || "일반",
+      category2: parsed.category2 || "기타",
+      memo: parsed.memo || "",
+      tag: photo.tag || "",
+      imageUrls,
+    };
+  }
+
   // CRUD: Delete Photo Book Item
   async function deletePhotoBookItem(itemId: string) {
     let targetItem = allPhotoBookItems.find(p => p.id === itemId);
     if (!targetItem) return;
 
     if (!window.confirm("이 포토북 카드를 삭제할까요?")) return;
+
+    const personSource = toPhotobookPersonSource(targetItem);
+    const keepInPersonAlbum = Boolean(
+      personSource && isPersonAlbumCategory(personSource.category2),
+    );
+    if (keepInPersonAlbum && personSource) {
+      // 人앨범에 사진을 남기므로 스토리지 파일은 삭제하지 않음
+      keepPersonPhotosFromDeletedItems([personSource]);
+    }
 
     const dateStr = targetItem.tag;
     const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
@@ -6938,20 +6968,29 @@ function MarkDateView() {
       previousData: JSON.stringify(previousItems),
     });
 
-    if (targetItem.storagePath) {
-      await deleteSupabasePhoto("info-photos", "info_photos", targetItem.storagePath);
-    }
+    if (!keepInPersonAlbum) {
+      if (targetItem.storagePath) {
+        await deleteSupabasePhoto("info-photos", "info_photos", targetItem.storagePath);
+      }
 
-    // Delete any additional images from storage
-    if (isSupabaseConfigured && supabase) {
-      const parsed = parsePhotoBookMemo(targetItem.memo || "");
-      if (parsed.additionalImages && parsed.additionalImages.length > 0) {
-        for (const img of parsed.additionalImages) {
-          if (img.storagePath) {
-            const { error: storageError } = await supabase.storage.from("info-photos").remove([img.storagePath]);
-            if (storageError) console.warn("Supabase additional photo storage delete error:", storageError.message);
+      // Delete any additional images from storage
+      if (isSupabaseConfigured && supabase) {
+        const parsed = parsePhotoBookMemo(targetItem.memo || "");
+        if (parsed.additionalImages && parsed.additionalImages.length > 0) {
+          for (const img of parsed.additionalImages) {
+            if (img.storagePath) {
+              const { error: storageError } = await supabase.storage.from("info-photos").remove([img.storagePath]);
+              if (storageError) console.warn("Supabase additional photo storage delete error:", storageError.message);
+            }
           }
         }
+      }
+    } else if (isSupabaseConfigured && supabase && targetItem.id) {
+      // DB 행만 제거 (스토리지 URL은 人앨범 keep용으로 유지)
+      try {
+        await supabase.from("info_photos").delete().eq("id", targetItem.id);
+      } catch (error) {
+        console.warn("info_photos row delete for person-album keep failed", error);
       }
     }
 
@@ -7647,6 +7686,10 @@ ${photo.memoText}
                     setPhotoBookTab("register");
                   }}
                 >📖 포토북 등록</button>
+                <button
+                  className={`ch3TabBtn ${photoBookTab === "person-album" ? "active" : ""}`}
+                  onClick={() => setPhotoBookTab("person-album")}
+                >人 앨범</button>
               </div>
 
               {/* Register Tab: edit / create / detail forms */}
@@ -8518,6 +8561,20 @@ ${photo.memoText}
               </div>
               )}
 
+              {photoBookTab === "person-album" && (
+              <div style={{ position: "relative" }}>
+                <PhotobookPersonAlbumScreen
+                  items={allPhotoBookItems
+                    .map((photo) => toPhotobookPersonSource(photo))
+                    .filter((item): item is PhotobookPersonSource => Boolean(item))}
+                  onOpenItem={(id) => {
+                    setActiveItem({ type: "photobook", id });
+                    setPhotoBookTab("register");
+                  }}
+                />
+              </div>
+              )}
+
               {/* Index Tab: search + list */}
               {photoBookTab === "index" && (
               <div style={{ position: "relative" }}>
@@ -8779,6 +8836,41 @@ ${photo.memoText}
               </button>
               <button type="button" className="pill-btn" onClick={() => setSelectedInfoPhotoMenu(null)}>취소</button>
             </div>
+          </div>
+        </div>
+      )}
+      {isPhotoAlbumModalOpen && (
+        <div
+          className="pbPersonAlbumModal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="포토앨범"
+          onClick={() => setIsPhotoAlbumModalOpen(false)}
+        >
+          <div className="pbPersonAlbumModalPanel" onClick={(event) => event.stopPropagation()}>
+            <div className="pbPersonAlbumModalBar">
+              <h3>🖼️ 포토앨범</h3>
+              <button
+                type="button"
+                className="pbPersonAlbumModalClose"
+                onClick={() => setIsPhotoAlbumModalOpen(false)}
+              >
+                닫기
+              </button>
+            </div>
+            <PhotobookPersonAlbumGallery
+              mode="selection"
+              items={allPhotoBookItems
+                .filter((photo) => photo.id && selectedPhotoBookIds.includes(photo.id))
+                .map((photo) => toPhotobookPersonSource(photo))
+                .filter((item): item is PhotobookPersonSource => Boolean(item))}
+              onOpenItem={(id) => {
+                setIsPhotoAlbumModalOpen(false);
+                setActiveItem({ type: "photobook", id });
+                setPhotoBookTab("register");
+              }}
+              onPrint={() => window.print()}
+            />
           </div>
         </div>
       )}
