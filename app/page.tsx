@@ -26,6 +26,7 @@ import {
   groupInformationEntriesByDay,
   type InformationCalendarItem,
 } from "../lib/informationEntries";
+import { importWorkScheduleFromFile, type ImportedWorkMarkType } from "../lib/workScheduleImport";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
@@ -64,7 +65,7 @@ type InfoTextCard = {
   content: string;
   createdAt: string;
 };
-type CalendarMarkType = "C" | "A" | "심야" | "노조";
+type CalendarMarkType = "C" | "A" | "당" | "심야" | "노조" | "休";
 type CalendarMarkItem = {
   id: string;
   type: CalendarMarkType;
@@ -103,9 +104,19 @@ const scheduleColorLabels: Record<ScheduleColor, string> = {
 const calendarMarkLabels: Record<CalendarMarkType, string> = {
   C: "C",
   A: "A",
+  당: "당",
   심야: "심야",
   노조: "노조",
+  休: "休",
 };
+
+function calendarMarkClassSuffix(type: CalendarMarkType) {
+  if (type === "심야") return "night";
+  if (type === "노조") return "union";
+  if (type === "休") return "rest";
+  if (type === "당") return "dang";
+  return type.toLowerCase();
+}
 
 const holidays: Record<string, string> = {
   "5-5": "어린이날",
@@ -2100,6 +2111,96 @@ export default function HomePage() {
     }
   }
 
+  async function importWorkScheduleMarksFromFile(file: File | null) {
+    if (!file) return;
+
+    try {
+      const result = await importWorkScheduleFromFile(file);
+      if (!result.ok || !result.marks.length) {
+        alert(result.message || "가져오기에 실패했습니다.");
+        return;
+      }
+
+      const year = result.year || currentYear;
+      const month = result.month || currentMonth;
+      const confirmMsg =
+        `${result.message}\n\n` +
+        `선택한 캘린더 ${year}년 ${month}월 근무 표시에 반영합니다.\n` +
+        `(검정색 타인·익일 정보는 포함하지 않습니다)\n\n` +
+        `같은 달 기존 C/A/당/심야/노조/休 표시는 덮어씁니다. 계속할까요?`;
+      if (!window.confirm(confirmMsg)) return;
+
+      const importTypes = new Set(result.marks.map((m) => m.type));
+      const nextMarks: Record<string, CalendarMarkItem[]> = { ...calendarMarks };
+
+      // 같은 연·월의 기존 표시 중 가져오는 타입만 삭제(다른 타입은 보존)
+      Object.keys(nextMarks).forEach((markKey) => {
+        const parsed = parseScheduleKey(markKey);
+        if (parsed.year !== year || parsed.month !== month) return;
+        const kept = (nextMarks[markKey] || []).filter(
+          (item) => !importTypes.has(item.type as ImportedWorkMarkType),
+        );
+        if (kept.length) nextMarks[markKey] = kept;
+        else delete nextMarks[markKey];
+      });
+
+      const stamp = Date.now();
+      result.marks.forEach((mark, index) => {
+        const markKey = key(mark.month, mark.day, mark.year);
+        const current = nextMarks[markKey] || [];
+        const exists = current.some((item) => item.type === mark.type && item.plus === mark.plus);
+        if (!exists) {
+          current.push({
+            id: `import-${stamp}-${index}-${mark.day}-${mark.type}`,
+            type: mark.type,
+            plus: mark.plus,
+          } as CalendarMarkItem);
+        }
+        nextMarks[markKey] = current;
+      });
+
+      saveCalendarMarks(nextMarks);
+      setCurrentYear(year);
+      setCurrentMonth(month);
+
+      if (isSupabaseConfigured && supabase) {
+        const dbMonth = year === 2026 ? month : year * 100 + month;
+        const saveErrors: string[] = [];
+        await Promise.all(
+          result.marks.map(async (mark) => {
+            const { error } = await supabase!.from("calendar_marks").upsert(
+              {
+                month: dbMonth,
+                day: mark.day,
+                mark_type: mark.type,
+                plus: mark.plus,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "month,day,mark_type,plus" },
+            );
+            if (error) saveErrors.push(error.message);
+          }),
+        );
+        if (saveErrors.length) {
+          alert(
+            `기기에는 ${result.marks.length}건 반영했지만 서버 저장 일부 실패:\n${saveErrors[0]}\n\n` +
+              "Supabase에서 mark_type 체크 제약을 업데이트하세요.",
+          );
+        } else {
+          alert(`${year}년 ${month}월 근무 ${result.marks.length}건을 가져왔습니다.`);
+        }
+      } else {
+        alert(`${year}년 ${month}월 근무 ${result.marks.length}건을 가져왔습니다.`);
+      }
+
+      setView("calendar");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      console.error(error);
+      alert("근무표 가져오기 중 오류가 발생했습니다.");
+    }
+  }
+
   function moveToTodayOnCalendar() {
     const today = getSafeToday();
     setCurrentYear(today.year ?? 2026);
@@ -3653,7 +3754,7 @@ export default function HomePage() {
                 {dayMarks.slice(0, 4).map(mark => (
                   <span
                     key={`${mark.type}-${mark.plus}`}
-                    className={`calendar-mark calendar-mark-${mark.type === "심야" ? "night" : mark.type === "노조" ? "union" : mark.type.toLowerCase()}`}
+                    className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(mark.type)}`}
                   >
                     {calendarMarkLabels[mark.type]}{mark.plus ? "+" : ""}
                   </span>
@@ -3750,6 +3851,19 @@ export default function HomePage() {
             <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
+            <label className="mark-btn work-ics-import-btn" title="근무표 ICS/JSON 가져오기" style={{ cursor: "pointer" }}>
+              가져오기
+              <input
+                type="file"
+                accept=".ics,.json,text/calendar,application/json"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0] || null;
+                  void importWorkScheduleMarksFromFile(file);
+                  event.target.value = "";
+                }}
+              />
+            </label>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
             <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
           </div>
@@ -4132,12 +4246,32 @@ function MarkDateView() {
             <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
           </div>
 
+          <div className="work-schedule-import-box">
+            <strong>근무표 가져오기 (추천)</strong>
+            <p className="muted" style={{ margin: "6px 0 10px" }}>
+              excel-schedule-calendar에서 받은 <b>ICS</b> 또는 <b>PC 저장 JSON</b> 파일을 불러오세요.
+              검정색(타인·익일) 정보는 가져오지 않습니다. 매달 PC 저장 후 불러오면 됩니다.
+            </p>
+            <label className="primaryLabel work-schedule-import-label">
+              파일 ICS / JSON 선택
+              <input
+                type="file"
+                accept=".ics,.json,text/calendar,application/json"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] || null;
+                  void importWorkScheduleMarksFromFile(file);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+
           <div className="mark-type-options">
             {(Object.keys(calendarMarkLabels) as CalendarMarkType[]).map(type => (
               <button
                 type="button"
                 key={type}
-                className={`mark-type-btn mark-type-${type === "심야" ? "night" : type === "노조" ? "union" : type.toLowerCase()} ${markType === type ? "active" : ""}`}
+                className={`mark-type-btn mark-type-${calendarMarkClassSuffix(type)} ${markType === type ? "active" : ""}`}
                 onClick={() => {
                   setMarkType(type);
                   if (type === "노조") setMarkPlus(false);
@@ -4178,7 +4312,7 @@ function MarkDateView() {
             {monthMarkEntries.map(({ day, item }) => (
               <div className="saved-mark-row" key={`${day}-${item.type}-${item.plus}`}>
                 <span>{currentMonth}/{day}</span>
-                <span className={`calendar-mark calendar-mark-${item.type === "심야" ? "night" : item.type === "노조" ? "union" : item.type.toLowerCase()}`}>
+                <span className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(item.type)}`}>
                   {calendarMarkLabels[item.type]}{item.plus ? "+" : ""}
                 </span>
                 <button type="button" className="soft-btn delete-btn" onClick={() => deleteCalendarMark(currentMonth, day, item)}>삭제</button>
