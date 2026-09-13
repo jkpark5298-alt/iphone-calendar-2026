@@ -28,13 +28,11 @@ type GeneralInfoPayload = {
   factCheckStatus: string;
   factCheckSummary: string;
   extraNote?: string;
-  formattedTextHtml?: string;
   confirmed: boolean;
   createdAt: string;
 };
 
 const MAX_TEXT_LENGTH = 50000;
-const MAX_FACT_CHECK_SUMMARY_LENGTH = 1_000_000;
 const MAX_KEYWORDS = 30;
 const MAX_INPUT_TYPES = 8;
 const MAX_MEDIA_ITEMS = 20;
@@ -110,23 +108,26 @@ const normalizePayload = (value: unknown): GeneralInfoPayload | null => {
     inputTypes: normalizeStringArray(source.inputTypes, MAX_INPUT_TYPES),
     summary: normalizeString(source.summary, 4000),
     factCheckStatus: normalizeString(source.factCheckStatus, 80) || "확인 전",
-    factCheckSummary: normalizeString(source.factCheckSummary, MAX_FACT_CHECK_SUMMARY_LENGTH),
+    factCheckSummary: normalizeString(source.factCheckSummary, 4000),
     extraNote: normalizeString(source.extraNote, 4000) || undefined,
-    formattedTextHtml: normalizeString(source.formattedTextHtml, MAX_TEXT_LENGTH) || undefined,
     confirmed: source.confirmed !== false,
     createdAt: normalizeString(source.createdAt, 80),
   };
 };
 
 const getWriteAuthError = (request: NextRequest) => {
-  const token = process.env.GENERAL_INFO_API_TOKEN || process.env.APP_API_TOKEN;
-  const authorization = request.headers.get("authorization") || "";
-  if (token && authorization === `Bearer ${token}`) return null;
+  const token = process.env.GENERAL_INFO_API_TOKEN;
+  if (!token) return null;
 
-  // 토큰이 없어도 same-origin은 필수 (기존: 토큰 없으면 무조건 통과 → 위험)
+  // 1. Bearer Token Check (for external APIs, iOS Shortcuts, etc.)
+  const authorization = request.headers.get("authorization") || "";
+  if (authorization === `Bearer ${token}`) return null;
+
+  // Gather host headers (including reverse proxy forwarding)
   const host = request.headers.get("host") || request.nextUrl.host;
   const forwardedHost = request.headers.get("x-forwarded-host");
 
+  // 2. Origin check (POST/PUT/DELETE requests always send Origin header in modern browsers)
   const origin = request.headers.get("origin");
   if (origin) {
     try {
@@ -138,11 +139,12 @@ const getWriteAuthError = (request: NextRequest) => {
       ) {
         return null;
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      // ignore
     }
   }
 
+  // 3. Same-origin request check using Referer header
   const referer = request.headers.get("referer");
   if (referer) {
     try {
@@ -154,11 +156,12 @@ const getWriteAuthError = (request: NextRequest) => {
       ) {
         return null;
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      // ignore parsing error
     }
   }
 
+  // 4. Sec-Fetch-Site check (not supported in Safari but useful for other browsers)
   const secFetchSite = request.headers.get("sec-fetch-site");
   if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
     return null;
@@ -175,22 +178,20 @@ const getWriteAuthError = (request: NextRequest) => {
 
 const getSupabaseAdmin = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  // 개인 앱 호환: service role 우선. 장기적으로 RLS+anon으로 전환 권장.
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !key) {
+  if (!supabaseUrl || !serviceRoleKey) {
     throw new Error("Supabase URL 또는 Key 환경변수가 없습니다.");
   }
 
-  return createClient(supabaseUrl, key, {
+  return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       persistSession: false,
     },
   });
 };
 
-const toDbRow = (item: GeneralInfoPayload, includeFormattedHtml = true) => ({
+const toDbRow = (item: GeneralInfoPayload) => ({
   id: item.id,
   title: item.title || "",
   text: item.text || "",
@@ -212,34 +213,9 @@ const toDbRow = (item: GeneralInfoPayload, includeFormattedHtml = true) => ({
   fact_check_summary: item.factCheckSummary || "",
 
   extra_note: item.extraNote || "",
-  ...(includeFormattedHtml ? { formatted_text_html: item.formattedTextHtml || "" } : {}),
   confirmed: item.confirmed !== false,
   created_at_text: item.createdAt || "",
 });
-
-const upsertGeneralInfoRow = async (
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  item: GeneralInfoPayload,
-) => {
-  const first = await supabase
-    .from("general_info_items")
-    .upsert(toDbRow(item, true))
-    .select("*")
-    .single();
-
-  if (!first.error) return first;
-
-  const message = String(first.error.message || "");
-  if (/formatted_text_html/i.test(message)) {
-    return supabase
-      .from("general_info_items")
-      .upsert(toDbRow(item, false))
-      .select("*")
-      .single();
-  }
-
-  return first;
-};
 
 const fromDbRow = (row: Record<string, unknown>): GeneralInfoPayload => {
   // media_items에서 storagePath로 공개 URL 복원
@@ -276,10 +252,9 @@ const fromDbRow = (row: Record<string, unknown>): GeneralInfoPayload => {
 
     summary: normalizeString(row.summary, 4000),
     factCheckStatus: normalizeString(row.fact_check_status, 80) || "확인 전",
-    factCheckSummary: normalizeString(row.fact_check_summary, MAX_FACT_CHECK_SUMMARY_LENGTH),
+    factCheckSummary: normalizeString(row.fact_check_summary, 4000),
 
     extraNote: normalizeString(row.extra_note, 4000),
-    formattedTextHtml: normalizeString(row.formatted_text_html, MAX_FACT_CHECK_SUMMARY_LENGTH) || undefined,
     confirmed: row.confirmed !== false,
     createdAt:
       normalizeString(row.created_at_text, 80) ||
@@ -287,12 +262,8 @@ const fromDbRow = (row: Record<string, unknown>): GeneralInfoPayload => {
   };
 };
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const { assertAppApiAccess } = await import("../../../lib/apiSecurity");
-    const authError = assertAppApiAccess(request);
-    if (authError) return authError;
-
     const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
@@ -346,7 +317,11 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    const { data, error } = await upsertGeneralInfoRow(supabase, item);
+    const { data, error } = await supabase
+      .from("general_info_items")
+      .upsert(toDbRow(item))
+      .select("*")
+      .single();
 
     if (error) {
       return NextResponse.json(
@@ -393,7 +368,11 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const { data, error } = await upsertGeneralInfoRow(supabase, item);
+    const { data, error } = await supabase
+      .from("general_info_items")
+      .upsert(toDbRow(item))
+      .select("*")
+      .single();
 
     if (error) {
       return NextResponse.json(

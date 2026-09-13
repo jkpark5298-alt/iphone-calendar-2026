@@ -417,23 +417,27 @@ export const dedupeImageFiles = (files: File[]): File[] => {
   return out;
 };
 
-/** 클립보드에서 이미지 File만 수집 (files/items 중복 제거) */
+const isClipboardMediaFile = (file: File | null): file is File => {
+  if (!file || file.size === 0) return false;
+  if (file.type.startsWith("image/") || file.type.startsWith("video/")) return true;
+  return /\.(jpe?g|png|gif|webp|heic|heif|mp4|mov|webm)$/i.test(file.name || "");
+};
+
+/** 클립보드에서 이미지 File만 수집 (files/items 중복 제거, HEIC 확장자 포함) */
 export const collectClipboardImageFiles = (clipboardData: DataTransfer | null): File[] => {
   if (!clipboardData) return [];
   const collected: File[] = [];
   if (clipboardData.files?.length) {
     Array.from(clipboardData.files).forEach((file) => {
-      if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-        collected.push(file);
-      }
+      if (isClipboardMediaFile(file)) collected.push(file);
     });
   }
+  if (collected.length > 0) return dedupeImageFiles(collected);
   if (clipboardData.items) {
     Array.from(clipboardData.items).forEach((item) => {
       if (item.kind !== "file") return;
-      if (!(item.type.startsWith("image/") || item.type.startsWith("video/"))) return;
       const file = item.getAsFile();
-      if (file) collected.push(file);
+      if (isClipboardMediaFile(file)) collected.push(file);
     });
   }
   return dedupeImageFiles(collected);
@@ -608,7 +612,30 @@ export const bindInlineImageRemoveHandler = (editor: HTMLElement | null) => {
 
   const removeFromEvent = (event: Event) => {
     const target = event.target as HTMLElement | null;
-    const btn = target?.closest?.(".generalInfoInlineImageRemove") as HTMLElement | null;
+    if (!target) return;
+
+    // insta-fact-library style rich slot / wrap delete
+    const richDel = target.closest?.(".rich-inline-img-del") as HTMLElement | null;
+    if (richDel && editor.contains(richDel)) {
+      event.preventDefault();
+      event.stopPropagation();
+      const wrap = richDel.closest(".rich-inline-img-wrap");
+      const alt = wrap?.querySelector("img")?.getAttribute("alt") || "이미지";
+      if (!window.confirm(`${alt}을(를) 지울까요?`)) return;
+      wrap?.remove();
+      return;
+    }
+    const slot = target.closest?.(".rich-img-slot") as HTMLElement | null;
+    if (slot && editor.contains(slot) && !slot.classList.contains("rich-inline-img-wrap")) {
+      event.preventDefault();
+      event.stopPropagation();
+      const id = slot.getAttribute("data-img-slot") || "이미지 칸";
+      if (!window.confirm(`${id} 칸을 지울까요?`)) return;
+      slot.remove();
+      return;
+    }
+
+    const btn = target.closest?.(".generalInfoInlineImageRemove") as HTMLElement | null;
     if (!btn || !editor.contains(btn)) return;
     event.preventDefault();
     event.stopPropagation();
@@ -1133,7 +1160,6 @@ export const applyInfographicAsRepresentative = (
     mediaItems: nextMedia,
     filePreview: src,
     fileName: nextMedia[0]?.name || "인포그래픽 대표",
-    fileType: "image",
   };
 };
 

@@ -619,42 +619,6 @@ textarea {
 .schedule-orange { background: #ffb35c; }
 .schedule-navy { background: #4464ad; color: #fff; }
 .schedule-purple { background: #b58cff; }
-.information-chip-list {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-top: 5px;
-}
-.information-chip {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  border-radius: 5px;
-  padding: 3px 5px;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.15;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-decoration: none;
-  color: #0f172a;
-  background: #e0f2fe;
-  border: 1px solid rgba(14, 165, 233, 0.35);
-}
-.information-chip-giftcard { background: #fef3c7; border-color: rgba(245, 158, 11, 0.4); }
-.information-chip-interest { background: #dcfce7; border-color: rgba(34, 197, 94, 0.35); }
-.information-chip-card { background: #ede9fe; border-color: rgba(139, 92, 246, 0.35); }
-.information-chip-delivery { background: #ffedd5; border-color: rgba(249, 115, 22, 0.4); }
-.information-chip-general { background: #e0f2fe; border-color: rgba(14, 165, 233, 0.35); }
-.information-chip-more {
-  background: rgba(148, 163, 184, 0.25);
-  border-color: rgba(148, 163, 184, 0.4);
-  color: #334155;
-  text-align: center;
-}
 .schedule-page {
   max-width: 720px;
   margin: 0 auto;
@@ -816,30 +780,22 @@ textarea {
 }
 
 
-/* Ã¬Â¶ÂÃªÂ°Â Ã¬ÂÂÃ¬Â Â: ÃªÂ³ÂµÃ­ÂÂ´Ã¬ÂÂ¼ ÃªÂ¸Â°Ã«Â³Â¸ Ã«Â¹Â¨ÃªÂ°ÂÃ¬ÂÂ Ã­ÂÂ´Ã¬Â Â, Ã¬Â§ÂÃ¬Â Â Ã¬Â§ÂÃ¬Â Â Ã«ÂÂ Ã¬Â§ÂÃ«Â§Â Ã«Â¹Â¨ÃªÂ°ÂÃ¬ÂÂ */
+/* 추가 수정: 공휴일 기본 빨간색 해제, 직접 지정 날짜만 빨간색 */
 .holiday-neutral {
   color: #8f8f8f !important;
   font-weight: 700;
 }
 
-/* ì¤ëì ì¼ì ì«ì ìì´ ìëë¼ ì ì ì²´ë¥¼ ë¸ëìì¼ë¡ ê°ì¼ë¤ */
-.today-day {
-  box-shadow: inset 0 0 0 2.5px #f5c518;
-  z-index: 3;
-}
-.today-day.selected-day {
-  box-shadow: inset 0 0 0 2.5px #f5c518;
-}
 .today-day .today-num {
-  display: inline;
-  width: auto;
-  height: auto;
-  border-radius: 0;
-  background: transparent !important;
-  color: inherit !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #2f80ed;
+  color: #ffffff !important;
+  font-weight: 800;
 }
 
 .weather-source {
@@ -848,8 +804,10 @@ textarea {
 }
 
 @media (max-width: 820px) {
-  .today-day {
-    box-shadow: inset 0 0 0 2px #f5c518;
+  .today-day .today-num {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
   }
   .info-title {
     font-size: 17px !important;
@@ -965,158 +923,6 @@ textarea {
   background: #111;
   border-radius: 10px;
 }
-.original-modal-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-  align-items: center;
-  width: 100%;
-}
-
-.photo-resize-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  width: 100%;
-  justify-content: flex-end;
-}
-
-.photo-resize-label {
-  color: #e2e8f0;
-  font-size: 12px;
-  font-weight: 700;
-  margin-right: 4px;
-}
-
-.photo-resize-size-btn {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(15, 23, 42, 0.75);
-  color: #cbd5e1;
-  border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.photo-resize-size-btn.active {
-  background: #62b19b;
-  color: #0f172a;
-  border-color: #62b19b;
-  font-weight: 800;
-}
-
-.photo-resize-info {
-  width: 100%;
-  margin: 0;
-  text-align: right;
-  color: #94a3b8;
-  font-size: 12px;
-}
-
-.photo-crop-stage {
-  position: relative;
-  width: 100%;
-  height: min(72vh, 720px);
-  max-height: calc(94vh - 120px);
-  background: #0a0a0a;
-  border-radius: 10px;
-  overflow: hidden;
-  user-select: none;
-  touch-action: none;
-  cursor: grab;
-}
-
-.photo-crop-stage:active {
-  cursor: grabbing;
-}
-
-.photo-crop-source {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  max-width: none !important;
-  max-height: none !important;
-  width: auto;
-  height: auto;
-  object-fit: fill !important;
-  display: block;
-  pointer-events: none;
-  transform-origin: center center;
-  will-change: transform;
-  border-radius: 0 !important;
-  background: transparent !important;
-}
-
-.photo-crop-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.photo-crop-box {
-  position: absolute;
-  box-sizing: border-box;
-  border: 2px solid #62b19b;
-  background: transparent;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
-  pointer-events: none;
-  touch-action: none;
-}
-
-.photo-crop-handle {
-  position: absolute;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: #62b19b;
-  border: 2px solid #0f172a;
-  z-index: 3;
-  pointer-events: auto;
-  touch-action: none;
-}
-
-.photo-crop-handle.nw {
-  left: -14px;
-  top: -14px;
-  cursor: nwse-resize;
-}
-
-.photo-crop-handle.ne {
-  right: -14px;
-  top: -14px;
-  cursor: nesw-resize;
-}
-
-.photo-crop-handle.sw {
-  left: -14px;
-  bottom: -14px;
-  cursor: nesw-resize;
-}
-
-.photo-crop-handle.se {
-  right: -14px;
-  bottom: -14px;
-  cursor: nwse-resize;
-}
-
-.photo-crop-hint {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 10px;
-  z-index: 4;
-  margin: 0;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 12px;
-  font-weight: 600;
-  pointer-events: none;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-}
-
 .original-close-btn {
   border: 0;
   border-radius: 999px;
@@ -1293,7 +1099,7 @@ textarea {
   background: #0f1110;
 }
 .photo-size-control .manual-size-head span::after {
-  content: " Ã¬Â¡Â°Ã¬Â Â";
+  content: " 조정";
 }
 
 /* Touch/mouse frame resize for diary and info photos */
@@ -1345,7 +1151,7 @@ textarea {
 }
 
 .photo-resize-handle::before {
-  content: "Ã¢ÂÂ";
+  content: "↘";
   color: #53675e;
   font-size: 18px;
   font-weight: 900;
@@ -1437,7 +1243,7 @@ textarea {
   z-index: 5;
 }
 .memo-resize-handle::before {
-  content: "Ã¢ÂÂ";
+  content: "↕";
   color: #53675e;
   font-size: 18px;
   font-weight: 900;
@@ -1479,7 +1285,7 @@ textarea {
   cursor: nwse-resize;
 }
 .memo-resize-handle::before {
-  content: "Ã¢ÂÂ";
+  content: "↘";
   line-height: 42px;
 }
 .resizable-memo-frame .photo-memo-box,
@@ -1536,7 +1342,7 @@ textarea {
   box-shadow: 0 0 0 1px rgba(83, 103, 94, 0.25);
 }
 .card-resize-handle::before {
-  content: "Ã¢ÂÂ";
+  content: "↘";
   color: #53675e;
   font-size: 22px;
   font-weight: 900;
@@ -1909,12 +1715,12 @@ textarea {
   font-size: 16px;
 }
 
-/* ì¤ë ë ì§: ì ì ì²´ ë¸ë íëë¦¬ (ì«ì ì íì ìì). ê¸ììì ë¹¨ê° ë ì§ì ì¶©ëíì§ ìê² ì ì§ */
+/* 오늘 날짜는 배경을 채우지 않고 파란 테두리만 표시한다. 글자색은 빨간 날짜와 충돌하지 않게 기존 색을 따른다. */
 .today-day .today-num {
   background: transparent !important;
   color: inherit !important;
-  border: 0 !important;
-  box-shadow: none !important;
+  border: 2px solid #2f80ed;
+  box-shadow: 0 0 0 2px rgba(47, 128, 237, 0.12);
 }
 .today-day .today-num.num-red {
   color: #e24141 !important;
@@ -1929,7 +1735,7 @@ textarea {
   letter-spacing: -0.04em;
 }
 
-/* Ã¬ÂÂ¼ÃªÂ¸Â°Ã¬ÂÂ¥ Ã¬ÂÂ¬Ã¬Â§Â: Ã¬ÂÂ«Ã¬ÂÂ/Ã¬Â¢ÂÃ¬ÂÂ° Ã¬ÂÂ´Ã«ÂÂ Ã¬ÂÂÃ¬ÂÂ´ Ã¬ÂÂ¥Ã¬ÂÂÃ¬ÂÂ Ã«ÂÂ°Ã«ÂÂ¼ Ã¬ÂÂÃ«ÂÂ Ã­ÂÂ¬ÃªÂ¸Â° Ã«Â°Â°Ã¬Â¹Â */
+/* 일기장 사진: 숫자/좌우 이동 없이 장수에 따라 자동 크기 배치 */
 .diary-photo-grid-safe.count-1 {
   grid-template-columns: 1fr !important;
 }
@@ -1954,7 +1760,7 @@ textarea {
   max-height: 420px;
 }
 
-/* Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂÃ«ÂÂ¨ Ã«Â²ÂÃ­ÂÂ¼Ã¬ÂÂ´ Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ°Ã¬ÂÂÃ¬ÂÂ Ã«Â°ÂÃ¬ÂÂ¼Ã«Â¡Â Ã«Â²ÂÃ¬ÂÂ´Ã«ÂÂÃ¬Â§Â Ã¬ÂÂÃ«ÂÂÃ«Â¡Â Ã¬Â ÂÃ«Â¦Â¬ */
+/* 정보보관소 상단 버튼이 아이폰에서 밖으로 벗어나지 않도록 정리 */
 .info-nav-row {
   width: 100%;
   flex-wrap: wrap !important;
@@ -2068,7 +1874,7 @@ textarea {
   background: transparent !important;
 }
 
-/* Ã¬ÂÂ¼ÃªÂ¸Â°Ã¬ÂÂ¥ Ã¬ÂÂ¬Ã¬Â§ÂÃ¬ÂÂ Ã¬ÂÂ¥Ã¬ÂÂÃ¬ÂÂ Ã«ÂÂ°Ã«ÂÂ¼ ÃªÂ°ÂÃ¬ÂÂ¥ Ã­ÂÂ¬ÃªÂ²Â Ã«Â³Â´Ã¬ÂÂ´Ã«ÂÂÃ«Â¡Â Ã¬ÂÂÃ«ÂÂ Ã«Â°Â°Ã¬Â¹Â */
+/* 일기장 사진은 장수에 따라 가장 크게 보이도록 자동 배치 */
 .diary-photo-grid-safe.count-1 {
   grid-template-columns: 1fr !important;
 }
@@ -2094,7 +1900,7 @@ textarea {
   max-height: 220px !important;
 }
 
-/* Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂÃ«ÂÂ¨ Ã«Â²ÂÃ­ÂÂ¼ Ã­ÂÂ Ã¬Â¤Â Ã¬ÂÂ Ã¬Â§Â: Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ°Ã¬ÂÂÃ¬ÂÂÃ«ÂÂ ÃªÂ¸ÂÃ¬ÂÂÃ¬ÂÂ Ã­ÂÂ¨Ã«ÂÂ© Ã¬Â¶ÂÃ¬ÂÂ */
+/* 정보보관소 상단 버튼 한 줄 유지: 아이폰에서는 글자와 패딩 축소 */
 .info-nav-row {
   display: flex !important;
   align-items: center !important;
@@ -2122,7 +1928,7 @@ textarea {
   font-size: 15px !important;
 }
 
-/* Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂ¬Ã¬Â§ÂÃ«ÂÂ Ã¬ÂÂ¥Ã¬ÂÂÃ¬ÂÂ Ã«ÂÂ°Ã«ÂÂ¼ Ã«Â³Â´ÃªÂ¸Â° Ã¬Â¢ÂÃ¬ÂÂ Ã­ÂÂ¬ÃªÂ¸Â° Ã¬ÂÂ Ã¬Â§Â */
+/* 정보보관소 사진도 장수에 따라 보기 좋은 크기 유지 */
 .info-photo-grid-safe.count-1 .info-photo-card-safe img { max-height: 520px !important; }
 .info-photo-grid-safe.count-2 .info-photo-card-safe img { max-height: 360px !important; }
 .info-photo-grid-safe.count-3 .info-photo-card-safe img { max-height: 260px !important; }
@@ -2156,12 +1962,12 @@ textarea {
 }
 
 
-/* 2026-05-25: Ã¬ÂºÂÃ«Â¦Â°Ã«ÂÂ Ã¬ÂÂÃ«ÂÂ¨ Ã«ÂÂ Ã¬Â§ÂÃ«ÂÂ Ã¬ÂÂ¤Ã«ÂÂ Ã¬ÂÂ¼ÃªÂ¸Â°Ã¬ÂÂ¥ Ã¬ÂÂ´Ã«ÂÂ, Ã¬ÂÂ¼ÃªÂ¸Â°Ã¬ÂÂ¥ Ã¬ÂÂ¬Ã¬Â§Â ÃªÂ³ÂµÃªÂ°Â Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ */
+/* 2026-05-25: 캘린더 상단 날짜는 오늘 일기장 이동, 일기장 사진 공간 최적화 */
 .calendar-top-actions .today-circle {
   cursor: pointer;
 }
 
-/* Ã¬ÂÂ¼ÃªÂ¸Â°Ã¬ÂÂ¥ Ã¬ÂÂ¬Ã¬Â§Â Ã¬ÂÂÃ¬ÂÂ­Ã¬ÂÂ Ã¬ÂÂ¬Ã¬Â§Â Ã¬ÂÂ¥Ã¬ÂÂÃ¬ÂÂ Ã«Â§ÂÃ¬Â¶Â° ÃªÂ°ÂÃ¬ÂÂ¥ Ã­ÂÂ¬ÃªÂ²Â Ã«Â³Â´Ã¬ÂÂ´Ã«ÂÂÃ«Â¡Â Ã¬ÂÂÃ«ÂÂ Ã«Â°Â°Ã¬Â¹Â */
+/* 일기장 사진 영역은 사진 장수에 맞춰 가장 크게 보이도록 자동 배치 */
 .diary-photo-panel {
   display: flex;
   flex-direction: column;
@@ -2214,7 +2020,7 @@ textarea {
   min-height: 255px;
 }
 
-/* 3Ã¬ÂÂ¥Ã¬ÂÂ Ã¬Â²Â« Ã¬ÂÂ¬Ã¬Â§ÂÃ¬ÂÂ Ã­ÂÂ¬ÃªÂ²Â, Ã«ÂÂÃ«Â¨Â¸Ã¬Â§Â 2Ã¬ÂÂ¥Ã¬ÂÂ Ã¬ÂÂÃ«ÂÂÃ¬ÂÂ Ã«Â°Â°Ã¬Â¹ÂÃ­ÂÂÃ¬ÂÂ¬ Ã¬ÂÂ¬Ã¬Â§Â ÃªÂ³ÂµÃªÂ°ÂÃ¬ÂÂ ÃªÂ½Â Ã¬ÂÂ¬Ã¬ÂÂ© */
+/* 3장은 첫 사진을 크게, 나머지 2장은 아래에 배치하여 사진 공간을 꽉 사용 */
 .diary-photo-grid-safe.count-3 {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
@@ -2233,7 +2039,7 @@ textarea {
   min-height: 245px;
 }
 
-/* 5Ã¬ÂÂ¥ Ã¬ÂÂ´Ã¬ÂÂÃ«ÂÂ 2Ã¬ÂÂ´ ÃªÂ¸Â°Ã¬Â¤ÂÃ¬ÂÂ¼Ã«Â¡Â Ã¬ÂÂ¬Ã¬Â§ÂÃ¬ÂÂ Ã­ÂÂ¬ÃªÂ²Â Ã¬ÂÂ Ã¬Â§Â */
+/* 5장 이상도 2열 기준으로 사진을 크게 유지 */
 .diary-photo-grid-safe:not(.count-1):not(.count-2):not(.count-3):not(.count-4) {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
@@ -2423,7 +2229,7 @@ textarea {
 }
 
 
-/* 2026-05-25: Ã¬ÂÂÃ«ÂÂ Ã«ÂÂÃ¬ÂÂ´ + Ã¬ÂÂ¬Ã¬Â§Â Ã¬Â ÂÃ¬Â²Â´ Ã«Â³Â´ÃªÂ¸Â° Ã¬Â¤ÂÃ¬ÂÂ¬ Ã«Â³Â´Ã¬ÂÂ */
+/* 2026-05-25: 자동 높이 + 사진 전체 보기 중심 보완 */
 .diary-full-textarea {
   min-height: 180px !important;
   height: auto;
@@ -2465,7 +2271,7 @@ textarea {
   max-height: 520px !important;
 }
 
-/* Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂ¬Ã¬Â§ÂÃ¬Â²Â©Ã­ÂÂ Ã«Â³Â´ÃªÂ¸Â°: Ã¬Â¹Â´Ã«ÂÂ Ã­ÂÂÃ«ÂÂÃ«Â¦Â¬ Ã¬Â ÂÃªÂ±Â°, Ã¬ÂÂ¬Ã«Â°Â± Ã¬ÂµÂÃ¬ÂÂÃ­ÂÂ, Ã­ÂÂ° Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â */
+/* 정보보관소 사진첩형 보기: 카드 테두리 제거, 여백 최소화, 큰 이미지 */
 .info-photo-grid-safe {
   gap: 6px !important;
   margin-top: 10px !important;
@@ -2530,7 +2336,7 @@ textarea {
 }
 
 
-/* 2026-05-25: Ã¬Â£Â¼Ã¬ÂÂ Ã¬Â ÂÃ«Â³Â´ Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂÃ«Â Â¥Ã¬Â¹Â¸ Ã¬ÂÂÃ«ÂÂ Ã«ÂÂÃ¬ÂÂ´ + Ã¬ÂÂ¬Ã¬Â§Â Ã¬ÂÂÃ¬ÂÂ­ Ã¬ÂÂÃ¬ÂÂ° Ã«ÂÂÃ¬ÂÂ´ */
+/* 2026-05-25: 주요 정보 보관소 입력칸 자동 높이 + 사진 영역 자연 높이 */
 .info-main-textarea {
   width: 100%;
   min-height: 180px !important;
@@ -2723,7 +2529,7 @@ textarea {
 }
 
 
-/* 2026-05-25: Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂ¬Ã¬Â§Â Ã«Â©ÂÃ«ÂªÂ¨Ã«ÂÂ ÃªÂ¸Â°Ã«Â³Â¸ Ã­ÂÂ¬ÃªÂ¸Â° Ã¬ÂÂ Ã¬Â§Â, Ã¬ÂÂ Ã­ÂÂ Ã¬ÂÂ Ã¬Â ÂÃ¬Â²Â´ Ã«ÂÂ´Ã¬ÂÂ© Ã­ÂÂÃ¬ÂÂ */
+/* 2026-05-25: 정보보관소 사진 메모는 기본 크기 유지, 선택 시 전체 내용 표시 */
 .info-photo-note-safe {
   min-height: 74px !important;
   max-height: 74px !important;
@@ -2750,7 +2556,7 @@ textarea {
 }
 
 
-/* 2026-05-25: Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã¬ÂÂ¬Ã¬Â§Â Ã«Â©ÂÃ«ÂªÂ¨ ÃªÂ¸Â°Ã«Â³Â¸ Ã«Â³Â´ÃªÂ¸Â°Ã¬ÂÂÃ¬ÂÂÃ«ÂÂ Ã­ÂÂ­Ã¬ÂÂ Ã«Â©ÂÃ«ÂªÂ¨ Ã¬Â²Â« Ã¬Â¤ÂÃ«Â¶ÂÃ­ÂÂ° Ã«Â³Â´Ã¬ÂÂ´Ã«ÂÂÃ«Â¡Â ÃªÂ³Â Ã¬Â Â */
+/* 2026-05-25: 정보보관소 사진 메모 기본 보기에서는 항상 메모 첫 줄부터 보이도록 고정 */
 .info-photo-note-safe {
   line-height: 1.45 !important;
   white-space: pre-wrap !important;
@@ -3004,10 +2810,8 @@ textarea {
 
 .calendar-mark-c { background: #914141; color: #fff; }
 .calendar-mark-a { background: #2f80ed; color: #fff; }
-.calendar-mark-dang { background: #e67e22; color: #fff; }
 .calendar-mark-night { background: #f2c94c; color: #2b2412; }
 .calendar-mark-union { background: #f2a7c8; color: #402030; }
-.calendar-mark-rest { background: #e53935; color: #fff; }
 
 .mark-date-page {
   max-width: 760px;
@@ -3016,7 +2820,7 @@ textarea {
 
 .mark-type-options {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 9px;
   margin-bottom: 12px;
 }
@@ -3037,37 +2841,8 @@ textarea {
 
 .mark-type-c { background: #914141; color: #fff; }
 .mark-type-a { background: #2f80ed; color: #fff; }
-.mark-type-dang { background: #e67e22; color: #fff; }
 .mark-type-night { background: #f2c94c; color: #2b2412; }
 .mark-type-union { background: #f2a7c8; color: #402030; }
-.mark-type-rest { background: #e53935; color: #fff; }
-.mark-type-thumb { background: #1e3a5f; color: #fff; font-size: 20px; }
-
-.work-schedule-import-box {
-  margin: 12px 0 16px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(56, 189, 248, 0.28);
-  background: rgba(14, 165, 233, 0.08);
-}
-
-.work-schedule-import-box strong {
-  display: block;
-  color: #e0f2fe;
-  font-size: 14px;
-}
-
-.work-schedule-import-label {
-  display: inline-flex !important;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.work-schedule-import-label input[type="file"] {
-  max-width: 220px;
-  font-size: 12px;
-}
 
 .mark-plus-option {
   display: flex;
@@ -4198,7 +3973,7 @@ textarea {
   margin-bottom: 12px !important;
 }
 
-/* [Ã¢ÂÂ Ã¬ÂÂ´Ã¬Â ÂÃ¬ÂÂ¼]                         [Ã«ÂÂ¤Ã¬ÂÂÃ¬ÂÂ¼ Ã¢ÂÂ] */
+/* [← 이전일]                         [다음일 →] */
 .diary-date-nav-row {
   width: 100% !important;
   display: flex !important;
@@ -4213,7 +3988,7 @@ textarea {
   flex: 0 0 auto !important;
 }
 
-/* 2026. 05. 26 (Ã­ÂÂ) [Ã¬ÂºÂÃ«Â¦Â°Ã«ÂÂ] [Ã¬Â ÂÃ«Â³Â´ Ã¬ÂÂ´Ã«ÂÂ] Ã­ÂÂ Ã­ÂÂ */
+/* 2026. 05. 26 (화) [캘린더] [정보 이동] 한 행 */
 .diary-title-nav-row {
   width: 100% !important;
   display: grid !important;
@@ -4247,7 +4022,7 @@ textarea {
   flex: 0 0 auto !important;
 }
 
-/* Ã«ÂÂ Ã¬ÂÂ¨ Ã¢ÂÂ Ã¬ÂÂ¼Ã¬Â Â Ã¢ÂÂ Ã¬ÂÂ¬Ã¬Â§ÂÃ«Â²ÂÃ­ÂÂ¼ Ã¢ÂÂ Ã«Â³Â¸Ã«Â¬Â¸ Ã¢ÂÂ Ã¬ÂÂ¬Ã¬Â§Â Ã¢ÂÂ Ã¬ÂÂÃ¬ÂÂ± */
+/* 날씨 → 일정 → 사진버튼 → 본문 → 사진 → 음성 */
 .diary-top-row {
   display: flex !important;
   flex-direction: column !important;
@@ -4372,7 +4147,7 @@ textarea {
   }
 }
 
-/* Ã¬ÂÂÃ¬Â£Â¼ Ã¬Â¢ÂÃ¬ÂÂ Ã­ÂÂÃ«Â©Â´Ã¬ÂÂÃ¬ÂÂÃ«ÂÂ Ã¬Â ÂÃ«ÂªÂ© Ã¬Â¤ÂÃ«Â§Â Ã¬ÂÂÃ¬Â ÂÃ­ÂÂÃªÂ²Â 2Ã¬Â¤Â Ã­ÂÂÃ¬ÂÂ© */
+/* 아주 좁은 화면에서는 제목 줄만 안전하게 2줄 허용 */
 @media (max-width: 360px) {
   .diary-title-nav-row {
     grid-template-columns: 1fr !important;
@@ -4396,7 +4171,7 @@ textarea {
   margin-bottom: 10px !important;
 }
 
-/* 1Ã­ÂÂ: Ã¬ÂÂ´Ã¬Â ÂÃ¬ÂÂ¼ / Ã«ÂÂ Ã¬Â§Â+Ã¬ÂÂÃ¬ÂÂ¼ / Ã«ÂÂ¤Ã¬ÂÂÃ¬ÂÂ¼ */
+/* 1행: 이전일 / 날짜+요일 / 다음일 */
 .info-date-nav-one-line {
   width: 100% !important;
   display: grid !important;
@@ -4417,7 +4192,7 @@ textarea {
   text-overflow: clip !important;
 }
 
-/* 2Ã­ÂÂ: Ã¬Â£Â¼Ã¬ÂÂÃ¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ / Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã«Â¶ÂÃ¬ÂÂ¬Ã«ÂÂ£ÃªÂ¸Â° / Ã¬ÂÂÃªÂ°Â Ã¬ÂºÂÃ«Â¦Â°Ã«ÂÂ */
+/* 2행: 주요정보보관소 / 이미지 붙여넣기 / 월간 캘린더 */
 .info-title-one-line {
   width: 100% !important;
   display: grid !important;
@@ -4448,7 +4223,7 @@ textarea {
   white-space: nowrap !important;
 }
 
-/* 3Ã­ÂÂ: 26 / Ã¬ÂÂ¼ÃªÂ¸Â° / Ã¬ÂÂ¬Ã¬Â§Â ÃªÂ°ÂÃ¬Â Â¸Ã¬ÂÂ¤ÃªÂ¸Â° / Ã¬ÂÂ¹ÃÂ·Ã¬ÂºÂ¡Ã¬Â²Â Ã«Â¶ÂÃ¬ÂÂ¬Ã«ÂÂ£ÃªÂ¸Â° */
+/* 3행: 26 / 일기 / 사진 가져오기 / 웹·캡처 붙여넣기 */
 .info-action-one-line {
   width: 100% !important;
   display: grid !important;
@@ -4486,7 +4261,7 @@ textarea {
   margin-bottom: 8px !important;
 }
 
-/* Ã¬ÂÂ¬Ã¬Â§Â 2Ã¬ÂÂ´ ÃªÂ³Â Ã¬Â Â */
+/* 사진 2열 고정 */
 .info-photo-grid-safe {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -4513,7 +4288,7 @@ textarea {
   display: block !important;
 }
 
-/* Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ° Ã¬ÂÂÃ¬Â¶Â */
+/* 아이폰 압축 */
 @media (max-width: 820px) {
   .info-head-one-line {
     gap: 7px !important;
@@ -4575,7 +4350,7 @@ textarea {
   }
 }
 
-/* Ã¬ÂÂÃ¬Â£Â¼ Ã¬Â¢ÂÃ¬ÂÂ Ã­ÂÂÃ«Â©Â´ Ã¬ÂÂÃ¬Â ÂÃ¬ÂÂ¥Ã¬Â¹Â */
+/* 아주 좁은 화면 안전장치 */
 @media (max-width: 370px) {
   .info-title-one-line {
     grid-template-columns: 1fr auto !important;
@@ -4728,8 +4503,6 @@ textarea {
   flex-direction: column !important;
   gap: 7px !important;
   width: 100% !important;
-  position: relative !important;
-  z-index: 1 !important;
 }
 
 .diary-photo-row-primary,
@@ -4746,41 +4519,6 @@ textarea {
   justify-content: center !important;
   text-align: center !important;
   white-space: nowrap !important;
-}
-
-.diary-photo-file-label {
-  position: relative !important;
-  overflow: hidden !important;
-  isolation: isolate !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  cursor: pointer !important;
-}
-
-.diary-photo-file-label input[type="file"] {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  max-width: 100% !important;
-  max-height: 100% !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  opacity: 0 !important;
-  cursor: pointer !important;
-  font-size: 16px !important;
-  display: block !important;
-  overflow: hidden !important;
-  z-index: 1 !important;
-}
-
-.diary-photo-file-label input[type="file"]::-webkit-file-upload-button {
-  width: 100% !important;
-  height: 100% !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 0 !important;
-  cursor: pointer !important;
 }
 
 @media (max-width: 820px) {
@@ -5178,7 +4916,7 @@ body {
   }
 
   body.ios-keyboard-editing::before {
-    content: "Ã¬ÂÂÃ«Â Â¥ Ã­ÂÂ¸Ã¬Â§Â Ã¬Â¤Â";
+    content: "입력 편집 중";
     position: fixed;
     z-index: 9998;
     left: 14px;
@@ -5425,10 +5163,10 @@ body {
 }
 
 /* ==========================================
-   Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ ÃªÂ°ÂÃ­ÂÂ¸: Ã¬ÂÂ¸Ã¬ÂÂ¤Ã­ÂÂ Ã¬Â£Â¼Ã¬ÂÂ Ã¬Â ÂÃ«Â³Â´ & Ã­ÂÂ¬Ã­ÂÂ Ã«Â¶Â
+   정보보관소 개편: 인스타 주요 정보 & 포토북
    ========================================== */
 
-/* Ã­ÂÂÃ¬ÂÂ Ã­ÂÂ­ Ã¬Â ÂÃ­ÂÂ */
+/* 하위 탭 전환 */
 .info-subview-tabs {
   display: flex;
   width: 100%;
@@ -5463,7 +5201,7 @@ body {
   border-radius: 6px 6px 0 0;
 }
 
-/* Ã«Â¡ÂÃ«ÂÂ© Ã¬ÂÂ¤Ã«Â²ÂÃ«Â ÂÃ¬ÂÂ´ */
+/* 로딩 오버레이 */
 .insta-loading-overlay {
   position: absolute;
   top: 0;
@@ -5494,7 +5232,7 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* API Ã­ÂÂ¤ Ã­ÂÂÃ«ÂÂ¬ */
+/* API 키 판넬 */
 .api-key-panel {
   display: flex;
   align-items: center;
@@ -5545,7 +5283,7 @@ body {
   color: #ff6363;
 }
 
-/* Ã¬ÂÂÃ«Â Â¥ Ã¬Â¹Â´Ã«ÂÂ */
+/* 입력 카드 */
 .insta-input-card {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -5565,7 +5303,7 @@ body {
   padding-left: 8px;
 }
 
-/* Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã«ÂÂÃ«ÂÂ/Ã«Â¶ÂÃ¬ÂÂ¬Ã«ÂÂ£ÃªÂ¸Â° Ã¬ÂÂÃ¬ÂÂ­ */
+/* 이미지 드랍/붙여넣기 영역 */
 .insta-paste-zone {
   min-height: 120px;
   border: 2.5px dashed rgba(255, 255, 255, 0.18);
@@ -5655,7 +5393,7 @@ body {
   background: #ff2d2d;
 }
 
-/* OCR Ã¬ÂÂ¸Ã«ÂÂÃ¬Â¼ÂÃ¬ÂÂ´Ã­ÂÂ° */
+/* OCR 인디케이터 */
 .ocr-result-indicator {
   background: rgba(98, 177, 155, 0.08);
   border: 1px solid rgba(98, 177, 155, 0.25);
@@ -5675,7 +5413,7 @@ body {
   margin-right: 6px;
 }
 
-/* Ã¬ÂÂÃ«Â Â¥ Ã­ÂÂÃ«ÂÂ */
+/* 입력 필드 */
 .input-group {
   margin-bottom: 15px;
   display: flex;
@@ -5725,7 +5463,7 @@ body {
   color: #fff;
 }
 
-/* Ã¬Â¹Â´Ã­ÂÂÃªÂ³Â Ã«Â¦Â¬ Ã¬ÂÂ Ã­ÂÂ Ã¬ÂÂÃ¬ÂÂ½ Ã«Â²ÂÃ­ÂÂ¼ */
+/* 카테고리 선택 알약 버튼 */
 .category-selection {
   margin-bottom: 18px;
 }
@@ -5759,7 +5497,7 @@ body {
   font-weight: 800;
 }
 
-/* Ã­ÂÂ¤Ã¬ÂÂÃ«ÂÂ Ã«Â°Â Ã«Â¯Â¸Ã«Â¦Â¬Ã«Â³Â´ÃªÂ¸Â° Ã¬ÂÂ´ */
+/* 키워드 및 미리보기 열 */
 .meta-row {
   display: flex;
   flex-wrap: wrap;
@@ -5811,7 +5549,7 @@ body {
   color: #ffd04b;
 }
 
-/* Ã­ÂÂ¼ Ã¬ÂÂ¡Ã¬ÂÂ */
+/* 폼 액션 */
 .form-actions {
   display: flex;
   justify-content: flex-end;
@@ -5829,7 +5567,7 @@ body {
   color: #fff !important;
 }
 
-/* Ã¬ÂÂ¸Ã¬ÂÂ¤Ã­ÂÂ Ã¬Â¹Â´Ã«ÂÂ Ã¬ÂÂ¹Ã¬ÂÂ */
+/* 인스타 카드 섹션 */
 .insta-cards-section, .photobook-cards-section {
   margin-top: 30px;
 }
@@ -5850,14 +5588,14 @@ body {
   border-radius: 8px;
 }
 
-/* Ã¬Â¹Â´Ã«ÂÂ ÃªÂ·Â¸Ã«Â¦Â¬Ã«ÂÂ */
+/* 카드 그리드 */
 .insta-cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
 }
 
-/* Ã¬ÂÂ¸Ã¬ÂÂ¤Ã­ÂÂ Ã¬Â¹Â´Ã«ÂÂ Ã¬ÂÂ¤Ã­ÂÂÃ¬ÂÂ¼ */
+/* 인스타 카드 스타일 */
 .insta-card {
   background: rgba(255, 255, 255, 0.04);
   border: 1.5px solid rgba(255, 255, 255, 0.08);
@@ -5898,22 +5636,22 @@ body {
   color: #fff;
 }
 
-/* Ã¬Â¹Â´Ã­ÂÂÃªÂ³Â Ã«Â¦Â¬ Ã­ÂÂÃªÂ·Â¸ Ã¬ÂÂÃ¬ÂÂ ÃªÂµÂ¬Ã«Â¶Â */
-.category-tag[data-cat="Ã¬Â ÂÃ¬Â¹Â"] { background: #ff4d4d; color: #fff; }
-.category-tag[data-cat="ÃªÂ²Â½Ã¬Â Â"] { background: #ffd04b; color: #000; }
-.category-tag[data-cat="Ã¬ÂÂ¬Ã­ÂÂ"] { background: #3399ff; color: #fff; }
-.category-tag[data-cat="Ã¬ÂÂ°Ã¬ÂÂ"] { background: #a862ff; color: #fff; }
-.category-tag[data-cat="ÃªÂ¸Â°Ã¬ÂÂ "] { background: #26e6a4; color: #000; }
-.category-tag[data-cat="ÃªÂµÂ­Ã¬Â Â"] { background: #ff9f40; color: #fff; }
-.category-tag[data-cat="Ã­ÂÂÃ¬Â Â"] { background: #5bc0de; color: #fff; }
-.category-tag[data-cat="ÃªÂµÂÃ¬ÂÂ¡"] { background: #5cb85c; color: #fff; }
-.category-tag[data-cat="Ã«Â¬Â¸Ã­ÂÂ"] { background: #e05bbf; color: #fff; }
-.category-tag[data-cat="Ã¬ÂÂÃ¬ÂÂ "] { background: #f0ad4e; color: #fff; }
-.category-tag[data-cat="ÃªÂ³Â¼Ã­ÂÂ"] { background: #777777; color: #fff; }
-.category-tag[data-cat="Ã¬ÂÂ¸ÃªÂµÂ"] { background: #4b0082; color: #fff; }
-.category-tag[data-cat="ÃªÂµÂ­Ã«Â°Â©"] { background: #556b2f; color: #fff; }
-.category-tag[data-cat="Ã¬ÂÂÃ«Â³Â´"] { background: #2f4f4f; color: #fff; }
-.category-tag[data-cat="ÃªÂ¸Â°Ã­ÂÂ"] { background: #9fa6b2; color: #fff; }
+/* 카테고리 태그 색상 구분 */
+.category-tag[data-cat="정치"] { background: #ff4d4d; color: #fff; }
+.category-tag[data-cat="경제"] { background: #ffd04b; color: #000; }
+.category-tag[data-cat="사회"] { background: #3399ff; color: #fff; }
+.category-tag[data-cat="산업"] { background: #a862ff; color: #fff; }
+.category-tag[data-cat="기술"] { background: #26e6a4; color: #000; }
+.category-tag[data-cat="국제"] { background: #ff9f40; color: #fff; }
+.category-tag[data-cat="행정"] { background: #5bc0de; color: #fff; }
+.category-tag[data-cat="교육"] { background: #5cb85c; color: #fff; }
+.category-tag[data-cat="문화"] { background: #e05bbf; color: #fff; }
+.category-tag[data-cat="예술"] { background: #f0ad4e; color: #fff; }
+.category-tag[data-cat="과학"] { background: #777777; color: #fff; }
+.category-tag[data-cat="외교"] { background: #4b0082; color: #fff; }
+.category-tag[data-cat="국방"] { background: #556b2f; color: #fff; }
+.category-tag[data-cat="안보"] { background: #2f4f4f; color: #fff; }
+.category-tag[data-cat="기타"] { background: #9fa6b2; color: #fff; }
 
 .card-image-wrapper {
   max-height: 200px;
@@ -5966,7 +5704,7 @@ body {
   white-space: pre-wrap;
 }
 
-/* Ã­ÂÂ©Ã­ÂÂ¸Ã¬Â²Â´Ã­ÂÂ¬ Ã«Â¦Â¬Ã­ÂÂ¬Ã­ÂÂ¸ Ã«Â°ÂÃ¬ÂÂ¤ */
+/* 팩트체크 리포트 박스 */
 .fact-check-box {
   background: rgba(0, 112, 243, 0.05);
   border-left: 3.5px solid #0070f3;
@@ -6008,7 +5746,7 @@ body {
   color: #fff;
 }
 
-/* Ã¬Â¹Â´Ã«ÂÂ Ã¬ÂÂ¡Ã¬ÂÂ Ã«Â²ÂÃ­ÂÂ¼ */
+/* 카드 액션 버튼 */
 .card-actions {
   display: flex;
   border-top: 1.5px solid rgba(255, 255, 255, 0.05);
@@ -6056,7 +5794,7 @@ body {
 }
 
 /* ==========================================
-   Ã­ÂÂ¬Ã­ÂÂ Ã«Â¶Â Ã«Â·Â° Ã«ÂÂÃ¬ÂÂÃ¬ÂÂ¸
+   포토북 뷰 디자인
    ========================================== */
 .photobook-grid {
   display: grid;
@@ -6125,7 +5863,7 @@ body {
   background: rgba(0,0,0,0.12);
 }
 
-/* Ã¬ÂÂ¸Ã¬ÂÂ Ã¬Â ÂÃ¬ÂÂ¸ Ã¬ÂÂÃ¬ÂÂ­ */
+/* 인쇄 제외 영역 */
 @media print {
   .no-print {
     display: none !important;
@@ -6133,7 +5871,7 @@ body {
 }
 
 /* ==========================================
-   Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ 3Ã«ÂÂ¨ Ã«Â ÂÃ¬ÂÂ´Ã¬ÂÂÃ¬ÂÂ ÃªÂ°ÂÃ­ÂÂ¸
+   정보보관소 3단 레이아웃 개편
    ========================================== */
 .info-layout-3col {
   display: grid;
@@ -6350,7 +6088,7 @@ body {
   box-sizing: border-box;
 }
 
-/* 3Ã«ÂÂ¨ Ã«Â ÂÃ¬ÂÂ´Ã¬ÂÂÃ¬ÂÂ Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ Ã«Â°ÂÃ¬ÂÂÃ­ÂÂ */
+/* 3단 레이아웃 모바일 반응형 */
 @media (max-width: 900px) {
   .info-layout-3col {
     grid-template-columns: 1fr;
@@ -6362,7 +6100,7 @@ body {
 }
 
 /* ==========================================
-   Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ 2Ã¬Â»Â¬Ã«ÂÂ¼ Ã«Â ÂÃ¬ÂÂ´Ã¬ÂÂÃ¬ÂÂ Ã«Â°Â Ã­ÂÂ¸Ã«Â²Â Ã¬Â¤Â Ã¬ÂÂ¤Ã­ÂÂÃ¬ÂÂ¼
+   정보보관소 2컬럼 레이아웃 및 호버 줌 스타일
    ========================================== */
 .info-layout-2col {
   display: grid;
@@ -6393,7 +6131,7 @@ body {
   box-sizing: border-box;
 }
 
-/* Ã¬ÂÂ¬Ã¬ÂÂ´Ã«ÂÂÃ«Â°Â Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ Ã­ÂÂ */
+/* 사이드바 아이템 행 */
 .info-sidebar-item-row {
   width: 100%;
   display: flex;
@@ -6409,7 +6147,7 @@ body {
   text-align: left;
   box-sizing: border-box;
   color: #fff;
-  position: relative; /* Ã­ÂÂ¸Ã«Â²Â Ã¬Â¤Â Ã¬ÂÂÃ¬Â¹Â ÃªÂ¸Â°Ã¬Â¤Â */
+  position: relative; /* 호버 줌 위치 기준 */
 }
 
 .info-sidebar-item-row:hover {
@@ -6424,12 +6162,12 @@ body {
   font-weight: bold;
 }
 
-/* Ã¬ÂÂ¸Ã«ÂÂ¤Ã¬ÂÂ¼ */
+/* 썸네일 */
 .info-sidebar-thumb {
   width: 48px;
   height: 48px;
   border-radius: 6px;
-  overflow: visible; /* Ã­ÂÂ¸Ã«Â²Â Ã¬Â¤Â Ã­ÂÂÃ¬ÂÂÃ¬ÂÂ´ Ã«Â°ÂÃ¬ÂÂ¼Ã«Â¡Â Ã­ÂÂÃ¬ÂÂ´Ã«ÂÂÃ¬ÂÂÃ¬ÂÂ¼ Ã­ÂÂÃ«Â¯ÂÃ«Â¡Â visible */
+  overflow: visible; /* 호버 줌 팝업이 밖으로 튀어나와야 하므로 visible */
   background: rgba(0, 0, 0, 0.2);
   display: flex;
   align-items: center;
@@ -6450,7 +6188,7 @@ body {
   font-size: 20px;
 }
 
-/* Ã«Â©ÂÃ­ÂÂ Ã¬Â ÂÃ«Â³Â´ */
+/* 메타 정보 */
 .info-sidebar-meta {
   flex: 1;
   display: flex;
@@ -6479,12 +6217,12 @@ body {
   display: block;
 }
 
-/* Ã­ÂÂ¸Ã«Â²Â Ã¬Â¤Â Ã­ÂÂÃ«Â¦Â¬Ã«Â·Â° Ã¬ÂÂ¤Ã­ÂÂÃ¬ÂÂ¼ */
+/* 호버 줌 프리뷰 스타일 */
 .info-sidebar-hover-zoom {
   display: none;
   position: absolute;
   top: 50%;
-  right: 60px; /* Ã¬ÂÂ¸Ã«ÂÂ¤Ã¬ÂÂ¼ ÃªÂ¸Â°Ã¬Â¤Â Ã¬ÂÂ¼Ã¬ÂªÂ½ Ã«Â°Â©Ã­ÂÂ¥Ã¬ÂÂ¼Ã«Â¡Â Ã­ÂÂÃ¬ÂÂ */
+  right: 60px; /* 썸네일 기준 왼쪽 방향으로 팝업 */
   transform: translateY(-50%) scale(0.95);
   width: 220px;
   height: 220px;
@@ -6499,14 +6237,14 @@ body {
   transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Ã­ÂÂ¸Ã«Â²Â Ã¬ÂÂ Ã­ÂÂÃ¬ÂÂ Ã«ÂÂÃ¬ÂÂ°ÃªÂ¸Â° */
+/* 호버 시 팝업 띄우기 */
 .info-sidebar-item-row:hover .info-sidebar-hover-zoom {
   display: block;
   opacity: 1;
   transform: translateY(-50%) scale(1);
 }
 
-/* 2Ã¬Â»Â¬Ã«ÂÂ¼ Ã«Â°ÂÃ¬ÂÂÃ­ÂÂ Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ */
+/* 2컬럼 반응형 모바일 */
 @media (max-width: 900px) {
   .info-box {
     width: 100% !important;
@@ -6546,18 +6284,18 @@ body {
     padding: 10px !important;
   }
 
-  /* Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ Ã­ÂÂ°Ã¬Â¹Â Ã­ÂÂÃªÂ²Â½Ã¬ÂÂÃ¬ÂÂÃ«ÂÂ Ã¬ÂÂ¤Ã«ÂÂÃ¬ÂÂÃ­ÂÂ  Ã¬ÂÂ Ã¬ÂÂÃ«ÂÂ Ã­ÂÂ¸Ã«Â²Â Ã¬Â¤ÂÃ¬ÂÂ Ã¬ÂÂÃ¬Â ÂÃ­ÂÂ Ã«Â¹ÂÃ­ÂÂÃ¬ÂÂ±Ã­ÂÂ */
+  /* 모바일 터치 환경에서는 오동작할 수 있는 호버 줌을 완전히 비활성화 */
   .info-sidebar-hover-zoom {
     display: none !important;
   }
 
-  /* Ã¬Â¹Â´Ã­ÂÂÃªÂ³Â Ã«Â¦Â¬ Ã¬ÂÂÃ¬ÂÂ½ Ã«Â²ÂÃ­ÂÂ¼ Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ */
+  /* 카테고리 알약 버튼 모바일 최적화 */
   .category-pill {
     padding: 4px 8px !important;
     font-size: 11px !important;
   }
 
-  /* Ã­ÂÂ¤Ã«ÂÂ Ã¬Â ÂÃ«Â Â¬ Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ */
+  /* 헤더 정렬 모바일 최적화 */
   .info-head-one-line {
     flex-direction: column !important;
     align-items: stretch !important;
@@ -6576,7 +6314,7 @@ body {
     margin-top: 5px !important;
   }
 
-  /* Ã¬ÂÂ¸Ã¬ÂÂ¤Ã­ÂÂ/Ã­ÂÂ¬Ã­ÂÂ Ã«Â¶Â Ã­ÂÂ­ Ã«Â²ÂÃ­ÂÂ¼ Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ */
+  /* 인스타/포토북 탭 버튼 최적화 */
   .info-subview-tabs {
     flex-direction: column !important;
     width: 100% !important;
@@ -6589,7 +6327,7 @@ body {
     text-align: center !important;
   }
 
-  /* Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã«Â°Â Ã­ÂÂ¼ Ã­ÂÂÃ«ÂÂ Ã­ÂÂ¬ÃªÂ¸Â° Ã¬Â ÂÃ­ÂÂ */
+  /* 이미지 및 폼 필드 크기 제한 */
   .info-detail-view {
     width: 100% !important;
     max-width: 100% !important;
@@ -6667,14 +6405,14 @@ body {
 }
 
 /* ==========================================
-   Ã­ÂÂ¬Ã­ÂÂ Ã¬ÂÂ¨Ã«Â²Â Ã­ÂÂÃ«Â¦Â°Ã­ÂÂ¸ Ã«Â°Â Ã¬ÂÂ¸Ã¬ÂÂ Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ (PDF Ã¬Â ÂÃ¬ÂÂ¥)
+   포토앨범 프린트 및 인쇄 최적화 (PDF 저장)
    ========================================== */
 @media print {
-  /* ÃªÂ¸Â°Ã«Â³Â¸Ã¬Â ÂÃ¬ÂÂ¼Ã«Â¡Â Ã«ÂªÂ¨Ã«ÂÂ  Ã¬ÂÂ± Ã«Â ÂÃ¬ÂÂ´Ã¬ÂÂÃ¬ÂÂ Ã¬ÂÂÃ¬ÂÂÃ«Â¥Â¼ Ã¬ÂÂ¨ÃªÂ¹ÂÃ«ÂÂÃ«ÂÂ¤ */
+  /* 기본적으로 모든 앱 레이아웃 요소를 숨깁니다 */
   body * {
     visibility: hidden !important;
   }
-  /* Ã­ÂÂ¬Ã­ÂÂ Ã¬ÂÂ¨Ã«Â²Â Ã«ÂªÂ¨Ã«ÂÂ¬ÃªÂ³Â¼ ÃªÂ·Â¸ Ã¬ÂÂÃ¬ÂÂ Ã¬ÂÂÃ¬ÂÂÃ«Â§Â Ã­ÂÂÃ¬ÂÂÃ­ÂÂ©Ã«ÂÂÃ«ÂÂ¤ */
+  /* 포토앨범 모달과 그 자식 요소만 표시합니다 */
   .photo-album-modal-overlay,
   .photo-album-modal-overlay * {
     visibility: visible !important;
@@ -6707,19 +6445,19 @@ body {
     padding: 0 !important;
     overflow-y: visible !important;
   }
-  /* Ã¬ÂÂ¸Ã¬ÂÂ Ã¬Â ÂÃ¬ÂÂ© Ã­ÂÂ¤Ã«ÂÂ Ã­ÂÂÃ¬ÂÂ´Ã­ÂÂ Ã­ÂÂÃ¬ÂÂ */
+  /* 인쇄 전용 헤더 타이틀 표시 */
   .print-only-header {
     display: block !important;
     color: #000 !important;
   }
-  /* Ã¬ÂÂ¨Ã«Â²Â Ã«ÂÂ´Ã¬ÂÂ ÃªÂ²ÂÃ¬ÂÂ ÃªÂ²Â°ÃªÂ³Â¼ÃªÂ°Â 2/3Ã¬Â»Â¬Ã«ÂÂ¼ Ã¬Â ÂÃ«Â Â¬Ã¬ÂÂ Ã¬ÂÂ Ã¬Â§ÂÃ­ÂÂÃ«ÂÂÃ«Â¡Â Ã¬ÂÂ¤Ã¬Â Â */
+  /* 앨범 내의 검색 결과가 2/3컬럼 정렬을 유지하도록 설정 */
   .album-grid {
     display: grid !important;
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 20px !important;
     background: #fff !important;
   }
-  /* ÃªÂ°Â Ã­ÂÂ¬Ã­ÂÂ Ã¬ÂÂ¨Ã«Â²Â Ã¬Â¹Â´Ã«ÂÂÃªÂ°Â Ã­ÂÂÃ¬ÂÂ´Ã¬Â§Â Ã«ÂÂÃ¬Â¤ÂÃ¬ÂÂ Ã¬ÂÂÃ«Â¦Â¬Ã¬Â§Â Ã¬ÂÂÃ«ÂÂÃ«Â¡Â Ã¬ÂÂ¤Ã¬Â Â */
+  /* 각 포토앨범 카드가 페이지 도중에 잘리지 않도록 설정 */
   .album-photo-card {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
@@ -6743,7 +6481,7 @@ body {
     color: #333 !important;
   }
 
-  /* Ã¬ÂÂ¸Ã¬ÂÂ¤Ã­ÂÂ Ã¬Â ÂÃ«Â³Â´Ã«Â¶Â Ã«ÂªÂ¨Ã«ÂÂ¬ÃªÂ³Â¼ ÃªÂ·Â¸ Ã¬ÂÂÃ¬ÂÂ Ã¬ÂÂÃ¬ÂÂ Ã­ÂÂÃ¬ÂÂ */
+  /* 인스타 정보북 모달과 그 자식 요소 표시 */
   .info-book-modal-overlay,
   .info-book-modal-overlay * {
     visibility: visible !important;
@@ -6809,7 +6547,7 @@ body {
     color: #444 !important;
   }
 
-  /* Ã­ÂÂÃ«Â©Â´ UI Ã¬Â»Â¨Ã­ÂÂ¸Ã«Â¡Â¤Ã«ÂÂ¬ Ã¬ÂÂ¨ÃªÂ¸Â°ÃªÂ¸Â° */
+  /* 화면 UI 컨트롤러 숨기기 */
   .no-print {
     display: none !important;
   }
@@ -7045,7 +6783,7 @@ body {
   }
 }
 
-/* ÃªÂµÂ¬Ã«Â²ÂÃ¬Â Â generalInfoCardActions Ã¢ÂÂ Ã¬Â¹Â´Ã«ÂÂ Ã¬ÂÂ¸Ã«Â¶Â(inline detail) Ã¬ÂÂÃ¬ÂÂ­Ã¬ÂÂÃ«Â§Â Ã¬Â ÂÃ¬ÂÂ© */
+/* 구버전 generalInfoCardActions — 카드 외부(inline detail) 영역에만 적용 */
 .generalInfoInlineDetail .generalInfoCardActions {
   display: flex;
   justify-content: space-between;
@@ -7060,21 +6798,6 @@ body {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto 1fr auto;
-}
-
-.generalInfoDetailHeaderActions {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 8px;
-}
-
-.generalInfoDetailHeaderActions .smallActionButton {
-  width: auto !important;
-  white-space: nowrap;
-  padding: 8px 12px !important;
-  font-size: 12px !important;
-  font-weight: 800 !important;
 }
 
 .generalInfoDetailBody {
@@ -7100,118 +6823,6 @@ body {
   margin-bottom: 8px;
   color: #7dd3fc;
   font-size: 13px;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-.generalInfoFactCheckReportSection {
-  padding: 16px 14px 18px;
-  border-radius: 16px;
-  border: 1px solid rgba(56, 189, 248, 0.28);
-  background: rgba(14, 165, 233, 0.06);
-}
-
-.generalInfoFactCheckReportSection .generalInfoFactCheckReportTitle,
-.generalInfoFactCheckReportTitle {
-  display: block;
-  margin-bottom: 12px;
-  color: #e0f2fe;
-  font-size: 20px !important;
-  font-weight: 800;
-  line-height: 1.35;
-  letter-spacing: -0.02em;
-}
-
-.generalInfoRichTextEditor.generalInfoFactCheckEditor,
-.generalInfoFactCheckEditor {
-  min-height: 280px !important;
-  max-height: none !important;
-  height: auto !important;
-  overflow: visible !important;
-  font-size: 16px !important;
-  line-height: 1.85 !important;
-  color: #f1f5f9 !important;
-}
-
-/* PC: Ã«ÂÂ´Ã«Â¶Â Ã¬ÂÂ¤Ã­ÂÂ¬Ã«Â¡Â¤Ã¬ÂÂ Ã«Â³Â¸Ã«Â¬Â¸Ã¬ÂÂ´ ÃªÂ°ÂÃ«ÂÂÃ¬Â§Â Ã¬ÂÂÃ¬ÂÂ Ã¢ÂÂ Ã¬ÂÂÃ¬ÂÂ¸ Ã«ÂªÂ¨Ã«ÂÂ¬ Ã¬ÂÂ¤Ã­ÂÂ¬Ã«Â¡Â¤Ã«Â¡Â Ã¬Â ÂÃ¬Â²Â´ Ã«Â³Â´ÃªÂ³Â Ã¬ÂÂ Ã­ÂÂÃ¬ÂÂ¸ */
-@media (min-width: 761px) {
-  .generalInfoDetailModal {
-    width: min(920px, calc(100vw - 40px));
-    max-height: min(92vh, 900px);
-  }
-
-  .generalInfoRichTextEditor.generalInfoFactCheckEditor,
-  .generalInfoFactCheckEditor {
-    min-height: 320px !important;
-    max-height: none !important;
-    overflow: visible !important;
-  }
-
-  .generalInfoFactCheckPanel {
-    overflow: visible !important;
-  }
-}
-
-@media (max-width: 760px) {
-  .generalInfoRichTextEditor.generalInfoFactCheckEditor,
-  .generalInfoFactCheckEditor {
-    min-height: 260px !important;
-    max-height: 60vh !important;
-    overflow-y: auto !important;
-    scroll-padding-bottom: calc(var(--gi-mobile-format-bar-h, 0px) + 12px) !important;
-    padding-bottom: calc(18px + var(--gi-mobile-format-bar-h, 0px)) !important;
-  }
-}
-
-.generalInfoFactCheckEditor h1,
-.generalInfoFactCheckEditor h2,
-.generalInfoFactCheckEditor h3,
-.generalInfoFactCheckEditor h4,
-.generalInfoFactCheckEditor h5,
-.generalInfoFactCheckEditor h6,
-.generalInfoFactCheckEditor p,
-.generalInfoFactCheckEditor div:not(.generalInfoInlineImageBlock):not([data-gi-media]),
-.generalInfoFactCheckEditor span,
-.generalInfoFactCheckEditor li,
-.generalInfoFactCheckEditor strong,
-.generalInfoFactCheckEditor b,
-.generalInfoFactCheckEditor em,
-.generalInfoFactCheckEditor font {
-  color: #e2e8f0 !important;
-}
-
-.generalInfoFactCheckEditor img.generalInfoInlineImage,
-.generalInfoFactCheckEditor .generalInfoInlineImage,
-.generalInfoFactCheckEditor img {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  max-width: 100% !important;
-  width: 100% !important;
-  height: auto !important;
-  min-height: 120px !important;
-  max-height: min(480px, 70vh) !important;
-  object-fit: contain !important;
-  border-radius: 12px !important;
-  background: rgba(15, 23, 42, 0.85) !important;
-  -webkit-user-select: none !important;
-  user-select: none !important;
-  pointer-events: auto !important;
-  -webkit-touch-callout: default !important;
-}
-
-.generalInfoFactCheckEditor .generalInfoInlineImageBlock,
-.generalInfoRichTextEditor .generalInfoInlineImageBlock {
-  display: block !important;
-  visibility: visible !important;
-  position: relative !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  min-height: 120px !important;
-  margin: 12px 0 !important;
-  overflow: visible !important;
-  -webkit-user-select: none !important;
-  user-select: none !important;
 }
 
 .generalInfoDetailSection p,
@@ -7252,12 +6863,6 @@ body {
 
   .smallActionButton {
     width: 100%;
-  }
-
-  /* Ã¬ÂÂÃ¬ÂÂ¸Ã«Â³Â´ÃªÂ¸Â° Ã¬Â ÂÃ«ÂªÂ© Ã¬ÂÂ Ã«Â³ÂµÃ¬ÂÂ¬ Ã«Â²ÂÃ­ÂÂ¼Ã¬ÂÂ ÃªÂ°ÂÃ«Â¡Â 100% ÃªÂ¸ÂÃ¬Â§Â Ã¢ÂÂ Ã¬Â ÂÃ«ÂªÂ© Ã¬ÂÂ¸Ã«Â¡ÂÃªÂ¹Â¨Ã¬Â§Â Ã«Â°Â©Ã¬Â§Â */
-  .generalInfoSectionTitleRow .smallActionButton,
-  .generalInfoFactCheckToolbar .smallActionButton {
-    width: auto;
   }
 }
 
@@ -7488,7 +7093,7 @@ body {
 }
 
 @media print {
-  /* 1. Ã­ÂÂÃ«Â©Â´ Ã¬Â ÂÃ¬Â²Â´ ÃªÂ°ÂÃ¬Â¶ÂÃªÂ¸Â° Ã«Â°Â Ã«Â°Â°ÃªÂ²Â½Ã¬ÂÂ Ã¬Â´ÂÃªÂ¸Â°Ã­ÂÂ */
+  /* 1. 화면 전체 감추기 및 배경색 초기화 */
   html, body, .pageShell {
     background: white !important;
     color: black !important;
@@ -7499,12 +7104,12 @@ body {
     margin: 0 !important;
   }
   
-  /* 2. Ã¬ÂÂ¸Ã¬ÂÂ Ã«Â¹ÂÃ«ÂÂÃ¬ÂÂ Ã¬ÂÂ¨ÃªÂ¹Â Ã¬Â²ÂÃ«Â¦Â¬ */
+  /* 2. 인쇄 비대상 숨김 처리 */
   .reportNoPrint {
     display: none !important;
   }
   
-  /* 3. ÃªÂ³Â Ã¬Â Â Ã¬ÂÂ¤Ã«Â²ÂÃ«Â ÂÃ¬ÂÂ´ Ã­ÂÂ´Ã¬Â Â Ã«Â°Â Ã¬Â ÂÃ¬Â²Â´ Ã¬ÂÂ¸Ã¬ÂÂ Ã­ÂÂÃ«Â¦Â Ã¬Â ÂÃ¬ÂÂ© */
+  /* 3. 고정 오버레이 해제 및 전체 인쇄 흐름 적용 */
   .overlay {
     position: static !important;
     background: transparent !important;
@@ -7541,7 +7146,7 @@ body {
     border: 0 !important;
   }
   
-  /* 6. Ã¬ÂÂ¸Ã¬ÂÂ Ã¬Â ÂÃ¬ÂÂ© Ã­ÂÂ¤Ã«ÂÂ Ã¬ÂÂÃ¬ÂÂ */
+  /* 6. 인쇄 전용 헤더 서식 */
   .reportPrintHeader {
     border-bottom: 2px solid #000 !important;
     padding-bottom: 12px;
@@ -7565,7 +7170,7 @@ body {
     color: #475569 !important;
   }
   
-  /* 7. Ã«Â³Â´ÃªÂ³Â Ã¬ÂÂ Ã«ÂÂ´Ã¬ÂÂ© Ã¬ÂÂ¸Ã¬ÂÂ Ã«Â ÂÃ¬ÂÂ´Ã¬ÂÂÃ¬ÂÂ */
+  /* 7. 보고서 내용 인쇄 레이아웃 */
   .generalInfoReportPreview {
     max-height: none !important;
     overflow: visible !important;
@@ -7642,7 +7247,7 @@ body {
     color: black !important;
   }
   
-  /* Ã«Â§ÂÃ­ÂÂ¬Ã«ÂÂ¤Ã¬ÂÂ´ Ã­ÂÂÃ¬ÂÂ´Ã­ÂÂ¬ÃªÂ·Â¸Ã«ÂÂÃ­ÂÂ¼ Ã¬ÂÂ¸Ã¬ÂÂ Ã¬ÂµÂÃ¬Â ÂÃ­ÂÂ */
+  /* 마크다운 타이포그래피 인쇄 최적화 */
   .report-markdown-body h3.report-h1,
   .report-markdown-body h4.report-h2,
   .report-markdown-body h5.report-h3 {
@@ -7851,26 +7456,9 @@ body {
 
 .generalInfoActionRow {
   display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  gap: 14px;
+  gap: 10px;
   margin-top: 14px;
-  flex-wrap: nowrap;
-  width: 100%;
-}
-
-.generalInfoActionRow > button {
-  flex: 1 1 0;
-  min-width: 0;
-  width: auto;
-  min-height: 54px;
-  white-space: nowrap;
-  letter-spacing: 0.06em;
-  padding: 16px 14px !important;
-  font-size: 15px !important;
-  font-weight: 800 !important;
-  border-radius: 14px !important;
-  box-sizing: border-box;
+  flex-wrap: wrap;
 }
 
 .generalInfoEditableTextarea {
@@ -7904,14 +7492,6 @@ body {
   font-size: 12px;
 }
 
-.generalInfoFactSummaryLabelRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .generalInfoFactEditGrid select {
   width: 100%;
 }
@@ -7935,93 +7515,6 @@ body {
   color: #7dd3fc;
 }
 
-.generalInfoSectionTitleRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px 10px;
-  margin-bottom: 10px;
-}
-
-.generalInfoSectionTitleRow strong {
-  display: block;
-  flex: 1 1 160px;
-  min-width: 0;
-  margin-bottom: 0;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-  white-space: normal;
-  line-height: 1.45;
-}
-
-.generalInfoCopyAllBtn {
-  flex: 0 0 auto;
-  width: auto !important;
-  max-width: 100%;
-  padding: 6px 12px !important;
-  font-size: 12px !important;
-  font-weight: 800 !important;
-  white-space: nowrap;
-  border-radius: 999px !important;
-}
-
-.generalInfoCopyAppActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-}
-.generalInfoCopyAppActions .secondaryButton {
-  flex: 0 0 auto;
-  width: auto !important;
-  padding: 6px 10px !important;
-  font-size: 12px !important;
-  font-weight: 800 !important;
-  white-space: nowrap;
-  border-radius: 999px !important;
-}
-
-.generalInfoFactCheckPanel {
-  display: grid;
-  gap: 12px;
-  margin-top: 4px;
-}
-
-.generalInfoFactCheckToolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 10px;
-}
-
-.generalInfoFactCheckHint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #94a3b8;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-.generalInfoFactCheckStatusLabel {
-  display: grid;
-  gap: 6px;
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.generalInfoFactCheckStatusSelect {
-  min-height: 40px;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: #0f172a;
-  color: #e2e8f0;
-  padding: 8px 10px;
-}
-
 .generalInfoResultBox p {
   margin: 0;
   color: #cbd5e1;
@@ -8030,10 +7523,10 @@ body {
 }
 
 /* ==========================================
-   Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã«Â©ÂÃ«ÂªÂ¨ ÃªÂ¸Â°Ã«ÂÂ¥ Ã¬ÂÂ¤Ã­ÂÂÃ¬ÂÂ¼
+   이미지 메모 기능 스타일
    ========================================== */
 
-/* Ã«ÂÂÃ«ÂÂÃ­ÂÂÃ­ÂÂ¸ Ã«Â¯Â¸Ã«ÂÂÃ¬ÂÂ´ Ã¬Â¹Â´Ã«ÂÂ Ã¬ÂÂ¸Ã«ÂÂ¤Ã¬ÂÂ¼ Ã«ÂÂÃ­ÂÂ¼ */
+/* 드래프트 미디어 카드 썸네일 래퍼 */
 .generalInfoDraftMediaThumb {
   position: relative;
   cursor: pointer;
@@ -8067,7 +7560,7 @@ body {
   color: #e0f2fe;
 }
 
-/* Ã«Â©ÂÃ«ÂªÂ¨ Ã­ÂÂ¸Ã¬Â§Â Ã¬ÂÂÃ¬ÂÂ­ */
+/* 메모 편집 영역 */
 .generalInfoMediaMemoEdit {
   margin-top: 6px;
   display: flex;
@@ -8122,7 +7615,7 @@ body {
   font-weight: 600;
 }
 
-/* Ã¬Â ÂÃ¬ÂÂ¥Ã«ÂÂ Ã«Â©ÂÃ«ÂªÂ¨ Ã­ÂÂÃ¬ÂÂ */
+/* 저장된 메모 표시 */
 .generalInfoMediaMemoDisplay {
   margin-top: 6px;
   background: rgba(2, 6, 23, 0.5);
@@ -8169,7 +7662,7 @@ body {
   color: #f87171;
 }
 
-/* Ã­ÂÂÃ¬ÂÂ¼Ã«ÂªÂ + Ã¬ÂÂ­Ã¬Â Â */
+/* 파일명 + 삭제 */
 .generalInfoDraftMediaFooter {
   display: flex;
   align-items: center;
@@ -8187,7 +7680,7 @@ body {
   flex: 1;
 }
 
-/* Ã¬ÂÂÃ¬ÂÂ¸Ã«Â³Â´ÃªÂ¸Â° Ã«ÂªÂ¨Ã«ÂÂ¬ Ã«Â©ÂÃ«ÂªÂ¨ */
+/* 상세보기 모달 메모 */
 .generalInfoDetailMediaMemo {
   display: flex;
   align-items: flex-start;
@@ -8214,46 +7707,14 @@ body {
 }
 
 /* ==========================================
-   Card Ã¬Â»Â´Ã­ÂÂ¬Ã«ÂÂÃ­ÂÂ¸ ÃªÂ¸Â°Ã«Â³Â¸ Ã­ÂÂ¤Ã«ÂÂ Ã¢ÂÂ Ã«Â²ÂÃ­ÂÂ¸+Ã¬Â ÂÃ«ÂªÂ© Ã­ÂÂ Ã¬Â¤Â
+   Card 컴포넌트 기본 헤더 — 번호+제목 한 줄
    ========================================== */
 .cardHeader {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   margin-bottom: 14px;
-}
-
-.cardHeaderMain {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  flex: 1;
-}
-
-.cardHeaderTitleRow {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-}
-
-.cardHeaderActions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.cardHeaderActionBtn {
-  padding: 6px 10px !important;
-  font-size: 12px !important;
-  font-weight: 800 !important;
-  border-radius: 8px !important;
-  white-space: nowrap;
 }
 
 .cardHeader > div {
@@ -8296,7 +7757,7 @@ body {
 }
 
 /* ==========================================
-   Ã¬Â ÂÃ«Â³Â´Ã«Â³Â´ÃªÂ´ÂÃ¬ÂÂ Ã­ÂÂ­ Ã«Â²ÂÃ­ÂÂ¼
+   정보보관소 탭 버튼
    ========================================== */
 .ch3TabBar {
   display: flex;
@@ -8330,7 +7791,7 @@ body {
 }
 
 /* ==========================================
-   Ã¬Â ÂÃ«Â³Â´Ã¬Â ÂÃ¬ÂÂ¥Ã­ÂÂ¨ Ã¬Â¹Â´Ã«ÂÂ Ã¢ÂÂ ÃªÂ°ÂÃ«Â¡ÂÃ­ÂÂ (Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â 2/5 ÃÂ· Ã¬Â ÂÃ«ÂªÂ© 2/5 ÃÂ· Ã«Â²ÂÃ­ÂÂ¼ 1/5)
+   정보저장함 카드 — 가로형 (이미지 2/5 · 제목 2/5 · 버튼 1/5)
    ========================================== */
 .generalInfoList {
   display: flex;
@@ -8372,7 +7833,7 @@ body {
   }
 }
 
-/* Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã¬ÂÂÃ¬ÂÂ­ Ã¢ÂÂ 2/5, Ã¬Â¹Â´Ã«ÂÂ Ã¬Â ÂÃ¬Â²Â´ Ã«ÂÂÃ¬ÂÂ´Ã¬ÂÂ Ã«Â§ÂÃªÂ²Â Ã¬Â±ÂÃ¬ÂÂ */
+/* 이미지 영역 — 2/5, 카드 전체 높이에 맞게 채움 */
 .generalInfoCardThumbnail {
   width: 100%;
   height: 100%;
@@ -8395,7 +7856,7 @@ body {
   font-size: 26px;
 }
 
-/* Ã¬Â ÂÃ«ÂªÂ©/Ã«ÂÂ Ã¬Â§Â/Ã¬ÂÂÃ¬ÂÂ½ Ã¬ÂÂÃ¬ÂÂ­ Ã¢ÂÂ 2/5 */
+/* 제목/날짜/요약 영역 — 2/5 */
 .generalInfoCardContent {
   padding: 8px 10px;
   min-width: 0;
@@ -8407,22 +7868,6 @@ body {
 
 .generalInfoCardPinMark {
   margin-right: 3px;
-}
-
-.generalInfoTempBadge {
-  display: inline-flex;
-  align-items: center;
-  margin-right: 6px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  border: 1px solid rgba(250, 204, 21, 0.45);
-  background: rgba(250, 204, 21, 0.16);
-  color: #facc15;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.2;
-  vertical-align: middle;
-  white-space: nowrap;
 }
 
 .generalInfoCardContent strong {
@@ -8454,7 +7899,7 @@ body {
   line-height: 1.3;
 }
 
-/* Ã«Â²ÂÃ­ÂÂ¼ Ã¬ÂÂÃ¬ÂÂ­ Ã¢ÂÂ 1/5 */
+/* 버튼 영역 — 1/5 */
 .generalInfoCardActions {
   display: flex;
   flex-direction: column;
@@ -8520,8 +7965,8 @@ body {
 }
 
 /* ==========================================
-   Ã­ÂÂ¬Ã­ÂÂ Ã«Â¶Â Ã¬ÂÂ¸Ã«ÂÂ±Ã¬ÂÂ¤ Ã¬Â¹Â´Ã«ÂÂ Ã¢ÂÂ Ã¬ÂÂ¼Ã«Â°Â Ã¬Â ÂÃ¬ÂÂ¥Ã­ÂÂ¨ Ã¬Â ÂÃ«Â³Â´ Ã¬Â°Â½ÃªÂ³Â Ã¬ÂÂ Ã«ÂÂÃ¬ÂÂ¼Ã­ÂÂ ÃªÂ°ÂÃ«Â¡ÂÃ­ÂÂ 3Ã¬Â»Â¬Ã«ÂÂ¼
-   (Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â 2fr | Ã­ÂÂ¤Ã¬ÂÂÃ«ÂÂ/Ã«ÂÂ Ã¬Â§Â/Ã«Â¶ÂÃ«Â¥Â 2fr | Ã«Â²ÂÃ­ÂÂ¼ 1fr)
+   포토북 인덱스 카드 — 일반 저장함 정보 창고와 동일한 가로형 3컬럼
+   (이미지 2fr | 키워드/날짜/분류 2fr | 버튼 1fr)
    ========================================== */
 .pbIndexList {
   display: flex;
@@ -8557,52 +8002,7 @@ body {
   }
 }
 
-.pbPhotoExifCaption {
-  margin: 4px 0 0;
-  padding: 4px 5px;
-  font-size: 10px;
-  line-height: 1.35;
-  color: #cbd5e1;
-  text-align: center;
-  word-break: break-word;
-  max-width: 100%;
-  width: 100%;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 6px;
-}
-
-.pbPhotoExifCaption span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pbDetailExifInfo,
-.photo-album-viewer-exif {
-  margin-top: 10px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: rgba(30, 41, 59, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  color: #e2e8f0;
-  font-size: 14px;
-  line-height: 1.55;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: center;
-}
-
-.photo-album-viewer-exif {
-  margin-top: 0;
-}
-
-/* Ã¢ÂÂÃ¢ÂÂ Ã¬ÂÂ¬Ã¬Â§Â Ã¬Â»Â¬Ã«ÂÂ¼ (2fr) Ã¢ÂÂ generalInfoCardThumbnailÃªÂ³Â¼ Ã«ÂÂÃ¬ÂÂ¼ Ã¢ÂÂÃ¢ÂÂ */
+/* ── 사진 컬럼 (2fr) — generalInfoCardThumbnail과 동일 ── */
 .pbIndexCardPhoto {
   width: 100%;
   height: 100%;
@@ -8627,7 +8027,7 @@ body {
   opacity: 0.5;
 }
 
-/* Ã¢ÂÂÃ¢ÂÂ Ã¬Â ÂÃ«Â³Â´ Ã¬Â»Â¬Ã«ÂÂ¼ (2fr) Ã¢ÂÂ generalInfoCardContentÃ¬ÂÂ Ã«ÂÂÃ¬ÂÂ¼ Ã¢ÂÂÃ¢ÂÂ */
+/* ── 정보 컬럼 (2fr) — generalInfoCardContent와 동일 ── */
 .pbIndexCardInfo {
   padding: 8px 10px;
   min-width: 0;
@@ -8666,7 +8066,7 @@ body {
   line-height: 1.3;
 }
 
-/* Ã¢ÂÂÃ¢ÂÂ Ã¬ÂÂ¡Ã¬ÂÂ Ã¬Â»Â¬Ã«ÂÂ¼ (1fr) Ã¢ÂÂ generalInfoCardActionsÃ¬ÂÂ Ã«ÂÂÃ¬ÂÂ¼ Ã¢ÂÂÃ¢ÂÂ */
+/* ── 액션 컬럼 (1fr) — generalInfoCardActions와 동일 ── */
 .pbIndexCardActions {
   display: flex;
   flex-direction: column;
@@ -8730,7 +8130,7 @@ body {
   opacity: 0.82;
 }
 
-/* Ã¢ÂÂÃ¢ÂÂ Ã¬ÂÂÃ«ÂÂ¨ ÃªÂ³Â Ã¬Â Â Ã«Â²ÂÃ­ÂÂ¼ Ã¢ÂÂÃ¢ÂÂ */
+/* ── 상단 고정 버튼 ── */
 .pbIndexCardBtnPin {
   width: 100%;
   padding: 5px 4px;
@@ -8754,351 +8154,9 @@ body {
   font-weight: 700;
 }
 
-/* Ã¢ÂÂÃ¢ÂÂ Ã­ÂÂ Ã«Â°Â°Ã¬Â§Â (Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â Ã¬ÂÂ Ã¬ÂÂ¤Ã«Â²ÂÃ«Â ÂÃ¬ÂÂ´) Ã¢ÂÂÃ¢ÂÂ */
+/* ── 핀 배지 (이미지 위 오버레이) ── */
 .pbIndexCardPhoto {
   position: relative;
-}
-
-.pbIndexCardAlbumBadge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  z-index: 2;
-  background: rgba(15, 23, 42, 0.78);
-  color: #7dd3c0;
-  border: 1px solid rgba(98, 177, 155, 0.45);
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 2px 6px;
-}
-
-.pbIndexCardBtnAlbum {
-  width: 100%;
-  border: 1px solid rgba(98, 177, 155, 0.35);
-  background: rgba(98, 177, 155, 0.12);
-  color: #7dd3c0;
-  border-radius: 6px;
-  padding: 5px 6px;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.photo-album-viewer-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  background: rgba(2, 6, 23, 0.92);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-
-.photo-album-viewer-panel {
-  width: min(96vw, 1100px);
-  max-height: 94vh;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  background: rgba(15, 23, 42, 0.95);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 14px;
-  padding: 14px;
-}
-
-.photo-album-viewer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  color: #e2e8f0;
-}
-
-.photo-album-viewer-header strong {
-  display: block;
-  font-size: 16px;
-}
-
-.photo-album-viewer-header span {
-  color: #94a3b8;
-  font-size: 12px;
-}
-
-.photo-album-viewer-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.photo-album-viewer-counter {
-  color: #7dd3c0;
-  font-weight: 800;
-  font-size: 13px;
-}
-
-.photo-album-viewer-stage {
-  position: relative;
-  min-height: 55vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(2, 6, 23, 0.55);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.photo-album-viewer-image {
-  max-width: 100%;
-  max-height: 62vh;
-  object-fit: contain;
-  cursor: zoom-in;
-  border-radius: 8px;
-}
-
-.photo-album-nav-btn {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  font-size: 28px;
-  line-height: 1;
-  cursor: pointer;
-  z-index: 2;
-}
-
-.photo-album-nav-btn.left { left: 10px; }
-.photo-album-nav-btn.right { right: 10px; }
-
-.photo-album-viewer-hint {
-  margin: 0;
-  text-align: center;
-  color: #94a3b8;
-  font-size: 12px;
-}
-
-.photo-album-viewer-memo {
-  margin: 0;
-  text-align: center;
-  color: #e2e8f0;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.5;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: rgba(98, 177, 155, 0.14);
-  border: 1px solid rgba(98, 177, 155, 0.28);
-  word-break: break-word;
-}
-
-.photo-album-thumb-memo {
-  position: absolute;
-  left: 2px;
-  right: 2px;
-  bottom: 2px;
-  padding: 2px 3px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.72);
-  color: #fff;
-  font-size: 9px;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-}
-
-.pbRegImageGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  width: 100%;
-  align-items: start;
-}
-
-.pbRegImageCell {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 0;
-  width: 100%;
-  gap: 3px;
-}
-
-.pbRegImageThumb {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1;
-  height: auto;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: #0f172a;
-  flex-shrink: 0;
-}
-
-.pbRegImageThumb.is-primary {
-  border: 2px solid #eab308;
-}
-
-.pbRegImageThumb.is-editing {
-  border: 2px solid #62b19b;
-}
-
-.pbRegThumbMemoBadge {
-  position: absolute;
-  left: 2px;
-  right: 2px;
-  bottom: 2px;
-  padding: 1px 3px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.72);
-  color: #fff;
-  font-size: 9px;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: center;
-  pointer-events: none;
-}
-
-.pbRegMemoToggle {
-  margin-top: 1px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(15, 23, 42, 0.85);
-  color: #cbd5e1;
-  border-radius: 999px;
-  font-size: 10px;
-  padding: 2px 5px;
-  cursor: pointer;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.pbRegMemoEditor {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(15em, 88vw);
-  min-width: min(15em, 88vw);
-  max-width: 88vw;
-  margin-top: 0;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  z-index: 40;
-  background: rgba(15, 23, 42, 0.97);
-  border: 1px solid rgba(98, 177, 155, 0.45);
-  border-radius: 10px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
-}
-
-.pbRegMemoInput {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
-  background: rgba(2, 6, 23, 0.92);
-  border: 1px solid rgba(98, 177, 155, 0.55);
-  border-radius: 8px;
-  color: #e2e8f0;
-  padding: 8px 10px;
-  font-size: 14px;
-  line-height: 1.4;
-  outline: none;
-}
-
-.pbRegMemoInput:focus {
-  border-color: #62b19b;
-  box-shadow: 0 0 0 2px rgba(98, 177, 155, 0.2);
-}
-
-.pbRegMemoEditorActions {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-}
-
-.pbRegMemoDisplay {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
-  margin-top: 1px;
-  padding: 2px 3px;
-  border-radius: 6px;
-  background: rgba(2, 6, 23, 0.55);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  color: #e2e8f0;
-  font-size: 10px;
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  writing-mode: horizontal-tb;
-  text-align: center;
-  cursor: pointer;
-}
-
-.pbRegAddTile {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  aspect-ratio: 1;
-  height: auto;
-  border-radius: 6px;
-  border: 1px dashed rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.05);
-  cursor: pointer;
-  font-size: 11px;
-  color: #ccc;
-  justify-self: stretch;
-  box-sizing: border-box;
-}
-
-.photo-album-viewer-thumbs {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.photo-album-thumb {
-  position: relative;
-  flex: 0 0 auto;
-  width: 64px;
-  height: 64px;
-  padding: 0;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid transparent;
-  background: #1e293b;
-  cursor: pointer;
-  opacity: 0.55;
-}
-
-.photo-album-thumb.active {
-  border-color: #62b19b;
-  opacity: 1;
-}
-
-.photo-album-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
 }
 
 .pbIndexCardPinBadge {
@@ -9114,13 +8172,13 @@ body {
   pointer-events: none;
 }
 
-/* Ã¢ÂÂÃ¢ÂÂ Ã­ÂÂÃ«ÂÂ Ã¬Â¹Â´Ã«ÂÂ ÃªÂ°ÂÃ¬Â¡Â° Ã­ÂÂÃ«ÂÂÃ«Â¦Â¬ Ã¢ÂÂÃ¢ÂÂ */
+/* ── 핀된 카드 강조 테두리 ── */
 .pbIndexCardPinned {
   border-color: rgba(251, 191, 36, 0.5) !important;
   background: rgba(251, 191, 36, 0.05) !important;
 }
 
-/* Ã¢ÂÂÃ¢ÂÂ ÃªÂµÂ¬ Ã­ÂÂ´Ã«ÂÂÃ¬ÂÂ¤ Ã¢ÂÂ Ã­ÂÂÃ¬ÂÂÃ­ÂÂ¸Ã­ÂÂ Ã¢ÂÂÃ¢ÂÂ */
+/* ── 구 클래스 — 하위호환 ── */
 .pbIndexCardContent { display: none; }
 
 .generalInfoCardPinButton.pinned {
@@ -9140,7 +8198,7 @@ body {
 
   .generalInfoActionRow .primaryButton,
   .generalInfoActionRow .gradientButton {
-    width: auto;
+    width: 100%;
   }
 }
 
@@ -9255,34 +8313,15 @@ body {
   }
 
   .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    gap: 12px !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow button {
-    width: auto !important;
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    min-height: 52px !important;
-    white-space: nowrap !important;
-    letter-spacing: 0.05em !important;
-    padding: 15px 12px !important;
-    font-size: 14px !important;
-    border-radius: 14px !important;
-  }
-
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow button,
   .layoutGrid.generalInfoLayoutGrid .urlExtractButton,
   .layoutGrid.generalInfoLayoutGrid .primaryButton,
   .layoutGrid.generalInfoLayoutGrid .gradientButton {
     width: 100% !important;
-  }
-
-  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow .primaryButton,
-  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow .gradientButton,
-  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow .secondaryButton {
-    width: auto !important;
   }
 
   .layoutGrid.generalInfoLayoutGrid .generalInfoCard,
@@ -9344,51 +8383,6 @@ body {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
   }
-}
-
-.generalInfoSummaryParagraphList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.generalInfoSummaryParagraph {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(2, 6, 23, 0.35);
-}
-
-.generalInfoSummaryParagraphHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.generalInfoSummaryParagraphHead span {
-  color: #7dd3fc;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.generalInfoBodyParagraphList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.generalInfoBodyParagraph {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(2, 6, 23, 0.35);
 }
 
 .generalInfoEditableResultBox {
@@ -9693,17 +8687,11 @@ body {
   }
 
   .layoutGrid.generalInfoLayoutGrid .generalInfoActionButtons,
-  .layoutGrid.generalInfoLayoutGrid .generalInfoCardActions {
+  .layoutGrid.generalInfoLayoutGrid .generalInfoCardActions,
+  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow {
     display: flex !important;
     flex-wrap: wrap !important;
     gap: 8px !important;
-  }
-
-  .layoutGrid.generalInfoLayoutGrid .generalInfoActionRow {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    gap: 12px !important;
   }
 
   .layoutGrid.generalInfoLayoutGrid button {
@@ -10050,38 +9038,20 @@ body {
     overflow-wrap: break-word !important;
   }
 
-  .generalInfoActionButtons {
+  .generalInfoActionButtons,
+  .generalInfoActionRow {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) !important;
     width: 100% !important;
   }
 
-  .generalInfoActionRow {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    gap: 12px !important;
-    width: 100% !important;
-  }
-
-  .generalInfoActionButtons button {
+  .generalInfoActionButtons button,
+  .generalInfoActionRow button {
     width: 100% !important;
     white-space: normal !important;
   }
 
-  .generalInfoActionRow button {
-    width: auto !important;
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    min-height: 52px !important;
-    white-space: nowrap !important;
-    letter-spacing: 0.05em !important;
-    font-size: 14px !important;
-    padding: 15px 10px !important;
-    border-radius: 14px !important;
-  }
-
-  /* Ã¬Â¹Â´Ã«ÂÂ Ã«ÂÂ´ Ã«Â²ÂÃ­ÂÂ¼ Ã¬ÂÂÃ¬ÂÂ­ Ã¢ÂÂ ÃªÂ°ÂÃ«Â¡Â ÃªÂ·Â¸Ã«Â¦Â¬Ã«ÂÂ Ã¬ÂÂ Ã¬Â§Â */
+  /* 카드 내 버튼 영역 — 가로 그리드 유지 */
   .generalInfoCard .generalInfoCardActions {
     display: flex !important;
     flex-direction: column !important;
@@ -10168,10 +9138,6 @@ body {
   gap: 4px !important;
 }
 
-.generalInfoRichTextHeader .generalInfoSectionTitleRow {
-  margin-bottom: 0;
-}
-
 .generalInfoRichTextHeader strong {
   color: #bfdbfe !important;
   font-size: 13px !important;
@@ -10223,9 +9189,6 @@ body {
   white-space: pre-wrap !important;
   word-break: break-word !important;
   outline: none !important;
-  -webkit-user-select: text !important;
-  user-select: text !important;
-  cursor: text !important;
 }
 
 .generalInfoRichTextEditor:focus {
@@ -10236,6 +9199,84 @@ body {
 .generalInfoRichTextEditor:empty::before {
   content: attr(data-placeholder);
   color: #64748b;
+}
+
+/* ── insta-fact-library 방식 인라인 이미지 슬롯/삭제 ── */
+.generalInfoRichTextEditor .rich-inline-img-wrap {
+  position: relative !important;
+  display: inline-block !important;
+  max-width: 100% !important;
+  margin: 4px 4px 4px 0 !important;
+  vertical-align: middle !important;
+}
+
+.generalInfoRichTextEditor .rich-inline-img {
+  display: block !important;
+  max-width: 240px !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(148, 163, 184, 0.3) !important;
+  object-fit: contain !important;
+}
+
+.generalInfoRichTextEditor .rich-inline-img-del {
+  position: absolute !important;
+  top: -9px !important;
+  right: -9px !important;
+  width: 22px !important;
+  height: 22px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 999px !important;
+  background: #dc2626 !important;
+  color: #fff !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+}
+
+.generalInfoRichTextEditor .rich-img-slot {
+  display: inline-block !important;
+  margin: 2px 4px 2px 0 !important;
+  padding: 2px 10px !important;
+  border-radius: 999px !important;
+  border: 1px dashed rgba(56, 189, 248, 0.6) !important;
+  background: rgba(14, 165, 233, 0.1) !important;
+  color: #7dd3fc !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+}
+
+.generalInfoRichTextEditor .generalInfoInlineImageBlock {
+  position: relative !important;
+  margin: 8px 0 !important;
+}
+
+.generalInfoRichTextEditor .generalInfoInlineImageBlock img.generalInfoInlineImage {
+  display: block !important;
+  max-width: 100% !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(148, 163, 184, 0.3) !important;
+}
+
+.generalInfoRichTextEditor .generalInfoInlineImageRemove {
+  position: absolute !important;
+  top: -9px !important;
+  right: -9px !important;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 999px !important;
+  background: #dc2626 !important;
+  color: #fff !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  border: none !important;
 }
 
 .generalInfoFormattedTextView {
@@ -10250,95 +9291,6 @@ body {
   line-height: 1.75 !important;
   white-space: pre-wrap !important;
   word-break: break-word !important;
-}
-
-.generalInfoRichTextEditor img.generalInfoInlineImage,
-.generalInfoRichTextEditor .generalInfoInlineImage,
-.generalInfoFormattedTextView img.generalInfoInlineImage,
-.generalInfoFormattedTextView img,
-.generalInfoInlineImage {
-  display: block !important;
-  max-width: 100% !important;
-  width: auto !important;
-  height: auto !important;
-  margin: 12px 0 !important;
-  border-radius: 12px !important;
-  border: 1px solid rgba(56, 189, 248, 0.28) !important;
-  background: rgba(15, 23, 42, 0.65) !important;
-}
-
-.generalInfoInlineImageBlock {
-  display: block !important;
-  position: relative !important;
-  margin: 10px 0 !important;
-  max-width: 100% !important;
-}
-
-.generalInfoInlineImageRemove {
-  position: absolute !important;
-  top: 8px !important;
-  right: 8px !important;
-  width: 32px !important;
-  height: 32px !important;
-  border: none !important;
-  border-radius: 999px !important;
-  background: rgba(15, 23, 42, 0.82) !important;
-  color: #fff !important;
-  font-size: 20px !important;
-  font-weight: 700 !important;
-  line-height: 1 !important;
-  cursor: pointer !important;
-  z-index: 2 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
-}
-
-.generalInfoInlineImageRemove:active {
-  transform: scale(0.96) !important;
-}
-
-.generalInfoInlineVideo {
-  max-width: 100% !important;
-}
-
-.generalInfoFactImageManageStrip {
-  margin: 8px 0 12px !important;
-}
-
-.generalInfoFactImageManageRow {
-  display: flex !important;
-  gap: 10px !important;
-  overflow-x: auto !important;
-  -webkit-overflow-scrolling: touch !important;
-  padding: 2px 2px 8px !important;
-}
-
-.generalInfoFactImageManageCard {
-  position: relative !important;
-  flex: 0 0 auto !important;
-  width: 112px !important;
-  height: 84px !important;
-  border-radius: 12px !important;
-  overflow: hidden !important;
-  border: 1px solid rgba(148, 163, 184, 0.35) !important;
-  background: #020617 !important;
-}
-
-.generalInfoFactImageManageCard img {
-  display: block !important;
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-}
-
-.generalInfoFactImageManageCard .generalInfoInlineImageRemove {
-  top: 4px !important;
-  right: 4px !important;
-  width: 28px !important;
-  height: 28px !important;
-  font-size: 18px !important;
 }
 
 @media (max-width: 760px) {
@@ -10401,7 +9353,6 @@ body {
   gap: 10px !important;
   margin-top: 12px !important;
   position: relative !important;
-  z-index: 2 !important;
 }
 
 .generalInfoRichToolbar {
@@ -10449,9 +9400,6 @@ body {
   white-space: pre-wrap !important;
   word-break: break-word !important;
   outline: none !important;
-  -webkit-user-select: text !important;
-  user-select: text !important;
-  cursor: text !important;
 }
 
 .generalInfoRichTextEditor:focus {
@@ -10522,185 +9470,6 @@ body {
   z-index: 50 !important;
 }
 
-/* Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ°/Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼: stickyÃªÂ°Â Ã«Â³Â¸Ã«Â¬Â¸ÃÂ·Ã¬Â»Â¤Ã¬ÂÂÃ«Â¥Â¼ Ã«ÂÂ®Ã¬Â§Â Ã¬ÂÂÃ«ÂÂÃ«Â¡Â ÃªÂ³Â Ã¬Â Â Ã­ÂÂ´Ã¬Â Â */
-@media (max-width: 760px) {
-  .generalInfoRichToolbar {
-    position: relative !important;
-    top: auto !important;
-  }
-
-  .generalInfoFactDesktopToolbar {
-    display: none !important;
-  }
-
-  .generalInfoFactMobileFormatHint {
-    display: block !important;
-    margin: 6px 0 10px !important;
-    font-size: 12px !important;
-    line-height: 1.45 !important;
-    color: #94a3b8 !important;
-  }
-}
-
-.generalInfoFactMobileFormatHint {
-  display: none;
-}
-
-.generalInfoMobileFormatBubble {
-  position: fixed !important;
-  z-index: 120 !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 2px !important;
-  padding: 4px 4px !important;
-  border-radius: 14px !important;
-  border: 1px solid rgba(148, 163, 184, 0.45) !important;
-  background: rgba(255, 255, 255, 0.97) !important;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.28) !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
-  touch-action: manipulation !important;
-}
-
-/* Ã­ÂÂ¤Ã«Â³Â´Ã«ÂÂ Ã«Â°ÂÃ«Â¡Â Ã¬ÂÂ ÃªÂ³Â Ã¬Â Â Ã«ÂÂ */
-.generalInfoMobileFormatBubble.generalInfoMobileFormatDock {
-  left: 8px !important;
-  right: 8px !important;
-  width: auto !important;
-  top: auto !important;
-  border-radius: 14px 14px 0 0 !important;
-  border-bottom: none !important;
-  padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px)) !important;
-  box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.22) !important;
-}
-
-.generalInfoMobileFormatNav {
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  flex: 0 0 auto !important;
-  width: 28px !important;
-  height: 28px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: none !important;
-  border-radius: 999px !important;
-  background: rgba(148, 163, 184, 0.18) !important;
-  color: #334155 !important;
-  font-size: 18px !important;
-  font-weight: 700 !important;
-  line-height: 1 !important;
-  cursor: pointer !important;
-}
-
-.generalInfoMobileFormatNav:disabled {
-  opacity: 0.28 !important;
-  cursor: default !important;
-}
-
-.generalInfoMobileFormatStrip {
-  display: flex !important;
-  align-items: center !important;
-  gap: 4px !important;
-  min-width: 0 !important;
-  flex: 1 1 auto !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-  -webkit-overflow-scrolling: touch !important;
-  scrollbar-width: none !important;
-  overscroll-behavior-x: contain !important;
-  padding: 2px 2px !important;
-}
-
-.generalInfoMobileFormatStrip::-webkit-scrollbar {
-  display: none !important;
-}
-
-.generalInfoMobileFormatBtn,
-.generalInfoMobileFormatNum,
-.generalInfoMobileFormatClear {
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  flex: 0 0 auto !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  min-height: 32px !important;
-  min-width: 32px !important;
-  margin: 0 !important;
-  padding: 0 6px !important;
-  border: none !important;
-  border-radius: 8px !important;
-  background: transparent !important;
-  color: #1e293b !important;
-  font-size: 15px !important;
-  font-weight: 700 !important;
-  cursor: pointer !important;
-}
-
-.generalInfoMobileFormatBtn:active,
-.generalInfoMobileFormatNum:active,
-.generalInfoMobileFormatClear:active {
-  background: rgba(251, 191, 36, 0.28) !important;
-}
-
-.generalInfoMobileFormatB {
-  font-weight: 900 !important;
-  letter-spacing: 0.02em !important;
-}
-
-.generalInfoMobileFormatU {
-  text-decoration: underline !important;
-  font-weight: 800 !important;
-}
-
-.generalInfoMobileFormatSep {
-  flex: 0 0 auto !important;
-  width: 1px !important;
-  height: 20px !important;
-  margin: 0 2px !important;
-  background: rgba(148, 163, 184, 0.55) !important;
-}
-
-.generalInfoMobileFormatSwatch {
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  flex: 0 0 auto !important;
-  width: 26px !important;
-  height: 26px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 1px solid rgba(100, 116, 139, 0.45) !important;
-  border-radius: 999px !important;
-  cursor: pointer !important;
-}
-
-.generalInfoMobileFormatHighlight {
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  flex: 0 0 auto !important;
-  width: 26px !important;
-  height: 26px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 1px solid rgba(100, 116, 139, 0.35) !important;
-  border-radius: 7px !important;
-  cursor: pointer !important;
-}
-
-.generalInfoMobileFormatClear {
-  font-size: 11px !important;
-  min-width: auto !important;
-  padding: 0 8px !important;
-  color: #64748b !important;
-}
-
-@media (min-width: 761px) {
-  .generalInfoMobileFormatBubble,
-  .generalInfoFactMobileFormatHint {
-    display: none !important;
-  }
-}
-
 .generalInfoRichToolbar button {
   appearance: none !important;
   -webkit-appearance: none !important;
@@ -10731,21 +9500,6 @@ body {
 
 .generalInfoRichToolbar button:active {
   transform: translateY(0) !important;
-}
-
-.generalInfoCircledNumberToolbar {
-  margin-top: 0 !important;
-}
-
-.generalInfoCircledNumberToolbar .generalInfoCircledNumberBtn,
-.generalInfoCircledNumberBtn {
-  min-width: 40px !important;
-  min-height: 36px !important;
-  padding: 6px 8px !important;
-  font-size: 15px !important;
-  font-weight: 800 !important;
-  color: #7dd3fc !important;
-  border-color: rgba(56, 189, 248, 0.4) !important;
 }
 
 .generalInfoRichColorDefault {
@@ -10800,11 +9554,6 @@ body {
     min-height: 32px !important;
     letter-spacing: -0.5px !important;
     border-radius: 8px !important;
-  }
-
-  /* AI ÃªÂ²ÂÃ¬Â¦ÂÃ«Â³Â´ÃªÂ³Â Ã¬ÂÂ: Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼Ã¬ÂÂ Ã­ÂÂÃ«Â¡ÂÃ­ÂÂ Ã¬ÂÂÃ¬ÂÂ Ã«Â°Â Ã¬ÂÂ¬Ã¬ÂÂ© (grid ÃªÂ·ÂÃ¬Â¹ÂÃ«Â³Â´Ã«ÂÂ¤ Ã«ÂÂ¤Ã¬ÂÂ Ã«ÂÂ¬Ã¬ÂÂ¼ Ã­ÂÂ¨) */
-  .generalInfoFactDesktopToolbar {
-    display: none !important;
   }
 }
 
@@ -10947,6 +9696,7 @@ body {
   .generalInfoGrid,
   .generalInfoManualGrid,
   .generalInfoUploadBox,
+  .generalInfoActionRow,
   .generalInfoActionButtons,
   .generalInfoCardActions,
   .generalInfoCardHeader,
@@ -10956,15 +9706,6 @@ body {
     width: 100% !important;
     max-width: 100% !important;
     gap: 10px !important;
-  }
-
-  .generalInfoActionRow {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    gap: 12px !important;
-    width: 100% !important;
-    max-width: 100% !important;
   }
 
   .generalInfoGrid input,
@@ -10983,19 +9724,7 @@ body {
     box-sizing: border-box !important;
   }
 
-  .generalInfoActionRow button {
-    width: auto !important;
-    max-width: none !important;
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    min-height: 50px !important;
-    white-space: nowrap !important;
-    letter-spacing: 0.05em !important;
-    font-size: 13px !important;
-    padding: 14px 8px !important;
-    border-radius: 12px !important;
-  }
-
+  .generalInfoActionRow button,
   .generalInfoActionButtons button,
   .generalInfoCardActions button {
     width: 100% !important;
@@ -11350,7 +10079,7 @@ body {
     align-items: stretch !important;
   }
   
-  /* Left column: Ã¬ÂÂÃ¬Â§Â/Ã«Â¶ÂÃ«Â¥Â Card section */
+  /* Left column: 수집/분류 Card section */
   .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > section.generalInfoLeftColumn {
     height: 100% !important;
     max-height: 100% !important;
@@ -11359,7 +10088,7 @@ body {
     box-sizing: border-box !important;
   }
   
-  /* Right column: Ã¬Â ÂÃ¬ÂÂ¥Ã­ÂÂ¨/ÃªÂ²ÂÃ¬ÂÂ aside */
+  /* Right column: 저장함/검색 aside */
   .layoutGrid.generalInfoLayoutGrid.ch3HalfLayout > .generalInfoRightColumn {
     height: 100% !important;
     max-height: 100% !important;
@@ -11448,25 +10177,9 @@ body {
 .layoutGrid.generalInfoLayoutGrid .cardHeader {
   display: flex !important;
   flex-direction: row !important;
-  align-items: flex-start !important;
+  align-items: center !important;
   gap: 10px !important;
   margin-bottom: 12px !important;
-}
-
-.layoutGrid.generalInfoLayoutGrid .cardHeaderMain {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 4px !important;
-  min-width: 0 !important;
-  flex: 1 !important;
-}
-
-.layoutGrid.generalInfoLayoutGrid .cardHeaderTitleRow {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  flex-wrap: wrap !important;
-  gap: 8px !important;
 }
 
 .layoutGrid.generalInfoLayoutGrid .cardHeader > div {
@@ -11504,7 +10217,7 @@ body {
    Redesigned Elements for General Info & Photo Book Layouts
    ========================================== */
 
-/* 1. Redesign scroll-to-top button to dark rounded pill "Ã«Â§Â¨ Ã¬ÂÂÃ«Â¡Â Ã¢ÂÂ" style */
+/* 1. Redesign scroll-to-top button to dark rounded pill "맨 위로 ↑" style */
 .scroll-to-top-btn {
   width: auto !important;
   height: auto !important;
@@ -11647,8 +10360,8 @@ body {
   }
   
   /* ==========================================
-     Ã­ÂÂ¬Ã­ÂÂ Ã«Â¶Â Ã¬ÂÂ¸Ã«ÂÂ±Ã¬ÂÂ¤ Ã¬Â¹Â´Ã«ÂÂ Ã¢ÂÂ Ã«ÂªÂ¨Ã«Â°ÂÃ¬ÂÂ¼ (Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ° Ã«ÂÂ±)
-     Ã¬ÂÂ¼Ã«Â°Â Ã¬Â ÂÃ¬ÂÂ¥Ã­ÂÂ¨ Ã¬Â ÂÃ«Â³Â´ Ã¬Â°Â½ÃªÂ³Â Ã¬ÂÂ Ã«ÂÂÃ¬ÂÂ¼Ã­ÂÂ Ã«Â°ÂÃ¬ÂÂÃ­ÂÂ
+     포토북 인덱스 카드 — 모바일 (아이폰 등)
+     일반 저장함 정보 창고와 동일한 반응형
      ========================================== */
   .pbIndexCard {
     grid-template-columns: 2fr 2fr 1fr !important;
@@ -11682,1656 +10395,3 @@ body {
     font-size: 16px !important;
   }
 }
-
-/* ===== Ã¬ÂÂ¼Ã«Â°Â Ã¬Â ÂÃ«Â³Â´ Ã¬ÂÂÃ¬Â§Â ÃªÂ°ÂÃ­ÂÂ¸ (ÃªÂ³ÂµÃ¬ÂÂ¥ Ã­ÂÂ­ / S Ã¬ÂÂ´Ã«Â¯Â¸Ã¬Â§Â / URL Ã¬ÂÂ¤Ã«ÂªÂ) ===== */
-.generalInfoFactoryHint {
-  margin-top: 8px;
-  padding: 16px 18px;
-  border-radius: 14px;
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  background: rgba(14, 165, 233, 0.06);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.generalInfoFactoryHint p {
-  margin: 0;
-  color: #cbd5e1;
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.generalInfoFieldLabel {
-  display: grid;
-  gap: 7px;
-  color: #cbd5e1;
-  font-size: 13px;
-  font-weight: 800;
-  margin-bottom: 12px;
-}
-
-.generalInfoFieldLabel input,
-.generalInfoSourceUrlBlock input {
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid #1e293b;
-  background: #020617;
-  color: #e2e8f0;
-  padding: 11px 12px;
-  font-size: 13px;
-  box-sizing: border-box;
-}
-
-.generalInfoSourceUrlBlock {
-  display: grid;
-  gap: 8px;
-  margin: 12px 0;
-}
-
-.generalInfoSourceUrlLabelRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.generalInfoSourceUrlLabelRow .generalInfoFieldLabel {
-  margin-bottom: 0;
-}
-
-.activeHelpBtn {
-  border-color: rgba(56, 189, 248, 0.45) !important;
-  background: rgba(56, 189, 248, 0.12) !important;
-  color: #7dd3fc !important;
-}
-
-.generalInfoTextImageInsertPanel {
-  margin-top: 10px;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(74, 222, 128, 0.35);
-  background: rgba(74, 222, 128, 0.08);
-  display: grid;
-  gap: 10px;
-}
-
-.generalInfoTextImageInsertHead {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.generalInfoTextImageInsertHead strong {
-  color: #86efac;
-  font-size: 13px;
-}
-
-.generalInfoTextImageInsertHead span {
-  color: #94a3b8;
-  font-size: 11px;
-  flex: 1;
-  min-width: 140px;
-}
-
-.generalInfoTextImageInsertActions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  gap: 10px;
-}
-
-.generalInfoTextImageFileLabel {
-  margin: 0 !important;
-  min-height: 72px;
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.generalInfoTextImageFileLabel input[type="file"] {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-  font-size: 24px;
-}
-
-.generalInfoTextImagePasteZone {
-  min-height: 72px;
-  border-radius: 12px;
-  border: 1px dashed rgba(148, 163, 184, 0.45);
-  background: rgba(2, 6, 23, 0.7);
-  color: #cbd5e1;
-  font-size: 12px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 10px;
-  outline: none;
-}
-
-.generalInfoTextImagePasteZone:focus {
-  border-color: rgba(74, 222, 128, 0.7);
-  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
-}
-
-@media (max-width: 760px) {
-  .ch3TabBar {
-    flex-wrap: wrap;
-  }
-
-  .ch3TabBtn {
-    flex: 1 1 calc(50% - 5px);
-    font-size: 12px;
-    padding: 10px 8px;
-  }
-
-  .generalInfoTextImageInsertActions {
-    grid-template-columns: 1fr;
-  }
-
-  .cardHeaderActionBtn {
-    padding: 5px 8px !important;
-    font-size: 11px !important;
-  }
-
-  .generalInfoFieldLabel input,
-  .generalInfoSourceUrlBlock input {
-    font-size: 16px;
-  }
-}
-
-/* ===== AI ÃªÂ²ÂÃ¬Â¦Â Ã«Â³Â´ÃªÂ³Â Ã¬ÂÂ Ã«Â³ÂÃ«ÂÂ Ã­ÂÂÃ«Â©Â´ (Ã«ÂÂ¤Ã­ÂÂ¬ ÃÂ· ÃªÂ¸Â°Ã¬Â¡Â´ AI Ã«Â³Â´ÃªÂ³Â Ã¬ÂÂ Ã­ÂÂ¤) ===== */
-.giAiReportScreen {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  padding: 10px;
-  background: rgba(2, 6, 23, 0.82);
-  backdrop-filter: blur(8px);
-}
-
-.giAiReportScreenPanel {
-  width: min(920px, 100%);
-  height: 100%;
-  max-height: 100%;
-  overflow: hidden;
-  border-radius: 18px;
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  background: #020617;
-  color: #e2e8f0;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(14, 165, 233, 0.08);
-}
-
-.giAiReportScreenHeader {
-  flex-shrink: 0;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 16px 18px 10px;
-  border-bottom: 1px solid rgba(56, 189, 248, 0.18);
-}
-
-.giAiReportScreenEyebrow {
-  margin: 0 0 4px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #7dd3fc;
-}
-
-.giAiReportScreenTitleBlock {
-  flex: 1;
-  min-width: 0;
-}
-
-.giAiReportTitleInput {
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  background: rgba(2, 6, 23, 0.92);
-  color: #f8fafc;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.4;
-}
-
-.giAiReportTitleInput:focus {
-  outline: none;
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
-}
-
-.giAiReportTitleInputHeader {
-  margin-top: 4px;
-  font-size: 17px;
-  font-weight: 800;
-  padding: 6px 10px;
-}
-
-.giAiReportScreenHeaderActions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.giAiReportGhostBtn,
-.giAiReportCloseBtn {
-  appearance: none;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(15, 23, 42, 0.9);
-  color: #e2e8f0;
-  border-radius: 999px;
-  padding: 8px 14px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.giAiReportPrimaryBtn {
-  appearance: none;
-  border: none;
-  background: #f8fafc;
-  color: #0f172a;
-  border-radius: 999px;
-  padding: 8px 14px;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.giAiReportGhostBtn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.giAiReportCloseBtn {
-  width: 36px;
-  padding: 0;
-  font-size: 22px;
-  line-height: 34px;
-  border-radius: 10px;
-}
-
-.giAiReportTabs {
-  flex-shrink: 0;
-  display: flex;
-  gap: 6px;
-  padding: 10px 18px 0;
-}
-
-.giAiReportTabs button {
-  appearance: none;
-  border: 1px solid transparent;
-  background: transparent;
-  color: #94a3b8;
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.giAiReportTabs button.active {
-  background: rgba(14, 165, 233, 0.18);
-  border-color: rgba(56, 189, 248, 0.45);
-  color: #e0f2fe;
-}
-
-.giAiReportHint {
-  margin: 8px 18px 0;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(14, 165, 233, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  color: #bae6fd;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.giAiReportMeta {
-  flex-shrink: 0;
-  margin: 12px 18px 0;
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(56, 189, 248, 0.22);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
-}
-
-.giAiReportMeta span {
-  display: block;
-  font-size: 11px;
-  color: #7dd3fc;
-  margin-bottom: 2px;
-}
-
-.giAiReportMeta strong {
-  display: block;
-  font-size: 13px;
-  color: #f1f5f9;
-  word-break: break-word;
-}
-
-.giAiReportBodyWrap {
-  margin: 12px 18px 0;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.giAiReportBodyLabel {
-  flex-shrink: 0;
-  font-size: 12px;
-  font-weight: 800;
-  color: #7dd3fc;
-  margin-bottom: 8px;
-}
-
-.giAiReportBody {
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  background: #020617;
-  color: #e2e8f0;
-  line-height: 1.75;
-  font-size: 15px;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  -webkit-user-select: text;
-  user-select: text;
-  cursor: text;
-  touch-action: pan-y;
-}
-
-.giAiReportBody :where(p, div, li, strong, em, b, u, h1, h2, h3, h4, h5, h6, a, td, th) {
-  color: inherit;
-}
-
-.giAiReportBody img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 12px;
-  margin: 10px 0;
-  display: block;
-}
-
-.giAiReportBodyMuted {
-  opacity: 0.92;
-}
-
-.giAiReportFactCheckPanel {
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(56, 189, 248, 0.28);
-  background: rgba(15, 23, 42, 0.75);
-}
-
-.giAiReportFactCheckPanel strong {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 15px;
-  color: #e0f2fe;
-}
-
-.giAiReportFactCheckPanel .muted {
-  margin: 0 0 14px;
-  color: #94a3b8;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.giAiReportFactStatusLabel {
-  display: grid;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #bae6fd;
-}
-
-.giAiReportFactStatusSelect {
-  width: 100%;
-  box-sizing: border-box;
-  border-radius: 10px;
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  background: #020617;
-  color: #e2e8f0;
-  padding: 10px 12px;
-  font-size: 14px;
-}
-
-.giAiReportInfographicPanel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  overflow: auto;
-  padding: 4px 2px 12px;
-}
-
-.giAiReportInfographicHint {
-  margin: 0;
-  color: #94a3b8;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.giAiReportInfographicCaptionLabel {
-  display: grid;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #7dd3fc;
-}
-
-.giAiReportInfographicActions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
-  gap: 10px;
-}
-
-.giAiReportInfographicFileBtn {
-  min-height: 88px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  border-radius: 14px;
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  background: rgba(14, 165, 233, 0.12);
-  color: #e0f2fe;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  padding: 12px;
-}
-
-.giAiReportInfographicFileBtn.disabled {
-  opacity: 0.55;
-  cursor: default;
-  pointer-events: none;
-}
-
-.giAiReportInfographicPaste {
-  min-height: 88px;
-  border-radius: 14px;
-  border: 1px dashed rgba(148, 163, 184, 0.5);
-  background: rgba(2, 6, 23, 0.75);
-  color: #cbd5e1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 12px;
-  font-size: 13px;
-  font-weight: 700;
-  outline: none;
-}
-
-.giAiReportInfographicPaste:empty::before {
-  content: attr(data-placeholder);
-  color: #94a3b8;
-}
-
-.giAiReportInfographicPaste:focus {
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.18);
-}
-
-.giAiReportInfographicEmpty {
-  padding: 22px 14px;
-  text-align: center;
-  border-radius: 14px;
-  border: 1px dashed rgba(56, 189, 248, 0.28);
-  color: #94a3b8;
-  font-size: 13px;
-  background: rgba(15, 23, 42, 0.55);
-}
-
-.giAiReportInfographicList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 12px;
-}
-
-.giAiReportInfographicCard {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(56, 189, 248, 0.28);
-  background: rgba(15, 23, 42, 0.8);
-}
-
-.giAiReportInfographicCardHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: #bae6fd;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.giAiReportInfographicCard img,
-.giAiReportBody .gi-report-infographic img,
-.giAiReportTipTap .gi-report-infographic img {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  height: auto;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(2, 6, 23, 0.85);
-}
-
-.giAiReportBody .gi-report-infographic,
-.giAiReportTipTap .gi-report-infographic {
-  margin: 16px 0;
-  padding: 0;
-}
-
-.giAiReportBody .gi-report-infographic-caption,
-.giAiReportTipTap .gi-report-infographic-caption {
-  margin-top: 8px;
-  color: #94a3b8;
-  font-size: 13px;
-  line-height: 1.45;
-  text-align: center;
-}
-
-@media (max-width: 760px) {
-  .giAiReportInfographicActions {
-    grid-template-columns: 1fr;
-  }
-}
-
-.giAiReportPlaceholder {
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px dashed rgba(56, 189, 248, 0.35);
-  background: rgba(15, 23, 42, 0.7);
-}
-
-.giAiReportPlaceholder strong {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 15px;
-  color: #e0f2fe;
-}
-
-.giAiReportPlaceholder p {
-  margin: 0 0 10px;
-  color: #94a3b8;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.giAiReportEmpty {
-  padding: 28px 16px;
-  text-align: center;
-  color: #94a3b8;
-  font-size: 13px;
-  border-radius: 14px;
-  border: 1px dashed rgba(56, 189, 248, 0.3);
-  background: rgba(15, 23, 42, 0.7);
-}
-
-.giAiReportFooter {
-  flex-shrink: 0;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 14px 18px 16px;
-  border-top: 1px solid rgba(56, 189, 248, 0.18);
-  background: #020617;
-}
-
-.giAiReportPrimaryBtn {
-  padding: 10px 16px;
-}
-
-.generalInfoCardAiReportButton {
-  padding: 4px 6px;
-  font-size: 10px;
-  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
-  border: none;
-  border-radius: 5px;
-  color: white;
-  cursor: pointer;
-  font-weight: 700;
-  line-height: 1.3;
-  text-align: center;
-  white-space: nowrap;
-}
-
-@media (max-width: 760px) {
-  .giAiReportScreen {
-    padding: 0;
-    height: 100dvh;
-    max-height: 100dvh;
-  }
-  .giAiReportScreenPanel {
-    border-radius: 0;
-    height: 100%;
-    max-height: 100%;
-    /* iOS: 100% + safe area */
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  .giAiReportMeta {
-    grid-template-columns: 1fr;
-    flex-shrink: 0;
-  }
-  .giAiReportScreenHeader {
-    flex-direction: column;
-  }
-  /* Ã¬ÂÂÃ¬ÂÂ´Ã­ÂÂ°: Ã¬Â¤ÂÃ¬Â²Â© overflow Ã«ÂÂÃ¬ÂÂ  Ã«Â³Â¸Ã«Â¬Â¸ Ã«ÂÂÃ­ÂÂ¼ Ã­ÂÂÃ«ÂÂÃ«Â§Â Ã¬ÂÂ¤Ã­ÂÂ¬Ã«Â¡Â¤ */
-  .giAiReportBodyWrap {
-    overflow-x: hidden;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-    touch-action: pan-y;
-    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-  }
-  .giAiReportBody {
-    overflow: visible;
-    flex: none;
-    min-height: auto;
-  }
-  .giAiReportEditorShell {
-    overflow: visible;
-    flex: none;
-    min-height: auto;
-  }
-  .giAiReportEditorContent {
-    overflow: visible;
-    flex: none;
-    min-height: auto;
-  }
-  .giAiReportTipTap {
-    min-height: 55vh;
-  }
-  .giAiReportInfographicPanel,
-  .giAiReportFactCheckPanel {
-    overflow: visible;
-    flex: none;
-    min-height: auto;
-  }
-  .giAiReportFooter {
-    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  }
-}
-
-/* ===== AI Ã«Â³Â´ÃªÂ³Â Ã¬ÂÂ TipTap Ã­ÂÂ¸Ã¬Â§ÂÃªÂ¸Â° (Ã«ÂÂ¤Ã­ÂÂ¬) ===== */
-.giAiReportEditorShell {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.giAiReportEditorLoading {
-  padding: 24px;
-  text-align: center;
-  color: #94a3b8;
-  background: #020617;
-  border-radius: 14px;
-  border: 1px solid rgba(56, 189, 248, 0.3);
-}
-
-.giAiReportToolbar {
-  flex-shrink: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  padding: 8px;
-  border-radius: 12px;
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  background: rgba(15, 23, 42, 0.96);
-}
-
-.giAiReportToolBtn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
-  color: #e2e8f0;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.giAiReportToolBtn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.giAiReportToolbarIcon {
-  width: 14px;
-  height: 14px;
-}
-
-.giAiReportBulletChar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 14px;
-  font-size: 18px;
-  line-height: 1;
-  color: #f8fafc;
-  font-weight: 800;
-}
-
-.giAiReportToolbarSep {
-  width: 1px;
-  height: 22px;
-  background: rgba(148, 163, 184, 0.35);
-  margin: 0 2px;
-}
-
-.giAiReportToolbarLabel,
-.giAiReportToolbarSizes > span {
-  font-size: 11px;
-  color: #7dd3fc;
-  font-weight: 700;
-  padding: 0 2px;
-}
-
-.giAiReportToolbarSizes {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  align-items: center;
-  padding: 2px 4px;
-  border-radius: 8px;
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  background: rgba(2, 6, 23, 0.85);
-}
-
-.giAiReportToolbarSizes button {
-  appearance: none;
-  min-width: 24px;
-  min-height: 24px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #e2e8f0;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.giAiReportToolbarSizes button:hover {
-  background: rgba(14, 165, 233, 0.2);
-}
-
-.giAiReportSwatch,
-.giAiReportHighlight {
-  appearance: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.45);
-  cursor: pointer;
-  padding: 0;
-}
-
-.giAiReportHighlight {
-  border-radius: 6px;
-}
-
-.giAiReportEditorContent {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  border-radius: 14px;
-}
-
-.giAiReportTipTap {
-  min-height: 200px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  background: #020617;
-  color: #e2e8f0;
-  font-size: 15px;
-  line-height: 1.75;
-  outline: none;
-  -webkit-user-select: text;
-  user-select: text;
-  cursor: text;
-  /* iOS contenteditable Ã¬ÂÂ¤Ã­ÂÂ¬Ã«Â¡Â¤ Ã«Â³Â´Ã¬Â¡Â° */
-  touch-action: pan-y;
-}
-
-.giAiReportTipTap :where(p, div, li, strong, em, b, u, h1, h2, h3, h4, h5, h6) {
-  color: inherit;
-}
-
-.giAiReportTipTap:focus {
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
-}
-
-.giAiReportTipTap p {
-  margin: 0 0 0.75em;
-}
-
-.giAiReportTipTap img,
-.giAiReportTipTap img.giAiReportInlineImage {
-  max-width: 100%;
-  height: auto;
-  border-radius: 12px;
-  margin: 10px 0;
-  display: block;
-}
-
-.giAiReportImageInsertPanel {
-  flex-shrink: 0;
-}
-
-/* S ÃªÂ°ÂÃ¬Â§Â Ã¬ÂÂ: Ã­ÂÂ¤Ã«Â³Â´Ã«ÂÂÃÂ·Ã¬ÂÂÃ¬ÂÂÃ«Â°Â Ã«Â°ÂÃ«Â¡Â Ã¬ÂÂÃ¬ÂÂ ÃªÂ³Â Ã¬Â Â (Ã¬ÂÂ Ã«Â³Â´Ã¬ÂÂ´Ã«ÂÂ Ã«Â¬Â¸Ã¬Â Â Ã¬ÂÂÃ¬Â Â) */
-.giAiReportImageInsertPanel.giAiReportImageInsertDock {
-  position: fixed !important;
-  left: 8px !important;
-  right: 8px !important;
-  z-index: 130 !important;
-  margin: 0 !important;
-  box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.45) !important;
-  max-height: min(42vh, 280px);
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-@media (min-width: 761px) {
-  .giAiReportImageInsertPanel.giAiReportImageInsertDock {
-    position: sticky !important;
-    top: 0 !important;
-    left: auto !important;
-    right: auto !important;
-    bottom: auto !important;
-    z-index: 5 !important;
-    max-height: none;
-  }
-}
-
-.giAiReportTruncatedWarn {
-  margin: 0 16px 10px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(251, 191, 36, 0.45);
-  background: rgba(245, 158, 11, 0.12);
-  color: #fde68a;
-  font-size: 13px;
-  line-height: 1.55;
-  font-weight: 600;
-}
-
-.giAiReportInlineImageBlock,
-.giAiReportInlineVideoBlock {
-  position: relative;
-  margin: 10px 0;
-  max-width: 100%;
-}
-
-.giAiReportTipTap .giAiReportInlineVideo,
-.giAiReportBody .giAiReportInlineVideo {
-  max-width: 100%;
-  width: 100%;
-  border-radius: 12px;
-  display: block;
-  background: #000;
-}
-
-.giAiReportTipTap img.gi-report-bullet-dot,
-.giAiReportBody img.gi-report-bullet-dot {
-  display: inline-block !important;
-  width: 0.55em !important;
-  height: 0.55em !important;
-  max-width: 0.55em !important;
-  margin: 0 0.28em 0.05em 0 !important;
-  border-radius: 0 !important;
-  vertical-align: middle !important;
-  object-fit: contain !important;
-  filter: invert(1);
-}
-
-.giAiReportEditorHint {
-  flex-shrink: 0;
-  margin: 0;
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.giAiReportPrimaryBtn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.giAiReportMobileFormatHint {
-  display: none;
-  margin: 0 0 8px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: #94a3b8;
-}
-
-@media (max-width: 760px) {
-  .giAiReportDesktopToolbarWrap,
-  .giAiReportDesktopHint {
-    display: none !important;
-  }
-  .giAiReportMobileFormatHint {
-    display: block;
-  }
-  .giAiReportToolbar {
-    gap: 4px;
-    padding: 6px;
-  }
-  .giAiReportToolBtn span {
-    display: none;
-  }
-  .giAiReportEditorContent {
-    scroll-padding-bottom: calc(var(--gi-mobile-format-bar-h, 0px) + 16px);
-  }
-  .giAiReportTipTap {
-    font-size: 16px;
-    min-height: 55vh;
-    padding-bottom: calc(28px + var(--gi-mobile-format-bar-h, 0px));
-    /* builder Ã«Â³Â¸Ã«Â¬Â¸ Ã¬ÂÂÃ«Â Â¥ÃªÂ³Â¼ ÃªÂ°ÂÃ¬ÂÂ Ã«Â°ÂÃ¬ÂÂ Ã¬Â§ÂÃ«Â©Â´Ã¬ÂÂ Ã­ÂÂ¤Ã«Â³Â´Ã«ÂÂ Ã¬ÂÂ Ã¬ÂÂÃ¬ÂÂ Ã«Â°Â */
-    background: #f4f5f7;
-    color: #1e293b;
-    border-color: rgba(148, 163, 184, 0.55);
-    border-left: 3px solid #f97316;
-    box-shadow: inset 3px 0 0 #fb923c;
-  }
-  .giAiReportTipTap:focus {
-    border-color: #f97316;
-    box-shadow: inset 3px 0 0 #fb923c, 0 0 0 3px rgba(249, 115, 22, 0.18);
-  }
-  .giAiReportTipTap :where(p, div, li, strong, em, b, u) {
-    color: inherit;
-  }
-  /* Ã«ÂÂ¤Ã­ÂÂ¬Ã¬ÂÂ©Ã¬ÂÂ¼Ã«Â¡Â Ã¬Â ÂÃ¬ÂÂ¥Ã«ÂÂ Ã«Â°ÂÃ¬ÂÂ ÃªÂ¸ÂÃ¬ÂÂÃ¬ÂÂÃ¬ÂÂ Ã«Â°ÂÃ¬ÂÂ Ã¬Â§ÂÃ«Â©Â´Ã¬ÂÂÃ¬ÂÂ ÃªÂ²ÂÃªÂ²Â */
-  .giAiReportTipTap [style*="color: #e2e8f0"],
-  .giAiReportTipTap [style*="color:#e2e8f0"],
-  .giAiReportTipTap [style*="color: #f8fafc"],
-  .giAiReportTipTap [style*="color:#f8fafc"] {
-    color: #1e293b !important;
-  }
-  .giAiReportTipTap img.gi-report-bullet-dot {
-    filter: none;
-  }
-}
-
-/* ===== builder FormatToolbar ÃÃÂ½Ã (ÃÃÂ¹Ã ÃÂ¤ÂºÂ¸ Â¼Ã¶ÃÃ½) ===== */
-.collectFormatToolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin: 0 0 12px;
-  padding: 8px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-}
-
-.collectFormatToolBtn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #334155;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.collectFormatToolBtn:hover {
-  border-color: #38bdf8;
-}
-
-.collectFormatToolBtn:disabled {
-  opacity: 0.4;
-  pointer-events: none;
-}
-
-.collectFormatToolbarIcon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.collectFormatToolbarSep {
-  width: 1px;
-  height: 24px;
-  margin: 0 2px;
-  background: #e2e8f0;
-}
-
-.collectFormatToolbarLabel {
-  font-size: 12px;
-  color: #94a3b8;
-  padding: 0 4px;
-}
-
-.collectFormatToolbarSizes {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px;
-  padding: 2px 4px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-}
-
-.collectFormatToolbarSizes > span {
-  font-size: 10px;
-  color: #94a3b8;
-  padding: 0 4px;
-}
-
-.collectFormatToolbarSizes button {
-  appearance: none;
-  min-height: 28px;
-  min-width: 28px;
-  padding: 2px 6px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #334155;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.collectFormatToolbarSizes button:hover {
-  background: #e0f2fe;
-  color: #0f172a;
-}
-
-.collectFormatSwatch,
-.collectFormatHighlight {
-  appearance: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-
-.collectModalOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: 12000;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 12px;
-  background: rgba(15, 23, 42, 0.5);
-}
-
-@media (min-width: 640px) {
-  .collectModalOverlay {
-    align-items: center;
-  }
-}
-
-.collectModalPanel {
-  width: 100%;
-  max-width: 32rem;
-  border-radius: 16px;
-  background: #ffffff;
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
-  overflow: hidden;
-}
-
-.collectModalPanelTall {
-  max-height: 88dvh;
-  display: flex;
-  flex-direction: column;
-}
-
-.collectModalHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #f1f5f9;
-  color: #0f172a;
-  font-weight: 600;
-}
-
-.collectModalHeader button {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: #64748b;
-  cursor: pointer;
-  padding: 4px;
-}
-
-.collectModalBody {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-}
-
-.collectModalField {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: #475569;
-}
-
-.collectModalField textarea {
-  display: block;
-  width: 100%;
-  margin-top: 6px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  padding: 10px 12px;
-  font-size: 14px;
-  color: #0f172a;
-  resize: vertical;
-  box-sizing: border-box;
-}
-
-.collectModalActions {
-  display: flex;
-  gap: 8px;
-}
-
-.collectModalSecondaryBtn,
-.collectModalPrimaryBtn {
-  flex: 1;
-  min-height: 44px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.collectModalSecondaryBtn {
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #334155;
-}
-
-.collectModalPrimaryBtn {
-  border: none;
-  background: #0f172a;
-  color: #ffffff;
-}
-
-.collectModalPrimaryBtn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.collectHandwritingTools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.collectHandwritingColor {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  border: 2px solid #e2e8f0;
-  cursor: pointer;
-}
-
-.collectHandwritingColor.active {
-  border-color: #38bdf8;
-}
-
-.collectHandwritingSize {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #64748b;
-}
-
-.collectHandwritingCanvas {
-  width: 100%;
-  touch-action: none;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  cursor: crosshair;
-}
-
-.collectTextImageOptions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 12px;
-  color: #475569;
-}
-
-.collectTextImagePresets,
-.collectTextImageAlign {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.collectTextImagePresets button,
-.collectTextImageAlign button {
-  appearance: none;
-  min-height: 32px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.collectTextImagePresets button.active,
-.collectTextImageAlign button.active {
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
-}
-
-.collectTextImagePreview {
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  overflow: hidden;
-  background: #f8fafc;
-}
-
-.collectTextImagePreview img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-/* builder ÂºÂ»Â¹Â® ÃÃ¶Â¸Ã©: Â¹Ã ÃÂº ÃÃ­ÃÃ½Â±Ã¢ (Â±ÃÃÃÂ¡Â¤ÃÃ¼Â±Â¤ Â°Â¡ÂµÂ¶Â¼Âº) */
-.generalInfoRichTextEditor.collectPaperEditor {
-  border: 1px solid #e2e8f0 !important;
-  background: #ffffff !important;
-  color: #1a2430 !important;
-}
-.generalInfoRichTextEditor.collectPaperEditor:focus {
-  border-color: #38bdf8 !important;
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18) !important;
-}
-.generalInfoRichTextEditor.collectPaperEditor:empty::before {
-  color: #94a3b8 !important;
-}
-
-
-/* —— Photobook 人앨범 (insta-fact-library PersonAlbum parity) —— */
-.pbPersonAlbumScreen {
-  width: 100%;
-  padding: 4px 0 24px;
-}
-.pbPersonAlbumScreenTitle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.pbPersonAlbumScreenTitle h2 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: #e2e8f0;
-}
-.pbPersonAlbumScreenTitle span {
-  font-size: 11px;
-  color: #94a3b8;
-}
-.pbPersonAlbum {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.pbPersonAlbumHeader {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-}
-.pbPersonAlbumHint {
-  margin: 0;
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: #94a3b8;
-}
-.pbPersonAlbumHint b {
-  color: #cbd5e1;
-  font-weight: 600;
-}
-.pbPersonAlbumActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.pbPersonAlbumBtn {
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
-  color: #e2e8f0;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 8px 12px;
-  cursor: pointer;
-}
-.pbPersonAlbumBtn.active {
-  border-color: #62b19b;
-  background: #62b19b;
-  color: #0b1220;
-}
-.pbPersonAlbumBtn.danger {
-  border-color: rgba(239, 68, 68, 0.45);
-  background: rgba(239, 68, 68, 0.12);
-  color: #fca5a5;
-}
-.pbPersonAlbumBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.pbPersonAlbumEmpty {
-  border: 1px dashed rgba(148, 163, 184, 0.35);
-  border-radius: 16px;
-  background: rgba(15, 23, 42, 0.45);
-  padding: 32px 16px;
-  text-align: center;
-  font-size: 13px;
-  color: #94a3b8;
-}
-.pbPersonAlbumScroller {
-  display: flex;
-  gap: 0;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-  margin: 0 -4px;
-  padding-bottom: 8px;
-}
-.pbPersonAlbumScroller::-webkit-scrollbar {
-  display: none;
-}
-.pbPersonAlbumSlide {
-  width: 100%;
-  flex-shrink: 0;
-  scroll-snap-align: center;
-  scroll-snap-stop: always;
-  padding: 0 4px;
-  box-sizing: border-box;
-}
-.pbPersonAlbumCounter {
-  margin: 8px 0 0;
-  text-align: center;
-  font-size: 12px;
-  color: #94a3b8;
-}
-.pbPersonAlbumSpotlight {
-  max-width: 360px;
-  margin: 0 auto 12px;
-}
-.pbPersonAlbumGrid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-}
-.pbPersonCard {
-  overflow: hidden;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #0b1220;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-}
-.pbPersonCard.is-selected {
-  border-color: #62b19b;
-  box-shadow: 0 0 0 2px rgba(98, 177, 155, 0.45);
-}
-.pbPersonCard.is-playing:not(.is-selected) {
-  border-color: #7ab8ff;
-  box-shadow: 0 0 0 2px rgba(122, 184, 255, 0.4);
-}
-.pbPersonCardFace {
-  position: relative;
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.pbPersonCardImgWrap {
-  display: flex;
-  aspect-ratio: 3 / 4;
-  width: 100%;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: #111827;
-}
-.pbPersonCardImgWrap img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-}
-.pbPersonCardCheck {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  display: flex;
-  width: 24px;
-  height: 24px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-}
-.pbPersonCardCheck.on {
-  background: #62b19b;
-  color: #0b1220;
-}
-.pbPersonCardMeta {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: block;
-  padding: 8px 10px;
-  background: rgba(0, 0, 0, 0.75);
-  text-align: left;
-}
-.pbPersonCardMetaLabel {
-  display: block;
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: #bae6fd;
-  margin-bottom: 2px;
-}
-.pbPersonCardMetaTitle {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-size: 12px;
-  font-weight: 600;
-  color: #fff;
-}
-.pbPersonCardMetaDate {
-  display: block;
-  margin-top: 4px;
-  font-size: 10px;
-  color: #e2e8f0;
-}
-.pbPersonCardOpen {
-  width: 100%;
-  border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: #141414;
-  color: #bae6fd;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 8px 12px;
-  cursor: pointer;
-}
-.pbPersonAlbumMobileOnly {
-  display: block;
-}
-.pbPersonAlbumDesktopOnly {
-  display: none;
-}
-.pbPersonAlbumHidden {
-  display: none !important;
-}
-@media (min-width: 768px) {
-  .pbPersonAlbumMobileOnly {
-    display: none;
-  }
-  .pbPersonAlbumDesktopOnly {
-    display: block;
-  }
-}
-@media (max-width: 1100px) {
-  .pbPersonAlbumGrid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-@media (max-width: 900px) {
-  .pbPersonAlbumGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-.pbPersonAlbumModal {
-  position: fixed;
-  inset: 0;
-  z-index: 12000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(2, 6, 23, 0.72);
-  padding: 16px;
-}
-.pbPersonAlbumModalPanel {
-  width: min(1100px, 100%);
-  max-height: min(92vh, 900px);
-  overflow: auto;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #0f172a;
-  padding: 16px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
-}
-.pbPersonAlbumModalBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.pbPersonAlbumModalBar h3 {
-  margin: 0;
-  font-size: 15px;
-  color: #e2e8f0;
-}
-.pbPersonAlbumModalClose {
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.06);
-  color: #e2e8f0;
-  font-size: 12px;
-  padding: 6px 10px;
-  cursor: pointer;
-}
-@media print {
-  .pbPersonAlbumModal {
-    position: static;
-    background: #fff;
-    padding: 0;
-  }
-  .pbPersonAlbumModalPanel {
-    max-height: none;
-    border: 0;
-    box-shadow: none;
-    background: #fff;
-    color: #111;
-  }
-  .pbPersonAlbumActions,
-  .pbPersonAlbumModalClose,
-  .pbPersonCardCheck,
-  .pbPersonCardOpen {
-    display: none !important;
-  }
-  .pbPersonAlbumMobileOnly {
-    display: none !important;
-  }
-  .pbPersonAlbumDesktopOnly {
-    display: block !important;
-  }
-  .pbPersonAlbumGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-

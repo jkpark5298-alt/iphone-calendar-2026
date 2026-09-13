@@ -28,7 +28,6 @@ export interface GeneralInfoItem {
   sourceUrl?: string;
   fileName?: string;
   filePreview?: string;
-  fileType?: GeneralInfoFileType;
   mediaItems?: GeneralInfoMediaItem[];
   primaryCategory: string;
   secondaryCategory: string;

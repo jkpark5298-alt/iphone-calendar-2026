@@ -4,711 +4,221 @@ import type { GeneralInfoItem } from "../types/generalInfo";
 import {
   getGeneralInfoDisplayMediaItems,
   getGeneralInfoFormattedHtml,
-  htmlToPlainText,
-  enhanceInlineImageBlocks,
-  bindInlineImageRemoveHandler,
-  readFilesAsDataUrls,
-  dedupeImageFiles,
-  collectClipboardImageFiles,
-  hasDisplayableAiReport,
-  makeGeneralInfoMediaItem,
-  normalizeGeneralInfoMediaItems,
-  extractGeneralInfoBodyImageSrcs,
-  extractGeneralInfoReportImageSrcs,
-  looksLikeHtmlContent,
-  editorHasInlineImageTrigger,
-  removeInlineImageTrigger,
-  insertInlineMediaIntoEditor,
-  splitSummaryParagraphs,
-  joinSummaryParagraphs,
-  splitBodyParagraphHtml,
-  joinBodyParagraphHtml,
 } from "../lib/generalInfoHelpers";
-import type { GeneralInfoMediaItem } from "../lib/generalInfoHelpers";
 import React from "react";
-import { CollectFormatToolbar } from "./CollectFormatToolbar";
-import { HandwritingModal } from "./HandwritingModal";
-import { TextToImageModal } from "./TextToImageModal";
-import { stepCollectFontSize } from "../lib/collectFormatPalette";
+
+// --- AI 보고서 마크다운 및 JSON 파싱/렌더링 헬퍼 ---
+
+function decodeEscapedChars(str: string): string {
+  if (typeof str !== "string") return "";
+  return str
+    .replace(/\\r/g, "")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\");
+}
+
+function parseReportText(text: string) {
+  let status = "확인 필요";
+  let summary = "";
+  let result = text;
+  
+  let cleaned = (text || "").trim();
+  
+  // Strip markdown code block wrapper if present
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
+  }
+  
+  // 1. Try standard JSON.parse
+  try {
+    const parsed = JSON.parse(cleaned);
+    return {
+      status: parsed.status || "확인 필요",
+      summary: parsed.summary || "",
+      result: parsed.result || text
+    };
+  } catch (e) {
+    // Continue
+  }
+  
+  // 2. Try JSON.parse with string repair (e.g. escaping raw newlines inside quotes)
+  try {
+    const repaired = cleaned.replace(/\n/g, "\\n");
+    const parsed = JSON.parse(repaired);
+    return {
+      status: parsed.status || "확인 필요",
+      summary: parsed.summary || "",
+      result: parsed.result || text
+    };
+  } catch (e) {
+    // Continue
+  }
+  
+  // 3. Fallback: regex extraction
+  const statusMatch = cleaned.match(/"status"\s*:\s*"([^"]+)"/);
+  if (statusMatch) {
+    status = statusMatch[1];
+  }
+  
+  const summaryMatch = cleaned.match(/"summary"\s*:\s*"([\s\S]*?)"\s*,\s*"result"/);
+  if (summaryMatch) {
+    summary = summaryMatch[1];
+  } else {
+    const fallbackSummaryMatch = cleaned.match(/"summary"\s*:\s*"([^"]+)"/);
+    if (fallbackSummaryMatch) {
+      summary = fallbackSummaryMatch[1];
+    }
+  }
+  
+  const resultMatch = cleaned.match(/"result"\s*:\s*"([\s\S]*?)"\s*}\s*$/);
+  if (resultMatch) {
+    result = resultMatch[1];
+  } else {
+    const fallbackResultMatch = cleaned.match(/"result"\s*:\s*"([\s\S]*?)"/);
+    if (fallbackResultMatch) {
+      result = fallbackResultMatch[1];
+    } else {
+      const cutOffResultMatch = cleaned.match(/"result"\s*:\s*"([\s\S]*)$/);
+      if (cutOffResultMatch) {
+        result = cutOffResultMatch[1];
+      }
+    }
+  }
+  
+  // Decode escaped characters (\n, \t, etc.)
+  status = decodeEscapedChars(status);
+  summary = decodeEscapedChars(summary);
+  result = decodeEscapedChars(result);
+  
+  return { status, summary, result };
+}
+
+function parseMarkdownSections(markdown: string) {
+  const sections: Array<{ title: string; content: string[] }> = [];
+  const lines = markdown.split("\n");
+  let currentSection: { title: string; content: string[] } | null = null;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+    
+    if (line.startsWith("# ") && !line.includes("##")) {
+      // 메인 타이틀 라인은 건너뜀
+      continue;
+    } else if (line.startsWith("## ")) {
+      const title = line.replace("## ", "").trim();
+      currentSection = { title, content: [] };
+      sections.push(currentSection);
+    } else {
+      if (currentSection) {
+        currentSection.content.push(rawLine);
+      } else if (line !== "") {
+        currentSection = { title: "개요", content: [rawLine] };
+        sections.push(currentSection);
+      }
+    }
+  }
+  return sections;
+}
+
+function MarkdownViewer({ text }: { text: string }) {
+  const lines = text.split("\n");
+  let insideList = false;
+  let listItems: string[] = [];
+  const elements: React.ReactNode[] = [];
+  let key = 0;
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={`ul-${key++}`} className="report-ul" style={{ paddingLeft: "20px", margin: "8px 0" }}>
+          {listItems.map((item, idx) => (
+            <li key={idx} dangerouslySetInnerHTML={{ __html: formatBold(item) }} style={{ listStyleType: "disc", marginBottom: "4px" }} />
+          ))}
+        </ul>
+      );
+      listItems = [];
+      insideList = false;
+    }
+  };
+
+  const formatBold = (str: string) => {
+    return str
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>");
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+
+    if (line === "") {
+      flushList();
+      continue;
+    }
+
+    if (line.startsWith("* ") || line.startsWith("- ")) {
+      insideList = true;
+      listItems.push(line.substring(2));
+      continue;
+    } else if (/^\d+\.\s/.test(line)) {
+      flushList();
+      elements.push(
+        <p key={key++} className="report-list-item" style={{ margin: "6px 0", lineHeight: "1.6" }} dangerouslySetInnerHTML={{ __html: formatBold(rawLine) }} />
+      );
+      continue;
+    } else {
+      flushList();
+    }
+
+    if (line.startsWith("# ") && !line.includes("##")) {
+      elements.push(<h3 key={key++} className="report-h1" style={{ fontSize: "18px", margin: "14px 0 8px", color: "#bae6fd" }}>{line.replace("# ", "")}</h3>);
+    } else if (line.startsWith("## ")) {
+      elements.push(<h4 key={key++} className="report-h2" style={{ fontSize: "16px", margin: "12px 0 6px", color: "#38bdf8" }}>{line.replace("## ", "")}</h4>);
+    } else if (line.startsWith("### ")) {
+      elements.push(<h5 key={key++} className="report-h3" style={{ fontSize: "14px", margin: "10px 0 4px", color: "#7dd3fc" }}>{line.replace("### ", "")}</h5>);
+    } else {
+      elements.push(
+        <p key={key++} className="report-p" style={{ margin: "8px 0", lineHeight: "1.7" }} dangerouslySetInnerHTML={{ __html: formatBold(rawLine) }} />
+      );
+    }
+  }
+  flushList();
+
+  return <div className="report-markdown-body" style={{ overflowX: "hidden", wordBreak: "break-all", overflowWrap: "anywhere" }}>{elements}</div>;
+}
+
 
 interface Props {
   item: GeneralInfoItem;
   onClose: () => void;
-  onGenerateReport: (item: GeneralInfoItem) => void | Promise<void>;
-  onOpenAiReport?: (itemId: number) => void;
-  onEdit?: (item: GeneralInfoItem) => void;
+  onGenerateReport: (item: GeneralInfoItem) => void;
+  onRunFactCheck: (item: GeneralInfoItem) => void;
+  onEdit: (item: GeneralInfoItem) => void;
   onDelete?: (item: GeneralInfoItem) => void;
+  onSavePdf?: (item: GeneralInfoItem) => void;
   onShareReport?: (item: GeneralInfoItem) => void;
-  onOpenStorageImage?: (url: string, fileName?: string) => void;
-  isGeneratingReport?: boolean;
-  needsManualFactCheck?: boolean;
-  startInEditMode?: boolean;
-  onSaveItemEdit?: (item: GeneralInfoItem) => void | Promise<void>;
-  onUploadInlineImage?: (file: File) => Promise<string>;
 }
 
 export default function GeneralInfoDetailModal({
   item,
   onClose,
-  onGenerateReport: _onGenerateReport,
-  onOpenAiReport,
+  onGenerateReport,
+  onRunFactCheck,
+  onEdit,
   onDelete,
-  onShareReport: _onShareReport,
-  onOpenStorageImage,
-  isGeneratingReport = false,
-  needsManualFactCheck = false,
-  startInEditMode = false,
-  onSaveItemEdit,
-  onUploadInlineImage,
+  onSavePdf,
+  onShareReport,
 }: Props) {
-  void needsManualFactCheck;
-  void _onGenerateReport;
-  void _onShareReport;
-  const [copyFeedback, setCopyFeedback] = React.useState<"text" | null>(null);
-  const [isEditing, setIsEditing] = React.useState(Boolean(startInEditMode));
-  const [editTitle, setEditTitle] = React.useState(item.title || "");
-  const [editSummaries, setEditSummaries] = React.useState<string[]>(() =>
-    splitSummaryParagraphs(item.summary || ""),
-  );
-  const [editPrimary, setEditPrimary] = React.useState(item.primaryCategory || "");
-  const [editSecondary, setEditSecondary] = React.useState(item.secondaryCategory || "");
-  const [editKeywordsText, setEditKeywordsText] = React.useState(
-    (item.keywords || []).join(", "),
-  );
-  const [bodyImageTick, setBodyImageTick] = React.useState(0);
-  const [bodyEditorKey, setBodyEditorKey] = React.useState(0);
-  const [bodyParas, setBodyParas] = React.useState<Array<{ id: number; html: string }>>(() =>
-    splitBodyParagraphHtml(getGeneralInfoFormattedHtml(item)).map((html, index) => ({
-      id: index + 1,
-      html,
-    })),
-  );
-  const [editMediaItems, setEditMediaItems] = React.useState<GeneralInfoMediaItem[]>(() =>
-    getGeneralInfoDisplayMediaItems(item),
-  );
-  const bodyParaRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
-  const bodyParasRef = React.useRef(bodyParas);
-  bodyParasRef.current = bodyParas;
-  const focusedBodyParaIdRef = React.useRef<number | null>(bodyParas[0]?.id ?? null);
-  const nextBodyParaIdRef = React.useRef((bodyParas[bodyParas.length - 1]?.id ?? 0) + 1);
-  const pendingBodyHtmlRef = React.useRef<string[] | null>(
-    bodyParas.map((para) => para.html),
-  );
-  const bodyParagraphListRef = React.useRef<HTMLDivElement | null>(null);
-  const coverImageFileRef = React.useRef<HTMLInputElement | null>(null);
-  const bodyImageFileRef = React.useRef<HTMLInputElement | null>(null);
-  const bodyImageInsertPanelRef = React.useRef<HTMLDivElement | null>(null);
-  const detailBodyRef = React.useRef<HTMLDivElement | null>(null);
-  const [showBodyImageInsert, setShowBodyImageInsert] = React.useState(false);
-  const [showHandwritingModal, setShowHandwritingModal] = React.useState(false);
-  const [showTextToImageModal, setShowTextToImageModal] = React.useState(false);
-  const [collectFontSizePx, setCollectFontSizePx] = React.useState(15);
-  const [autoSaveStatus, setAutoSaveStatus] = React.useState("");
-  const [autoSaveTick, setAutoSaveTick] = React.useState(0);
-  const restoreDoneRef = React.useRef(false);
-  const toolbarFileRef = React.useRef<HTMLInputElement | null>(null);
-
-  const hasAiReport = hasDisplayableAiReport(String(item?.factCheckSummary || ""));
-
-  const getActiveBodyEditor = React.useCallback(() => {
-    const focusedId = focusedBodyParaIdRef.current;
-    if (focusedId != null && bodyParaRefs.current[focusedId]) {
-      return bodyParaRefs.current[focusedId];
-    }
-    const first = bodyParasRef.current[0];
-    if (first && bodyParaRefs.current[first.id]) {
-      return bodyParaRefs.current[first.id];
-    }
-    const remaining = Object.values(bodyParaRefs.current).find(Boolean);
-    return remaining || null;
-  }, []);
-
-  const collectAllBodyHtml = React.useCallback(() => {
-    const htmls = bodyParasRef.current.map((para) =>
-      String(bodyParaRefs.current[para.id]?.innerHTML || ""),
-    );
-    return joinBodyParagraphHtml(htmls);
-  }, []);
-
-  const collectAllBodyText = React.useCallback(() => {
-    return bodyParasRef.current
-      .map((para) => String(bodyParaRefs.current[para.id]?.innerText || ""))
-      .join("\n\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-  }, []);
-
-  React.useEffect(() => {
-    setEditTitle(item.title || "");
-    setEditSummaries(splitSummaryParagraphs(item.summary || ""));
-    setEditPrimary(item.primaryCategory || "");
-    setEditSecondary(item.secondaryCategory || "");
-    setEditKeywordsText((item.keywords || []).join(", "));
-    setEditMediaItems(getGeneralInfoDisplayMediaItems(item));
-    const parts = splitBodyParagraphHtml(getGeneralInfoFormattedHtml(item));
-    pendingBodyHtmlRef.current = parts;
-    const nextParas = parts.map((html) => ({
-      id: nextBodyParaIdRef.current++,
-      html,
-    }));
-    setBodyParas(nextParas);
-    focusedBodyParaIdRef.current = nextParas[0]?.id ?? null;
-    setBodyEditorKey((prev) => prev + 1);
-    setIsEditing(true);
-    restoreDoneRef.current = false;
-    window.setTimeout(() => {
-      restoreDoneRef.current = true;
-    }, 400);
-  }, [item.id, item.factCheckSummary, item.factCheckStatus, startInEditMode]);
-
-  React.useEffect(() => {
-    if (!isEditing) return;
-    const parts = pendingBodyHtmlRef.current;
-    if (!parts) return;
-    const frame = window.requestAnimationFrame(() => {
-      bodyParasRef.current.forEach((para, index) => {
-        const editor = bodyParaRefs.current[para.id];
-        if (!editor) return;
-        editor.innerHTML = parts[index] || "";
-        enhanceInlineImageBlocks(editor);
-        bindInlineImageRemoveHandler(editor);
-      });
-      setShowBodyImageInsert(false);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [isEditing, bodyEditorKey]);
-
-  const textEndsWithImageTrigger = React.useCallback((raw: string) => {
-    const text = String(raw || "")
-      .replace(/\u00a0/g, " ")
-      .replace(/[\u200B-\u200D\uFEFF]/g, "")
-      .replace(/\r/g, "");
-    const trimmedEnd = text.replace(/[ \t\n]+$/g, "");
-    return /[Ss]$/.test(trimmedEnd);
-  }, []);
-
-  const checkBodyImageTrigger = React.useCallback(() => {
-    const editor = getActiveBodyEditor();
-    const plain = String(editor?.innerText || "");
-    setShowBodyImageInsert(
-      editorHasInlineImageTrigger(editor) || textEndsWithImageTrigger(plain),
-    );
-  }, [getActiveBodyEditor, textEndsWithImageTrigger]);
-
-  const insertBodyImageFiles = React.useCallback(
-    (files: FileList | File[] | null) => {
-      if (!files || (files instanceof FileList ? files.length === 0 : files.length === 0)) return;
-      const afterNode = removeInlineImageTrigger(getActiveBodyEditor());
-      const list = dedupeImageFiles(files instanceof FileList ? Array.from(files) : files);
-      const mediaFiles = list.filter(
-        (file) =>
-          file.type.startsWith("image/") ||
-          file.type.startsWith("video/") ||
-          /\.(jpe?g|png|gif|webp|heic|heif|mp4|mov|webm|m4v)$/i.test(file.name || ""),
-      );
-      if (!mediaFiles.length) {
-        alert("이미지/동영상 파일을 선택해 주세요.");
-        return;
-      }
-
-      void (async () => {
-        try {
-          const editor = getActiveBodyEditor();
-          if (!editor) return;
-
-          const uploaded: Array<{ src: string; name: string; type: "image" | "video" }> = [];
-          for (const [index, file] of mediaFiles.entries()) {
-            const isVideo =
-              file.type.startsWith("video/") || /\.(mp4|mov|webm|m4v)$/i.test(file.name || "");
-            let src = "";
-            if (!isVideo && onUploadInlineImage) {
-              try {
-                src = String((await onUploadInlineImage(file)) || "").trim();
-              } catch (error) {
-                console.error("body inline image upload failed", error);
-              }
-            }
-            if (!src) {
-              const loaded = await readFilesAsDataUrls([file]);
-              src = String(loaded[0]?.dataUrl || "").trim();
-            }
-            if (!src) continue;
-            uploaded.push({
-              src,
-              name: file.name || `inline-${index + 1}`,
-              type: isVideo ? "video" : "image",
-            });
-          }
-
-          if (!uploaded.length) {
-            alert("이미지를 넣지 못했습니다. 다시 시도해 주세요.");
-            return;
-          }
-
-          insertInlineMediaIntoEditor(editor, uploaded, { afterNode });
-          enhanceInlineImageBlocks(editor);
-          bindInlineImageRemoveHandler(editor);
-          setBodyImageTick((prev) => prev + 1);
-        } catch (error) {
-          console.error("inline image insert failed", error);
-          alert("이미지를 본문 TEXT에 넣지 못했습니다. 다시 시도해 주세요.");
-        } finally {
-          setShowBodyImageInsert(false);
-        }
-      })();
-    },
-    [getActiveBodyEditor, onUploadInlineImage],
-  );
-
-  const handleBodyImageInsertPaste = React.useCallback(
-    (event: React.ClipboardEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const pastedFiles = collectClipboardImageFiles(event.clipboardData);
-      if (pastedFiles.length > 0) {
-        insertBodyImageFiles(pastedFiles);
-      }
-    },
-    [insertBodyImageFiles],
-  );
-
-  const handleBodyEditorPaste = React.useCallback(
-    (event: React.ClipboardEvent<HTMLDivElement>) => {
-      const pastedFiles = collectClipboardImageFiles(event.clipboardData);
-      if (pastedFiles.length > 0) {
-        event.preventDefault();
-        insertBodyImageFiles(pastedFiles);
-        return;
-      }
-      requestAnimationFrame(checkBodyImageTrigger);
-    },
-    [checkBodyImageTrigger, insertBodyImageFiles],
-  );
-
-  React.useEffect(() => {
-    if (!isEditing) return;
-    const root = bodyParagraphListRef.current;
-    if (!root) return;
-    const recheck = () => checkBodyImageTrigger();
-    root.addEventListener("keyup", recheck);
-    root.addEventListener("compositionend", recheck);
-    root.addEventListener("input", recheck);
-    return () => {
-      root.removeEventListener("keyup", recheck);
-      root.removeEventListener("compositionend", recheck);
-      root.removeEventListener("input", recheck);
-    };
-  }, [isEditing, bodyEditorKey, bodyParas.length, checkBodyImageTrigger]);
-
-  React.useEffect(() => {
-    if (!showBodyImageInsert) return;
-    const el = bodyImageInsertPanelRef.current;
-    if (!el) return;
-    requestAnimationFrame(() => {
-      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
-  }, [showBodyImageInsert]);
-
-  React.useEffect(() => {
-    if (detailBodyRef.current) {
-      detailBodyRef.current.scrollTop = 0;
-    }
-  }, [item?.id, hasAiReport]);
-
-  const persistRepresentativeMedia = React.useCallback(
-    async (nextMedia: GeneralInfoMediaItem[]) => {
-      setEditMediaItems(nextMedia);
-      if (isEditing || !onSaveItemEdit) {
-        setIsEditing(true);
-        return;
-      }
-      const main = nextMedia[0];
-      await onSaveItemEdit({
-        ...item,
-        mediaItems: nextMedia,
-        filePreview: main?.preview || "",
-        fileName: main?.name || item.fileName || "",
-        fileType: main?.type || item.fileType || "image",
-      });
-    },
-    [isEditing, item, onSaveItemEdit],
-  );
-
-  const addCoverMediaFiles = React.useCallback(
-    async (files: FileList | File[] | null, asRepresentative = false) => {
-      const list = files instanceof FileList ? Array.from(files) : Array.isArray(files) ? files : [];
-      const imageOrVideo = list.filter(
-        (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
-      );
-      if (imageOrVideo.length === 0) return;
-
-      const loaded = await readFilesAsDataUrls(imageOrVideo);
-      const nextItems = loaded.map(({ file, dataUrl }) =>
-        makeGeneralInfoMediaItem(
-          file.name || `대표 이미지 ${Date.now()}`,
-          file.type.startsWith("video/") ? "video" : "image",
-          dataUrl,
-        ),
-      );
-      const current = isEditing ? editMediaItems : getGeneralInfoDisplayMediaItems(item);
-      const merged = asRepresentative
-        ? [...nextItems, ...current]
-        : [...current, ...nextItems];
-      await persistRepresentativeMedia(merged);
-    },
-    [editMediaItems, isEditing, item, persistRepresentativeMedia],
-  );
-
-  const handleCoverFileChange = React.useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = event.target.files;
-      const asRepresentative = event.currentTarget.dataset.mode === "replace";
-      void addCoverMediaFiles(files, asRepresentative);
-      event.target.value = "";
-    },
-    [addCoverMediaFiles],
-  );
-
-  const handleCoverPaste = React.useCallback(
-    (event: React.ClipboardEvent) => {
-      const files = collectClipboardImageFiles(event.clipboardData);
-      if (files.length === 0) return;
-      event.preventDefault();
-      void addCoverMediaFiles(dedupeImageFiles(files), true);
-    },
-    [addCoverMediaFiles],
-  );
-
-  const setMediaAsRepresentative = React.useCallback(
-    (index: number) => {
-      const current = isEditing ? editMediaItems : getGeneralInfoDisplayMediaItems(item);
-      if (index <= 0 || index >= current.length) return;
-      const next = [...current];
-      const [picked] = next.splice(index, 1);
-      void persistRepresentativeMedia([picked, ...next]);
-    },
-    [editMediaItems, isEditing, item, persistRepresentativeMedia],
-  );
-
-  const removeEditMediaItem = React.useCallback(
-    (index: number) => {
-      const current = isEditing ? editMediaItems : getGeneralInfoDisplayMediaItems(item);
-      const next = current.filter((_, i) => i !== index);
-      void persistRepresentativeMedia(next);
-    },
-    [editMediaItems, isEditing, item, persistRepresentativeMedia],
-  );
-
-  const applyHtmlImageAsRepresentative = React.useCallback(
-    async (src: string, label: string) => {
-      const url = String(src || "").trim();
-      if (!url) return;
-
-      const current = isEditing ? editMediaItems : getGeneralInfoDisplayMediaItems(item);
-      const existingIndex = current.findIndex(
-        (media) => media.preview === url || media.fileUrl === url,
-      );
-      let nextMedia: GeneralInfoMediaItem[];
-      if (existingIndex === 0) {
-        return;
-      }
-      if (existingIndex > 0) {
-        nextMedia = [...current];
-        const [picked] = nextMedia.splice(existingIndex, 1);
-        nextMedia = [picked, ...nextMedia];
-      } else {
-        nextMedia = [makeGeneralInfoMediaItem(label, "image", url), ...current];
-      }
-
-      await persistRepresentativeMedia(nextMedia);
-    },
-    [editMediaItems, isEditing, item, persistRepresentativeMedia],
-  );
-
-  const bodyImageSrcs = React.useMemo(() => {
-    const liveBodyHtml = isEditing ? collectAllBodyHtml() : "";
-    return extractGeneralInfoBodyImageSrcs(
-      liveBodyHtml,
-      item.formattedTextHtml,
-      looksLikeHtmlContent(item.text || "") ? item.text : "",
-    );
-  }, [isEditing, item.formattedTextHtml, item.text, bodyEditorKey, bodyImageTick, collectAllBodyHtml]);
-
-  const reportImageSrcs = React.useMemo(() => {
-    return extractGeneralInfoReportImageSrcs(String(item.factCheckSummary || ""));
-  }, [item.factCheckSummary]);
-
-  const saveAllEdits = React.useCallback(async (opts?: { keepEditing?: boolean }) => {
-    const keepEditing = opts?.keepEditing !== false;
-    const bodyHtml = collectAllBodyHtml() || String(item.formattedTextHtml || "").trim();
-    const bodyText = htmlToPlainText(bodyHtml) || String(item.text || "");
-    const keywords = editKeywordsText
-      .split(/[,，#\n]+/)
-      .map((k) => k.trim().replace(/^#+/, ""))
-      .filter(Boolean);
-    const mediaItems = normalizeGeneralInfoMediaItems({ mediaItems: editMediaItems });
-    const mainMedia = mediaItems[0];
-
-    const updated: GeneralInfoItem = {
-      ...item,
-      title: editTitle.trim() || item.title,
-      summary: joinSummaryParagraphs(editSummaries),
-      sourceUrl: item.sourceUrl,
-      primaryCategory: editPrimary.trim() || item.primaryCategory,
-      secondaryCategory: editSecondary.trim() || item.secondaryCategory,
-      thirdCategory: "",
-      keywords,
-      text: bodyText,
-      formattedTextHtml: bodyHtml,
-      mediaItems,
-      filePreview: mainMedia?.preview || "",
-      fileName: mainMedia?.name || "",
-    };
-
-    if (onSaveItemEdit) {
-      await onSaveItemEdit(updated);
-    }
-    setShowBodyImageInsert(false);
-    if (!keepEditing) setIsEditing(false);
-  }, [
-    collectAllBodyHtml,
-    editKeywordsText,
-    editMediaItems,
-    editPrimary,
-    editSecondary,
-    editSummaries,
-    editTitle,
-    item,
-    onSaveItemEdit,
-  ]);
-
-  // Source 수정 자동 저장 (수집 화면과 동일하게 debounce)
-  React.useEffect(() => {
-    if (!isEditing || !onSaveItemEdit) return;
-    const timer = window.setTimeout(() => {
-      if (!restoreDoneRef.current) return;
-      void (async () => {
-        try {
-          await saveAllEdits({ keepEditing: true });
-          setAutoSaveStatus(
-            `💾 자동 저장 ${new Date().toLocaleTimeString("ko-KR", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })}`,
-          );
-        } catch (error) {
-          console.error(error);
-          setAutoSaveStatus("⚠️ 자동 저장 실패");
-        }
-      })();
-    }, 900);
-    return () => window.clearTimeout(timer);
-  }, [
-    autoSaveTick,
-    bodyImageTick,
-    editKeywordsText,
-    editMediaItems,
-    editSummaries,
-    editTitle,
-    isEditing,
-    onSaveItemEdit,
-    saveAllEdits,
-  ]);
-
-  const updateSummaryParagraph = React.useCallback((index: number, value: string) => {
-    setEditSummaries((prev) => prev.map((part, i) => (i === index ? value : part)));
-    setAutoSaveTick((tick) => tick + 1);
-  }, []);
-
-  const addSummaryParagraph = React.useCallback(() => {
-    setEditSummaries((prev) => [...prev, ""]);
-    setAutoSaveTick((tick) => tick + 1);
-  }, []);
-
-  const removeSummaryParagraph = React.useCallback((index: number) => {
-    setEditSummaries((prev) => {
-      if (prev.length <= 1) return [""];
-      return prev.filter((_, i) => i !== index);
-    });
-    setAutoSaveTick((tick) => tick + 1);
-  }, []);
-
-  const addBodyParagraph = React.useCallback(() => {
-    const id = nextBodyParaIdRef.current++;
-    setBodyParas((prev) => [...prev, { id, html: "" }]);
-    focusedBodyParaIdRef.current = id;
-    setAutoSaveTick((tick) => tick + 1);
-    window.setTimeout(() => {
-      bodyParaRefs.current[id]?.focus();
-    }, 0);
-  }, []);
-
-  const removeBodyParagraph = React.useCallback((id: number) => {
-    setBodyParas((prev) => {
-      if (prev.length <= 1) {
-        const only = prev[0];
-        const editor = only ? bodyParaRefs.current[only.id] : null;
-        if (editor) editor.innerHTML = "";
-        return prev;
-      }
-      delete bodyParaRefs.current[id];
-      const next = prev.filter((para) => para.id !== id);
-      if (focusedBodyParaIdRef.current === id) {
-        focusedBodyParaIdRef.current = next[0]?.id ?? null;
-      }
-      return next;
-    });
-    setAutoSaveTick((tick) => tick + 1);
-  }, []);
-
-  const runBodyRichCommand = React.useCallback((command: string, value?: string) => {
-    const editor = getActiveBodyEditor();
-    editor?.focus();
-
-    const wrapSelectionWithSpan = (styles: Record<string, string>) => {
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) return false;
-      const range = selection.getRangeAt(0);
-      if (range.collapsed) {
-        const span = document.createElement("span");
-        Object.assign(span.style, styles);
-        span.appendChild(document.createTextNode("\u200b"));
-        range.insertNode(span);
-        range.setStart(span.firstChild!, 1);
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
-        return true;
-      }
-      try {
-        const span = document.createElement("span");
-        Object.assign(span.style, styles);
-        range.surroundContents(span);
-        return true;
-      } catch {
-        document.execCommand("styleWithCSS", false, "true");
-        if (styles.fontSize) {
-          document.execCommand("fontSize", false, "7");
-          editor?.querySelectorAll('font[size="7"]').forEach((node) => {
-            const el = node as HTMLElement;
-            const span = document.createElement("span");
-            span.style.fontSize = styles.fontSize!;
-            while (el.firstChild) span.appendChild(el.firstChild);
-            el.replaceWith(span);
-          });
-          return true;
-        }
-        return false;
-      }
-    };
-
-    if (command === "insertText" && value) {
-      const ok = document.execCommand("insertText", false, value);
-      if (!ok) {
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          range.insertNode(document.createTextNode(value));
-          range.collapse(false);
-          selection.removeAllRanges();
-          selection.addRange(range);
-        }
-      }
-    } else if (command === "fontSizePx" && value) {
-      wrapSelectionWithSpan({ fontSize: `${value}px` });
-    } else if (command === "highlight" && value) {
-      document.execCommand("styleWithCSS", false, "true");
-      const ok =
-        document.execCommand("hiliteColor", false, value) ||
-        document.execCommand("backColor", false, value);
-      if (!ok) wrapSelectionWithSpan({ backgroundColor: value });
-    } else if (command === "foreColor" && value) {
-      document.execCommand("styleWithCSS", false, "true");
-      document.execCommand("foreColor", false, value);
-    } else {
-      document.execCommand(command, false, value);
-    }
-    setBodyImageTick((prev) => prev + 1);
-    setAutoSaveTick((prev) => prev + 1);
-  }, [getActiveBodyEditor]);
-
-  const insertDataUrlIntoBody = React.useCallback(
-    (dataUrl: string, name: string) => {
-      const editor = getActiveBodyEditor();
-      if (!editor || !dataUrl) return;
-      removeInlineImageTrigger(editor);
-      insertInlineMediaIntoEditor(editor, [{ src: dataUrl, name, type: "image" }]);
-      enhanceInlineImageBlocks(editor);
-      bindInlineImageRemoveHandler(editor);
-      setShowBodyImageInsert(false);
-      setBodyImageTick((prev) => prev + 1);
-      setAutoSaveTick((prev) => prev + 1);
-    },
-    [getActiveBodyEditor],
-  );
-
-  const handleToolbarPasteImage = React.useCallback(async () => {
-    try {
-      if (!navigator.clipboard?.read) {
-        alert("이 브라우저는 클립보드 이미지 읽기를 지원하지 않습니다. 본문에 직접 붙여넣기 하세요.");
-        return;
-      }
-      const items = await navigator.clipboard.read();
-      const files: File[] = [];
-      for (const clipboardItem of items) {
-        const type = clipboardItem.types.find((t) => t.startsWith("image/"));
-        if (!type) continue;
-        const blob = await clipboardItem.getType(type);
-        files.push(new File([blob], `clipboard-${Date.now()}.png`, { type }));
-      }
-      if (!files.length) {
-        alert("클립보드에서 이미지를 찾지 못했습니다.");
-        return;
-      }
-      insertBodyImageFiles(files);
-    } catch {
-      alert("클립보드 접근에 실패했습니다. 본문 칸에 Ctrl+V / ⌘V로 붙여넣기 하세요.");
-    }
-  }, [insertBodyImageFiles]);
-
-  const handleAiReportAction = React.useCallback(() => {
-    // 저장 후 Report 화면 열기
-    void (async () => {
-      try {
-        await saveAllEdits({ keepEditing: true });
-      } catch {
-        /* ignore */
-      }
-      onOpenAiReport?.(item.id);
-    })();
-  }, [item.id, onOpenAiReport, saveAllEdits]);
-
   if (!item) return null;
 
-  const mediaItems = isEditing ? editMediaItems : getGeneralInfoDisplayMediaItems(item);
-
-  const copyPlainText = async (text: string) => {
-    const value = String(text || "").trim();
-    if (!value) {
-      alert("복사할 Text가 없습니다.");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopyFeedback("text");
-      window.setTimeout(() => {
-        setCopyFeedback((prev) => (prev === "text" ? null : prev));
-      }, 1800);
-    } catch {
-      alert("클립보드 복사에 실패했습니다.");
-    }
-  };
+  const mediaItems = getGeneralInfoDisplayMediaItems(item);
 
   return (
-    <div
-      className="overlay"
+    <div 
+      className="overlay" 
       onClick={onClose}
       style={{
         position: "fixed",
@@ -732,416 +242,73 @@ export default function GeneralInfoDetailModal({
         }}
       >
         <div className="modalHeader">
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <span>Source DATA · 수정</span>
-            <p className="mutedText" style={{ margin: "4px 0 0", fontSize: 12 }}>
-              일반 정보 수집과 같은 형식으로 수정합니다. 입력 내용은 자동 저장됩니다.
-            </p>
+          <div>
+            <span>일반 정보 상세보기</span>
+            <h3>{item.title}</h3>
           </div>
-          <div className="generalInfoDetailHeaderActions">
-            <button className="iconButton" type="button" onClick={onClose}>
-              ×
-            </button>
-          </div>
+          <button className="iconButton" type="button" onClick={onClose}>
+            ×
+          </button>
         </div>
 
-        <div
-          className="generalInfoDetailBody"
-          ref={detailBodyRef}
-          style={{ display: "flex", flexDirection: "column" }}
-        >
-          <section className="generalInfoDetailSection" style={{ order: 0 }}>
-            <strong>정보 제목</strong>
-            <input
-              value={editTitle}
-              onChange={(e) => {
-                setEditTitle(e.target.value);
-                setAutoSaveTick((prev) => prev + 1);
-              }}
-              placeholder="제목을 입력하세요"
-              style={{
-                display: "block",
-                width: "100%",
-                marginTop: 6,
-                boxSizing: "border-box",
-                borderRadius: 10,
-                border: "1px solid rgba(56, 189, 248, 0.45)",
-                background: "#020617",
-                color: "#e2e8f0",
-                padding: "10px 12px",
-                fontSize: 16,
-                fontWeight: 700,
-              }}
-            />
+        <div className="generalInfoDetailBody">
+          <section className="generalInfoDetailSection">
+            <strong>분류</strong>
+            <p>
+              {item.primaryCategory} &gt; {item.secondaryCategory} &gt;{" "}
+              {item.thirdCategory}
+            </p>
           </section>
 
-          <section className="generalInfoDetailSection" style={{ order: 1 }}>
-            <div className="generalInfoSectionTitleRow">
-              <strong>요약</strong>
-              <button
-                type="button"
-                className="secondaryButton smallActionButton"
-                onClick={addSummaryParagraph}
+          <section className="generalInfoDetailSection">
+            <strong>키워드</strong>
+            <div className="miniTags">
+              {item.keywords.length > 0 ? (
+                item.keywords.map((keyword) => <span key={keyword}>{keyword}</span>)
+              ) : (
+                <span>키워드 없음</span>
+              )}
+            </div>
+          </section>
+
+          <section className="generalInfoDetailSection">
+            <strong>출처 URL</strong>
+            {item.sourceUrl ? (
+              <a 
+                href={item.sourceUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ 
+                  wordBreak: "break-all", 
+                  overflowWrap: "anywhere", 
+                  display: "inline-block", 
+                  maxWidth: "100%" 
+                }}
               >
-                요약 추가
-              </button>
-            </div>
-            <p className="mutedText" style={{ margin: "0 0 8px", fontSize: 12 }}>
-              단락별로 요약을 작성할 수 있습니다. [요약 추가]로 단락을 늘릴 수 있습니다.
-            </p>
-            <div className="generalInfoSummaryParagraphList">
-              {editSummaries.map((paragraph, index) => (
-                <div className="generalInfoSummaryParagraph" key={`summary-${index}`}>
-                  <div className="generalInfoSummaryParagraphHead">
-                    <span>요약 {index + 1}</span>
-                    {editSummaries.length > 1 && (
-                      <button
-                        type="button"
-                        className="secondaryButton smallActionButton dangerSmallButton"
-                        onClick={() => removeSummaryParagraph(index)}
-                      >
-                        삭제
-                      </button>
-                    )}
-                  </div>
-                  <textarea
-                    value={paragraph}
-                    onChange={(e) => updateSummaryParagraph(index, e.target.value)}
-                    rows={3}
-                    placeholder="이 단락의 요약 내용을 입력하세요."
-                    className="generalInfoEditableTextarea"
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      borderRadius: 10,
-                      border: "1px solid rgba(148, 163, 184, 0.35)",
-                      background: "#020617",
-                      color: "#e2e8f0",
-                      padding: "10px 12px",
-                      fontSize: 13,
-                      lineHeight: 1.6,
-                      resize: "vertical",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="generalInfoDetailSection" style={{ order: 2 }}>
-            <div className="generalInfoSectionTitleRow">
-              <strong>Text 입력 / 편집</strong>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="secondaryButton smallActionButton"
-                  onClick={addBodyParagraph}
-                >
-                  단락 추가
-                </button>
-                <button
-                  type="button"
-                  className="secondaryButton smallActionButton generalInfoCopyAllBtn"
-                  onClick={() => void copyPlainText(collectAllBodyText() || item.text || "")}
-                >
-                  {copyFeedback === "text" ? "✅ 복사됨" : "📋 전체 복사"}
-                </button>
-              </div>
-            </div>
-            <p className="mutedText" style={{ margin: "0 0 8px", fontSize: 12 }}>
-              단락별로 본문을 작성할 수 있습니다. [단락 추가]로 칸을 늘릴 수 있습니다. 줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능
-            </p>
-            <CollectFormatToolbar
-              onUndo={() => runBodyRichCommand("undo")}
-              onRedo={() => runBodyRichCommand("redo")}
-              onBold={() => runBodyRichCommand("bold")}
-              onUnderline={() => runBodyRichCommand("underline")}
-              onFontSize={(px) => {
-                setCollectFontSizePx(px);
-                runBodyRichCommand("fontSizePx", String(px));
-              }}
-              onFontSizeStep={(delta) => {
-                const next = stepCollectFontSize(collectFontSizePx, delta);
-                setCollectFontSizePx(next);
-                runBodyRichCommand("fontSizePx", String(next));
-              }}
-              onColor={(c) => runBodyRichCommand("foreColor", c)}
-              onHighlight={(c) => runBodyRichCommand("highlight", c)}
-              onInsertChar={(ch) => runBodyRichCommand("insertText", ch)}
-              onImage={() => {
-                setShowBodyImageInsert(true);
-                window.setTimeout(() => toolbarFileRef.current?.click(), 0);
-              }}
-              onPasteImage={() => {
-                void handleToolbarPasteImage();
-              }}
-              onTextImage={() => setShowTextToImageModal(true)}
-              onHandwriting={() => setShowHandwritingModal(true)}
-            />
-            <input
-              ref={toolbarFileRef}
-              type="file"
-              accept="image/*,image/heic,image/heif,video/*"
-              multiple
-              hidden
-              onChange={(e) => {
-                insertBodyImageFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
-            <div
-              key={bodyEditorKey}
-              ref={bodyParagraphListRef}
-              className="generalInfoBodyParagraphList"
-            >
-              {bodyParas.map((para, index) => (
-                <div className="generalInfoBodyParagraph" key={para.id}>
-                  <div className="generalInfoSummaryParagraphHead">
-                    <span>단락 {index + 1}</span>
-                    {bodyParas.length > 1 && (
-                      <button
-                        type="button"
-                        className="secondaryButton smallActionButton dangerSmallButton"
-                        onClick={() => removeBodyParagraph(para.id)}
-                      >
-                        삭제
-                      </button>
-                    )}
-                  </div>
-                  <div
-                    ref={(el) => {
-                      bodyParaRefs.current[para.id] = el;
-                    }}
-                    className="generalInfoRichTextEditor collectPaperEditor"
-                    contentEditable
-                    suppressContentEditableWarning
-                    role="textbox"
-                    tabIndex={0}
-                    onFocus={() => {
-                      focusedBodyParaIdRef.current = para.id;
-                    }}
-                    onInput={() => {
-                      setBodyImageTick((prev) => prev + 1);
-                      setAutoSaveTick((prev) => prev + 1);
-                      checkBodyImageTrigger();
-                    }}
-                    onKeyUp={checkBodyImageTrigger}
-                    onCompositionEnd={checkBodyImageTrigger}
-                    onPaste={handleBodyEditorPaste}
-                    data-placeholder="이 단락의 본문을 입력하세요. 문장 끝에 S를 붙이면 이미지를 넣을 수 있습니다."
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      minHeight: 140,
-                      maxHeight: 360,
-                      overflowY: "auto",
-                      boxSizing: "border-box",
-                      borderRadius: 14,
-                      border: "1px solid #e2e8f0",
-                      background: "#ffffff",
-                      color: "#1a2430",
-                      padding: "14px 15px",
-                      fontSize: 15,
-                      lineHeight: 1.8,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            {showBodyImageInsert && (
-              <div ref={bodyImageInsertPanelRef} className="generalInfoTextImageInsertPanel">
-                <div className="generalInfoTextImageInsertHead">
-                  <strong>이미지 붙여넣기</strong>
-                  <span>S 감지 · 사진첩 또는 복사 붙여넣기</span>
-                  <button
-                    type="button"
-                    className="secondaryButton smallActionButton"
-                    onClick={() => {
-                      removeInlineImageTrigger(getActiveBodyEditor());
-                      setShowBodyImageInsert(false);
-                    }}
-                  >
-                    닫기
-                  </button>
-                </div>
-                <div className="generalInfoTextImageInsertActions">
-                  <label className="primaryLabel generalInfoTextImageFileLabel">
-                    🖼 사진첩 · 파일 선택
-                    <input
-                      ref={bodyImageFileRef}
-                      type="file"
-                      accept="image/*,image/heic,image/heif,video/*"
-                      multiple
-                      onChange={(e) => {
-                        insertBodyImageFiles(e.target.files);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                  <div
-                    className="generalInfoTextImagePasteZone"
-                    contentEditable
-                    suppressContentEditableWarning
-                    role="textbox"
-                    tabIndex={0}
-                    onPaste={handleBodyImageInsertPaste}
-                  >
-                    📋 아이폰·PC 이미지 여기 붙여넣기 (Ctrl+V / ⌘V)
-                  </div>
-                </div>
-              </div>
+                {item.sourceUrl}
+              </a>
+            ) : (
+              <p>출처 URL 없음</p>
             )}
-            <p className="mutedText" style={{ margin: "8px 0 0", fontSize: 12 }}>
-              문장 끝에 <strong>S</strong>를 붙이면 이미지 붙여넣기가 열립니다.
-            </p>
           </section>
 
-          <section className="generalInfoDetailSection" style={{ order: 3 }}>
-            <div className="generalInfoSectionTitleRow">
-              <strong>대표 이미지 / 자료</strong>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="secondaryButton smallActionButton"
-                  onClick={() => {
-                    if (coverImageFileRef.current) {
-                      coverImageFileRef.current.dataset.mode = "replace";
-                      coverImageFileRef.current.click();
-                    }
-                  }}
-                >
-                  {mediaItems.length === 0 ? "대표 이미지 추가" : "대표 이미지 교체"}
-                </button>
-                {mediaItems.length > 0 && (
-                  <button
-                    type="button"
-                    className="secondaryButton smallActionButton"
-                    onClick={() => {
-                      if (coverImageFileRef.current) {
-                        coverImageFileRef.current.dataset.mode = "append";
-                        coverImageFileRef.current.click();
-                      }
-                    }}
-                  >
-                    이미지 추가
-                  </button>
-                )}
-                {mediaItems.length > 0 && (
-                  <button
-                    type="button"
-                    className="secondaryButton smallActionButton dangerSmallButton"
-                    onClick={() => void persistRepresentativeMedia([])}
-                  >
-                    전체 삭제
-                  </button>
-                )}
-              </div>
-            </div>
-            <input
-              ref={coverImageFileRef}
-              type="file"
-              accept="image/*,video/*"
-              multiple
-              hidden
-              onChange={handleCoverFileChange}
-            />
-            <div
-              className="generalInfoIphonePasteZone"
-              contentEditable
-              suppressContentEditableWarning
-              role="textbox"
-              tabIndex={0}
-              onPaste={handleCoverPaste}
-              style={{
-                textAlign: "center",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "12px",
-                marginTop: 8,
-                cursor: "pointer",
-                minHeight: 48,
-              }}
-            >
-              <strong>대표 이미지 붙여넣기(교체)</strong>
-            </div>
+          <section className="generalInfoDetailSection">
+            <strong>대표 이미지 / 자료</strong>
             {mediaItems.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "10px" }}>
                 {mediaItems.map((media, index) => (
-                  <div
-                    className="generalInfoDetailMediaCard"
-                    key={media.id || index}
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border:
-                        index === 0
-                          ? "2px solid rgba(250, 204, 21, 0.65)"
-                          : "1px solid rgba(148, 163, 184, 0.22)",
-                      borderRadius: "14px",
-                      background: "rgba(15, 23, 42, 0.45)",
-                      position: "relative",
-                    }}
-                  >
-                    <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                      {index === 0 ? (
-                        <span className="generalInfoDraftMediaBadge representative">★ 대표</span>
-                      ) : (
-                        <button
-                          type="button"
-                          className="secondaryButton smallActionButton"
-                          onClick={() => setMediaAsRepresentative(index)}
-                        >
-                          ★ 대표로 교체
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="secondaryButton smallActionButton dangerSmallButton"
-                        onClick={() => removeEditMediaItem(index)}
-                      >
-                        삭제
-                      </button>
-                    </div>
+                  <div className="generalInfoDetailMediaCard" key={media.id || index} style={{ width: "100%", padding: "12px", border: "1px solid rgba(148, 163, 184, 0.22)", borderRadius: "14px", background: "rgba(15, 23, 42, 0.45)" }}>
                     {media.type === "video" ? (
-                      <video
-                        src={media.preview}
-                        controls
-                        style={{
-                          width: "100%",
-                          maxHeight: "500px",
-                          objectFit: "contain",
-                          borderRadius: "10px",
-                          display: "block",
-                        }}
-                      />
+                      <video src={media.preview} controls style={{ width: "100%", maxHeight: "500px", objectFit: "contain", borderRadius: "10px", display: "block" }} />
                     ) : (
                       <img
                         src={media.preview}
                         alt={media.name || item.title || `자료 이미지 ${index + 1}`}
-                        style={{
-                          width: "100%",
-                          maxHeight: "500px",
-                          objectFit: "contain",
-                          borderRadius: "10px",
-                          background: "rgba(2, 6, 23, 0.55)",
-                          display: "block",
-                          cursor: onOpenStorageImage ? "zoom-in" : "default",
-                        }}
-                        onClick={() => {
-                          if (!onOpenStorageImage) return;
-                          onOpenStorageImage(
-                            media.preview,
-                            media.name || `${item.title || "general_info"}_${index + 1}.jpg`,
-                          );
-                        }}
+                        style={{ width: "100%", maxHeight: "500px", objectFit: "contain", borderRadius: "10px", background: "rgba(2, 6, 23, 0.55)", display: "block" }}
                       />
                     )}
                     <p className="mutedText" style={{ margin: "8px 0 4px", wordBreak: "break-all" }}>
                       {media.name || `자료 이미지 ${index + 1}`}
-                      {index === 0 ? " · 창고 카드 썸네일" : ""}
                     </p>
                     {media.memo?.trim() && (
                       <div className="generalInfoDetailMediaMemo">
@@ -1153,194 +320,183 @@ export default function GeneralInfoDetailModal({
                 ))}
               </div>
             ) : (
-              <p style={{ marginTop: 8 }}>
-                대표 이미지가 저장되지 않았습니다. [대표 이미지 추가] 또는 붙여넣기로 등록하세요.
-              </p>
-            )}
-            {mediaItems.length > 0 && (
-              <p className="mutedText" style={{ marginTop: 8, fontSize: 12 }}>
-                ★ 대표로 교체하면 바로 반영됩니다. 본문·보고서 이미지에서도 고를 수 있습니다.
-              </p>
-            )}
-
-            {bodyImageSrcs.length > 0 && (
-              <div className="generalInfoBodyImagePickBox" style={{ marginTop: 14 }}>
-                <strong style={{ display: "block", marginBottom: 8, fontSize: 13, color: "#7dd3fc" }}>
-                  본문 이미지에서 대표 선택
-                </strong>
-                <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
-                  본문 TEXT에 넣은 사진을 대표 이미지로 쓸 수 있습니다.
-                </p>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
-                    gap: 10,
-                  }}
-                >
-                  {bodyImageSrcs.map((src, index) => {
-                    const isRep =
-                      mediaItems[0] &&
-                      (mediaItems[0].preview === src || mediaItems[0].fileUrl === src);
-                    return (
-                      <div
-                        key={`body-img-${index}`}
-                        style={{
-                          border: isRep
-                            ? "2px solid #facc15"
-                            : "1px solid rgba(148, 163, 184, 0.28)",
-                          borderRadius: 12,
-                          overflow: "hidden",
-                          background: "rgba(2, 6, 23, 0.55)",
-                        }}
-                      >
-                        <img
-                          src={src}
-                          alt={`본문 이미지 ${index + 1}`}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            height: 100,
-                            objectFit: "cover",
-                            background: "#020617",
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="secondaryButton smallActionButton"
-                          style={{ width: "100%", borderRadius: 0, fontSize: 11 }}
-                          disabled={Boolean(isRep)}
-                          onClick={() => void applyHtmlImageAsRepresentative(src, "본문 이미지")}
-                        >
-                          {isRep ? "★ 대표" : "★ 대표로 설정"}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {reportImageSrcs.length > 0 && (
-              <div className="generalInfoBodyImagePickBox" style={{ marginTop: 14 }}>
-                <strong style={{ display: "block", marginBottom: 8, fontSize: 13, color: "#7dd3fc" }}>
-                  보고서 이미지에서 대표 선택
-                </strong>
-                <p className="mutedText" style={{ margin: "0 0 10px", fontSize: 12 }}>
-                  보고서에 넣은 사진을 대표 이미지로 쓸 수 있습니다.
-                </p>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
-                    gap: 10,
-                  }}
-                >
-                  {reportImageSrcs.map((src, index) => {
-                    const isRep =
-                      mediaItems[0] &&
-                      (mediaItems[0].preview === src || mediaItems[0].fileUrl === src);
-                    return (
-                      <div
-                        key={`report-img-${index}`}
-                        style={{
-                          border: isRep
-                            ? "2px solid #facc15"
-                            : "1px solid rgba(148, 163, 184, 0.28)",
-                          borderRadius: 12,
-                          overflow: "hidden",
-                          background: "rgba(2, 6, 23, 0.55)",
-                        }}
-                      >
-                        <img
-                          src={src}
-                          alt={`보고서 이미지 ${index + 1}`}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            height: 100,
-                            objectFit: "cover",
-                            background: "#020617",
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="secondaryButton smallActionButton"
-                          style={{ width: "100%", borderRadius: 0, fontSize: 11 }}
-                          disabled={Boolean(isRep)}
-                          onClick={() => void applyHtmlImageAsRepresentative(src, "보고서 이미지")}
-                        >
-                          {isRep ? "★ 대표" : "★ 대표로 설정"}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <p>대표 이미지가 저장되지 않았습니다.</p>
             )}
           </section>
-          <section className="generalInfoDetailSection" style={{ order: 4 }}>
-            <strong>키워드</strong>
-            <p className="mutedText" style={{ margin: "4px 0 10px", fontSize: 12 }}>
-              키워드를 직접 입력하세요. 입력 내용은 자동 저장됩니다.
-            </p>
-            <div className="generalInfoResultBox generalInfoKeywordInputBox" style={{ marginBottom: 10 }}>
-              <strong>키워드 직접 입력</strong>
-              <input
-                value={editKeywordsText}
-                onChange={(e) => {
-                  setEditKeywordsText(e.target.value);
-                  setAutoSaveTick((prev) => prev + 1);
+
+          <section className="generalInfoDetailSection">
+            <strong>요약</strong>
+            <p>{item.summary || "요약 없음"}</p>
+          </section>
+
+          <section className="generalInfoDetailSection">
+            <strong>본문 Text</strong>
+            {item.text ? (
+              <div
+                className="generalInfoFormattedTextView"
+                dangerouslySetInnerHTML={{
+                  __html: getGeneralInfoFormattedHtml(item),
                 }}
-                placeholder="예: #npm, #run, #dev 또는 npm, run, dev"
-                className="generalInfoFactCheckStatusSelect"
-                style={{ width: "100%" }}
               />
-            </div>
-            <div className="generalInfoResultBox" style={{ marginBottom: 10 }}>
-              <strong>키워드</strong>
-              <div className="miniTags">
-                {editKeywordsText
-                  .split(/[,，#\n]+/)
-                  .map((k) => k.trim().replace(/^#+/, ""))
-                  .filter(Boolean).length > 0 ? (
-                  editKeywordsText
-                    .split(/[,，#\n]+/)
-                    .map((k) => k.trim().replace(/^#+/, ""))
-                    .filter(Boolean)
-                    .map((keyword) => <span key={keyword}>#{keyword}</span>)
-                ) : (
-                  <span>위에서 키워드를 입력하면 표시됩니다.</span>
-                )}
-              </div>
-            </div>
-            <div className="generalInfoActionRow" style={{ marginTop: 12 }}>
-              <button
-                type="button"
-                className="gradientButton"
-                disabled={isGeneratingReport}
-                onClick={handleAiReportAction}
-              >
-                {isGeneratingReport
-                  ? "작성 중…"
-                  : hasAiReport
-                    ? "Report 열기"
-                    : "Report 작성"}
-              </button>
-            </div>
-            {autoSaveStatus ? (
-              <p className="mutedText" style={{ margin: "8px 0 0", fontSize: 12 }}>
-                {autoSaveStatus}
-              </p>
             ) : (
-              <p className="mutedText" style={{ margin: "8px 0 0", fontSize: 12 }}>
-                입력 내용은 자동 저장됩니다. [Report]를 누르면 보고서 화면을 엽니다.
-              </p>
+              <pre>본문 Text 없음</pre>
+            )}
+          </section>
+
+          <section className="generalInfoDetailSection">
+            <strong>Fact Check 및 AI 보고서</strong>
+            {item.factCheckSummary ? (() => {
+              const { status: parsedStatus, summary: parsedSummary, result: parsedResult } = parseReportText(item.factCheckSummary);
+              const sections = parseMarkdownSections(parsedResult);
+              const hasReport = item.factCheckSummary && item.factCheckSummary.length > 80;
+              const statusToShow = item.factCheckStatus === "오류 가능성"
+                ? "오류 가능성"
+                : item.factCheckStatus === "확인 완료"
+                  ? "확인 완료"
+                  : hasReport
+                    ? "확인 완료"
+                    : parsedStatus || "확인 필요";
+
+              const isOk = statusToShow === "확인 완료";
+              const isCheck = statusToShow === "확인 필요";
+              const isError = statusToShow === "오류 가능" || statusToShow === "오류 가능성";
+
+              const badgeBg = isOk
+                ? "rgba(52, 211, 153, 0.15)"
+                : isCheck
+                  ? "rgba(250, 204, 21, 0.15)"
+                  : isError
+                    ? "rgba(248, 113, 113, 0.15)"
+                    : "rgba(148, 163, 184, 0.15)";
+
+              const badgeBorder = isOk
+                ? "1px solid rgba(52, 211, 153, 0.3)"
+                : isCheck
+                  ? "1px solid rgba(250, 204, 21, 0.3)"
+                  : isError
+                    ? "1px solid rgba(248, 113, 113, 0.3)"
+                    : "1px solid rgba(148, 163, 184, 0.3)";
+
+              const badgeColor = isOk
+                ? "#4ade80"
+                : isCheck
+                  ? "#facc15"
+                  : isError
+                    ? "#f87171"
+                    : "#94a3b8";
+
+              return (
+                <div style={{ marginTop: "10px" }}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" }}>
+                    <span className="miniTag" style={{
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      background: badgeBg,
+                      border: badgeBorder,
+                      color: badgeColor
+                    }}>
+                      {statusToShow}
+                    </span>
+                  </div>
+
+                  {parsedSummary && (
+                    <div className="reportSummaryCard" style={{
+                      background: "rgba(14, 165, 233, 0.08)",
+                      border: "1px solid rgba(56, 189, 248, 0.25)",
+                      borderRadius: "12px",
+                      padding: "12px 14px",
+                      marginBottom: "14px"
+                    }}>
+                      <strong style={{ color: "#38bdf8", fontSize: "13px", display: "block", marginBottom: "4px" }}>💡 AI 요약 및 핵심 피드백</strong>
+                      <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.6", color: "#cbd5e1" }}>{parsedSummary}</p>
+                    </div>
+                  )}
+
+                  <div className="reportSectionsContainer" style={{ display: "grid", gap: "12px" }}>
+                    {sections.map((sec, idx) => (
+                      <div key={idx} className="reportSectionCard" style={{
+                        background: "rgba(30, 41, 59, 0.35)",
+                        border: "1px solid rgba(148, 163, 184, 0.12)",
+                        borderRadius: "12px",
+                        padding: "14px 16px"
+                      }}>
+                        <h4 className="reportSectionHeader" style={{
+                          margin: "0 0 10px 0",
+                          fontSize: "14px",
+                          fontWeight: 800,
+                          color: "#bae6fd",
+                          borderBottom: "1px solid rgba(148, 163, 184, 0.12)",
+                          paddingBottom: "6px"
+                        }}>{sec.title}</h4>
+                        <div className="reportSectionBody" style={{ fontSize: "13px", color: "#e2e8f0" }}>
+                          <MarkdownViewer text={sec.content.join("\n")} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })() : (
+              <div style={{ 
+                whiteSpace: "pre-wrap", 
+                marginTop: "8px", 
+                lineHeight: "1.7",
+                background: "rgba(15, 23, 42, 0.4)",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                border: "1px solid rgba(148, 163, 184, 0.15)",
+                color: "#94a3b8",
+                fontSize: "13px"
+              }}>
+                아직 작성된 AI 보고서가 없습니다. 하단의 [AI 보고서] 버튼을 눌러 보고서를 생성해 보세요.
+              </div>
             )}
           </section>
         </div>
 
         <div className="modalFooter">
+          {item.factCheckSummary && onSavePdf && (
+            <button
+              className="secondaryButton"
+              style={{ borderColor: "rgba(56, 189, 248, 0.4)", color: "#bae6fd" }}
+              type="button"
+              onClick={() => onSavePdf(item)}
+            >
+              💾 PC 저장
+            </button>
+          )}
+          {item.factCheckSummary && onShareReport && (
+            <button
+              className="secondaryButton"
+              type="button"
+              onClick={() => onShareReport(item)}
+            >
+              공유하기
+            </button>
+          )}
+          <button
+            className="secondaryButton"
+            type="button"
+            onClick={() => onGenerateReport(item)}
+          >
+            AI 보고서
+          </button>
+          <button
+            className="secondaryButton"
+            type="button"
+            onClick={() => onRunFactCheck(item)}
+          >
+            정밀 Fact Check
+          </button>
+          <button
+            className="primaryButton"
+            type="button"
+            onClick={() => onEdit(item)}
+          >
+            수정
+          </button>
           {onDelete && (
             <button
               className="secondaryButton"
@@ -1359,26 +515,6 @@ export default function GeneralInfoDetailModal({
           </button>
         </div>
       </div>
-
-      {showHandwritingModal && (
-        <HandwritingModal
-          onCancel={() => setShowHandwritingModal(false)}
-          onInsert={(dataUrl) => {
-            insertDataUrlIntoBody(dataUrl, `handwriting-${Date.now()}.png`);
-            setShowHandwritingModal(false);
-          }}
-        />
-      )}
-      {showTextToImageModal && (
-        <TextToImageModal
-          initialText={String(collectAllBodyText() || item.text || "").slice(0, 800)}
-          onCancel={() => setShowTextToImageModal(false)}
-          onInsert={(dataUrl) => {
-            insertDataUrlIntoBody(dataUrl, `text-image-${Date.now()}.png`);
-            setShowTextToImageModal(false);
-          }}
-        />
-      )}
     </div>
   );
 }

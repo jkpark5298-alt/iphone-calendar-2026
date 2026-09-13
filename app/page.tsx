@@ -2,7 +2,6 @@
 
 import { Chapter3Info } from "../components/Chapter3Info";
 import GeneralInfoDetailModal from "../components/GeneralInfoDetailModal";
-import GeneralInfoAiReportScreen from "../components/GeneralInfoAiReportScreen";
 import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralInfoState";
 
 
@@ -10,34 +9,13 @@ import { ChangeEvent, ClipboardEvent, useCallback, useEffect, useMemo, useRef, u
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateApi";
 import {
-  getInformationAppDayUrl,
-  getInformationAppItemUrl,
-  groupInformationEntriesByDay,
-  loadInformationEntriesForMonth,
-  type InformationCalendarItem,
-} from "../lib/informationEntries";
-import {
-  enrichPhotoBookImageExifs,
-  extractPhotoExif,
-  getPhotoBookExifViewLines,
-  hasPhotoBookExif,
-  type PhotoBookImageExif,
-} from "../lib/photoExif";
-import { importWorkScheduleFromFile } from "../lib/workScheduleImport";
-import { PhotobookPersonAlbumGallery, PhotobookPersonAlbumScreen } from "../components/PhotobookPersonAlbumGallery";
-import { keepPersonPhotosFromDeletedItems } from "../lib/client-photobook-person-album";
-import { isPersonAlbumCategory, type PhotobookPersonSource } from "../lib/photobook-person-album";
-import {
-  bindInlineImageRemoveHandler,
-  collectClipboardImageFiles,
-  dedupeImageFiles,
-  editorHasInlineImageTrigger,
-  enhanceInlineImageBlocks,
-  htmlToPlainText,
-  insertInlineMediaIntoEditor,
-  readFilesAsDataUrls,
-  removeInlineImageTrigger,
-} from "../lib/generalInfoHelpers";
+  enhanceRichInlineImages,
+  insertImagesAtSlotOrCaret,
+  insertEmptyImageSlot,
+  tryConsumeImageTriggerToSlot,
+  handleRichImageSlotPointer,
+} from "../lib/richImageSlots";
+import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
@@ -59,8 +37,7 @@ type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orang
 type OriginalImageTarget = 
   | { type: "diary"; photoKey: string; index: number } 
   | { type: "insta"; id: string }
-  | { type: "storage-image"; url: string; fileName?: string }
-  | { type: "photobook-resize"; url: string; photoBookId: string; imageIndex: number; fileName?: string }
+  | { type: "photobook"; id: string }
   | null;
 type ScheduleItem = {
   id: string;
@@ -77,7 +54,7 @@ type InfoTextCard = {
   content: string;
   createdAt: string;
 };
-type CalendarMarkType = "C" | "A" | "당" | "심야" | "노조" | "休";
+type CalendarMarkType = "C" | "A" | "심야" | "노조";
 type CalendarMarkItem = {
   id: string;
   type: CalendarMarkType;
@@ -85,13 +62,12 @@ type CalendarMarkItem = {
 };
 
 type SearchResult = {
-  type: "diary" | "info" | "information" | "general";
+  type: "diary" | "info";
   entryDate: string;
   year: number;
   month: number;
   day: number;
   text: string;
-  itemId?: string;
 };
 type GoogleScheduleItem = {
   title: string;
@@ -117,25 +93,9 @@ const scheduleColorLabels: Record<ScheduleColor, string> = {
 const calendarMarkLabels: Record<CalendarMarkType, string> = {
   C: "C",
   A: "A",
-  당: "당",
   심야: "심야",
   노조: "노조",
-  休: "休",
 };
-
-function formatCalendarMarkText(type: CalendarMarkType, plus: boolean) {
-  const label = calendarMarkLabels[type];
-  if (plus && type !== "노조") return `👍${label}`;
-  return label;
-}
-
-function calendarMarkClassSuffix(type: CalendarMarkType) {
-  if (type === "심야") return "night";
-  if (type === "노조") return "union";
-  if (type === "休") return "rest";
-  if (type === "당") return "dang";
-  return type.toLowerCase();
-}
 
 const holidays: Record<string, string> = {
   "5-5": "어린이날",
@@ -311,16 +271,6 @@ function storageKey(type: string, month: number, day: number, year: number = 202
     return `iphone-diary-2026-${type}-${pad(month)}-${pad(day)}`;
   }
   return `iphone-diary-${year}-${type}-${pad(month)}-${pad(day)}`;
-}
-
-function diaryPendingStorageKey(month: number, day: number, year: number = 2026) {
-  return `${storageKey("diary", month, day, year)}-pending`;
-}
-
-function isDiaryEditorBlank(editor: HTMLElement | null) {
-  if (!editor) return true;
-  const liveText = String(editor.innerText || "").replace(/\u00a0/g, " ").trim();
-  return !liveText && !editor.querySelector("img, video");
 }
 
 function weatherStorageKey(month: number, day: number, year: number = 2026) {
@@ -500,7 +450,6 @@ export default function HomePage() {
   const [redDates, setRedDates] = useState<Record<number, number[]>>({});
   const [redDateInput, setRedDateInput] = useState("");
   const [calendarMarks, setCalendarMarks] = useState<Record<string, CalendarMarkItem[]>>({});
-  const [informationByDay, setInformationByDay] = useState<Record<string, InformationCalendarItem[]>>({});
   const [markDateInput, setMarkDateInput] = useState("");
   const [markType, setMarkType] = useState<CalendarMarkType>("C");
   const [markPlus, setMarkPlus] = useState(false);
@@ -521,37 +470,7 @@ export default function HomePage() {
   const [weatherSource, setWeatherSource] = useState("기상청 연결 대기");
   const [originalImageUrl, setOriginalImageUrl] = useState("");
   const [originalImageTarget, setOriginalImageTarget] = useState<OriginalImageTarget>(null);
-  const [photoResizeMaxSide, setPhotoResizeMaxSide] = useState<800 | 1200 | 1600 | 2400>(1200);
-  const [photoResizeBusy, setPhotoResizeBusy] = useState(false);
-  const [photoResizePreviewUrl, setPhotoResizePreviewUrl] = useState("");
-  const [photoResizeInfo, setPhotoResizeInfo] = useState("");
-  const [photoCropMode, setPhotoCropMode] = useState(false);
-  const [photoCropRect, setPhotoCropRect] = useState({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
-  const [photoCropAspect, setPhotoCropAspect] = useState<"free" | "1:1" | "4:3" | "16:9">("free");
-  const [photoCropStageSize, setPhotoCropStageSize] = useState({ w: 0, h: 0 });
-  const [photoCropNatural, setPhotoCropNatural] = useState({ w: 0, h: 0 });
-  const [photoCropScale, setPhotoCropScale] = useState(1);
-  const [photoCropPan, setPhotoCropPan] = useState({ x: 0, y: 0 });
-  const photoCropStageRef = useRef<HTMLDivElement | null>(null);
-  const photoCropImageRef = useRef<HTMLImageElement | null>(null);
-  const photoCropPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
-  const photoCropGestureRef = useRef<{
-    mode: "pan" | "pinch" | "crop-move" | "nw" | "ne" | "sw" | "se" | null;
-    startX: number;
-    startY: number;
-    startPan: { x: number; y: number };
-    startScale: number;
-    startDist: number;
-    startRect: { x: number; y: number; w: number; h: number };
-    pinchOriginX: number;
-    pinchOriginY: number;
-  } | null>(null);
-  const photoCropPanRef = useRef({ x: 0, y: 0 });
-  const photoCropScaleRef = useRef(1);
-  const photoCropRectRef = useRef({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
-  const photoCropStageSizeRef = useRef({ w: 0, h: 0 });
-  const photoCropNaturalRef = useRef({ w: 0, h: 0 });
-  const photoCropAspectRef = useRef<"free" | "1:1" | "4:3" | "16:9">("free");  const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
+  const [selectedInfoPhotoMenu, setSelectedInfoPhotoMenu] = useState<{ photoKey: string; index: number } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<"diary" | "info" | null>(null);
   const [datePickerValue, setDatePickerValue] = useState(`${todayDefault.year ?? 2026}-${pad(todayDefault.month)}-${pad(todayDefault.day)}`);
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -578,42 +497,6 @@ export default function HomePage() {
     } else {
       console.log(msg);
     }
-  }, []);
-
-  const makeDurableImageFiles = useCallback(async (files: File[]) => {
-    const durable: File[] = [];
-    for (const file of files) {
-      if (!file) continue;
-      const isImage =
-        !file.type ||
-        file.type.startsWith("image/") ||
-        file.type === "application/octet-stream" ||
-        /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || "");
-      if (!isImage) continue;
-      try {
-        const buffer = await file.arrayBuffer();
-        if (!buffer.byteLength) continue;
-        const name = file.name?.trim() || `pasted_${Date.now()}_${durable.length + 1}.jpg`;
-        const lower = name.toLowerCase();
-        let type = file.type || "";
-        if (!type.startsWith("image/")) {
-          if (lower.endsWith(".heic")) type = "image/heic";
-          else if (lower.endsWith(".heif")) type = "image/heif";
-          else if (lower.endsWith(".png")) type = "image/png";
-          else if (lower.endsWith(".webp")) type = "image/webp";
-          else type = "image/jpeg";
-        }
-        durable.push(
-          new File([buffer], name, {
-            type,
-            lastModified: file.lastModified || Date.now(),
-          })
-        );
-      } catch (error) {
-        console.warn("pasted image clone failed", error);
-      }
-    }
-    return durable;
   }, []);
 
   const infoState = useTravelDiaryGeneralInfoState({
@@ -647,9 +530,8 @@ export default function HomePage() {
   const [editingPhotoBookItemId, setEditingPhotoBookItemId] = useState<string | null>(null);
   const [photoBookInputImage, setPhotoBookInputImage] = useState<File | null>(null);
   const [photoBookInputImageMemos, setPhotoBookInputImageMemos] = useState<string[]>([]);
-  const [photoBookInputImageExifs, setPhotoBookInputImageExifs] = useState<PhotoBookImageExif[]>([]);
   const [pbMemoEditIdx, setPbMemoEditIdx] = useState<number | null>(null);
-  const [photoBookTab, setPhotoBookTab] = useState<"index" | "register" | "person-album">("index");
+  const [photoBookTab, setPhotoBookTab] = useState<"index" | "register">("index");
 
   // Restructured Info Repository states for global notes catalog
   const [allInstaCards, setAllInstaCards] = useState<InstaInfoCard[]>([]);
@@ -662,15 +544,6 @@ export default function HomePage() {
   const [selectedPhotoBookIds, setSelectedPhotoBookIds] = useState<string[]>([]);
   const [isPhotoAlbumModalOpen, setIsPhotoAlbumModalOpen] = useState(false);
   const [albumSearchQuery, setAlbumSearchQuery] = useState("");
-  const [photoAlbumViewer, setPhotoAlbumViewer] = useState<{
-    photoBookId: string;
-    keyword: string;
-    urls: string[];
-    memos: string[];
-    exifs: PhotoBookImageExif[];
-    index: number;
-  } | null>(null);
-  const [activePhotoResolvedExifs, setActivePhotoResolvedExifs] = useState<PhotoBookImageExif[] | null>(null);
   const [selectedInstaCardIds, setSelectedInstaCardIds] = useState<string[]>([]);
   const [isInfoBookModalOpen, setIsInfoBookModalOpen] = useState(false);
   const [infoBookSearchQuery, setInfoBookSearchQuery] = useState("");
@@ -680,16 +553,6 @@ export default function HomePage() {
   const audioChunksRef = useRef<BlobPart[]>([]);
   const diaryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const diaryRichTextRef = useRef<HTMLDivElement | null>(null);
-  const diaryTextImageFileRef = useRef<HTMLInputElement | null>(null);
-  const diaryHtmlFromEditorRef = useRef("");
-  const diarySaveTimerRef = useRef<number | null>(null);
-  const diaryComposingRef = useRef(false);
-  const diaryEditorFocusedRef = useRef(false);
-  const diarySaveGenRef = useRef(0);
-  const diaryPhotoLoadGenRef = useRef(0);
-  const diaryPhotoSavingRef = useRef(false);
-  const [showDiaryTextImageInsert, setShowDiaryTextImageInsert] = useState(false);
-  const [diaryPhotoSaving, setDiaryPhotoSaving] = useState(false);
   const infoTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const diaryEditStartRef = useRef<{ key: string; diaryText: string; voiceText: string } | null>(null);
   const infoEditStartRef = useRef<{ key: string; infoText: string } | null>(null);
@@ -699,163 +562,90 @@ export default function HomePage() {
     document.execCommand(command, false, value);
   }
 
-  function diaryTextEndsWithImageTrigger(raw: string) {
-    const text = String(raw || "").replace(/\u00a0/g, " ").replace(/\r/g, "");
-    const trimmedEnd = text.replace(/[ \t\n]+$/g, "");
-    return /[Ss]$/.test(trimmedEnd);
-  }
-
-  function prepareDiaryRichEditor(editor: HTMLDivElement | null) {
-    if (!editor) return;
-    enhanceInlineImageBlocks(editor);
-    bindInlineImageRemoveHandler(editor);
-  }
-
-  function checkDiaryTextImageTrigger() {
-    const editor = diaryRichTextRef.current;
-    const plain = String(editor?.innerText || "");
-    setShowDiaryTextImageInsert(
-      editorHasInlineImageTrigger(editor) || diaryTextEndsWithImageTrigger(plain),
-    );
-  }
-
-  function commitDiaryEditorHtml(options?: { immediate?: boolean }) {
-    const editor = diaryRichTextRef.current;
-    const html = editor?.innerHTML || "";
-    diaryHtmlFromEditorRef.current = html;
-
-    const flush = () => {
-      diarySaveTimerRef.current = null;
-      const latest = diaryRichTextRef.current?.innerHTML || diaryHtmlFromEditorRef.current;
-      diaryHtmlFromEditorRef.current = latest;
-      saveDiary(latest, voiceText);
-    };
-
-    if (options?.immediate) {
-      if (diarySaveTimerRef.current) {
-        window.clearTimeout(diarySaveTimerRef.current);
-        diarySaveTimerRef.current = null;
-      }
-      flush();
-      return html;
-    }
-
-    if (diaryComposingRef.current) return html;
-    if (diarySaveTimerRef.current) window.clearTimeout(diarySaveTimerRef.current);
-    diarySaveTimerRef.current = window.setTimeout(flush, 400);
-    return html;
-  }
-
-  function removeDiaryTrailingImageTrigger() {
-    const afterNode = removeInlineImageTrigger(diaryRichTextRef.current);
-    return afterNode;
-  }
-
-  function resolveDiaryInlineInsertAnchor(editor: HTMLElement, afterNode: Node | null) {
-    if (!afterNode || !editor.contains(afterNode)) return null;
-    let node: Node | null = afterNode;
-    while (node && node.parentNode && node.parentNode !== editor) {
-      node = node.parentNode;
-    }
-    if (!node || node === editor || node.parentNode !== editor) return null;
-    return node;
-  }
-
-  function insertDiaryImageFilesFromTextTrigger(files: FileList | File[] | null) {
-    if (!files || files.length === 0) return;
-    const snapshot = files instanceof FileList ? Array.from(files) : [...files];
-    const afterNode = removeDiaryTrailingImageTrigger();
-    commitDiaryEditorHtml({ immediate: true });
-    const list = dedupeImageFiles(snapshot);
-    const imageFiles = list.filter(
-      (file) =>
-        file.type.startsWith("image/") ||
-        file.type.startsWith("video/") ||
-        /\.(jpe?g|png|gif|webp|heic|heif|mp4|mov|webm)$/i.test(file.name || ""),
-    );
-    if (!imageFiles.length) {
-      alert("이미지 파일을 선택해 주세요.");
-      return;
-    }
-
-    void (async () => {
+  /** 일기장 본문에 인라인 이미지 업로드 (insta-fact-library onUploadImages 방식) */
+  async function uploadDiaryInlineImages(files: File[]): Promise<string[]> {
+    const ready = filterUploadImageFiles(files).slice(0, 8);
+    const urls: string[] = [];
+    for (const file of ready) {
       try {
-        const uploaded: Array<{ src: string; name: string; type: "image" | "video" }> = [];
-        for (const file of imageFiles) {
-          const isVideo =
-            file.type.startsWith("video/") || /\.(mp4|mov|webm)$/i.test(file.name || "");
-          let src = "";
-          if (isVideo) {
-            const loaded = await readFilesAsDataUrls([file]);
-            src = String(loaded[0]?.dataUrl || "").trim();
-          } else {
-            // data URL을 본문에 넣으면 저장이 실패하고 앱을 나갔다 오면 글이 사라짐 → Storage URL 사용
-            const uploadedItem = await uploadPhotoToSupabase(
-              file,
-              "diary-photos",
-              currentMonth,
-              currentDay,
-              Date.now() % 100000,
-              currentYear,
-            );
-            if (uploadedItem?.url) {
-              src = uploadedItem.url;
-            } else {
-              try {
-                src = String(await makeOptimizedImageDataUrl(file) || "").trim();
-              } catch (readError) {
-                console.warn("diary inline image optimize failed, fallback read", readError);
-                const loaded = await readFilesAsDataUrls([file]);
-                src = String(loaded[0]?.dataUrl || "").trim();
-              }
-              if (src.startsWith("data:image")) {
-                src = String(await makeImageDataUrl(src, 960, 0.72, true) || src).trim();
-              }
-            }
-          }
-          if (!src) continue;
-          uploaded.push({
-            src,
-            name: file.name || (isVideo ? "본문 동영상" : "본문 이미지"),
-            type: isVideo ? "video" : "image",
-          });
-        }
-
-        const editor = diaryRichTextRef.current;
-        if (!editor) {
-          alert("본문 편집기를 찾지 못했습니다. 화면을 새로고침한 뒤 다시 시도해 주세요.");
-          return;
-        }
-        if (!uploaded.length) {
-          alert("이미지를 읽지 못했습니다. JPG/PNG로 다시 선택하거나 사진 가져오기를 사용해 주세요.");
-          return;
-        }
-
-        const anchor = resolveDiaryInlineInsertAnchor(editor, afterNode);
-        insertInlineMediaIntoEditor(editor, uploaded, { afterNode: anchor });
-        prepareDiaryRichEditor(editor);
-        try {
-          commitDiaryEditorHtml({ immediate: true });
-        } catch (saveError) {
-          console.error("diary inline image save failed", saveError);
-          alert("이미지는 본문에 넣었지만 저장 공간이 부족할 수 있습니다. 사진을 줄인 뒤 다시 저장해 주세요.");
+        const compressed = await compressImageFile(file);
+        const item = await uploadPhotoToSupabase(compressed, "diary-photos", currentMonth, currentDay, 999, currentYear);
+        if (item?.url) {
+          urls.push(item.url);
+          continue;
         }
       } catch (error) {
-        console.error("diary inline image insert failed", error);
-        alert("이미지를 본문 TEXT에 넣지 못했습니다. 용량이 큰 원본 대신 작은 사진으로 다시 시도해 주세요.");
-      } finally {
-        setShowDiaryTextImageInsert(false);
+        console.error("다이어리 인라인 이미지 업로드 실패", error);
       }
-    })();
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(reader.error || new Error("read failed"));
+          reader.readAsDataURL(file);
+        });
+        if (dataUrl) urls.push(dataUrl);
+      } catch {
+        /* skip */
+      }
+    }
+    return urls;
   }
 
-  function handleDiaryTextImageInsertPaste(event: ClipboardEvent<HTMLDivElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-    const pastedFiles = collectClipboardImageFiles(event.clipboardData);
-    if (pastedFiles.length > 0) {
-      insertDiaryImageFilesFromTextTrigger(pastedFiles);
+  async function insertDiaryInlineImages(files: File[], slotId?: string | null) {
+    const editor = diaryRichTextRef.current;
+    const ready = filterUploadImageFiles(files);
+    if (!editor || ready.length === 0) return;
+    const urls = await uploadDiaryInlineImages(ready);
+    if (!urls.length) return;
+    editor.focus();
+    enhanceRichInlineImages(editor);
+    const inserted = insertImagesAtSlotOrCaret(
+      editor,
+      urls.map((src) => ({ src })),
+      slotId,
+    );
+    if (inserted) {
+      enhanceRichInlineImages(editor);
+      const html = editor.innerHTML || "";
+      saveDiary(html, voiceText);
     }
+  }
+
+  function handleDiaryInsertImageSlot() {
+    const editor = diaryRichTextRef.current;
+    if (!editor) return;
+    editor.focus();
+    insertEmptyImageSlot(editor);
+    saveDiary(editor.innerHTML || "", voiceText);
+  }
+
+  function handleDiaryRichInput() {
+    const editor = diaryRichTextRef.current;
+    if (!editor) return;
+    const slotId = tryConsumeImageTriggerToSlot(editor);
+    if (slotId) {
+      enhanceRichInlineImages(editor);
+    }
+  }
+
+  function handleDiaryRichEditorClick(event: React.MouseEvent<HTMLDivElement>) {
+    const editor = diaryRichTextRef.current;
+    if (!editor) return;
+    const handled = handleRichImageSlotPointer(editor, event.target as Node);
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+      saveDiary(editor.innerHTML || "", voiceText);
+    }
+  }
+
+  const diaryImageFileRef = useRef<HTMLInputElement | null>(null);
+
+  function handleDiaryRichImagePick(files: FileList | null) {
+    const list = Array.from(files || []);
+    if (!list.length) return;
+    void insertDiaryInlineImages(list);
   }
 
   function resizeTextareaToContent(element: HTMLTextAreaElement | null) {
@@ -941,17 +731,6 @@ export default function HomePage() {
         return;
       }
       beginDiaryTextUndoSession();
-      const editor = diaryRichTextRef.current;
-      if (editor) {
-        editor.focus();
-        const inserted = document.execCommand("insertText", false, editor.innerText?.trim() ? `\n${text}` : text);
-        if (!inserted) {
-          editor.appendChild(document.createTextNode(editor.innerText?.trim() ? `\n${text}` : text));
-        }
-        commitDiaryEditorHtml({ immediate: true });
-        requestAnimationFrame(checkDiaryTextImageTrigger);
-        return;
-      }
       const nextText = diaryText ? `${diaryText}\n${text}` : text;
       saveDiary(nextText, voiceText);
       requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
@@ -977,7 +756,7 @@ export default function HomePage() {
   }
 
   async function loadDiaryEntryFromSupabase(month: number, day: number, year: number = currentYear) {
-    if (!isSupabaseConfigured || !supabase) return { status: "skipped" as const };
+    if (!isSupabaseConfigured || !supabase) return null;
 
     const { data, error } = await supabase
       .from("diary_entries")
@@ -987,13 +766,10 @@ export default function HomePage() {
 
     if (error) {
       console.warn("Supabase diary load error:", error.message);
-      return { status: "error" as const };
+      return null;
     }
 
-    return {
-      status: "ok" as const,
-      data: data as { diary_text?: string | null; voice_text?: string | null; weather?: any } | null,
-    };
+    return data as { diary_text?: string | null; voice_text?: string | null; weather?: any } | null;
   }
 
   async function loadInfoEntryFromSupabase(month: number, day: number, year: number = currentYear) {
@@ -1181,7 +957,7 @@ export default function HomePage() {
       const type = row.mark_type as CalendarMarkType;
       const maxDay = getDaysInMonth(year, month);
       if (day < 1 || day > maxDay) return;
-      if (!["C", "A", "당", "심야", "노조", "休"].includes(type)) return;
+      if (!["C", "A", "심야", "노조"].includes(type)) return;
 
       const markKey = key(month, day, year);
       nextMarks[markKey] = [
@@ -1296,10 +1072,10 @@ export default function HomePage() {
 
 
 
-  async function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string, year: number = currentYear) {
-    if (!isSupabaseConfigured || !supabase) return true;
+  function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string, year: number = currentYear) {
+    if (!isSupabaseConfigured || !supabase) return;
 
-    const { error } = await supabase
+    void supabase
       .from("diary_entries")
       .upsert(
         {
@@ -1309,13 +1085,10 @@ export default function HomePage() {
           updated_at: new Date().toISOString(),
         },
         { onConflict: "entry_date" }
-      );
-
-    if (error) {
-      console.warn("Supabase diary save error:", error.message);
-      return false;
-    }
-    return true;
+      )
+      .then(({ error }) => {
+        if (error) console.warn("Supabase diary save error:", error.message);
+      });
   }
 
   function saveInfoEntryToSupabase(month: number, day: number, nextInfoText: string, year: number = currentYear) {
@@ -1583,50 +1356,106 @@ export default function HomePage() {
       return;
     }
 
+    if (!isSupabaseConfigured || !supabase) {
+      setSearchResults([]);
+      setSearchStatus("Supabase 연결 후 검색할 수 있습니다.");
+      return;
+    }
+
     setSearchStatus("검색 중...");
+    const pattern = `%${keyword}%`;
 
-    const nextResults: SearchResult[] = [];
+    const [diaryRes, infoCardsRes, infoMemoRes] = await Promise.all([
+      supabase
+        .from("diary_entries")
+        .select("entry_date, diary_text, voice_text")
+        .or(`diary_text.ilike.${pattern},voice_text.ilike.${pattern}`)
+        .order("entry_date", { ascending: true }),
+      supabase
+        .from("info_text_cards")
+        .select("entry_date, content")
+        .ilike("content", pattern)
+        .order("entry_date", { ascending: true }),
+      supabase
+        .from("info_photos")
+        .select("entry_date, caption")
+        .ilike("caption", pattern)
+        .order("entry_date", { ascending: true }),
+    ]);
 
-    try {
-      const response = await fetch(`/api/search?q=${encodeURIComponent(keyword)}`, {
-        cache: "no-store",
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload?.ok) {
-        console.warn("search api failed:", payload?.error || response.statusText);
-        if (!Array.isArray(payload?.results)) {
-          setSearchResults([]);
-          setSearchStatus(payload?.status || "검색 중 오류가 발생했습니다.");
-          return;
-        }
-      }
-      for (const row of payload?.results || []) {
-        nextResults.push({
-          type: row.type,
-          entryDate: row.entryDate,
-          year: Number(row.year),
-          month: Number(row.month),
-          day: Number(row.day),
-          text: String(row.text || ""),
-          itemId: row.itemId ? String(row.itemId) : undefined,
-        });
-      }
-      if (Array.isArray(payload?.warnings) && payload.warnings.length) {
-        console.warn("search api warnings:", payload.warnings.join(" / "));
-      }
-    } catch (error) {
-      console.warn("search api network error:", error);
+    const errors = [diaryRes.error, infoCardsRes.error, infoMemoRes.error].filter(Boolean);
+    if (errors.length) {
+      console.warn("Supabase search error:", errors.map(error => error?.message).join(" / "));
       setSearchResults([]);
       setSearchStatus("검색 중 오류가 발생했습니다.");
       return;
     }
 
-    // 로컬 상태(일정·근무·구글)는 API에 없으므로 클라이언트에서 병합
+    const nextResults: SearchResult[] = [];
+
+    (diaryRes.data || []).forEach((row: any) => {
+      const date = monthDayFromEntryDate(row.entry_date);
+      if (!date) return;
+      const text = [row.diary_text, row.voice_text].filter(Boolean).join(" / ");
+      nextResults.push({
+        type: "diary",
+        entryDate: row.entry_date,
+        year: date.year,
+        month: date.month,
+        day: date.day,
+        text: text || "일기장 검색 결과",
+      });
+    });
+
+    (infoCardsRes.data || []).forEach((row: any) => {
+      const date = monthDayFromEntryDate(row.entry_date);
+      if (!date) return;
+      
+      let cardText = row.content || "";
+      if (cardText.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(cardText);
+          cardText = `[인스타 정보 - ${parsed.category}] #${parsed.keyword} / ${parsed.originalText}`;
+        } catch (e) {}
+      }
+      
+      nextResults.push({
+        type: "info",
+        entryDate: row.entry_date,
+        year: date.year,
+        month: date.month,
+        day: date.day,
+        text: cardText || "인스타 주요 정보 검색 결과",
+      });
+    });
+
+    (infoMemoRes.data || []).forEach((row: any) => {
+      const date = monthDayFromEntryDate(row.entry_date);
+      if (!date) return;
+      
+      let captionText = row.caption || "";
+      if (captionText.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(captionText);
+          captionText = `[포토북] #${parsed.keyword} / ${parsed.memo}`;
+        } catch (e) {}
+      }
+      
+      nextResults.push({
+        type: "info",
+        entryDate: row.entry_date,
+        year: date.year,
+        month: date.month,
+        day: date.day,
+        text: captionText || "포토북 사진 메모 검색 결과",
+      });
+    });
+
     Object.entries(schedules).forEach(([scheduleKey, items]) => {
       const { year, month, day } = parseScheduleKey(scheduleKey);
       if (!month || !day) return;
 
-      items.forEach((item) => {
+      items.forEach(item => {
         const scheduleText = `${item.startTime ? `${item.startTime} ` : ""}${item.title}`;
         const searchText = [scheduleText, item.repeat, item.endDate].filter(Boolean).join(" / ");
         if (!searchText.toLowerCase().includes(keyword.toLowerCase())) return;
@@ -1642,45 +1471,8 @@ export default function HomePage() {
       });
     });
 
-    Object.entries(calendarMarks).forEach(([markKey, marks]) => {
-      const parts = String(markKey).split("-").map(Number);
-      let year = currentYear;
-      let month = 0;
-      let day = 0;
-      if (parts.length === 2) {
-        month = parts[0];
-        day = parts[1];
-        year = 2026;
-      } else if (parts.length >= 3) {
-        year = parts[0];
-        month = parts[1];
-        day = parts[2];
-      }
-      if (!month || !day) return;
-      const kw = keyword.toLowerCase();
-      marks.forEach((mark) => {
-        const label = formatCalendarMarkText(mark.type, mark.plus);
-        const hit =
-          mark.type === keyword ||
-          label === keyword ||
-          String(mark.type).toLowerCase().includes(kw) ||
-          label.toLowerCase().includes(kw);
-        if (!hit) return;
-        nextResults.push({
-          type: "diary",
-          entryDate: entryDate(month, day, year),
-          year,
-          month,
-          day,
-          text: `근무 표시 · ${label}`,
-        });
-      });
-    });
-
-    googleSchedules.forEach((item) => {
-      const googleText = [item.title, item.start, item.end, item.allDay ? "종일" : ""]
-        .filter(Boolean)
-        .join(" / ");
+    googleSchedules.forEach(item => {
+      const googleText = [item.title, item.start, item.end, item.allDay ? "종일" : ""].filter(Boolean).join(" / ");
       if (!googleText.toLowerCase().includes(keyword.toLowerCase())) return;
 
       nextResults.push({
@@ -1694,49 +1486,14 @@ export default function HomePage() {
     });
 
     const unique = new Map<string, SearchResult>();
-    nextResults.forEach((result) => {
-      const uniqueKey = `${result.type}-${result.itemId || result.entryDate}-${result.text.slice(0, 40)}`;
+    nextResults.forEach(result => {
+      const uniqueKey = `${result.type}-${result.entryDate}-${result.text.slice(0, 40)}`;
       if (!unique.has(uniqueKey)) unique.set(uniqueKey, result);
     });
 
-    const results = Array.from(unique.values()).slice(0, 50);
+    const results = Array.from(unique.values()).slice(0, 30);
     setSearchResults(results);
     setSearchStatus(results.length ? `${results.length}개 검색 결과` : "검색 결과가 없습니다.");
-  }
-
-  function openSearchResult(result: SearchResult) {
-    if (result.type === "diary") {
-      openDiary(result.month, result.day, result.year);
-      return;
-    }
-    if (result.type === "info") {
-      openInfo(result.month, result.day, result.year, "photobook");
-      return;
-    }
-    if (result.type === "information") {
-      const url = result.itemId
-        ? getInformationAppItemUrl(result.itemId)
-        : getInformationAppDayUrl(result.entryDate);
-      window.open(url, "_blank", "noopener,noreferrer");
-      return;
-    }
-    if (result.type === "general") {
-      openInfo(result.month, result.day, result.year, "generalInfo");
-      infoState.setGeneralInfoActiveTab("storage");
-      if (result.itemId) {
-        const idNum = Number(result.itemId);
-        if (Number.isFinite(idNum) && idNum > 0) {
-          infoState.handleOpenGeneralInfoDetail(idNum);
-        }
-      }
-    }
-  }
-
-  function searchResultLabel(result: SearchResult) {
-    if (result.type === "diary") return "일기장";
-    if (result.type === "info") return "정보보관소";
-    if (result.type === "information") return "정보함";
-    return "일반정보";
   }
 
   async function loadGoogleSchedulesForDay(month: number, day: number, year: number = currentYear) {
@@ -1852,12 +1609,12 @@ export default function HomePage() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", handleFocus);
 
-    // 5분 주기 동기화 — 화면이 보일 때만 (Edge Request 폭주 방지)
+    // 30초 주기 자동 폴링 — PC/아이폰 간 실시간에 가까운 동기화
     const pollingInterval = setInterval(() => {
       if (document.visibilityState === "visible") {
         syncSchedulesFromSupabase();
       }
-    }, 300000);
+    }, 30000);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -1875,34 +1632,24 @@ export default function HomePage() {
 
     let isActive = true;
     const photoKey = key(currentMonth, currentDay, currentYear);
-    const photoLoadGen = ++diaryPhotoLoadGenRef.current;
 
-    let localDiaryText = "";
-    let localVoiceText = "";
-    try {
-      const raw = localStorage.getItem(storageKey("diary", currentMonth, currentDay, currentYear));
-      const data = raw ? JSON.parse(raw) : {};
-      localDiaryText = data.diaryText || "";
-      localVoiceText = data.voiceText || "";
-      setDiaryText(localDiaryText);
-      setVoiceText(localVoiceText);
-      diaryHtmlFromEditorRef.current = localDiaryText;
-    } catch {
+    // Supabase가 설정된 상태에서는 서버 데이터를 우선합니다.
+    // 예전 localStorage 데이터가 기기마다 달라서 아이폰/PC가 다르게 보이는 문제를 방지합니다.
+    if (isSupabaseConfigured && supabase) {
       setDiaryText("");
       setVoiceText("");
-    }
-
-    let localPhotoItems: PhotoItem[] = [];
-    try {
-      const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay, currentYear));
-      localPhotoItems = rawPhotos ? JSON.parse(rawPhotos) : [];
-    } catch {
-      localPhotoItems = [];
-    }
-    setPhotos(prev => ({ ...prev, [photoKey]: localPhotoItems }));
-
-    if (!isSupabaseConfigured || !supabase) {
+      setPhotos(prev => ({ ...prev, [photoKey]: [] }));
+    } else {
       try {
+        const raw = localStorage.getItem(storageKey("diary", currentMonth, currentDay, currentYear));
+        const data = raw ? JSON.parse(raw) : {};
+        setDiaryText(data.diaryText || "");
+        setVoiceText(data.voiceText || "");
+
+        const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay, currentYear));
+        const items = rawPhotos ? JSON.parse(rawPhotos) : [];
+        setPhotos(prev => ({ ...prev, [photoKey]: items }));
+
         const rawWeather = localStorage.getItem(weatherStorageKey(currentMonth, currentDay, currentYear));
         if (rawWeather) {
           const cachedWeather = JSON.parse(rawWeather);
@@ -1920,24 +1667,25 @@ export default function HomePage() {
           }
         }
       } catch {
-        // 로컬 사진/날씨만 실패한 경우 본문은 유지
+        setDiaryText("");
+        setVoiceText("");
       }
     }
 
-    const pendingKey = diaryPendingStorageKey(currentMonth, currentDay, currentYear);
-    const pendingLocalSave = (() => {
-      try {
-        return localStorage.getItem(pendingKey) === "true";
-      } catch {
-        return false;
-      }
-    })();
-
-    loadDiaryEntryFromSupabase(currentMonth, currentDay, currentYear).then(remoteResult => {
+    loadDiaryEntryFromSupabase(currentMonth, currentDay, currentYear).then(remoteData => {
       if (!isActive) return;
 
-      const applyRemoteWeather = (remoteWeather: any) => {
-        if (!remoteWeather || typeof remoteWeather !== "object") return;
+      const remoteDiaryText = remoteData?.diary_text || "";
+      const remoteVoiceText = remoteData?.voice_text || "";
+      setDiaryText(remoteDiaryText);
+      setVoiceText(remoteVoiceText);
+      localStorage.setItem(
+        storageKey("diary", currentMonth, currentDay, currentYear),
+        JSON.stringify({ diaryText: remoteDiaryText, voiceText: remoteVoiceText })
+      );
+
+      const remoteWeather = remoteData?.weather;
+      if (remoteWeather && typeof remoteWeather === "object") {
         if (isWeatherForSelectedDate(remoteWeather, currentMonth, currentDay, currentYear)) {
           setWeather(remoteWeather.weather || "확인 필요");
           setTemp(remoteWeather.temperature || "-");
@@ -1950,88 +1698,19 @@ export default function HomePage() {
           setWeatherTime("-");
           setWeatherSource("기상청");
         }
-      };
-
-      const retryLocalDiarySave = () => {
-        const liveHtml = diaryRichTextRef.current?.innerHTML || localDiaryText;
-        const liveVoice = voiceText || localVoiceText;
-        if (!liveHtml && !liveVoice) return;
-        void saveDiaryEntryToSupabase(currentMonth, currentDay, liveHtml, liveVoice, currentYear).then((success) => {
-          if (!success) return;
-          try {
-            localStorage.removeItem(pendingKey);
-          } catch {
-            // ignore
-          }
-        });
-      };
-
-      if (remoteResult.status !== "ok") {
-        const pendingOnError = (() => {
-          try {
-            return localStorage.getItem(pendingKey) === "true";
-          } catch {
-            return pendingLocalSave;
-          }
-        })();
-        if (pendingOnError || diaryEditorFocusedRef.current) retryLocalDiarySave();
-        return;
       }
-
-      const pendingNow = (() => {
-        try {
-          return localStorage.getItem(pendingKey) === "true";
-        } catch {
-          return pendingLocalSave;
-        }
-      })();
-      const liveHtml = diaryRichTextRef.current?.innerHTML || "";
-      const liveHasEdits =
-        diaryEditorFocusedRef.current &&
-        liveHtml !== "" &&
-        liveHtml !== localDiaryText;
-
-      if (pendingNow || liveHasEdits) {
-        retryLocalDiarySave();
-        applyRemoteWeather(remoteResult.data?.weather);
-        return;
-      }
-
-      if (!remoteResult.data && (localDiaryText || localVoiceText)) {
-        retryLocalDiarySave();
-        return;
-      }
-
-      const remoteDiaryText = remoteResult.data?.diary_text || "";
-      const remoteVoiceText = remoteResult.data?.voice_text || "";
-      if (diaryEditorFocusedRef.current && liveHtml && liveHtml !== remoteDiaryText) {
-        retryLocalDiarySave();
-        applyRemoteWeather(remoteResult.data?.weather);
-        return;
-      }
-      setDiaryText(remoteDiaryText);
-      setVoiceText(remoteVoiceText);
-      diaryHtmlFromEditorRef.current = remoteDiaryText;
-      localStorage.setItem(
-        storageKey("diary", currentMonth, currentDay, currentYear),
-        JSON.stringify({ diaryText: remoteDiaryText, voiceText: remoteVoiceText })
-      );
-
-      applyRemoteWeather(remoteResult.data?.weather);
     });
 
     loadDiaryPhotosFromSupabase(currentMonth, currentDay, currentYear).then(remoteItems => {
-      if (!isActive || photoLoadGen !== diaryPhotoLoadGenRef.current || !remoteItems) return;
-      if (remoteItems.length === 0 && localPhotoItems.length > 0) return;
+      if (!isActive || !remoteItems) return;
 
       setPhotos(prev => ({ ...prev, [photoKey]: remoteItems }));
       setLocalStorageSafely(storageKey("photos", currentMonth, currentDay, currentYear), JSON.stringify(remoteItems));
 
       const calendarIndex = remoteItems.findIndex(item => item.isCalendarPhoto);
-      const thumbIndex = calendarIndex >= 0 ? calendarIndex : (remoteItems[0] ? 0 : -1);
-      if (thumbIndex >= 0) {
-        const nextCalendarPhotos = { ...calendarPhotos, [photoKey]: remoteItems[thumbIndex].url };
-        const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes, [photoKey]: thumbIndex };
+      if (calendarIndex >= 0) {
+        const nextCalendarPhotos = { ...calendarPhotos, [photoKey]: remoteItems[calendarIndex].url };
+        const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes, [photoKey]: calendarIndex };
         setCalendarPhotos(nextCalendarPhotos);
         setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
         setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
@@ -2055,18 +1734,6 @@ export default function HomePage() {
       isActive = false;
     };
   }, [view, currentMonth, currentDay, currentYear]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const items = await loadInformationEntriesForMonth(currentYear, currentMonth);
-      if (cancelled) return;
-      setInformationByDay(groupInformationEntriesByDay(items, currentYear, currentMonth));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentYear, currentMonth, view]);
 
   useEffect(() => {
     // Supabase에서 먼저 불러오고, 실패하면 localStorage fallback
@@ -2136,77 +1803,8 @@ export default function HomePage() {
 
   useEffect(() => {
     if (view !== "diary") return;
-    requestAnimationFrame(() => {
-      resizeTextareaToContent(diaryTextareaRef.current);
-      const editor = diaryRichTextRef.current;
-      if (!editor) return;
-      const nextHtml = diaryText || "";
-      const editorBlank = isDiaryEditorBlank(editor);
-      const editorFocused = document.activeElement === editor || diaryEditorFocusedRef.current;
-      const savedHasMedia = /<img|<video/i.test(nextHtml);
-      const liveHasMedia = Boolean(editor.querySelector("img, video"));
-      if (editorFocused && !editorBlank && !(savedHasMedia && !liveHasMedia)) {
-        checkDiaryTextImageTrigger();
-        return;
-      }
-      const producedByEditor = nextHtml === diaryHtmlFromEditorRef.current;
-      const shouldRestore =
-        Boolean(nextHtml) &&
-        (
-          editor.innerHTML !== nextHtml && (!editorFocused || editorBlank || !producedByEditor)
-          || (editorBlank && nextHtml)
-          || (savedHasMedia && !liveHasMedia)
-        );
-      if (shouldRestore) {
-        editor.innerHTML = nextHtml;
-        diaryHtmlFromEditorRef.current = nextHtml;
-        prepareDiaryRichEditor(editor);
-      }
-      checkDiaryTextImageTrigger();
-    });
-  }, [view, diaryText, currentYear, currentMonth, currentDay]);
-
-  useEffect(() => {
-    const persistDiaryOnHide = () => {
-      if (view !== "diary") return;
-      if (!diaryRichTextRef.current) return;
-      commitDiaryEditorHtml({ immediate: true });
-    };
-
-    const restoreDiaryOnShow = () => {
-      if (view !== "diary") return;
-      const editor = diaryRichTextRef.current;
-      if (!editor) return;
-      if (document.activeElement === editor && !isDiaryEditorBlank(editor)) return;
-      const saved = diaryHtmlFromEditorRef.current || diaryText;
-      if (!saved) return;
-      const editorBlank = isDiaryEditorBlank(editor);
-      const savedHasMedia = /<img|<video/i.test(saved);
-      const liveHasMedia = Boolean(editor.querySelector("img, video"));
-      if (editorBlank || (savedHasMedia && !liveHasMedia)) {
-        editor.innerHTML = saved;
-        diaryHtmlFromEditorRef.current = saved;
-        prepareDiaryRichEditor(editor);
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") persistDiaryOnHide();
-      if (document.visibilityState === "visible") restoreDiaryOnShow();
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", persistDiaryOnHide);
-    window.addEventListener("pageshow", restoreDiaryOnShow);
-    window.addEventListener("focus", restoreDiaryOnShow);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", persistDiaryOnHide);
-      window.removeEventListener("pageshow", restoreDiaryOnShow);
-      window.removeEventListener("focus", restoreDiaryOnShow);
-    };
-  }, [view, diaryText, voiceText]);
+    requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
+  }, [view, diaryText, currentMonth, currentDay]);
 
   useEffect(() => {
     if (view !== "info") return;
@@ -2216,322 +1814,6 @@ export default function HomePage() {
   useEffect(() => {
     setIsPhotoMemoExpanded(false);
   }, [activeItem]);
-
-  useEffect(() => {
-    if (!photoAlbumViewer) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closePhotoAlbumViewer();
-        return;
-      }
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        movePhotoAlbumViewer(-1);
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        movePhotoAlbumViewer(1);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [photoAlbumViewer]);
-
-  useEffect(() => {
-    if (!activeItem || activeItem.type !== "photobook" || !activeItem.id) {
-      setActivePhotoResolvedExifs(null);
-      return;
-    }
-    const photoId = activeItem.id;
-    const raw = allPhotoBookItems.find((item) => item.id === photoId);
-    if (!raw) {
-      setActivePhotoResolvedExifs(null);
-      return;
-    }
-    const parsed = parsePhotoBookMemo(raw.memo || "");
-    let cancelled = false;
-    void enrichPhotoBookImageExifs(parsed.imageExifs || []).then((exifs) => {
-      if (!cancelled) setActivePhotoResolvedExifs(exifs);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeItem, allPhotoBookItems]);
-
-  useEffect(() => {
-    photoCropPanRef.current = photoCropPan;
-  }, [photoCropPan]);
-
-  useEffect(() => {
-    photoCropScaleRef.current = photoCropScale;
-  }, [photoCropScale]);
-
-  useEffect(() => {
-    photoCropRectRef.current = photoCropRect;
-  }, [photoCropRect]);
-
-  useEffect(() => {
-    photoCropStageSizeRef.current = photoCropStageSize;
-  }, [photoCropStageSize]);
-
-  useEffect(() => {
-    photoCropNaturalRef.current = photoCropNatural;
-  }, [photoCropNatural]);
-
-  useEffect(() => {
-    photoCropAspectRef.current = photoCropAspect;
-  }, [photoCropAspect]);
-
-  useEffect(() => {
-    if (!photoCropMode) return;
-    const id = requestAnimationFrame(() => {
-      const img = photoCropImageRef.current;
-      if (img?.naturalWidth) {
-        onPhotoCropImageLoad();
-      } else {
-        updatePhotoCropStageSize();
-      }
-    });
-    return () => cancelAnimationFrame(id);
-  }, [photoCropMode, originalImageUrl]);
-
-  useEffect(() => {
-    if (!photoCropMode) return;
-
-    const getTouchPoint = (touch: Touch) => ({ x: touch.clientX, y: touch.clientY });
-
-    const beginPan = (x: number, y: number) => {
-      photoCropGestureRef.current = {
-        mode: "pan",
-        startX: x,
-        startY: y,
-        startPan: { ...photoCropPanRef.current },
-        startScale: photoCropScaleRef.current,
-        startDist: 0,
-        startRect: { ...photoCropRectRef.current },
-        pinchOriginX: 0,
-        pinchOriginY: 0,
-      };
-    };
-
-    const beginPinch = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-      const stage = photoCropStageRef.current;
-      if (!stage) return;
-      const bounds = stage.getBoundingClientRect();
-      const midX = (a.x + b.x) / 2 - bounds.left;
-      const midY = (a.y + b.y) / 2 - bounds.top;
-      photoCropGestureRef.current = {
-        mode: "pinch",
-        startX: midX,
-        startY: midY,
-        startPan: { ...photoCropPanRef.current },
-        startScale: photoCropScaleRef.current,
-        startDist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
-        startRect: { ...photoCropRectRef.current },
-        pinchOriginX: midX,
-        pinchOriginY: midY,
-      };
-    };
-
-    const applyPan = (x: number, y: number) => {
-      const gesture = photoCropGestureRef.current;
-      if (!gesture || gesture.mode !== "pan") return;
-      const stageSize = photoCropStageSizeRef.current;
-      const natural = photoCropNaturalRef.current;
-      if (stageSize.w <= 0 || stageSize.h <= 0) return;
-      const next = clampPhotoCropPan(
-        { x: gesture.startPan.x + (x - gesture.startX), y: gesture.startPan.y + (y - gesture.startY) },
-        photoCropScaleRef.current,
-        stageSize,
-        natural,
-        photoCropRectRef.current
-      );
-      setPhotoCropPan(next);
-    };
-
-    const applyPinch = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-      const gesture = photoCropGestureRef.current;
-      if (!gesture || gesture.mode !== "pinch" || gesture.startDist <= 0) return;
-      const stageSize = photoCropStageSizeRef.current;
-      const natural = photoCropNaturalRef.current;
-      if (stageSize.w <= 0 || stageSize.h <= 0) return;
-      const stage = photoCropStageRef.current;
-      if (!stage) return;
-      const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      const nextScale = clampPhotoCropScale(
-        gesture.startScale * (dist / gesture.startDist),
-        stageSize,
-        natural,
-        photoCropRectRef.current
-      );
-      const bounds = stage.getBoundingClientRect();
-      const localX = (a.x + b.x) / 2 - bounds.left;
-      const localY = (a.y + b.y) / 2 - bounds.top;
-      const offsetX = (gesture.pinchOriginX - stageSize.w / 2 - gesture.startPan.x) / gesture.startScale;
-      const offsetY = (gesture.pinchOriginY - stageSize.h / 2 - gesture.startPan.y) / gesture.startScale;
-      const pan = {
-        x: localX - stageSize.w / 2 - offsetX * nextScale,
-        y: localY - stageSize.h / 2 - offsetY * nextScale,
-      };
-      setPhotoCropScale(nextScale);
-      setPhotoCropPan(clampPhotoCropPan(pan, nextScale, stageSize, natural, photoCropRectRef.current));
-    };
-
-    const applyCropDrag = (x: number, y: number) => {
-      const gesture = photoCropGestureRef.current;
-      if (
-        !gesture ||
-        (gesture.mode !== "crop-move" &&
-          gesture.mode !== "nw" &&
-          gesture.mode !== "ne" &&
-          gesture.mode !== "sw" &&
-          gesture.mode !== "se")
-      ) {
-        return;
-      }
-      const stageSize = photoCropStageSizeRef.current;
-      const natural = photoCropNaturalRef.current;
-      if (stageSize.w <= 0 || stageSize.h <= 0) return;
-      const dx = (x - gesture.startX) / stageSize.w;
-      const dy = (y - gesture.startY) / stageSize.h;
-      const start = gesture.startRect;
-      let next = { ...start };
-
-      if (gesture.mode === "crop-move") {
-        next = { ...start, x: start.x + dx, y: start.y + dy };
-      } else if (gesture.mode === "nw") {
-        next = { x: start.x + dx, y: start.y + dy, w: start.w - dx, h: start.h - dy };
-      } else if (gesture.mode === "ne") {
-        next = { x: start.x, y: start.y + dy, w: start.w + dx, h: start.h - dy };
-      } else if (gesture.mode === "sw") {
-        next = { x: start.x + dx, y: start.y, w: start.w - dx, h: start.h + dy };
-      } else if (gesture.mode === "se") {
-        next = { x: start.x, y: start.y, w: start.w + dx, h: start.h + dy };
-      }
-
-      const aspect = photoCropAspectRef.current;
-      if (aspect !== "free") {
-        const ratioMap = { "1:1": 1, "4:3": 4 / 3, "16:9": 16 / 9 } as const;
-        const target = ratioMap[aspect];
-        const stageAspect = stageSize.w / stageSize.h;
-        const desired = target / stageAspect;
-        if (gesture.mode === "se" || gesture.mode === "ne") {
-          next.h = next.w / desired;
-        } else if (gesture.mode === "nw" || gesture.mode === "sw") {
-          next.w = next.h * desired;
-        }
-      }
-
-      const clampedRect = clampPhotoCropRect(next);
-      setPhotoCropRect(clampedRect);
-      setPhotoCropPan((prev) =>
-        clampPhotoCropPan(prev, photoCropScaleRef.current, stageSize, natural, clampedRect)
-      );
-    };
-
-    const onTouchStart = (event: TouchEvent) => {
-      const stage = photoCropStageRef.current;
-      if (!stage || !stage.contains(event.target as Node)) return;
-      // Don't steal handle interactions
-      if ((event.target as HTMLElement)?.classList?.contains("photo-crop-handle")) return;
-      if ((event.target as HTMLElement)?.closest?.(".photo-crop-handle")) return;
-
-      event.preventDefault();
-      const touches = Array.from(event.touches).map(getTouchPoint);
-      photoCropPointersRef.current.clear();
-      touches.forEach((pt, idx) => photoCropPointersRef.current.set(idx, pt));
-
-      if (touches.length >= 2) {
-        beginPinch(touches[0], touches[1]);
-      } else if (touches.length === 1) {
-        // Drag inside crop box moves the frame; outside pans the photo.
-        const target = event.target as HTMLElement | null;
-        if (target?.closest?.(".photo-crop-box") && !target.classList.contains("photo-crop-handle")) {
-          photoCropGestureRef.current = {
-            mode: "crop-move",
-            startX: touches[0].x,
-            startY: touches[0].y,
-            startPan: { ...photoCropPanRef.current },
-            startScale: photoCropScaleRef.current,
-            startDist: 0,
-            startRect: { ...photoCropRectRef.current },
-            pinchOriginX: 0,
-            pinchOriginY: 0,
-          };
-        } else {
-          beginPan(touches[0].x, touches[0].y);
-        }
-      }
-    };
-
-    const onTouchMove = (event: TouchEvent) => {
-      const gesture = photoCropGestureRef.current;
-      if (!gesture) return;
-      event.preventDefault();
-      const touches = Array.from(event.touches).map(getTouchPoint);
-      if (gesture.mode === "pinch" && touches.length >= 2) {
-        applyPinch(touches[0], touches[1]);
-      } else if (gesture.mode === "pan" && touches.length >= 1) {
-        applyPan(touches[0].x, touches[0].y);
-      } else if (touches.length >= 1) {
-        applyCropDrag(touches[0].x, touches[0].y);
-      }
-    };
-
-    const onTouchEnd = (event: TouchEvent) => {
-      const touches = Array.from(event.touches).map(getTouchPoint);
-      if (touches.length >= 2) {
-        beginPinch(touches[0], touches[1]);
-        return;
-      }
-      if (touches.length === 1) {
-        beginPan(touches[0].x, touches[0].y);
-        return;
-      }
-      photoCropGestureRef.current = null;
-      photoCropPointersRef.current.clear();
-    };
-
-    const onPointerMove = (event: PointerEvent) => {
-      // Mouse / stylus fallback (touch uses touch handlers above)
-      if (event.pointerType === "touch") return;
-      const gesture = photoCropGestureRef.current;
-      if (!gesture) return;
-      if (gesture.mode === "pan") {
-        applyPan(event.clientX, event.clientY);
-      } else {
-        applyCropDrag(event.clientX, event.clientY);
-      }
-    };
-
-    const onPointerUp = (event: PointerEvent) => {
-      if (event.pointerType === "touch") return;
-      photoCropGestureRef.current = null;
-    };
-
-    const onResize = () => updatePhotoCropStageSize();
-
-    // Listen on document so attachment does not depend on stage mount timing.
-    // non-passive touchstart/move so iOS can prevent page scroll while cropping.
-    document.addEventListener("touchstart", onTouchStart, { passive: false });
-    document.addEventListener("touchmove", onTouchMove, { passive: false });
-    document.addEventListener("touchend", onTouchEnd);
-    document.addEventListener("touchcancel", onTouchEnd);
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("pointercancel", onPointerUp);
-    window.addEventListener("resize", onResize);
-    return () => {
-      document.removeEventListener("touchstart", onTouchStart);
-      document.removeEventListener("touchmove", onTouchMove);
-      document.removeEventListener("touchend", onTouchEnd);
-      document.removeEventListener("touchcancel", onTouchEnd);
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", onPointerUp);
-      window.removeEventListener("resize", onResize);
-    };
-  }, [photoCropMode]);
 
   async function fetchWeatherFromKma() {
     if (!isSelectedDiaryDateToday(currentMonth, currentDay, currentYear)) {
@@ -2575,7 +1857,6 @@ export default function HomePage() {
   }
 
   function openCalendar(month = currentMonth) {
-    if (view === "diary") commitDiaryEditorHtml({ immediate: true });
     setCurrentMonth(month);
     setView("calendar");
   }
@@ -2595,34 +1876,17 @@ export default function HomePage() {
   }
 
   function openDiary(month: number, day: number, year: number = currentYear) {
-    if (view === "diary") commitDiaryEditorHtml({ immediate: true });
     setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);
-    diaryHtmlFromEditorRef.current = "";
-    diaryEditorFocusedRef.current = false;
-    diaryComposingRef.current = false;
-    setShowDiaryTextImageInsert(false);
     setView("diary");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function openInfo(
-    month: number,
-    day: number,
-    year: number = currentYear,
-    subView: "generalInfo" | "photobook" = "generalInfo"
-  ) {
-    if (view === "diary") commitDiaryEditorHtml({ immediate: true });
+  function openInfo(month: number, day: number, year: number = currentYear) {
     setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);
-    setInfoSubView(subView);
-    setActiveItem(null);
-    if (subView === "photobook") {
-      setPhotoBookTab("index");
-      setEditingPhotoBookItemId(null);
-    }
     setView("info");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -2722,7 +1986,7 @@ export default function HomePage() {
     localStorage.setItem("iphone-calendar-2026-marks", JSON.stringify(nextMarks));
   }
 
-  async function addCalendarMarks() {
+  function addCalendarMarks() {
     const parsedDays = (markDateInput.match(/\d+/g) || [])
       .map(value => Number(value))
       .filter(value => Number.isInteger(value) && value >= 1 && value <= getDaysInMonth(currentYear, currentMonth));
@@ -2733,156 +1997,49 @@ export default function HomePage() {
       return;
     }
 
-    const thumbTypes: CalendarMarkType[] = ["C", "A", "당"];
+    const nextPlus = markType === "노조" ? false : markPlus;
     const nextMarks = { ...calendarMarks };
 
-    // 👍 전용: C/A/당 선택 없이, 해당 일 기존 C/A/당 앞에만 👍
-    if (markPlus) {
-      const upgraded: Array<{ day: number; type: CalendarMarkType; hadBase: boolean }> = [];
-      const skippedDays: number[] = [];
-
-      uniqueDays.forEach((day) => {
-        const markKey = key(currentMonth, day, currentYear);
-        let current = [...(nextMarks[markKey] || [])];
-        let changed = false;
-
-        thumbTypes.forEach((type) => {
-          const sameType = current.filter((item) => item.type === type);
-          if (!sameType.length) return;
-          const hadBase = sameType.some((item) => !item.plus);
-          const keepId = sameType[0].id;
-          current = current.filter((item) => item.type !== type);
-          current.push({ id: keepId, type, plus: true });
-          upgraded.push({ day, type, hadBase });
-          changed = true;
-        });
-
-        if (!changed) skippedDays.push(day);
-        else nextMarks[markKey] = current;
-      });
-
-      if (!upgraded.length) {
-        alert("선택한 날짜에 C/A/당 표시가 없습니다. 먼저 C·A·당을 저장한 뒤 👍만 선택해 저장하세요.");
-        return;
-      }
-
-      saveCalendarMarks(nextMarks);
-
-      const supabaseClient = supabase;
-      if (isSupabaseConfigured && supabaseClient) {
-        const saveErrors: string[] = [];
-        await Promise.all(
-          upgraded.map(async ({ day, type, hadBase }) => {
-            const dbMonth = currentYear === 2026 ? currentMonth : currentYear * 100 + currentMonth;
-            if (hadBase) {
-              const { error: delError } = await supabaseClient
-                .from("calendar_marks")
-                .delete()
-                .eq("month", dbMonth)
-                .eq("day", day)
-                .eq("mark_type", type)
-                .eq("plus", false);
-              if (delError) console.warn("Supabase calendar mark base delete error:", delError.message);
-            }
-            const { error } = await supabaseClient.from("calendar_marks").upsert(
-              {
-                month: dbMonth,
-                day,
-                mark_type: type,
-                plus: true,
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "month,day,mark_type,plus" },
-            );
-            if (error) {
-              console.warn("Supabase calendar mark save error:", error.message);
-              saveErrors.push(error.message);
-            }
-          }),
-        );
-        if (saveErrors.length) {
-          alert(`👍 표시 서버 저장 일부 실패: ${saveErrors[0]}`);
-          return;
-        }
-      }
-
-      setMarkDateInput(uniqueDays.join(", "));
-      const upgradedLabel = upgraded
-        .map(({ day, type }) => `${day}일 👍${type}`)
-        .join(", ");
-      const skipMsg = skippedDays.length
-        ? `\n(C/A/당 없음 → 건너뜀: ${skippedDays.join(", ")}일)`
-        : "";
-      alert(`${currentMonth}월 ${upgradedLabel} 적용했습니다.${skipMsg}`);
-      return;
-    }
-
-    // 일반 근무 표시 저장 (C/A/당/심야/노조/休)
-    const nextMarksNormal = nextMarks;
-    uniqueDays.forEach((day) => {
+    uniqueDays.forEach(day => {
       const markKey = key(currentMonth, day, currentYear);
-      const current = [...(nextMarksNormal[markKey] || [])];
-      const exists = current.some((item) => item.type === markType);
+      const current = nextMarks[markKey] || [];
+      const exists = current.some(item => item.type === markType && item.plus === nextPlus);
       if (!exists) {
         current.push({
-          id: `${Date.now()}-${currentMonth}-${day}-${markType}-base`,
+          id: `${Date.now()}-${currentMonth}-${day}-${markType}-${nextPlus ? "plus" : "base"}`,
           type: markType,
-          plus: false,
+          plus: nextPlus,
         });
       }
-      nextMarksNormal[markKey] = current;
+      nextMarks[markKey] = current;
     });
 
-    saveCalendarMarks(nextMarksNormal);
+    saveCalendarMarks(nextMarks);
 
     const supabaseClient = supabase;
     if (isSupabaseConfigured && supabaseClient) {
-      const saveErrors: string[] = [];
-      await Promise.all(
-        uniqueDays.map(async (day) => {
-          const dbMonth = currentYear === 2026 ? currentMonth : currentYear * 100 + currentMonth;
-          const { error } = await supabaseClient.from("calendar_marks").upsert(
+      uniqueDays.forEach(day => {
+        const dbMonth = currentYear === 2026 ? currentMonth : currentYear * 100 + currentMonth;
+        void supabaseClient
+          .from("calendar_marks")
+          .upsert(
             {
               month: dbMonth,
               day,
               mark_type: markType,
-              plus: false,
+              plus: nextPlus,
               updated_at: new Date().toISOString(),
             },
-            { onConflict: "month,day,mark_type,plus" },
-          );
-          if (error) {
-            console.warn("Supabase calendar mark save error:", error.message);
-            saveErrors.push(error.message);
-          }
-        }),
-      );
-
-      if (saveErrors.length) {
-        const isCheckConstraint = saveErrors.some((msg) => /mark_type_check|23514/i.test(msg));
-        if (isCheckConstraint && markType === "休") {
-          alert(
-            "休 표시는 이 기기에는 저장됐지만, 서버(DB) 제약 때문에 PC·아이폰 공유에 실패했습니다.\n\n" +
-              "Supabase SQL Editor에서 아래를 한 번 실행해 주세요.\n\n" +
-              "ALTER TABLE public.calendar_marks DROP CONSTRAINT IF EXISTS calendar_marks_mark_type_check;\n" +
-              "ALTER TABLE public.calendar_marks ADD CONSTRAINT calendar_marks_mark_type_check CHECK (mark_type = ANY (ARRAY['C'::text, 'A'::text, '당'::text, '심야'::text, '노조'::text, '休'::text]));",
-          );
-        } else if (isCheckConstraint && markType === "당") {
-          alert(
-            "당 표시는 이 기기에는 저장됐지만, 서버(DB) 제약 때문에 공유에 실패할 수 있습니다.\n\n" +
-              "Supabase SQL Editor에서 아래를 한 번 실행해 주세요.\n\n" +
-              "ALTER TABLE public.calendar_marks DROP CONSTRAINT IF EXISTS calendar_marks_mark_type_check;\n" +
-              "ALTER TABLE public.calendar_marks ADD CONSTRAINT calendar_marks_mark_type_check CHECK (mark_type = ANY (ARRAY['C'::text, 'A'::text, '당'::text, '심야'::text, '노조'::text, '休'::text]));",
-          );
-        } else {
-          alert(`근무 표시 서버 저장 실패: ${saveErrors[0]}`);
-        }
-        return;
-      }
+            { onConflict: "month,day,mark_type,plus" }
+          )
+          .then(({ error }) => {
+            if (error) console.warn("Supabase calendar mark save error:", error.message);
+          });
+      });
     }
 
     setMarkDateInput(uniqueDays.join(", "));
-    alert(`${currentMonth}월 ${uniqueDays.join(", ")}일에 ${formatCalendarMarkText(markType, false)} 표시를 저장했습니다.`);
+    alert(`${currentMonth}월 ${uniqueDays.join(", ")}일에 ${markType}${nextPlus ? "+" : ""} 표시를 저장했습니다.`);
   }
 
   function deleteCalendarMark(month: number, day: number, mark: CalendarMarkItem, year: number = currentYear) {
@@ -2908,100 +2065,6 @@ export default function HomePage() {
         .then(({ error }) => {
           if (error) console.warn("Supabase calendar mark delete error:", error.message);
         });
-    }
-  }
-
-  async function importWorkScheduleMarksFromFile(file: File | null) {
-    if (!file) return;
-
-    try {
-      const result = await importWorkScheduleFromFile(file);
-      if (!result.ok || !result.marks.length) {
-        alert(result.message || "가져오기에 실패했습니다.");
-        return;
-      }
-
-      const year = result.year || currentYear;
-      const month = result.month || currentMonth;
-      const confirmMsg =
-        `${result.message}\n\n` +
-        `→ 현재 캘린더 ${year}년 ${month}월 근무 표시로 반영합니다.\n` +
-        `(검정색 타인/익일 정보는 포함되지 않습니다)\n\n` +
-        `같은 달 기존 C/A/당/休/심야/노조 표시는 덮어씁니다. 계속할까요?`;
-      if (!window.confirm(confirmMsg)) return;
-
-      const importTypes = new Set(result.marks.map((m) => m.type));
-      const nextMarks: Record<string, CalendarMarkItem[]> = { ...calendarMarks };
-
-      // 해당 월·가져올 타입만 제거 후 재기록 (다른 달/타입 보존)
-      Object.keys(nextMarks).forEach((markKey) => {
-        const parsed = parseScheduleKey(markKey);
-        if (parsed.year !== year || parsed.month !== month) return;
-        const kept = (nextMarks[markKey] || []).filter((item) => !importTypes.has(item.type as typeof result.marks[number]["type"]));
-        if (kept.length) nextMarks[markKey] = kept;
-        else delete nextMarks[markKey];
-      });
-
-      const stamp = Date.now();
-      result.marks.forEach((mark, index) => {
-        const markKey = key(mark.month, mark.day, mark.year);
-        const current = nextMarks[markKey] || [];
-        const exists = current.some((item) => item.type === mark.type && item.plus === mark.plus);
-        if (!exists) {
-          current.push({
-            id: `import-${stamp}-${index}-${mark.day}-${mark.type}`,
-            type: mark.type,
-            plus: mark.plus,
-          });
-        }
-        nextMarks[markKey] = current;
-      });
-
-      saveCalendarMarks(nextMarks);
-      setCurrentYear(year);
-      setCurrentMonth(month);
-
-      const supabaseClient = supabase;
-      if (isSupabaseConfigured && supabaseClient) {
-        const dbMonth = year === 2026 ? month : year * 100 + month;
-        const saveErrors: string[] = [];
-        await Promise.all(
-          result.marks.map(async (mark) => {
-            const { error } = await supabaseClient.from("calendar_marks").upsert(
-              {
-                month: dbMonth,
-                day: mark.day,
-                mark_type: mark.type,
-                plus: mark.plus,
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "month,day,mark_type,plus" },
-            );
-            if (error) saveErrors.push(error.message);
-          }),
-        );
-        if (saveErrors.length) {
-          const isCheckConstraint = saveErrors.some((msg) => /mark_type_check|23514/i.test(msg));
-          alert(
-            `기기에는 ${result.marks.length}건 반영됐지만 서버 저장 일부 실패:\n${saveErrors[0]}\n\n` +
-              (isCheckConstraint
-                ? "Supabase → SQL Editor에서 아래를 1회 실행한 뒤 다시 가져오세요.\n\n" +
-                  "ALTER TABLE public.calendar_marks DROP CONSTRAINT IF EXISTS calendar_marks_mark_type_check;\n" +
-                  "ALTER TABLE public.calendar_marks ADD CONSTRAINT calendar_marks_mark_type_check CHECK (mark_type = ANY (ARRAY['C'::text, 'A'::text, '당'::text, '심야'::text, '노조'::text, '休'::text]));"
-                : "잠시 후 다시 시도해 주세요."),
-          );
-        } else {
-          alert(`✅ ${year}년 ${month}월 근무 ${result.marks.length}건을 가져왔습니다.`);
-        }
-      } else {
-        alert(`✅ ${year}년 ${month}월 근무 ${result.marks.length}건을 가져왔습니다.`);
-      }
-
-      setView("calendar");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (error) {
-      console.error(error);
-      alert("근무표 가져오기 중 오류가 발생했습니다.");
     }
   }
 
@@ -3091,26 +2154,11 @@ export default function HomePage() {
 
     setDiaryText(nextDiaryText);
     setVoiceText(nextVoiceText);
-    setLocalStorageSafely(
+    localStorage.setItem(
       storageKey("diary", currentMonth, currentDay, year),
       JSON.stringify({ diaryText: nextDiaryText, voiceText: nextVoiceText })
     );
-    if (!isSupabaseConfigured || !supabase) return;
-    const pendingKey = diaryPendingStorageKey(currentMonth, currentDay, year);
-    const saveGen = ++diarySaveGenRef.current;
-    try {
-      localStorage.setItem(pendingKey, "true");
-    } catch {
-      // pending 표시 실패해도 저장은 시도
-    }
-    void saveDiaryEntryToSupabase(currentMonth, currentDay, nextDiaryText, nextVoiceText, year).then((success) => {
-      if (!success || saveGen !== diarySaveGenRef.current) return;
-      try {
-        localStorage.removeItem(pendingKey);
-      } catch {
-        // ignore
-      }
-    });
+    saveDiaryEntryToSupabase(currentMonth, currentDay, nextDiaryText, nextVoiceText, year);
   }
 
   function saveInfo(nextInfoText: string, year: number = currentYear) {
@@ -3160,7 +2208,7 @@ export default function HomePage() {
     });
   }
 
-  async function makeImageDataUrl(dataUrl: string, maxSide = 1000, quality = 0.68, force = false) {
+  async function makeImageDataUrl(dataUrl: string, maxSide = 1000, quality = 0.68) {
     try {
       const image = await loadImage(dataUrl);
       const ratio = Math.min(1, maxSide / Math.max(image.width, image.height));
@@ -3175,7 +2223,6 @@ export default function HomePage() {
       ctx.drawImage(image, 0, 0, width, height);
 
       const optimized = canvas.toDataURL("image/jpeg", quality);
-      if (force) return optimized;
       return optimized.length < dataUrl.length ? optimized : dataUrl;
     } catch {
       return dataUrl;
@@ -3184,13 +2231,8 @@ export default function HomePage() {
 
   async function makeOptimizedImageDataUrl(file: File) {
     const originalDataUrl = await readImageFileAsDataUrl(file);
-    const looksLikeImage =
-      file.type.startsWith("image/") ||
-      !file.type ||
-      file.type === "application/octet-stream" ||
-      /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || "");
-    if (!looksLikeImage) return originalDataUrl;
-    return makeImageDataUrl(originalDataUrl, 1200, 0.85, true);
+    if (!file.type.startsWith("image/")) return originalDataUrl;
+    return makeImageDataUrl(originalDataUrl, 1200, 0.85);
   }
 
   async function makeCalendarThumbDataUrl(dataUrl: string) {
@@ -4117,93 +3159,68 @@ export default function HomePage() {
 
   async function savePhotoFiles(files: File[]) {
     if (!files.length) return;
-    if (diaryPhotoSavingRef.current) {
-      alert("사진을 저장하는 중입니다. 잠시만 기다려 주세요.");
-      return;
+
+    const k = key(currentMonth, currentDay, currentYear);
+    const previousItems = photos[k] || [];
+    const previousCalendarPhotos = { ...calendarPhotos };
+    const previousCalendarPhotoIndexes = { ...calendarPhotoIndexes };
+    const newItems: PhotoItem[] = [];
+
+    for (const [offset, file] of files.entries()) {
+      const sortOrder = previousItems.length + offset;
+      const uploadedItem = await uploadPhotoToSupabase(file, "diary-photos", currentMonth, currentDay, sortOrder, currentYear);
+
+      if (uploadedItem) {
+        newItems.push(uploadedItem);
+        await saveDiaryPhotoRecordToSupabase(currentMonth, currentDay, uploadedItem, sortOrder, previousItems.length === 0 && offset === 0, currentYear);
+      } else {
+        newItems.push({
+          url: await makeOptimizedImageDataUrl(file),
+          name: file.name,
+          tag: tag(currentMonth, currentDay, currentYear),
+          extraTag: "",
+          memo: "",
+          size: "360",
+          memoWidth: "360",
+          memoHeight: "110",
+        });
+      }
     }
 
-    diaryPhotoSavingRef.current = true;
-    setDiaryPhotoSaving(true);
-    diaryPhotoLoadGenRef.current += 1;
+    if (!newItems.length) return;
 
-    try {
-      const k = key(currentMonth, currentDay, currentYear);
-      const previousItems = photos[k] || [];
-      const previousCalendarPhotos = { ...calendarPhotos };
-      const previousCalendarPhotoIndexes = { ...calendarPhotoIndexes };
-      const durableFiles = await makeDurableImageFiles(files);
-      const sourceFiles = durableFiles.length > 0 ? durableFiles : files;
-      const newItems: PhotoItem[] = [];
+    registerUndo({
+      label: "일기장 사진 추가",
+      target: "diaryPhotos",
+      photoKey: k,
+      year: currentYear,
+      month: currentMonth,
+      day: currentDay,
+      previousData: JSON.stringify(previousItems),
+      previousCalendarPhotos: JSON.stringify(previousCalendarPhotos),
+      previousCalendarPhotoIndexes: JSON.stringify(previousCalendarPhotoIndexes),
+    });
 
-      for (const [offset, file] of sourceFiles.entries()) {
-        const sortOrder = previousItems.length + offset;
-        try {
-          const uploadedItem = await uploadPhotoToSupabase(file, "diary-photos", currentMonth, currentDay, sortOrder, currentYear);
+    const nextPhotosForDay = [...previousItems, ...newItems];
+    const nextPhotos = { ...photos, [k]: nextPhotosForDay };
+    const nextCalendarPhotos = { ...calendarPhotos };
+    const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes };
 
-          if (uploadedItem) {
-            newItems.push(uploadedItem);
-            await saveDiaryPhotoRecordToSupabase(currentMonth, currentDay, uploadedItem, sortOrder, previousItems.length === 0 && offset === 0, currentYear);
-          } else {
-            newItems.push({
-              url: await makeOptimizedImageDataUrl(file),
-              name: file.name,
-              tag: tag(currentMonth, currentDay, currentYear),
-              extraTag: "",
-              memo: "",
-              size: "360",
-              memoWidth: "360",
-              memoHeight: "110",
-            });
-          }
-        } catch (error) {
-          console.warn("diary photo save failed", error);
-        }
-      }
-
-      if (!newItems.length) {
-        alert("사진을 가져오지 못했습니다. JPG/PNG로 다시 선택해 주세요.");
-        return;
-      }
-
-      registerUndo({
-        label: "일기장 사진 추가",
-        target: "diaryPhotos",
-        photoKey: k,
-        year: currentYear,
-        month: currentMonth,
-        day: currentDay,
-        previousData: JSON.stringify(previousItems),
-        previousCalendarPhotos: JSON.stringify(previousCalendarPhotos),
-        previousCalendarPhotoIndexes: JSON.stringify(previousCalendarPhotoIndexes),
-      });
-
-      const nextPhotosForDay = [...previousItems, ...newItems];
-      const nextPhotos = { ...photos, [k]: nextPhotosForDay };
-      const nextCalendarPhotos = { ...calendarPhotos };
-      const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes };
-
-      if (!nextCalendarPhotos[k]) {
-        nextCalendarPhotos[k] = await makeCalendarThumbDataUrl(newItems[0].url);
-        nextCalendarPhotoIndexes[k] = previousItems.length;
-      }
-
-      setPhotos(nextPhotos);
-      setCalendarPhotos(nextCalendarPhotos);
-      setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
-      savePhotos(currentMonth, currentDay, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes, currentYear);
-    } catch (error) {
-      console.warn("savePhotoFiles failed", error);
-      alert("사진을 가져오지 못했습니다. JPG/PNG로 다시 선택해 주세요.");
-    } finally {
-      diaryPhotoSavingRef.current = false;
-      setDiaryPhotoSaving(false);
+    if (!nextCalendarPhotos[k]) {
+      nextCalendarPhotos[k] = await makeCalendarThumbDataUrl(newItems[0].url);
+      nextCalendarPhotoIndexes[k] = previousItems.length;
     }
+
+    setPhotos(nextPhotos);
+    setCalendarPhotos(nextCalendarPhotos);
+    setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
+    savePhotos(currentMonth, currentDay, nextPhotosForDay, nextCalendarPhotos, nextCalendarPhotoIndexes, currentYear);
   }
 
   async function addPhotos(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []) as File[];
-    event.target.value = "";
     await savePhotoFiles(files);
+    event.target.value = "";
   }
 
   async function handlePhotoPaste(event: ClipboardEvent<HTMLDivElement>) {
@@ -4263,7 +3280,6 @@ export default function HomePage() {
   async function deletePhoto(k: string, index: number) {
     const items = photos[k] || [];
     if (!items[index]) return;
-    diaryPhotoLoadGenRef.current += 1;
 
     const deletingItem = items[index];
     const deletedUrl = deletingItem.url;
@@ -4324,573 +3340,6 @@ export default function HomePage() {
   function closeOriginalImage() {
     setOriginalImageUrl("");
     setOriginalImageTarget(null);
-    setPhotoResizePreviewUrl("");
-    setPhotoResizeInfo("");
-    setPhotoResizeBusy(false);
-    setPhotoCropMode(false);
-    setPhotoCropAspect("free");
-    setPhotoCropRect({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
-    setPhotoCropStageSize({ w: 0, h: 0 });
-    setPhotoCropNatural({ w: 0, h: 0 });
-    setPhotoCropScale(1);
-    setPhotoCropPan({ x: 0, y: 0 });
-    photoCropPointersRef.current.clear();
-    photoCropGestureRef.current = null;
-  }
-
-  function openStorageImage(url: string, fileName?: string) {
-    if (!url) return;
-    setPhotoResizePreviewUrl("");
-    setPhotoResizeInfo("");
-    setPhotoCropMode(false);
-    setOriginalImageUrl(url);
-    setOriginalImageTarget({ type: "storage-image", url, fileName });
-  }
-
-  function openPhotoBookImageResize(params: {
-    url: string;
-    photoBookId: string;
-    imageIndex: number;
-    fileName?: string;
-  }) {
-    if (!params.url || !params.photoBookId) return;
-    setPhotoResizeMaxSide(1200);
-    setPhotoResizePreviewUrl("");
-    setPhotoResizeInfo("");
-    setPhotoCropMode(false);
-    setPhotoCropAspect("free");
-    setPhotoCropRect({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
-    setPhotoCropScale(1);
-    setPhotoCropPan({ x: 0, y: 0 });
-    setOriginalImageUrl(params.url);
-    setOriginalImageTarget({
-      type: "photobook-resize",
-      url: params.url,
-      photoBookId: params.photoBookId,
-      imageIndex: params.imageIndex,
-      fileName: params.fileName,
-    });
-  }
-
-  function getPhotoCropBaseFit(
-    stage: { w: number; h: number },
-    natural: { w: number; h: number }
-  ) {
-    if (stage.w <= 0 || stage.h <= 0 || natural.w <= 0 || natural.h <= 0) {
-      return { baseScale: 1, displayW: 0, displayH: 0 };
-    }
-    const baseScale = Math.min(stage.w / natural.w, stage.h / natural.h);
-    return {
-      baseScale,
-      displayW: natural.w * baseScale,
-      displayH: natural.h * baseScale,
-    };
-  }
-
-  function getPhotoCropImageRect(
-    scale: number,
-    pan: { x: number; y: number },
-    stage: { w: number; h: number },
-    natural: { w: number; h: number }
-  ) {
-    const { displayW, displayH } = getPhotoCropBaseFit(stage, natural);
-    const imgW = displayW * scale;
-    const imgH = displayH * scale;
-    return {
-      left: (stage.w - imgW) / 2 + pan.x,
-      top: (stage.h - imgH) / 2 + pan.y,
-      width: imgW,
-      height: imgH,
-    };
-  }
-
-  function clampPhotoCropScale(
-    scale: number,
-    stage: { w: number; h: number },
-    natural: { w: number; h: number },
-    _cropRect: { x: number; y: number; w: number; h: number }
-  ) {
-    const { displayW, displayH } = getPhotoCropBaseFit(stage, natural);
-    if (displayW <= 0 || displayH <= 0) return 1;
-    // Allow zooming from fit(1) up to 8x. Covering the crop window is preferred but
-    // not forced as a floor — otherwise one-finger pan has zero room at open.
-    void _cropRect;
-    return Math.max(1, Math.min(8, scale));
-  }
-
-  function clampPhotoCropPan(
-    pan: { x: number; y: number },
-    scale: number,
-    stage: { w: number; h: number },
-    natural: { w: number; h: number },
-    cropRect: { x: number; y: number; w: number; h: number }
-  ) {
-    const img = getPhotoCropImageRect(scale, { x: 0, y: 0 }, stage, natural);
-    const cropLeft = cropRect.x * stage.w;
-    const cropTop = cropRect.y * stage.h;
-    const cropRight = (cropRect.x + cropRect.w) * stage.w;
-    const cropBottom = (cropRect.y + cropRect.h) * stage.h;
-    const centerOffsetX = (stage.w - img.width) / 2;
-    const centerOffsetY = (stage.h - img.height) / 2;
-    const cropW = cropRight - cropLeft;
-    const cropH = cropBottom - cropTop;
-
-    let x = pan.x;
-    let y = pan.y;
-
-    // Keep as much of the image under the crop as possible, but always allow
-    // some movement so finger drag never feels "stuck".
-    if (img.width <= cropW) {
-      x = (cropLeft + cropRight) / 2 - stage.w / 2;
-    } else {
-      const minX = cropRight - centerOffsetX - img.width;
-      const maxX = cropLeft - centerOffsetX;
-      x = Math.min(maxX, Math.max(minX, x));
-    }
-    if (img.height <= cropH) {
-      y = (cropTop + cropBottom) / 2 - stage.h / 2;
-    } else {
-      const minY = cropBottom - centerOffsetY - img.height;
-      const maxY = cropTop - centerOffsetY;
-      y = Math.min(maxY, Math.max(minY, y));
-    }
-    return { x, y };
-  }
-
-  function updatePhotoCropStageSize() {
-    const stage = photoCropStageRef.current;
-    if (!stage) return;
-    const w = stage.clientWidth;
-    const h = stage.clientHeight;
-    if (w <= 0 || h <= 0) return;
-    setPhotoCropStageSize({ w, h });
-    setPhotoCropScale((prev) => {
-      const next = clampPhotoCropScale(prev, { w, h }, photoCropNatural, photoCropRectRef.current);
-      setPhotoCropPan((pan) => clampPhotoCropPan(pan, next, { w, h }, photoCropNatural, photoCropRectRef.current));
-      return next;
-    });
-  }
-
-  function onPhotoCropImageLoad() {
-    const img = photoCropImageRef.current;
-    if (!img || !img.naturalWidth || !img.naturalHeight) return;
-    const natural = { w: img.naturalWidth, h: img.naturalHeight };
-    setPhotoCropNatural(natural);
-    requestAnimationFrame(() => {
-      const stage = photoCropStageRef.current;
-      if (!stage) return;
-      const w = stage.clientWidth;
-      const h = stage.clientHeight;
-      if (w <= 0 || h <= 0) return;
-      const stageSize = { w, h };
-      setPhotoCropStageSize(stageSize);
-      const scale = clampPhotoCropScale(1, stageSize, natural, photoCropRectRef.current);
-      setPhotoCropScale(scale);
-      setPhotoCropPan(clampPhotoCropPan({ x: 0, y: 0 }, scale, stageSize, natural, photoCropRectRef.current));
-    });
-  }
-
-  function clampPhotoCropRect(rect: { x: number; y: number; w: number; h: number }) {
-    let { x, y, w, h } = rect;
-    w = Math.max(0.12, Math.min(1, w));
-    h = Math.max(0.12, Math.min(1, h));
-    x = Math.max(0, Math.min(1 - w, x));
-    y = Math.max(0, Math.min(1 - h, y));
-    return { x, y, w, h };
-  }
-
-  function applyPhotoCropAspect(aspect: "free" | "1:1" | "4:3" | "16:9") {
-    setPhotoCropAspect(aspect);
-    if (aspect === "free") return;
-    const ratioMap = { "1:1": 1, "4:3": 4 / 3, "16:9": 16 / 9 } as const;
-    const target = ratioMap[aspect];
-    const stageAspect = photoCropStageSize.w > 0 && photoCropStageSize.h > 0
-      ? photoCropStageSize.w / photoCropStageSize.h
-      : 1;
-    let w = 0.84;
-    let h = w * (stageAspect / target);
-    if (h > 0.84) {
-      h = 0.84;
-      w = h * (target / stageAspect);
-    }
-    const nextRect = clampPhotoCropRect({ x: (1 - w) / 2, y: (1 - h) / 2, w, h });
-    setPhotoCropRect(nextRect);
-    setPhotoCropScale((prev) => {
-      const next = clampPhotoCropScale(prev, photoCropStageSize, photoCropNatural, nextRect);
-      setPhotoCropPan((pan) => clampPhotoCropPan(pan, next, photoCropStageSize, photoCropNatural, nextRect));
-      return next;
-    });
-  }
-
-  function startPhotoCropBoxDrag(
-    type: "crop-move" | "nw" | "ne" | "sw" | "se",
-    event: React.PointerEvent
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-    photoCropPointersRef.current.clear();
-    photoCropGestureRef.current = {
-      mode: type,
-      startX: event.clientX,
-      startY: event.clientY,
-      startPan: { ...photoCropPanRef.current },
-      startScale: photoCropScaleRef.current,
-      startDist: 0,
-      startRect: { ...photoCropRectRef.current },
-      pinchOriginX: 0,
-      pinchOriginY: 0,
-    };
-  }
-
-  function onPhotoCropStagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    // Touch is handled by native touch listeners for reliable multi-touch on iOS.
-    if (event.pointerType === "touch") return;
-    if (event.button !== 0) return;
-    const target = event.target as HTMLElement | null;
-    if (target?.closest?.(".photo-crop-handle")) return;
-    if (target?.closest?.(".photo-crop-box")) {
-      startPhotoCropBoxDrag("crop-move", event);
-      return;
-    }
-    photoCropPointersRef.current.clear();
-    photoCropGestureRef.current = {
-      mode: "pan",
-      startX: event.clientX,
-      startY: event.clientY,
-      startPan: { ...photoCropPanRef.current },
-      startScale: photoCropScaleRef.current,
-      startDist: 0,
-      startRect: { ...photoCropRectRef.current },
-      pinchOriginX: 0,
-      pinchOriginY: 0,
-    };
-  }
-
-  function nudgePhotoCropZoom(direction: 1 | -1) {
-    if (photoCropStageSize.w <= 0 || photoCropNatural.w <= 0) return;
-    const prevScale = photoCropScaleRef.current;
-    const nextScale = clampPhotoCropScale(
-      prevScale * (direction > 0 ? 1.2 : 1 / 1.2),
-      photoCropStageSize,
-      photoCropNatural,
-      photoCropRectRef.current
-    );
-    const pan = clampPhotoCropPan(
-      photoCropPanRef.current,
-      nextScale,
-      photoCropStageSize,
-      photoCropNatural,
-      photoCropRectRef.current
-    );
-    setPhotoCropScale(nextScale);
-    setPhotoCropPan(pan);
-  }
-
-  function onPhotoCropWheel(event: React.WheelEvent<HTMLDivElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (photoCropStageSize.w <= 0 || photoCropNatural.w <= 0) return;
-    const stage = photoCropStageRef.current;
-    if (!stage) return;
-    const bounds = stage.getBoundingClientRect();
-    const localX = event.clientX - bounds.left;
-    const localY = event.clientY - bounds.top;
-    const prevScale = photoCropScaleRef.current;
-    const nextScale = clampPhotoCropScale(
-      prevScale * (event.deltaY < 0 ? 1.08 : 1 / 1.08),
-      photoCropStageSize,
-      photoCropNatural,
-      photoCropRectRef.current
-    );
-    const offsetX = (localX - photoCropStageSize.w / 2 - photoCropPanRef.current.x) / prevScale;
-    const offsetY = (localY - photoCropStageSize.h / 2 - photoCropPanRef.current.y) / prevScale;
-    const pan = {
-      x: localX - photoCropStageSize.w / 2 - offsetX * nextScale,
-      y: localY - photoCropStageSize.h / 2 - offsetY * nextScale,
-    };
-    setPhotoCropScale(nextScale);
-    setPhotoCropPan(clampPhotoCropPan(pan, nextScale, photoCropStageSize, photoCropNatural, photoCropRectRef.current));
-  }
-
-  function beginPhotoCropMode() {
-    setPhotoCropMode(true);
-    setPhotoCropAspect("free");
-    setPhotoCropRect({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
-    setPhotoCropScale(1);
-    setPhotoCropPan({ x: 0, y: 0 });
-    setPhotoResizePreviewUrl("");
-    setPhotoResizeInfo("초록 틀을 드래그하거나, 사진을 확대·이동한 뒤 저장하세요.");
-  }
-
-  async function buildCroppedPhotoDataUrl() {
-    if (!originalImageUrl) throw new Error("원본 이미지가 없습니다.");
-    const source = await loadSourceDataUrl(originalImageUrl);
-    const image = await loadImage(source);
-    const stage = photoCropStageSize.w > 0
-      ? photoCropStageSize
-      : { w: photoCropStageRef.current?.clientWidth || 1, h: photoCropStageRef.current?.clientHeight || 1 };
-    const natural = photoCropNatural.w > 0
-      ? photoCropNatural
-      : { w: image.width, h: image.height };
-    const imgRect = getPhotoCropImageRect(photoCropScale, photoCropPan, stage, natural);
-    if (imgRect.width <= 0 || imgRect.height <= 0) {
-      throw new Error("잘라낼 이미지 영역을 계산하지 못했습니다.");
-    }
-
-    const cropLeft = photoCropRect.x * stage.w;
-    const cropTop = photoCropRect.y * stage.h;
-    const cropRight = (photoCropRect.x + photoCropRect.w) * stage.w;
-    const cropBottom = (photoCropRect.y + photoCropRect.h) * stage.h;
-
-    // Intersect crop window with the visible image so letterboxed areas are excluded.
-    const left = Math.max(cropLeft, imgRect.left);
-    const top = Math.max(cropTop, imgRect.top);
-    const right = Math.min(cropRight, imgRect.left + imgRect.width);
-    const bottom = Math.min(cropBottom, imgRect.top + imgRect.height);
-    const cropW = Math.max(1, right - left);
-    const cropH = Math.max(1, bottom - top);
-
-    let sx = Math.round(((left - imgRect.left) / imgRect.width) * image.width);
-    let sy = Math.round(((top - imgRect.top) / imgRect.height) * image.height);
-    let sw = Math.round((cropW / imgRect.width) * image.width);
-    let sh = Math.round((cropH / imgRect.height) * image.height);
-    sx = Math.max(0, Math.min(image.width - 1, sx));
-    sy = Math.max(0, Math.min(image.height - 1, sy));
-    sw = Math.max(1, Math.min(image.width - sx, sw));
-    sh = Math.max(1, Math.min(image.height - sy, sh));
-
-    const canvas = document.createElement("canvas");
-    canvas.width = sw;
-    canvas.height = sh;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("캔버스를 사용할 수 없습니다.");
-    ctx.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
-    const cropped = canvas.toDataURL("image/jpeg", 0.92);
-    return makeImageDataUrl(cropped, photoResizeMaxSide, 0.9, true);
-  }
-
-  async function loadSourceDataUrl(url: string) {
-    if (url.startsWith("data:")) return url;
-    const base64 = await imageUrlToBase64(url);
-    if (!base64) throw new Error("이미지를 불러오지 못했습니다.");
-    return `data:image/jpeg;base64,${base64}`;
-  }
-
-  async function previewPhotoBookResize(maxSide: 800 | 1200 | 1600 | 2400) {
-    if (!originalImageUrl) return;
-    setPhotoResizeMaxSide(maxSide);
-    setPhotoResizeBusy(true);
-    try {
-      const source = await loadSourceDataUrl(originalImageUrl);
-      const image = await loadImage(source);
-      const resized = await makeImageDataUrl(source, maxSide, 0.85, true);
-      const previewImage = await loadImage(resized);
-      setPhotoResizePreviewUrl(resized);
-      setPhotoResizeInfo(
-        `원본 ${image.width}×${image.height} → ${previewImage.width}×${previewImage.height} (최대 ${maxSide}px)`
-      );
-    } catch (error) {
-      console.warn(error);
-      alert("크기 미리보기에 실패했습니다. 다시 시도해 주세요.");
-    } finally {
-      setPhotoResizeBusy(false);
-    }
-  }
-
-  async function downloadStorageImage() {
-    if (!originalImageTarget) return;
-    if (originalImageTarget.type !== "storage-image" && originalImageTarget.type !== "photobook-resize") return;
-    const fileName = originalImageTarget.fileName || `saved_image_${Date.now()}.jpg`;
-    const sourceUrl = photoResizePreviewUrl || originalImageUrl;
-    if (!sourceUrl) return;
-    try {
-      if (sourceUrl.startsWith("data:")) {
-        const link = document.createElement("a");
-        link.href = sourceUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        return;
-      }
-      const response = await fetch(sourceUrl);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      window.open(sourceUrl, "_blank");
-    }
-  }
-
-  async function replacePhotoBookImageWithDataUrl(dataUrl: string, undoLabel: string) {
-    if (!originalImageTarget || originalImageTarget.type !== "photobook-resize") {
-      setPhotoResizeBusy(false);
-      return;
-    }
-    const { photoBookId, imageIndex } = originalImageTarget;
-    const targetItem = allPhotoBookItems.find((item) => item.id === photoBookId);
-    if (!targetItem) {
-      alert("포토북 항목을 찾을 수 없습니다.");
-      setPhotoResizeBusy(false);
-      return;
-    }
-
-    setPhotoResizeBusy(true);
-    try {
-      const blob = dataUrlToBlob(dataUrl);
-      const file = new File([blob], originalImageTarget.fileName || `photobook_edited_${Date.now()}.jpg`, {
-        type: "image/jpeg",
-      });
-
-      const dateStr = targetItem.tag || entryDate(currentMonth, currentDay, currentYear);
-      const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
-      const uploaded = await uploadPhotoToSupabase(file, "info-photos", tMonth, tDay, imageIndex, tYear);
-      const nextUrl = uploaded?.url || dataUrl;
-      const nextPath = uploaded?.storagePath || "";
-
-      const parsed = parsePhotoBookMemo(targetItem.memo || "");
-      const urls = [targetItem.url, ...(parsed.additionalImages?.map((img) => img.url) || [])].filter(Boolean);
-      const paths = [
-        targetItem.storagePath || "",
-        ...(parsed.additionalImages?.map((img) => img.storagePath || "") || []),
-      ];
-      while (urls.length <= imageIndex) urls.push("");
-      while (paths.length <= imageIndex) paths.push("");
-      urls[imageIndex] = nextUrl;
-      paths[imageIndex] = nextPath;
-
-      const primaryUrl = urls[0] || nextUrl;
-      const primaryPath = paths[0] || nextPath;
-      const additionalImages = urls.slice(1).map((url, i) => ({
-        url,
-        storagePath: paths[i + 1] || "",
-      }));
-      const serializedCaption = JSON.stringify({
-        type: "photobook",
-        keyword: parsed.keyword || "일반",
-        category2: parsed.category2 || "기타",
-        memo: parsed.memo || "",
-        imageMemos: parsed.imageMemos || [],
-        imageExifs: parsed.imageExifs || [],
-        additionalImages,
-        isPinned: parsed.isPinned || targetItem.isPinned || false,
-      });
-
-      const photoKey = key(tMonth, tDay, tYear);
-      const previousItems = infoPhotos[photoKey] || [];
-      registerUndo({
-        label: undoLabel,
-        target: "infoPhotos",
-        photoKey,
-        year: tYear,
-        previousData: JSON.stringify(previousItems),
-      });
-
-      const nextPhotosForDay = previousItems.map((item) => {
-        if (item.id !== photoBookId) return item;
-        return {
-          ...item,
-          url: primaryUrl,
-          name: primaryPath.split("/").pop() || item.name || "photo.jpg",
-          storagePath: primaryPath,
-          memo: serializedCaption,
-        };
-      });
-
-      setInfoPhotos((prev) => ({ ...prev, [photoKey]: nextPhotosForDay }));
-      saveInfoPhotos(tMonth, tDay, nextPhotosForDay, tYear);
-
-      if (isSupabaseConfigured && supabase && photoBookId && !photoBookId.startsWith("temp-")) {
-        await supabase
-          .from("info_photos")
-          .update({
-            caption: serializedCaption,
-            public_url: primaryUrl,
-            storage_path: primaryPath,
-          })
-          .eq("id", photoBookId);
-      }
-
-      if (editingPhotoBookItemId === photoBookId) {
-        setPhotoBookInputImageUrls(urls);
-        setPhotoBookInputImageStoragePaths(paths);
-        setPhotoBookInputImageUrl(primaryUrl);
-        setPhotoBookInputImageStoragePath(primaryPath);
-      }
-
-      setAllPhotoBookItems((prev) =>
-        prev.map((item) =>
-          item.id === photoBookId
-            ? {
-                ...item,
-                url: primaryUrl,
-                storagePath: primaryPath,
-                memo: serializedCaption,
-              }
-            : item
-        )
-      );
-
-      if (activeItem?.type === "photobook" && activeItem.id === photoBookId) {
-        setActivePreviewPhotoUrl(nextUrl);
-      }
-
-      setPhotoAlbumViewer((prev) => {
-        if (!prev || prev.photoBookId !== photoBookId) return prev;
-        const nextUrls = [...prev.urls];
-        if (imageIndex < nextUrls.length) nextUrls[imageIndex] = nextUrl;
-        else nextUrls.push(nextUrl);
-        return { ...prev, urls: nextUrls };
-      });
-
-      setOriginalImageUrl(nextUrl);
-      setPhotoResizePreviewUrl("");
-      setPhotoCropMode(false);
-      setPhotoResizeInfo(`저장 완료 · ${undoLabel}`);
-      alert(`${undoLabel}을(를) 완료하고 같은 포토북에 다시 저장했습니다.`);
-      await refreshAllInfoData();
-    } catch (error) {
-      console.error(error);
-      alert(`${undoLabel} 저장에 실패했습니다.`);
-    } finally {
-      setPhotoResizeBusy(false);
-    }
-  }
-
-  async function resizeAndResavePhotoBookImage() {
-    if (!originalImageTarget || originalImageTarget.type !== "photobook-resize") return;
-    setPhotoResizeBusy(true);
-    try {
-      const source = await loadSourceDataUrl(originalImageUrl);
-      const resizedDataUrl = photoResizePreviewUrl || await makeImageDataUrl(source, photoResizeMaxSide, 0.85, true);
-      await replacePhotoBookImageWithDataUrl(resizedDataUrl, "크기 변경");
-    } catch (error) {
-      console.error(error);
-      alert("포토북 사진 크기 변경 저장에 실패했습니다.");
-      setPhotoResizeBusy(false);
-    }
-  }
-
-  async function cropAndResavePhotoBookImage() {
-    if (!originalImageTarget || originalImageTarget.type !== "photobook-resize") return;
-    setPhotoResizeBusy(true);
-    try {
-      const croppedDataUrl = await buildCroppedPhotoDataUrl();
-      const previewImage = await loadImage(croppedDataUrl);
-      setPhotoResizePreviewUrl(croppedDataUrl);
-      setPhotoResizeInfo(`잘라내기 ${previewImage.width}×${previewImage.height}`);
-      await replacePhotoBookImageWithDataUrl(croppedDataUrl, "잘라내기");
-    } catch (error) {
-      console.error(error);
-      alert("포토북 사진 잘라내기 저장에 실패했습니다.");
-      setPhotoResizeBusy(false);
-    }
   }
 
   async function deleteOriginalDiaryPhoto() {
@@ -5170,9 +3619,9 @@ export default function HomePage() {
                 {dayMarks.slice(0, 4).map(mark => (
                   <span
                     key={`${mark.type}-${mark.plus}`}
-                    className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(mark.type)}`}
+                    className={`calendar-mark calendar-mark-${mark.type === "심야" ? "night" : mark.type === "노조" ? "union" : mark.type.toLowerCase()}`}
                   >
-                    {formatCalendarMarkText(mark.type, mark.plus)}
+                    {calendarMarkLabels[mark.type]}{mark.plus ? "+" : ""}
                   </span>
                 ))}
               </div>
@@ -5205,47 +3654,13 @@ export default function HomePage() {
                     event.stopPropagation();
                     openScheduleEditorForItem(item, currentMonth, day);
                   }}
-                  aria-label={`${item.title} 일정 수정${item.startTime ? ` (${item.startTime})` : ""}`}
-                  title={item.startTime ? `${item.startTime} ${item.title}` : item.title}
+                  aria-label={`${item.title} 일정 수정`}
                 >
-                  {item.title || "제목 없음"}
+                  {item.startTime && <span>{item.startTime}</span>} {item.title}
                 </button>
               ))}
             </div>
           )}
-          {(() => {
-            const iso = entryDate(currentMonth, day, currentYear);
-            const infoItems = (informationByDay[iso] || []).filter((item) => !item.checked);
-            if (!infoItems.length) return null;
-            return (
-              <div className="information-chip-list" aria-label={`${currentMonth}월 ${day}일 정보함`}>
-                {infoItems.slice(0, 3).map((item) => (
-                  <a
-                    key={item.id}
-                    className={`information-chip information-chip-${item.category}`}
-                    href={getInformationAppItemUrl(item.id)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(event) => event.stopPropagation()}
-                    title={item.summary || item.title}
-                  >
-                    {item.title}
-                  </a>
-                ))}
-                {infoItems.length > 3 && (
-                  <a
-                    className="information-chip information-chip-more"
-                    href={getInformationAppDayUrl(iso)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    +{infoItems.length - 3}
-                  </a>
-                )}
-              </div>
-            );
-          })()}
         </div>
       );
     }
@@ -5279,24 +3694,10 @@ export default function HomePage() {
           </h1>
           <div className="head-actions calendar-top-actions calendar-top-actions-redesign">
             <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("diary")}>일기장</button>
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfo(currentMonth, currentDay, currentYear, "photobook")}>포토</button>
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfo(currentMonth, currentDay, currentYear, "generalInfo")}>일반</button>
+            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfo(currentMonth, currentDay)}>정보보관소</button>
             <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
-            <label className="mark-btn work-ics-import-btn" title="근무표 ICS/JSON 가져오기" style={{ cursor: "pointer" }}>
-              가져오기
-              <input
-                type="file"
-                accept=".ics,.json,text/calendar,application/json"
-                hidden
-                onChange={(event) => {
-                  const file = event.target.files?.[0] || null;
-                  void importWorkScheduleMarksFromFile(file);
-                  event.target.value = "";
-                }}
-              />
-            </label>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
             <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
           </div>
@@ -5309,7 +3710,7 @@ export default function HomePage() {
               value={searchKeyword}
               onChange={e => setSearchKeyword(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") void searchDiaryAndInfo(); }}
-              placeholder="일기장·일정·정보함·일반정보 검색"
+              placeholder="일기장/정보보관소 검색어 입력"
             />
             <button type="button" className="soft-btn" onClick={() => void searchDiaryAndInfo()}>검색</button>
           </div>
@@ -5319,13 +3720,11 @@ export default function HomePage() {
               {searchResults.map((result, index) => (
                 <button
                   type="button"
-                  key={`${result.type}-${result.itemId || result.entryDate}-${index}`}
+                  key={`${result.type}-${result.entryDate}-${index}`}
                   className="calendar-search-result"
-                  onClick={() => openSearchResult(result)}
+                  onClick={() => result.type === "diary" ? openDiary(result.month, result.day) : openInfo(result.month, result.day)}
                 >
-                  <strong>
-                    {searchResultLabel(result)} · {pad(result.month)}/{pad(result.day)}
-                  </strong>
+                  <strong>{result.type === "diary" ? "일기장" : "정보보관소"} · {pad(result.month)}/{pad(result.day)}</strong>
                   <span>{result.text.length > 70 ? `${result.text.slice(0, 70)}...` : result.text}</span>
                 </button>
               ))}
@@ -5397,13 +3796,13 @@ export default function HomePage() {
           </div>
           <div className="diary-photo-button-group">
             <div className="button-row diary-photo-import-row diary-photo-row-primary">
-              <label className="soft-btn compact-photo-btn diary-photo-file-label">
+              <label className="soft-btn compact-photo-btn">
                 📷 사진찍기
-                <input type="file" accept="image/*,.heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png" capture="environment" multiple onChange={addPhotos} />
+                <input className="hidden-input" type="file" accept="image/*" capture="environment" multiple onChange={addPhotos} />
               </label>
-              <label className="soft-btn compact-photo-btn diary-photo-file-label">
+              <label className="soft-btn compact-photo-btn">
                 🖼 사진 가져오기
-                <input type="file" accept="image/*,.heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png" multiple onChange={addPhotos} />
+                <input className="hidden-input" type="file" accept="image/*" multiple onChange={addPhotos} />
               </label>
               <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
             </div>
@@ -5418,7 +3817,7 @@ export default function HomePage() {
         <div className="generalInfoTextBox generalInfoRichTextBox" style={{ margin: "10px 0" }}>
           <div className="generalInfoRichTextHeader">
             <strong>Text 입력 / 편집</strong>
-            <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄 편집 가능 · 문자 끝에 S/s를 붙이면 이미지 붙여넣기</span>
+            <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄 편집 가능</span>
           </div>
           <div className="generalInfoRichToolbar" aria-label="Text 편집 도구">
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("bold")}>B 굵게</button>
@@ -5429,16 +3828,25 @@ export default function HomePage() {
             <button type="button" className="generalInfoRichColorYellow" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#facc15")}>● 노랑</button>
             <button type="button" className="generalInfoRichColorBlue" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#60a5fa")}>● 파랑</button>
             <button type="button" className="generalInfoRichColorGreen" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#4ade80")}>● 초록</button>
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertImageSlot} title="이미지 칸 추가">＋ 칸</button>
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => diaryImageFileRef.current?.click()} title="이미지 파일 넣기">🖼 이미지</button>
+            <input
+              ref={diaryImageFileRef}
+              type="file"
+              accept="image/*,.heic,.heif,.jpeg,.jpg,.png,.webp"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => {
+                handleDiaryRichImagePick(e.target.files);
+                e.target.value = "";
+              }}
+            />
           </div>
           <div
             key={`diary-rich-${currentYear}-${currentMonth}-${currentDay}`}
             ref={(el) => {
               diaryRichTextRef.current = el;
-              if (!el || diaryEditorFocusedRef.current) return;
-              if (el.innerHTML === "" && diaryText) {
-                el.innerHTML = diaryText;
-                prepareDiaryRichEditor(el);
-              }
+              if (el && el.innerHTML === "") el.innerHTML = diaryText || "";
             }}
             className="generalInfoRichTextEditor"
             contentEditable
@@ -5446,49 +3854,26 @@ export default function HomePage() {
             role="textbox"
             tabIndex={0}
             data-placeholder="오늘의 기록을 남겨보세요...."
-            onFocus={() => {
-              diaryEditorFocusedRef.current = true;
-              beginDiaryTextUndoSession();
-            }}
             onInput={() => {
-              commitDiaryEditorHtml();
-              checkDiaryTextImageTrigger();
-            }}
-            onKeyUp={checkDiaryTextImageTrigger}
-            onCompositionStart={() => {
-              diaryComposingRef.current = true;
-            }}
-            onCompositionEnd={() => {
-              diaryComposingRef.current = false;
-              commitDiaryEditorHtml({ immediate: true });
-              checkDiaryTextImageTrigger();
+              handleDiaryRichInput();
+              const html = diaryRichTextRef.current?.innerHTML || "";
+              saveDiary(html, voiceText);
             }}
             onBlur={() => {
-              diaryEditorFocusedRef.current = false;
-              diaryComposingRef.current = false;
-              commitDiaryEditorHtml({ immediate: true });
-              checkDiaryTextImageTrigger();
+              const html = diaryRichTextRef.current?.innerHTML || "";
+              saveDiary(html, voiceText);
             }}
+            onClick={handleDiaryRichEditorClick}
             onPaste={(e) => {
-              const imageFiles = collectClipboardImageFiles(e.clipboardData);
-              const editor = diaryRichTextRef.current;
-              const plain = String(editor?.innerText || "");
-              const imageTriggerOpen =
-                showDiaryTextImageInsert ||
-                editorHasInlineImageTrigger(editor) ||
-                diaryTextEndsWithImageTrigger(plain);
-              if (imageFiles.length > 0 && imageTriggerOpen) {
+              const pastedFiles = imageFilesFromClipboard(e.clipboardData);
+              if (pastedFiles.length > 0) {
                 e.preventDefault();
-                insertDiaryImageFilesFromTextTrigger(imageFiles);
+                void insertDiaryInlineImages(pastedFiles);
                 return;
               }
               e.preventDefault();
-              const pastedText = e.clipboardData.getData("text/plain");
-              if (pastedText) document.execCommand("insertText", false, pastedText);
-              requestAnimationFrame(() => {
-                commitDiaryEditorHtml({ immediate: true });
-                checkDiaryTextImageTrigger();
-              });
+              const text = e.clipboardData.getData("text/plain");
+              if (text) document.execCommand("insertText", false, text);
             }}
             style={{
               display: "block",
@@ -5508,63 +3893,11 @@ export default function HomePage() {
               wordBreak: "break-word",
             }}
           />
-
-          {showDiaryTextImageInsert && (
-            <div className="generalInfoTextImageInsertPanel">
-              <div className="generalInfoTextImageInsertHead">
-                <strong>이미지 붙여넣기</strong>
-                <span>문자 끝 S/s 감지 · 본문 TEXT 안에 이미지가 들어갑니다</span>
-                <button
-                  type="button"
-                  className="secondaryButton smallActionButton"
-                  onClick={() => {
-                    removeDiaryTrailingImageTrigger();
-                    commitDiaryEditorHtml({ immediate: true });
-                    setShowDiaryTextImageInsert(false);
-                  }}
-                >
-                  닫기
-                </button>
-              </div>
-              <div className="generalInfoTextImageInsertActions">
-                <label className="primaryLabel generalInfoTextImageFileLabel soft-btn compact-photo-btn" style={{ margin: 0, cursor: "pointer" }}>
-                  🖼 사진첩 · 파일 선택
-                  <input
-                    ref={diaryTextImageFileRef}
-                    className="hidden-input"
-                    type="file"
-                    accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png,image/*"
-                    multiple
-                    onChange={(e) => {
-                      const selected = e.target.files ? Array.from(e.target.files) : [];
-                      e.target.value = "";
-                      insertDiaryImageFilesFromTextTrigger(selected);
-                    }}
-                  />
-                </label>
-                <div
-                  className="generalInfoTextImagePasteZone"
-                  contentEditable
-                  suppressContentEditableWarning
-                  role="textbox"
-                  tabIndex={0}
-                  onPaste={handleDiaryTextImageInsertPaste}
-                >
-                  📋 아이폰·PC 이미지 여기 붙여넣기 (Ctrl+V / ⌘V)
-                </div>
-              </div>
-            </div>
-          )}
-
-          <p className="generalInfoRichTextNote">
-            문장 끝에 <strong>S</strong> 또는 <strong>s</strong>를 붙이면 이미지 붙여넣기(사진첩·복사 붙여넣기·파일 선택)가 열리고, 선택한 사진은 본문 TEXT 안에 들어갑니다.
-          </p>
         </div>
-        <HyperlinkPreview text={htmlToPlainText(diaryText)} />
+        <HyperlinkPreview text={diaryText} />
 
         <div className="diary-photo-section" onPaste={handlePhotoPaste} tabIndex={0}>
-          {diaryPhotoSaving && <div className="empty-photo diary-empty-photo">사진을 저장하는 중입니다...</div>}
-          {dayPhotos.length === 0 && !diaryPhotoSaving && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
+          {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
           <div className={`diary-photo-grid-safe diary-photo-gallery ${diaryPhotoCountClass}`}>
             {dayPhotos.map((photo, index) => {
               const isRepPhoto = calendarPhotoIndexes[k] === index || 
@@ -5744,55 +4077,31 @@ function MarkDateView() {
             <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
           </div>
 
-          <div className="work-schedule-import-box">
-            <strong>근무표 가져오기 (안전)</strong>
-            <p className="muted" style={{ margin: "6px 0 10px" }}>
-              엑셀 근무표 캘린더에서 <b>ICS</b> 또는 <b>PC 저장 JSON</b>을 받은 뒤 여기서 불러오세요.
-              검정색(당일·익일 타인)은 가져오지 않습니다. 매달 새 파일로 반복하면 됩니다.
-            </p>
-            <label className="primaryLabel work-schedule-import-label">
-              📥 ICS / JSON 선택
-              <input
-                type="file"
-                accept=".ics,.json,text/calendar,application/json"
-                onChange={(event) => {
-                  const file = event.target.files?.[0] || null;
-                  void importWorkScheduleMarksFromFile(file);
-                  event.target.value = "";
-                }}
-              />
-            </label>
-          </div>
-
           <div className="mark-type-options">
             {(Object.keys(calendarMarkLabels) as CalendarMarkType[]).map(type => (
               <button
                 type="button"
                 key={type}
-                className={`mark-type-btn mark-type-${calendarMarkClassSuffix(type)} ${!markPlus && markType === type ? "active" : ""}`}
+                className={`mark-type-btn mark-type-${type === "심야" ? "night" : type === "노조" ? "union" : type.toLowerCase()} ${markType === type ? "active" : ""}`}
                 onClick={() => {
                   setMarkType(type);
-                  setMarkPlus(false);
+                  if (type === "노조") setMarkPlus(false);
                 }}
               >
                 {calendarMarkLabels[type]}
               </button>
             ))}
-            <button
-              type="button"
-              className={`mark-type-btn mark-type-thumb ${markPlus ? "active" : ""}`}
-              onClick={() => setMarkPlus(true)}
-              title="기존 C/A/당 앞에 👍만 붙입니다"
-            >
-              👍
-            </button>
           </div>
 
-          <p className="muted" style={{ marginTop: 8 }}>
-            {markPlus
-              ? "👍만 선택했습니다. 저장하면 해당 날짜의 기존 C/A/당 앞에만 👍가 붙습니다. (예: 👍C)"
-              : "근무 종류를 선택한 뒤 날짜를 입력해 저장하세요. 👍는 별도 버튼으로 기존 C/A/당에만 붙입니다."}
-          </p>
+          <label className="mark-plus-option">
+            <input
+              type="checkbox"
+              checked={markPlus && markType !== "노조"}
+              onChange={event => setMarkPlus(event.target.checked)}
+              disabled={markType === "노조"}
+            />
+            <span>+ 표시 추가 {markType === "노조" ? "(노조는 + 제외)" : `→ ${markType}+`}</span>
+          </label>
 
           <p className="muted">날짜를 쉼표로 여러 개 입력하세요. 예: 1, 3, 15</p>
           <input
@@ -5805,7 +4114,7 @@ function MarkDateView() {
           />
 
           <button type="button" className="save-schedule-btn" onClick={addCalendarMarks}>
-            {markPlus ? "👍 표시 저장" : `${formatCalendarMarkText(markType, false)} 표시 저장`}
+            {markType}{markType !== "노조" && markPlus ? "+" : ""} 표시 저장
           </button>
 
           <div className="saved-marks">
@@ -5814,8 +4123,8 @@ function MarkDateView() {
             {monthMarkEntries.map(({ day, item }) => (
               <div className="saved-mark-row" key={`${day}-${item.type}-${item.plus}`}>
                 <span>{currentMonth}/{day}</span>
-                <span className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(item.type)}`}>
-                  {formatCalendarMarkText(item.type, item.plus)}
+                <span className={`calendar-mark calendar-mark-${item.type === "심야" ? "night" : item.type === "노조" ? "union" : item.type.toLowerCase()}`}>
+                  {calendarMarkLabels[item.type]}{item.plus ? "+" : ""}
                 </span>
                 <button type="button" className="soft-btn delete-btn" onClick={() => deleteCalendarMark(currentMonth, day, item)}>삭제</button>
               </div>
@@ -6115,7 +4424,6 @@ function MarkDateView() {
     category2: string;
     memo: string;
     imageMemos: string[];
-    imageExifs?: PhotoBookImageExif[];
     additionalImages?: Array<{url: string; storagePath: string}>;
     isPinned?: boolean;
   } {
@@ -6131,7 +4439,6 @@ function MarkDateView() {
             category2: parsed.category2 || "기타",
             memo: parsed.memo || "",
             imageMemos: Array.isArray(parsed.imageMemos) ? parsed.imageMemos : [],
-            imageExifs: Array.isArray(parsed.imageExifs) ? parsed.imageExifs : [],
             additionalImages: parsed.additionalImages || [],
             isPinned: parsed.isPinned || false
           };
@@ -6152,7 +4459,6 @@ function MarkDateView() {
               category2: parsed.category2 || "기타",
               memo: parsed.memo || cleanMemo.replace(subStr, "").replace(/^[#\s]+|[#\s]+$/g, ""),
               imageMemos: Array.isArray(parsed.imageMemos) ? parsed.imageMemos : [],
-              imageExifs: Array.isArray(parsed.imageExifs) ? parsed.imageExifs : [],
               additionalImages: parsed.additionalImages || []
             };
           } catch (e) {}
@@ -6180,7 +4486,7 @@ function MarkDateView() {
         }
       }
     }
-    return { keyword, category2, memo: cleanMemo, imageMemos: [], imageExifs: [], additionalImages: [] };
+    return { keyword, category2, memo: cleanMemo, imageMemos: [], additionalImages: [] };
   }
 
   // API Call: AI OCR & Classification for Image Upload
@@ -6689,7 +4995,6 @@ function MarkDateView() {
       category2: photoBookInputCategory2.trim() || "기타",
       memo: photoBookInputMemo,
       imageMemos: photoBookInputImageMemos,
-      imageExifs: photoBookInputImageExifs,
       additionalImages,
       isPinned
     });
@@ -6810,7 +5115,6 @@ function MarkDateView() {
     setPhotoBookInputImage(null);
     setPhotoBookInputDate(entryDate(currentMonth, currentDay));
     setPhotoBookInputImageMemos([]);
-    setPhotoBookInputImageExifs([]);
     setPbMemoEditIdx(null);
     setActiveItem(null);
     setPhotoBookTab("index");
@@ -6821,7 +5125,6 @@ function MarkDateView() {
     const nextUrls = [...photoBookInputImageUrls];
     const nextPaths = [...photoBookInputImageStoragePaths];
     const nextMemos = [...photoBookInputImageMemos];
-    const nextExifs = [...photoBookInputImageExifs];
     
     const tempUrl = nextUrls[0];
     nextUrls[0] = nextUrls[index];
@@ -6834,15 +5137,10 @@ function MarkDateView() {
     const tempMemo = nextMemos[0];
     nextMemos[0] = nextMemos[index];
     nextMemos[index] = tempMemo;
-
-    const tempExif = nextExifs[0];
-    nextExifs[0] = nextExifs[index];
-    nextExifs[index] = tempExif;
     
     setPhotoBookInputImageUrls(nextUrls);
     setPhotoBookInputImageStoragePaths(nextPaths);
     setPhotoBookInputImageMemos(nextMemos);
-    setPhotoBookInputImageExifs(nextExifs);
     
     setPhotoBookInputImageUrl(nextUrls[0] || "");
     setPhotoBookInputImageStoragePath(nextPaths[0] || "");
@@ -6858,7 +5156,6 @@ function MarkDateView() {
       category2: parsed.category2,
       memo: parsed.memo,
       imageMemos: parsed.imageMemos,
-      imageExifs: parsed.imageExifs || [],
       additionalImages: parsed.additionalImages || [],
       isPinned: newIsPinned
     });
@@ -6893,14 +5190,8 @@ function MarkDateView() {
     setPhotoBookInputMemo(parsed.memo);
     setPhotoBookInputDate(item.tag);
     setPhotoBookInputImageMemos(parsed.imageMemos || []);
-    setPhotoBookInputImageExifs(parsed.imageExifs || []);
     setPbMemoEditIdx(null);
     setPhotoBookTab("register");
-
-    // 기존에 좌표만 저장된 EXIF는 장소명으로 변환
-    void enrichPhotoBookImageExifs(parsed.imageExifs || []).then((exifs) => {
-      setPhotoBookInputImageExifs(exifs);
-    });
   }
 
   // CRUD: Cancel Edit Photo Book
@@ -6916,27 +5207,8 @@ function MarkDateView() {
     setPhotoBookInputImage(null);
     setPhotoBookInputDate(entryDate(currentMonth, currentDay));
     setPhotoBookInputImageMemos([]);
-    setPhotoBookInputImageExifs([]);
     setPbMemoEditIdx(null);
     setPhotoBookTab("index");
-  }
-
-
-  function toPhotobookPersonSource(photo: PhotoItem): PhotobookPersonSource | null {
-    if (!photo.id) return null;
-    const parsed = parsePhotoBookMemo(photo.memo || "");
-    const imageUrls = [
-      photo.url,
-      ...((parsed.additionalImages || []).map((img) => img.url).filter(Boolean)),
-    ].filter(Boolean);
-    return {
-      id: photo.id,
-      keyword: parsed.keyword || "일반",
-      category2: parsed.category2 || "기타",
-      memo: parsed.memo || "",
-      tag: photo.tag || "",
-      imageUrls,
-    };
   }
 
   // CRUD: Delete Photo Book Item
@@ -6945,15 +5217,6 @@ function MarkDateView() {
     if (!targetItem) return;
 
     if (!window.confirm("이 포토북 카드를 삭제할까요?")) return;
-
-    const personSource = toPhotobookPersonSource(targetItem);
-    const keepInPersonAlbum = Boolean(
-      personSource && isPersonAlbumCategory(personSource.category2),
-    );
-    if (keepInPersonAlbum && personSource) {
-      // 人앨범에 사진을 남기므로 스토리지 파일은 삭제하지 않음
-      keepPersonPhotosFromDeletedItems([personSource]);
-    }
 
     const dateStr = targetItem.tag;
     const [tYear, tMonth, tDay] = dateStr.split("-").map(Number);
@@ -6968,29 +5231,20 @@ function MarkDateView() {
       previousData: JSON.stringify(previousItems),
     });
 
-    if (!keepInPersonAlbum) {
-      if (targetItem.storagePath) {
-        await deleteSupabasePhoto("info-photos", "info_photos", targetItem.storagePath);
-      }
+    if (targetItem.storagePath) {
+      await deleteSupabasePhoto("info-photos", "info_photos", targetItem.storagePath);
+    }
 
-      // Delete any additional images from storage
-      if (isSupabaseConfigured && supabase) {
-        const parsed = parsePhotoBookMemo(targetItem.memo || "");
-        if (parsed.additionalImages && parsed.additionalImages.length > 0) {
-          for (const img of parsed.additionalImages) {
-            if (img.storagePath) {
-              const { error: storageError } = await supabase.storage.from("info-photos").remove([img.storagePath]);
-              if (storageError) console.warn("Supabase additional photo storage delete error:", storageError.message);
-            }
+    // Delete any additional images from storage
+    if (isSupabaseConfigured && supabase) {
+      const parsed = parsePhotoBookMemo(targetItem.memo || "");
+      if (parsed.additionalImages && parsed.additionalImages.length > 0) {
+        for (const img of parsed.additionalImages) {
+          if (img.storagePath) {
+            const { error: storageError } = await supabase.storage.from("info-photos").remove([img.storagePath]);
+            if (storageError) console.warn("Supabase additional photo storage delete error:", storageError.message);
           }
         }
-      }
-    } else if (isSupabaseConfigured && supabase && targetItem.id) {
-      // DB 행만 제거 (스토리지 URL은 人앨범 keep용으로 유지)
-      try {
-        await supabase.from("info_photos").delete().eq("id", targetItem.id);
-      } catch (error) {
-        console.warn("info_photos row delete for person-album keep failed", error);
       }
     }
 
@@ -7009,45 +5263,14 @@ function MarkDateView() {
   async function handlePhotoBookImageUpload(files: File | File[]) {
     setInstaLoading(true);
     try {
-      const rawList = (Array.isArray(files) ? files : [files]).filter(Boolean) as File[];
-      if (rawList.length === 0) {
-        alert("업로드할 이미지를 읽을 수 없습니다.");
-        return;
-      }
+      const fileList = Array.isArray(files) ? files : [files];
+      if (fileList.length === 0) return;
 
       const uploadedItems: PhotoItem[] = [];
-      const extractedExifs: PhotoBookImageExif[] = [];
-      for (const original of rawList) {
-        // iOS가 복제/변환하기 전 원본에서 EXIF(특히 GPS)를 먼저 읽습니다.
-        const exif = await extractPhotoExif(original);
-        const durableList = await makeDurableImageFiles([original]);
-        const file = durableList[0] || original;
-
-        let item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999, currentYear);
-        if (!item) {
-          // Supabase 실패 시에도 등록 화면에 표시되도록 로컬 미리보기 사용
-          try {
-            const dataUrl = await readImageFileAsDataUrl(file);
-            if (dataUrl) {
-              item = {
-                url: dataUrl,
-                name: file.name || original.name || "photo.jpg",
-                tag: tag(currentMonth, currentDay, currentYear),
-                extraTag: "",
-                memo: "",
-                size: "360",
-                memoWidth: "360",
-                memoHeight: "110",
-                storagePath: "",
-              };
-            }
-          } catch (error) {
-            console.warn("local photobook preview fallback failed", error);
-          }
-        }
+      for (const file of fileList) {
+        const item = await uploadPhotoToSupabase(file, "info-photos", currentMonth, currentDay, 999, currentYear);
         if (item) {
           uploadedItems.push(item);
-          extractedExifs.push(exif);
         }
       }
 
@@ -7062,15 +5285,12 @@ function MarkDateView() {
           return next;
         });
 
-        setPhotoBookInputImageExifs(prev => [...prev, ...extractedExifs]);
-        setPhotoBookInputImageMemos(prev => [...prev, ...uploadedItems.map(() => "")]);
-
         // Set primary fallback images if not already set
         setPhotoBookInputImageUrl(prev => prev || uploadedItems[0].url);
         setPhotoBookInputImageStoragePath(prev => prev || uploadedItems[0].storagePath || "");
 
         // Auto classify photo book using AI!
-        await runPhotoBookAIClassification(rawList[0]);
+        await runPhotoBookAIClassification(fileList[0]);
       } else {
         alert("이미지 업로드에 실패했습니다.");
       }
@@ -7290,87 +5510,6 @@ ${photo.memoText}
     });
   }
 
-  function getPhotoBookImageUrls(photo: PhotoItem | { url?: string; memo?: string; additionalImages?: Array<{ url: string }> }) {
-    const parsed = "additionalImages" in photo && Array.isArray(photo.additionalImages)
-      ? { additionalImages: photo.additionalImages, imageMemos: (photo as { imageMemos?: string[] }).imageMemos }
-      : parsePhotoBookMemo(photo.memo || "");
-    return [photo.url || "", ...(parsed.additionalImages?.map((img) => img.url) || [])].filter(Boolean);
-  }
-
-  function getPhotoBookImageMemos(
-    photo: PhotoItem | { url?: string; memo?: string; imageMemos?: string[]; additionalImages?: Array<{ url: string }> },
-    urlCount?: number
-  ) {
-    const directMemos = "imageMemos" in photo && Array.isArray(photo.imageMemos) ? photo.imageMemos : null;
-    const parsed = directMemos
-      ? { imageMemos: directMemos }
-      : parsePhotoBookMemo(photo.memo || "");
-    const count = urlCount ?? getPhotoBookImageUrls(photo).length;
-    return Array.from({ length: count }, (_, i) => String(parsed.imageMemos?.[i] || ""));
-  }
-
-  function getPhotoBookImageExifs(
-    photo: PhotoItem | { url?: string; memo?: string; imageExifs?: PhotoBookImageExif[]; additionalImages?: Array<{ url: string }> },
-    urlCount?: number
-  ): PhotoBookImageExif[] {
-    const directExifs = "imageExifs" in photo && Array.isArray(photo.imageExifs) ? photo.imageExifs : null;
-    const parsed = directExifs
-      ? { imageExifs: directExifs }
-      : parsePhotoBookMemo(photo.memo || "");
-    const count = urlCount ?? getPhotoBookImageUrls(photo).length;
-    return Array.from({ length: count }, (_, i) => parsed.imageExifs?.[i] || {});
-  }
-
-  function updatePhotoBookImageMemoAt(idx: number, value: string) {
-    setPhotoBookInputImageMemos((prev) => {
-      const next = [...prev];
-      while (next.length <= idx) next.push("");
-      next[idx] = value;
-      return next;
-    });
-  }
-
-  function openPhotoAlbumViewer(
-    photo: PhotoItem & {
-      keyword?: string;
-      additionalImages?: Array<{ url: string }>;
-      imageMemos?: string[];
-      imageExifs?: PhotoBookImageExif[];
-    },
-    startIndex = 0
-  ) {
-    const urls = getPhotoBookImageUrls(photo);
-    if (urls.length === 0) {
-      alert("사진첩에 표시할 이미지가 없습니다.");
-      return;
-    }
-    const memos = getPhotoBookImageMemos(photo, urls.length);
-    const rawExifs = getPhotoBookImageExifs(photo, urls.length);
-    setPhotoAlbumViewer({
-      photoBookId: photo.id || "",
-      keyword: photo.keyword || parsePhotoBookMemo(photo.memo || "").keyword || "포토북",
-      urls,
-      memos,
-      exifs: rawExifs,
-      index: Math.max(0, Math.min(startIndex, urls.length - 1)),
-    });
-    void enrichPhotoBookImageExifs(rawExifs).then((exifs) => {
-      setPhotoAlbumViewer((prev) => (prev && prev.photoBookId === (photo.id || "") ? { ...prev, exifs } : prev));
-    });
-  }
-
-  function movePhotoAlbumViewer(direction: -1 | 1) {
-    setPhotoAlbumViewer((prev) => {
-      if (!prev || prev.urls.length === 0) return prev;
-      const nextIndex = (prev.index + direction + prev.urls.length) % prev.urls.length;
-      return { ...prev, index: nextIndex };
-    });
-  }
-
-  function closePhotoAlbumViewer() {
-    setPhotoAlbumViewer(null);
-  }
-
   // PhotoBook batch sharing helper
   async function shareSelectedPhotoBookItems() {
     const selectedPhotos = allPhotoBookItems.filter(p => p.id && selectedPhotoBookIds.includes(p.id)).map(photo => {
@@ -7517,8 +5656,6 @@ ${photo.memoText}
         category2: parsed.category2,
         memoText: parsed.memo,
         additionalImages: parsed.additionalImages || [],
-        imageMemos: parsed.imageMemos || [],
-        imageExifs: parsed.imageExifs || [],
         isPinned: parsed.isPinned || photo.isPinned || false
       };
     }).filter(photo => {
@@ -7559,7 +5696,6 @@ ${photo.memoText}
           category2: parsed.category2,
           memoText: parsed.memo,
           imageMemos: parsed.imageMemos || [],
-          imageExifs: parsed.imageExifs || [],
           additionalImages: parsed.additionalImages || []
         };
       }
@@ -7628,36 +5764,42 @@ ${photo.memoText}
               syncGeneralInfoRichTextToDraft={infoState.syncGeneralInfoRichTextToDraft}
               handleGeneralInfoRichPaste={infoState.handleGeneralInfoRichPaste}
               handleGeneralInfoRichCommand={infoState.handleGeneralInfoRichCommand}
+              handleGeneralInfoRichInput={infoState.handleGeneralInfoRichInput}
+              handleGeneralInfoRichEditorClick={infoState.handleGeneralInfoRichEditorClick}
+              handleGeneralInfoRichImagePick={infoState.handleGeneralInfoRichImagePick}
+              handleGeneralInfoInsertImageSlot={infoState.handleGeneralInfoInsertImageSlot}
               getGeneralInfoToolbarButtonStyle={infoState.getGeneralInfoToolbarButtonStyle}
               makeGeneralInfoHtmlFromText={infoState.makeGeneralInfoHtmlFromText}
               handleUndoGeneralInfoDraft={infoState.handleUndoGeneralInfoDraft}
               handleResetGeneralInfoDraft={infoState.handleResetGeneralInfoDraft}
               handleCollectGeneralInfoFromClipboard={infoState.handleCollectGeneralInfoFromClipboard}
               isCollectingGeneralInfoClipboard={infoState.isCollectingGeneralInfoClipboard}
+              handleExtractGeneralInfoUrl={infoState.handleExtractGeneralInfoUrl}
+              isExtractingGeneralInfoUrl={infoState.isExtractingGeneralInfoUrl}
               handleGeneralInfoFileUpload={infoState.handleGeneralInfoFileUpload}
               handleGeneralInfoIphonePasteZonePaste={infoState.handleGeneralInfoIphonePasteZonePaste}
               handleClearGeneralInfoCoverImage={infoState.handleClearGeneralInfoCoverImage}
               handleRemoveGeneralInfoMediaItem={infoState.handleRemoveGeneralInfoMediaItem}
-              uploadInlineImageFile={infoState.uploadGeneralInfoInlineImageFile}
+              handleAnalyzeGeneralInfoDraft={infoState.handleAnalyzeGeneralInfoDraft}
+              isAnalyzingGeneralInfo={infoState.isAnalyzingGeneralInfo}
               handleConfirmGeneralInfo={infoState.handleConfirmGeneralInfo}
               handleCancelEditGeneralInfo={infoState.handleCancelEditGeneralInfo}
-              generalInfoAutoSaveStatus={infoState.generalInfoAutoSaveStatus}
+              handleStartEditGeneralInfo={infoState.handleStartEditGeneralInfo}
               generalInfoItems={infoState.generalInfoItems}
               filteredGeneralInfoItems={infoState.filteredGeneralInfoItems}
               generalInfoSearchTerm={infoState.generalInfoSearchTerm}
               setGeneralInfoSearchTerm={infoState.setGeneralInfoSearchTerm}
               setGeneralInfoDetailId={infoState.setGeneralInfoDetailId}
-              handleOpenGeneralInfoDetail={infoState.handleOpenGeneralInfoDetail}
-              handleOpenGeneralInfoAiReport={infoState.handleOpenGeneralInfoAiReport}
               generalInfoDetailId={infoState.generalInfoDetailId}
               generalInfoActiveTab={infoState.generalInfoActiveTab}
               setGeneralInfoActiveTab={infoState.setGeneralInfoActiveTab}
               handleTogglePinGeneralInfo={infoState.handleTogglePinGeneralInfo}
               loadGeneralInfoItemsFromSupabase={infoState.loadGeneralInfoItemsFromSupabase}
               generalInfoSupabaseStatus={infoState.generalInfoSupabaseStatus}
+              generalInfoCategories={infoState.generalInfoCategories}
               normalizeGeneralInfoMediaItems={infoState.normalizeGeneralInfoMediaItems}
               getGeneralInfoDisplayMediaItems={infoState.getGeneralInfoDisplayMediaItems}
-              onOpenStorageImage={openStorageImage}
+              handleSaveTemporaryGeneralInfoDraft={infoState.handleSaveTemporaryGeneralInfoDraft}
             />
           ) : (
             /* Photo Book Tab-based Layout */
@@ -7680,16 +5822,10 @@ ${photo.memoText}
                     setPhotoBookInputImageStoragePath("");
                     setPhotoBookInputImageUrls([]);
                     setPhotoBookInputImageStoragePaths([]);
-                    setPhotoBookInputImageMemos([]);
-                    setPhotoBookInputImageExifs([]);
                     setPhotoBookInputDate(entryDate(currentMonth, currentDay));
                     setPhotoBookTab("register");
                   }}
                 >📖 포토북 등록</button>
-                <button
-                  className={`ch3TabBtn ${photoBookTab === "person-album" ? "active" : ""}`}
-                  onClick={() => setPhotoBookTab("person-album")}
-                >人 앨범</button>
               </div>
 
               {/* Register Tab: edit / create / detail forms */}
@@ -7740,32 +5876,16 @@ ${photo.memoText}
                           style={{ minHeight: "120px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", border: "2px dashed rgba(255,255,255,0.15)", borderRadius: "10px", padding: "15px", background: "rgba(0,0,0,0.15)", outline: "none" }}
                         >
                           {photoBookInputImageUrls.length > 0 ? (
-                            <div className="pbRegImageGrid">
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))", gap: "6px", width: "100%" }}>
                               {photoBookInputImageUrls.map((url, idx) => (
-                                <div key={idx} className="pbRegImageCell">
-                                  <div className={`pbRegImageThumb ${idx === 0 ? "is-primary" : ""} ${pbMemoEditIdx === idx ? "is-editing" : ""}`}>
+                                <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                  <div style={{ position: "relative", width: "52px", height: "52px", borderRadius: "5px", overflow: "hidden", border: idx === 0 ? "2px solid #eab308" : pbMemoEditIdx === idx ? "2px solid #62b19b" : "1px solid rgba(255,255,255,0.2)" }}>
                                     <img
                                       src={url}
                                       alt={`미리보기 ${idx + 1}`}
-                                      style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const pbId = editingPhotoBookItemId || activePhoto?.id || "";
-                                        if (pbId) {
-                                          openPhotoBookImageResize({
-                                            url,
-                                            photoBookId: pbId,
-                                            imageIndex: idx,
-                                            fileName: `photobook_preview_${idx + 1}.jpg`,
-                                          });
-                                        } else {
-                                          openStorageImage(url, `photobook_preview_${idx + 1}.jpg`);
-                                        }
-                                      }}
+                                      style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                                      onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}
                                     />
-                                    {photoBookInputImageMemos[idx] && pbMemoEditIdx !== idx && (
-                                      <span className="pbRegThumbMemoBadge">{photoBookInputImageMemos[idx]}</span>
-                                    )}
                                     <button 
                                       type="button" 
                                       className="remove-preview-btn" 
@@ -7775,15 +5895,12 @@ ${photo.memoText}
                                         const nextUrls = [...photoBookInputImageUrls];
                                         const nextPaths = [...photoBookInputImageStoragePaths];
                                         const nextMemos = [...photoBookInputImageMemos];
-                                        const nextExifs = [...photoBookInputImageExifs];
                                         nextUrls.splice(idx, 1);
                                         nextPaths.splice(idx, 1);
                                         nextMemos.splice(idx, 1);
-                                        nextExifs.splice(idx, 1);
                                         setPhotoBookInputImageUrls(nextUrls);
                                         setPhotoBookInputImageStoragePaths(nextPaths);
                                         setPhotoBookInputImageMemos(nextMemos);
-                                        setPhotoBookInputImageExifs(nextExifs);
                                         setPhotoBookInputImageUrl(nextUrls[0] || "");
                                         setPhotoBookInputImageStoragePath(nextPaths[0] || "");
                                         if (pbMemoEditIdx === idx) setPbMemoEditIdx(null);
@@ -7791,28 +5908,18 @@ ${photo.memoText}
                                       style={{ position: "absolute", top: "2px", right: "2px", background: "rgba(239, 68, 68, 0.8)", color: "#fff", border: "none", borderRadius: "50%", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", cursor: "pointer" }}
                                     >×</button>
                                   </div>
-                                  <button
-                                    type="button"
-                                    className="pbRegMemoToggle"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx);
-                                    }}
-                                  >
+                                  <div className="generalInfoDraftMediaHint" onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}>
                                     {photoBookInputImageMemos[idx] ? "📝 메모" : "＋ 메모"}
-                                  </button>
+                                  </div>
                                   {idx === 0 ? (
                                     <span style={{ fontSize: "10px", color: "#eab308", fontWeight: "bold", marginTop: "3px" }}>★ 대표</span>
                                   ) : (
                                     <button
                                       type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        makePhotoBookRepresentative(idx);
-                                      }}
+                                      onClick={() => makePhotoBookRepresentative(idx)}
                                       style={{
                                         marginTop: "3px",
-                                        background: "rgba(234, 179, 8,.15)",
+                                        background: "rgba(234, 179, 8, 0.15)",
                                         color: "#facc15",
                                         border: "1px solid rgba(234, 179, 8, 0.4)",
                                         borderRadius: "4px",
@@ -7825,62 +5932,52 @@ ${photo.memoText}
                                       ★ 대표 설정
                                     </button>
                                   )}
-                                  {hasPhotoBookExif(photoBookInputImageExifs[idx]) && (
-                                    <div className="pbPhotoExifCaption">
-                                      {getPhotoBookExifViewLines(photoBookInputImageExifs[idx]).map((line) => (
-                                        <span key={line}>{line}</span>
-                                      ))}
-                                    </div>
-                                  )}
                                   {pbMemoEditIdx === idx && (
-                                    <div
-                                      className="pbRegMemoEditor"
-                                      onClick={(e) => e.stopPropagation()}
-                                      onMouseDown={(e) => e.stopPropagation()}
-                                      onPaste={(e) => e.stopPropagation()}
-                                    >
-                                      <input
-                                        type="text"
-                                        className="pbRegMemoInput"
+                                    <div className="generalInfoMediaMemoEdit">
+                                      <textarea
+                                        className="generalInfoMediaMemoTextarea"
                                         value={photoBookInputImageMemos[idx] || ""}
-                                        onChange={(e) => updatePhotoBookImageMemoAt(idx, e.target.value)}
-                                        placeholder="개별 사진 메모 (최대 약 15자)"
-                                        maxLength={40}
+                                        onChange={e => {
+                                          const next = [...photoBookInputImageMemos];
+                                          next[idx] = e.target.value;
+                                          setPhotoBookInputImageMemos(next);
+                                        }}
+                                        placeholder="이미지 메모 입력..."
                                         autoFocus
                                       />
-                                      <div className="pbRegMemoEditorActions">
-                                        <button type="button" className="generalInfoMediaMemoBtnOk" onClick={() => setPbMemoEditIdx(null)}>✓ 완료</button>
+                                      <div className="generalInfoMediaMemoEditActions">
+                                        <button className="generalInfoMediaMemoBtnOk" onClick={() => setPbMemoEditIdx(null)}>✓ 완료</button>
                                         {photoBookInputImageMemos[idx] && (
-                                          <button
-                                            type="button"
-                                            className="generalInfoMediaMemoBtnDelete"
-                                            onClick={() => {
-                                              updatePhotoBookImageMemoAt(idx, "");
-                                              setPbMemoEditIdx(null);
-                                            }}
-                                          >✕ 삭제</button>
+                                          <button className="generalInfoMediaMemoBtnDelete" onClick={() => {
+                                            const next = [...photoBookInputImageMemos];
+                                            next[idx] = "";
+                                            setPhotoBookInputImageMemos(next);
+                                            setPbMemoEditIdx(null);
+                                          }}>✕ 삭제</button>
                                         )}
                                       </div>
                                     </div>
                                   )}
                                   {pbMemoEditIdx !== idx && photoBookInputImageMemos[idx] && (
-                                    <div
-                                      className="pbRegMemoDisplay"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setPbMemoEditIdx(idx);
-                                      }}
-                                    >
-                                      {photoBookInputImageMemos[idx]}
+                                    <div className="generalInfoMediaMemoDisplay">
+                                      <p className="generalInfoMediaMemoText">{photoBookInputImageMemos[idx]}</p>
+                                      <div className="generalInfoMediaMemoActions">
+                                        <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnEdit" onClick={() => setPbMemoEditIdx(idx)}>(0)</button>
+                                        <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnDel" onClick={() => {
+                                          const next = [...photoBookInputImageMemos];
+                                          next[idx] = "";
+                                          setPhotoBookInputImageMemos(next);
+                                        }}>(-)</button>
+                                      </div>
                                     </div>
                                   )}
                                 </div>
                               ))}
-                              <label className="pbRegAddTile">
+                              <label style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "52px", height: "52px", borderRadius: "5px", border: "1px dashed rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.05)", cursor: "pointer", fontSize: "11px", color: "#ccc" }}>
                                 <span>➕ 추가</span>
                                 <input
                                   type="file"
-                                  accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png"
+                                  accept="image/*"
                                   multiple
                                   className="hidden-input"
                                   style={{ display: "none" }}
@@ -7904,7 +6001,7 @@ ${photo.memoText}
                             📸 사진 가져오기
                             <input
                               type="file"
-                              accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png"
+                              accept="image/*"
                               multiple
                               className="hidden-input"
                               onChange={async e => {
@@ -8076,18 +6173,7 @@ ${photo.memoText}
                                   src={curUrl}
                                   alt="포토북 상세 사진"
                                   style={{ width: "100%", height: "auto", minHeight: "60vh", maxWidth: "100%", borderRadius: "8px", cursor: "zoom-in", objectFit: "contain", display: "block" }}
-                                  onClick={() => {
-                                    if (activePhoto.id) {
-                                      openPhotoBookImageResize({
-                                        url: curUrl,
-                                        photoBookId: activePhoto.id,
-                                        imageIndex: curIdx,
-                                        fileName: `photobook_${activePhoto.keyword || "photo"}_${curIdx + 1}.jpg`,
-                                      });
-                                    } else {
-                                      openStorageImage(curUrl, `photobook_${activePhoto.keyword || "photo"}_${curIdx + 1}.jpg`);
-                                    }
-                                  }}
+                                  onClick={() => { window.open(curUrl, "_blank"); }}
                                 />
                                 {allImgUrls.length > 1 && (
                                   <button
@@ -8120,42 +6206,18 @@ ${photo.memoText}
                                           transition: "all 0.2s",
                                         }}
                                       >
-                                        <img
-                                          src={imgUrl}
-                                          alt={`이미지 ${idx + 1}`}
-                                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (activePhoto.id) {
-                                              openPhotoBookImageResize({
-                                                url: imgUrl,
-                                                photoBookId: activePhoto.id,
-                                                imageIndex: idx,
-                                                fileName: `photobook_${activePhoto.keyword || "photo"}_${idx + 1}.jpg`,
-                                              });
-                                            } else {
-                                              openStorageImage(imgUrl, `photobook_${activePhoto.keyword || "photo"}_${idx + 1}.jpg`);
-                                            }
-                                          }}
-                                        />
+                                        <img src={imgUrl} alt={`이미지 ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                                       </div>
                                     ))}
                                   </div>
                                 </>
                               )}
 
-                              {/* 현재 이미지 메모 + EXIF */}
+                              {/* 현재 이미지 메모 */}
                               {imgMemo && (
                                 <div className="generalInfoDetailMediaMemo" style={{ marginTop: "12px", padding: "12px 16px", borderRadius: "10px", background: "rgba(98,177,155,0.12)", border: "1px solid rgba(98,177,155,0.3)" }}>
                                   <span className="generalInfoDetailMediaMemoIcon" style={{ fontSize: "22px", marginRight: "8px" }}>📝</span>
                                   <span className="generalInfoDetailMediaMemoText" style={{ fontSize: "18px", lineHeight: "1.7", fontWeight: "500" }}>{imgMemo}</span>
-                                </div>
-                              )}
-                              {hasPhotoBookExif((activePhotoResolvedExifs || activePhoto.imageExifs || [])[curIdx]) && (
-                                <div className="pbDetailExifInfo">
-                                  {getPhotoBookExifViewLines((activePhotoResolvedExifs || activePhoto.imageExifs || [])[curIdx]).map((line) => (
-                                    <span key={line}>{line}</span>
-                                  ))}
                                 </div>
                               )}
                             </div>
@@ -8227,15 +6289,6 @@ ${photo.memoText}
 
                         <div className="info-detail-actions no-print">
                           <button type="button" className="action-btn" onClick={() => { setActiveItem(null); setPhotoBookTab("index"); }} style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>🏠 목록으로</button>
-                          {(activePhoto.additionalImages?.length || 0) > 0 && (
-                            <button
-                              type="button"
-                              className="action-btn"
-                              onClick={() => openPhotoAlbumViewer(activePhoto, Math.max(0, [activePhoto.url, ...(activePhoto.additionalImages?.map((img: any) => img.url) || [])].indexOf(activePreviewPhotoUrl || activePhoto.url)))}
-                            >
-                              🖼️ 사진첩 보기
-                            </button>
-                          )}
                           <button type="button" className="action-btn" onClick={() => triggerEditPhotoBook(activePhoto!)}>✏️ 수정</button>
                           <button type="button" className="action-btn delete-btn" onClick={() => deletePhotoBookItem(activePhoto!.id!)}>🗑️ 삭제</button>
                           <button type="button" className="action-btn" onClick={() => copyPhotoBookToClipboard(activePhoto!)}>📋 복사</button>
@@ -8275,32 +6328,16 @@ ${photo.memoText}
                         style={{ minHeight: "120px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", border: "2px dashed rgba(255,255,255,0.15)", borderRadius: "10px", padding: "15px", background: "rgba(0,0,0,0.15)", outline: "none" }}
                       >
                         {photoBookInputImageUrls.length > 0 ? (
-                          <div className="pbRegImageGrid">
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))", gap: "6px", width: "100%" }}>
                             {photoBookInputImageUrls.map((url, idx) => (
-                              <div key={idx} className="pbRegImageCell">
-                                <div className={`pbRegImageThumb ${idx === 0 ? "is-primary" : ""} ${pbMemoEditIdx === idx ? "is-editing" : ""}`}>
+                              <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                <div style={{ position: "relative", width: "52px", height: "52px", borderRadius: "5px", overflow: "hidden", border: idx === 0 ? "2px solid #eab308" : pbMemoEditIdx === idx ? "2px solid #62b19b" : "1px solid rgba(255,255,255,0.2)" }}>
                                   <img
                                     src={url}
                                     alt={`미리보기 ${idx + 1}`}
-                                    style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const pbId = editingPhotoBookItemId || "";
-                                      if (pbId) {
-                                        openPhotoBookImageResize({
-                                          url,
-                                          photoBookId: pbId,
-                                          imageIndex: idx,
-                                          fileName: `photobook_preview_${idx + 1}.jpg`,
-                                        });
-                                      } else {
-                                        openStorageImage(url, `photobook_preview_${idx + 1}.jpg`);
-                                      }
-                                    }}
+                                    style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                                    onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}
                                   />
-                                  {photoBookInputImageMemos[idx] && pbMemoEditIdx !== idx && (
-                                    <span className="pbRegThumbMemoBadge">{photoBookInputImageMemos[idx]}</span>
-                                  )}
                                   <button 
                                     type="button" 
                                     className="remove-preview-btn" 
@@ -8310,15 +6347,12 @@ ${photo.memoText}
                                       const nextUrls = [...photoBookInputImageUrls];
                                       const nextPaths = [...photoBookInputImageStoragePaths];
                                       const nextMemos = [...photoBookInputImageMemos];
-                                      const nextExifs = [...photoBookInputImageExifs];
                                       nextUrls.splice(idx, 1);
                                       nextPaths.splice(idx, 1);
                                       nextMemos.splice(idx, 1);
-                                      nextExifs.splice(idx, 1);
                                       setPhotoBookInputImageUrls(nextUrls);
                                       setPhotoBookInputImageStoragePaths(nextPaths);
                                       setPhotoBookInputImageMemos(nextMemos);
-                                      setPhotoBookInputImageExifs(nextExifs);
                                       setPhotoBookInputImageUrl(nextUrls[0] || "");
                                       setPhotoBookInputImageStoragePath(nextPaths[0] || "");
                                       if (pbMemoEditIdx === idx) setPbMemoEditIdx(null);
@@ -8326,25 +6360,15 @@ ${photo.memoText}
                                     style={{ position: "absolute", top: "2px", right: "2px", background: "rgba(239, 68, 68, 0.8)", color: "#fff", border: "none", borderRadius: "50%", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", cursor: "pointer" }}
                                   >×</button>
                                 </div>
-                                <button
-                                  type="button"
-                                  className="pbRegMemoToggle"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx);
-                                  }}
-                                >
+                                <div className="generalInfoDraftMediaHint" onClick={() => setPbMemoEditIdx(pbMemoEditIdx === idx ? null : idx)}>
                                   {photoBookInputImageMemos[idx] ? "📝 메모" : "＋ 메모"}
-                                </button>
+                                </div>
                                 {idx === 0 ? (
                                   <span style={{ fontSize: "10px", color: "#eab308", fontWeight: "bold", marginTop: "3px" }}>★ 대표</span>
                                 ) : (
                                   <button
                                     type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      makePhotoBookRepresentative(idx);
-                                    }}
+                                    onClick={() => makePhotoBookRepresentative(idx)}
                                     style={{
                                       marginTop: "3px",
                                       background: "rgba(234, 179, 8, 0.15)",
@@ -8360,62 +6384,52 @@ ${photo.memoText}
                                     ★ 대표 설정
                                   </button>
                                 )}
-                                {hasPhotoBookExif(photoBookInputImageExifs[idx]) && (
-                                  <div className="pbPhotoExifCaption">
-                                    {getPhotoBookExifViewLines(photoBookInputImageExifs[idx]).map((line) => (
-                                      <span key={line}>{line}</span>
-                                    ))}
-                                  </div>
-                                )}
                                 {pbMemoEditIdx === idx && (
-                                  <div
-                                    className="pbRegMemoEditor"
-                                    onClick={(e) => e.stopPropagation()}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onPaste={(e) => e.stopPropagation()}
-                                  >
-                                    <input
-                                      type="text"
-                                      className="pbRegMemoInput"
+                                  <div className="generalInfoMediaMemoEdit">
+                                    <textarea
+                                      className="generalInfoMediaMemoTextarea"
                                       value={photoBookInputImageMemos[idx] || ""}
-                                      onChange={(e) => updatePhotoBookImageMemoAt(idx, e.target.value)}
-                                      placeholder="개별 사진 메모 (최대 약 15자)"
-                                      maxLength={40}
+                                      onChange={e => {
+                                        const next = [...photoBookInputImageMemos];
+                                        next[idx] = e.target.value;
+                                        setPhotoBookInputImageMemos(next);
+                                      }}
+                                      placeholder="이미지 메모 입력..."
                                       autoFocus
                                     />
-                                    <div className="pbRegMemoEditorActions">
-                                      <button type="button" className="generalInfoMediaMemoBtnOk" onClick={() => setPbMemoEditIdx(null)}>✓ 완료</button>
+                                    <div className="generalInfoMediaMemoEditActions">
+                                      <button className="generalInfoMediaMemoBtnOk" onClick={() => setPbMemoEditIdx(null)}>✓ 완료</button>
                                       {photoBookInputImageMemos[idx] && (
-                                        <button
-                                          type="button"
-                                          className="generalInfoMediaMemoBtnDelete"
-                                          onClick={() => {
-                                            updatePhotoBookImageMemoAt(idx, "");
-                                            setPbMemoEditIdx(null);
-                                          }}
-                                        >✕ 삭제</button>
+                                        <button className="generalInfoMediaMemoBtnDelete" onClick={() => {
+                                          const next = [...photoBookInputImageMemos];
+                                          next[idx] = "";
+                                          setPhotoBookInputImageMemos(next);
+                                          setPbMemoEditIdx(null);
+                                        }}>✕ 삭제</button>
                                       )}
                                     </div>
                                   </div>
                                 )}
                                 {pbMemoEditIdx !== idx && photoBookInputImageMemos[idx] && (
-                                  <div
-                                    className="pbRegMemoDisplay"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setPbMemoEditIdx(idx);
-                                    }}
-                                  >
-                                    {photoBookInputImageMemos[idx]}
+                                  <div className="generalInfoMediaMemoDisplay">
+                                    <p className="generalInfoMediaMemoText">{photoBookInputImageMemos[idx]}</p>
+                                    <div className="generalInfoMediaMemoActions">
+                                      <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnEdit" onClick={() => setPbMemoEditIdx(idx)}>(0)</button>
+                                      <button className="generalInfoMediaMemoBtn generalInfoMediaMemoBtnDel" onClick={() => {
+                                        const next = [...photoBookInputImageMemos];
+                                        next[idx] = "";
+                                        setPhotoBookInputImageMemos(next);
+                                      }}>(-)</button>
+                                    </div>
                                   </div>
                                 )}
                               </div>
                             ))}
-                            <label className="pbRegAddTile">
+                            <label style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", width: "52px", height: "52px", borderRadius: "5px", border: "1px dashed rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.05)", cursor: "pointer", fontSize: "11px", color: "#ccc" }}>
                               <span>➕ 추가</span>
                               <input
                                 type="file"
-                                accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png"
+                                accept="image/*"
                                 multiple
                                 className="hidden-input"
                                 style={{ display: "none" }}
@@ -8439,7 +6453,7 @@ ${photo.memoText}
                           📸 사진 가져오기
                           <input
                             type="file"
-                            accept=".heic,.heif,.jpg,.jpeg,.png,image/heic,image/heif,image/jpeg,image/png"
+                            accept="image/*"
                             multiple
                             className="hidden-input"
                             onChange={async e => {
@@ -8561,20 +6575,6 @@ ${photo.memoText}
               </div>
               )}
 
-              {photoBookTab === "person-album" && (
-              <div style={{ position: "relative" }}>
-                <PhotobookPersonAlbumScreen
-                  items={allPhotoBookItems
-                    .map((photo) => toPhotobookPersonSource(photo))
-                    .filter((item): item is PhotobookPersonSource => Boolean(item))}
-                  onOpenItem={(id) => {
-                    setActiveItem({ type: "photobook", id });
-                    setPhotoBookTab("register");
-                  }}
-                />
-              </div>
-              )}
-
               {/* Index Tab: search + list */}
               {photoBookTab === "index" && (
               <div style={{ position: "relative" }}>
@@ -8645,7 +6645,6 @@ ${photo.memoText}
                       const isActive = activeItem?.type === "photobook" && activeItem?.id === photo.id;
                       const isSelected = selectedPhotoBookIds.includes(photo.id || "");
                       const isPinned = photo.isPinned || false;
-                      const albumCount = 1 + (photo.additionalImages?.length || 0);
                       return (
                         <div
                           key={photo.id || idx}
@@ -8654,20 +6653,10 @@ ${photo.memoText}
                           {/* ── 이미지 — 2fr (generalInfoCardThumbnail과 동일) ── */}
                           <div
                             className="pbIndexCardPhoto"
-                            onClick={() => {
-                              if (albumCount > 1) {
-                                openPhotoAlbumViewer(photo, 0);
-                              } else {
-                                setActiveItem({ type: "photobook", id: photo.id || "" });
-                                setPhotoBookTab("register");
-                              }
-                            }}
+                            onClick={() => { setActiveItem({ type: "photobook", id: photo.id || "" }); setPhotoBookTab("register"); }}
                           >
                             {isPinned && (
                               <div className="pbIndexCardPinBadge">📌</div>
-                            )}
-                            {albumCount > 1 && (
-                              <div className="pbIndexCardAlbumBadge">🖼️ {albumCount}</div>
                             )}
                             {photo.url ? (
                               <img src={photo.url} alt={photo.keyword} />
@@ -8700,16 +6689,6 @@ ${photo.memoText}
                                 }}
                               />
                             </div>
-                            {albumCount > 1 && (
-                              <button
-                                className="pbIndexCardBtnAlbum"
-                                title="사진첩 보기"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openPhotoAlbumViewer(photo, 0);
-                                }}
-                              >🖼️ 사진첩 보기</button>
-                            )}
                             <button
                               className={`pbIndexCardBtnPin ${isPinned ? "active" : ""}`}
                               title={isPinned ? "상단 고정 해제" : "상단 고정"}
@@ -8839,140 +6818,6 @@ ${photo.memoText}
           </div>
         </div>
       )}
-      {isPhotoAlbumModalOpen && (
-        <div
-          className="pbPersonAlbumModal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="포토앨범"
-          onClick={() => setIsPhotoAlbumModalOpen(false)}
-        >
-          <div className="pbPersonAlbumModalPanel" onClick={(event) => event.stopPropagation()}>
-            <div className="pbPersonAlbumModalBar">
-              <h3>🖼️ 포토앨범</h3>
-              <button
-                type="button"
-                className="pbPersonAlbumModalClose"
-                onClick={() => setIsPhotoAlbumModalOpen(false)}
-              >
-                닫기
-              </button>
-            </div>
-            <PhotobookPersonAlbumGallery
-              mode="selection"
-              items={allPhotoBookItems
-                .filter((photo) => photo.id && selectedPhotoBookIds.includes(photo.id))
-                .map((photo) => toPhotobookPersonSource(photo))
-                .filter((item): item is PhotobookPersonSource => Boolean(item))}
-              onOpenItem={(id) => {
-                setIsPhotoAlbumModalOpen(false);
-                setActiveItem({ type: "photobook", id });
-                setPhotoBookTab("register");
-              }}
-              onPrint={() => window.print()}
-            />
-          </div>
-        </div>
-      )}
-      {photoAlbumViewer && (
-        <div
-          className="photo-album-viewer-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="사진첩 보기"
-          onClick={closePhotoAlbumViewer}
-        >
-          <div className="photo-album-viewer-panel" onClick={(event) => event.stopPropagation()}>
-            <div className="photo-album-viewer-header">
-              <div>
-                <strong>🖼️ 사진첩 보기</strong>
-                <span>#{photoAlbumViewer.keyword}</span>
-              </div>
-              <div className="photo-album-viewer-header-actions">
-                <span className="photo-album-viewer-counter">
-                  {photoAlbumViewer.index + 1} / {photoAlbumViewer.urls.length}
-                </span>
-                <button type="button" className="original-close-btn" onClick={closePhotoAlbumViewer}>닫기</button>
-              </div>
-            </div>
-
-            <div className="photo-album-viewer-stage">
-              {photoAlbumViewer.urls.length > 1 && (
-                <button
-                  type="button"
-                  className="photo-album-nav-btn left"
-                  onClick={() => movePhotoAlbumViewer(-1)}
-                  aria-label="이전 사진"
-                >
-                  ‹
-                </button>
-              )}
-              <img
-                src={photoAlbumViewer.urls[photoAlbumViewer.index]}
-                alt={`사진첩 ${photoAlbumViewer.index + 1}`}
-                className="photo-album-viewer-image"
-                onClick={() => {
-                  const url = photoAlbumViewer.urls[photoAlbumViewer.index];
-                  if (photoAlbumViewer.photoBookId) {
-                    openPhotoBookImageResize({
-                      url,
-                      photoBookId: photoAlbumViewer.photoBookId,
-                      imageIndex: photoAlbumViewer.index,
-                      fileName: `photobook_${photoAlbumViewer.keyword}_${photoAlbumViewer.index + 1}.jpg`,
-                    });
-                  } else {
-                    openStorageImage(url, `photobook_${photoAlbumViewer.keyword}_${photoAlbumViewer.index + 1}.jpg`);
-                  }
-                }}
-              />
-              {photoAlbumViewer.urls.length > 1 && (
-                <button
-                  type="button"
-                  className="photo-album-nav-btn right"
-                  onClick={() => movePhotoAlbumViewer(1)}
-                  aria-label="다음 사진"
-                >
-                  ›
-                </button>
-              )}
-            </div>
-
-            {photoAlbumViewer.memos[photoAlbumViewer.index] ? (
-              <p className="photo-album-viewer-memo">📝 {photoAlbumViewer.memos[photoAlbumViewer.index]}</p>
-            ) : null}
-
-            {hasPhotoBookExif(photoAlbumViewer.exifs[photoAlbumViewer.index]) && (
-              <div className="photo-album-viewer-exif">
-                {getPhotoBookExifViewLines(photoAlbumViewer.exifs[photoAlbumViewer.index]).map((line) => (
-                  <span key={line}>{line}</span>
-                ))}
-              </div>
-            )}
-
-            <p className="photo-album-viewer-hint">사진을 클릭하면 확대하여 볼 수 있습니다 · ← → 키로 이동</p>
-
-            {photoAlbumViewer.urls.length > 1 && (
-              <div className="photo-album-viewer-thumbs">
-                {photoAlbumViewer.urls.map((url, idx) => (
-                  <button
-                    key={`${url}-${idx}`}
-                    type="button"
-                    className={`photo-album-thumb ${idx === photoAlbumViewer.index ? "active" : ""}`}
-                    onClick={() => setPhotoAlbumViewer((prev) => (prev ? { ...prev, index: idx } : prev))}
-                    aria-label={`${idx + 1}번째 사진`}
-                  >
-                    <img src={url} alt={`썸네일 ${idx + 1}`} />
-                    {photoAlbumViewer.memos[idx] ? (
-                      <span className="photo-album-thumb-memo">{photoAlbumViewer.memos[idx]}</span>
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {originalImageUrl && (
         <div className="original-image-modal" role="dialog" aria-modal="true" onClick={closeOriginalImage}>
           <div className="original-image-panel" onClick={event => event.stopPropagation()}>
@@ -8995,261 +6840,30 @@ ${photo.memoText}
                   <button type="button" className="original-delete-btn" onClick={deleteOriginalDiaryPhoto}>사진 삭제</button>
                 </>
               )}
-              {originalImageTarget?.type === "storage-image" && (
-                <>
-                  <button
-                    type="button"
-                    className="original-primary-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void downloadStorageImage();
-                    }}
-                  >
-                    📥 사진 저장
-                  </button>
-                  <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
-                </>
-              )}
-              {originalImageTarget?.type === "photobook-resize" && (
-                <>
-                  {!photoCropMode ? (
-                    <>
-                      <div className="photo-resize-controls" onClick={(e) => e.stopPropagation()}>
-                        <span className="photo-resize-label">크기 선택</span>
-                        {([800, 1200, 1600, 2400] as const).map((size) => (
-                          <button
-                            key={size}
-                            type="button"
-                            className={`photo-resize-size-btn ${photoResizeMaxSide === size ? "active" : ""}`}
-                            disabled={photoResizeBusy}
-                            onClick={() => void previewPhotoBookResize(size)}
-                          >
-                            {size === 800 ? "작게" : size === 1200 ? "보통" : size === 1600 ? "크게" : "원본급"} ({size})
-                          </button>
-                        ))}
-                      </div>
-                      {photoResizeInfo && <p className="photo-resize-info">{photoResizeInfo}</p>}
-                      <button
-                        type="button"
-                        className="original-primary-btn"
-                        disabled={photoResizeBusy}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          beginPhotoCropMode();
-                        }}
-                      >
-                        ✂️ 잘라내기
-                      </button>
-                      <button
-                        type="button"
-                        className="original-primary-btn"
-                        disabled={photoResizeBusy}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void resizeAndResavePhotoBookImage();
-                        }}
-                      >
-                        {photoResizeBusy ? "처리 중..." : "📖 크기 변경 후 포토북 저장"}
-                      </button>
-                      <button
-                        type="button"
-                        className="original-primary-btn"
-                        disabled={photoResizeBusy}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void downloadStorageImage();
-                        }}
-                      >
-                        📥 사진 저장
-                      </button>
-                      <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="photo-resize-controls" onClick={(e) => e.stopPropagation()}>
-                        <span className="photo-resize-label">비율</span>
-                        {([
-                          ["free", "자유"],
-                          ["1:1", "1:1"],
-                          ["4:3", "4:3"],
-                          ["16:9", "16:9"],
-                        ] as const).map(([value, label]) => (
-                          <button
-                            key={value}
-                            type="button"
-                            className={`photo-resize-size-btn ${photoCropAspect === value ? "active" : ""}`}
-                            disabled={photoResizeBusy}
-                            onClick={() => applyPhotoCropAspect(value)}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                        <span className="photo-resize-label">확대</span>
-                        <button
-                          type="button"
-                          className="photo-resize-size-btn"
-                          disabled={photoResizeBusy}
-                          onClick={() => nudgePhotoCropZoom(-1)}
-                        >
-                          −
-                        </button>
-                        <button
-                          type="button"
-                          className="photo-resize-size-btn"
-                          disabled={photoResizeBusy}
-                          onClick={() => nudgePhotoCropZoom(1)}
-                        >
-                          +
-                        </button>
-                      </div>
-                      {photoResizeInfo && <p className="photo-resize-info">{photoResizeInfo}</p>}
-                      <button
-                        type="button"
-                        className="original-primary-btn"
-                        disabled={photoResizeBusy}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void cropAndResavePhotoBookImage();
-                        }}
-                      >
-                        {photoResizeBusy ? "처리 중..." : "✂️ 잘라낸 후 포토북 저장"}
-                      </button>
-                      <button
-                        type="button"
-                        className="original-close-btn"
-                        disabled={photoResizeBusy}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPhotoCropMode(false);
-                          setPhotoCropScale(1);
-                          setPhotoCropPan({ x: 0, y: 0 });
-                          setPhotoResizeInfo("");
-                        }}
-                      >
-                        잘라내기 취소
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-              {originalImageTarget?.type !== "diary" && originalImageTarget?.type !== "storage-image" && originalImageTarget?.type !== "photobook-resize" && (
+              {originalImageTarget?.type !== "diary" && (
                 <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
               )}
               {originalImageTarget?.type === "diary" && (
                 <button type="button" className="original-close-btn" onClick={closeOriginalImage}>닫기</button>
               )}
             </div>
-            {photoCropMode && originalImageTarget?.type === "photobook-resize" ? (
-              <div
-                className="photo-crop-stage"
-                ref={photoCropStageRef}
-                onClick={(e) => e.stopPropagation()}
-                onPointerDown={onPhotoCropStagePointerDown}
-                onWheel={onPhotoCropWheel}
-              >
-                <img
-                  ref={photoCropImageRef}
-                  src={originalImageUrl}
-                  alt="잘라내기 원본"
-                  className="photo-crop-source"
-                  draggable={false}
-                  onLoad={onPhotoCropImageLoad}
-                  style={(() => {
-                    const fit = getPhotoCropBaseFit(
-                      photoCropStageSize.w > 0 ? photoCropStageSize : { w: 1, h: 1 },
-                      photoCropNatural.w > 0 ? photoCropNatural : { w: 1, h: 1 }
-                    );
-                    return {
-                      width: photoCropNatural.w > 0 ? fit.displayW : undefined,
-                      height: photoCropNatural.w > 0 ? fit.displayH : undefined,
-                      transform: `translate(-50%, -50%) translate(${photoCropPan.x}px, ${photoCropPan.y}px) scale(${photoCropScale})`,
-                    };
-                  })()}
-                />
-                {photoCropStageSize.w > 0 && (
-                  <div className="photo-crop-layer">
-                    <div
-                      className="photo-crop-box"
-                      style={{
-                        left: `${photoCropRect.x * 100}%`,
-                        top: `${photoCropRect.y * 100}%`,
-                        width: `${photoCropRect.w * 100}%`,
-                        height: `${photoCropRect.h * 100}%`,
-                      }}
-                      onPointerDown={(e) => {
-                        if (e.pointerType === "touch") return;
-                        startPhotoCropBoxDrag("crop-move", e);
-                      }}
-                    >
-                      <span
-                        className="photo-crop-handle nw"
-                        onPointerDown={(e) => startPhotoCropBoxDrag("nw", e)}
-                      />
-                      <span
-                        className="photo-crop-handle ne"
-                        onPointerDown={(e) => startPhotoCropBoxDrag("ne", e)}
-                      />
-                      <span
-                        className="photo-crop-handle sw"
-                        onPointerDown={(e) => startPhotoCropBoxDrag("sw", e)}
-                      />
-                      <span
-                        className="photo-crop-handle se"
-                        onPointerDown={(e) => startPhotoCropBoxDrag("se", e)}
-                      />
-                    </div>
-                  </div>
-                )}
-                <p className="photo-crop-hint">틀 드래그 · 바깥은 사진 이동 · 핀치/+− 로 확대</p>
-              </div>
-            ) : (
-              <img src={photoResizePreviewUrl || originalImageUrl} alt="원본 사진" />
-            )}
+            <img src={originalImageUrl} alt="원본 사진" />
           </div>
         </div>
       )}
     
-      {infoState.selectedGeneralInfoAiReportItem && (
-        <GeneralInfoAiReportScreen
-          item={infoState.selectedGeneralInfoAiReportItem}
-          onClose={infoState.handleCloseGeneralInfoAiReport}
-          onSaveReport={async (html, status, title) => {
-            await infoState.handleSaveManualFactCheck(
-              infoState.selectedGeneralInfoAiReportItem!.id,
-              html,
-              status,
-              title,
-            );
-          }}
-          onUploadImage={infoState.uploadGeneralInfoInlineImageFile}
-          onDownloadPdfReport={infoState.handleDownloadGeneralInfoPdfReport}
-          isExportingPdf={infoState.isExportingGeneralInfoPdf}
-          onSetRepresentativeImage={(src) =>
-            infoState.handleSetRepresentativeImage(
-              infoState.selectedGeneralInfoAiReportItem!.id,
-              src,
-            )
-          }
-        />
-      )}
-
       {infoState.selectedGeneralInfoItem && (
         <GeneralInfoDetailModal
           item={infoState.selectedGeneralInfoItem}
-          onClose={infoState.handleCloseGeneralInfoDetail}
+          onClose={() => infoState.setGeneralInfoDetailId(null)}
           onGenerateReport={infoState.handleGenerateGeneralInfoReport}
-          onOpenAiReport={infoState.handleOpenGeneralInfoAiReport}
+          onRunFactCheck={infoState.handleRunPreciseGeneralInfoFactCheck}
           onEdit={infoState.handleStartEditGeneralInfo}
           onDelete={(item) => infoState.handleDeleteGeneralInfo(item.id)}
+          onSavePdf={(item) => {
+            window.print();
+          }}
           onShareReport={infoState.handleShareGeneralInfoReport}
-          onOpenStorageImage={openStorageImage}
-          isGeneratingReport={infoState.isGeneratingGeneralInfoReport}
-          needsManualFactCheck={
-            infoState.generalInfoManualFactCheckId === infoState.selectedGeneralInfoItem.id
-          }
-          startInEditMode={infoState.generalInfoDetailEditMode}
-          onSaveItemEdit={infoState.handleSaveGeneralInfoDetailEdit}
-          onUploadInlineImage={infoState.uploadGeneralInfoInlineImageFile}
         />
       )}
   
