@@ -11,6 +11,36 @@ export type InformationCalendarItem = {
   summary: string;
 };
 
+/** 정보함(iphone-information)과 공유하는 information_entries 테이블에 쓸 입력 형태 */
+export type InformationEntryInput = {
+  id: string;
+  title?: string;
+  category?: string;
+  source?: string;
+  primaryDate?: string;
+  eventDates?: string[];
+  checked?: boolean;
+  completedAt?: string | null;
+  important?: boolean;
+  summary?: string;
+  payload?: Record<string, unknown>;
+};
+
+type InformationEntresRow = {
+  id: string;
+  title: string;
+  category: string;
+  source: string;
+  primary_date: string;
+  event_dates: string[];
+  checked: boolean;
+  completed_at: string | null;
+  important: boolean;
+  summary: string;
+  payload: Record<string, unknown>;
+  updated_at: string;
+};
+
 const INFORMATION_APP_ORIGIN =
   process.env.NEXT_PUBLIC_INFORMATION_APP_URL || "https://iphone-information.vercel.app";
 
@@ -106,4 +136,84 @@ export function groupInformationEntriesByDay(
     }
   }
   return grouped;
+}
+
+/* ---------------------------------------------------------------------------
+ * 정보함(iphone-information)과 공유하는 information_entries 테이블 동기화(쓰기)
+ * a033221 "Supabase 공통 DB 동기화" 대응: 캘린더 ↔ 정보함 양방향 저장
+ * ------------------------------------------------------------------------- */
+
+function toInformationEntryRow(input: InformationEntryInput): InformationEntresRow | null {
+  const primaryDate = String(input.primaryDate || "").slice(0, 10);
+  const eventDates = (input.eventDates?.length ? input.eventDates : primaryDate ? [primaryDate] : [])
+    .map((d) => String(d).slice(0, 10))
+    .filter(Boolean);
+  if (!input?.id || !primaryDate) return null;
+  return {
+    id: input.id,
+    title: input.title || "정보",
+    category: input.category || "general",
+    source: input.source || "other",
+    primary_date: primaryDate,
+    event_dates: eventDates.length ? eventDates : [primaryDate],
+    checked: Boolean(input.checked),
+    completed_at: input.completedAt || null,
+    important: Boolean(input.important),
+    summary: (input.summary || "").slice(0, 500),
+    payload: input.payload || {},
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export type InformationEntrySyncResult = { ok: boolean; message?: string };
+
+/** 단건 upsert (저장/수정/완료 상태 반영) */
+export async function upsertInformationEntryToSupabase(
+  input: InformationEntryInput,
+): Promise<InformationEntrySyncResult> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, message: "Supabase 미설정" };
+  const row = toInformationEntryRow(input);
+  if (!row) return { ok: false, message: "날짜가 없는 항목은 동기화하지 않습니다." };
+  const { error } = await supabase.from("information_entries").upsert(row, { onConflict: "id" });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+/** 여러 건 upsert */
+export async function upsertInformationEntriesToSupabase(
+  inputs: InformationEntryInput[],
+): Promise<InformationEntrySyncResult> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, message: "Supabase 미설정" };
+  const rows = inputs
+    .map(toInformationEntryRow)
+    .filter((row): row is InformationEntresRow => row !== null);
+  if (!rows.length) return { ok: true };
+  const { error } = await supabase.from("information_entries").upsert(rows, { onConflict: "id" });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+/** 단건 삭제 */
+export async function deleteInformationEntryFromSupabase(
+  id: string,
+): Promise<InformationEntrySyncResult> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, message: "Supabase 미설정" };
+  const { error } = await supabase.from("information_entries").delete().eq("id", id);
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+/** 원격 → 로컬 병합용 (id 기준, 상세 정보는 payload에 보존) */
+export async function fetchInformationEntriesFromSupabase(): Promise<Record<string, unknown>[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const { data, error } = await supabase
+    .from("information_entries")
+    .select("id, title, category, source, primary_date, event_dates, checked, completed_at, important, summary, payload, updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(2000);
+  if (error || !data) {
+    if (error) console.warn("information_entries fetch:", error.message);
+    return [];
+  }
+  return data as Record<string, unknown>[];
 }

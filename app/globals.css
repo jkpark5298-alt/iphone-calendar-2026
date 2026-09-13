@@ -10395,3 +10395,324 @@ body {
     font-size: 16px !important;
   }
 }
+
+/* ── Photobook 人앨범 (insta-fact-library PersonAlbum parity) ── */
+.pbPersonAlbumScreen {
+  width: 100%;
+  padding: 4px 0 24px;
+}
+.pbPersonAlbumScreenTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pbPersonAlbumScreenTitle h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+.pbPersonAlbumScreenTitle span {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.pbPersonAlbum {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pbPersonAlbumHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pbPersonAlbumHint {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+.pbPersonAlbumHint b {
+  color: #cbd5e1;
+  font-weight: 600;
+}
+.pbPersonAlbumActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pbPersonAlbumBtn {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.pbPersonAlbumBtn.active {
+  border-color: #62b19b;
+  background: #62b19b;
+  color: #0b1220;
+}
+.pbPersonAlbumBtn.danger {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+.pbPersonAlbumBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pbPersonAlbumEmpty {
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.45);
+  padding: 32px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #94a3b8;
+}
+.pbPersonAlbumScroller {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  margin: 0 -4px;
+  padding-bottom: 8px;
+}
+.pbPersonAlbumScroller::-webkit-scrollbar {
+  display: none;
+}
+.pbPersonAlbumSlide {
+  width: 100%;
+  flex-shrink: 0;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  padding: 0 4px;
+  box-sizing: border-box;
+}
+.pbPersonAlbumCounter {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.pbPersonAlbumSpotlight {
+  max-width: 360px;
+  margin: 0 auto 12px;
+}
+.pbPersonAlbumGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.pbPersonCard {
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #0b1220;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+.pbPersonCard.is-selected {
+  border-color: #62b19b;
+  box-shadow: 0 0 0 2px rgba(98, 177, 155, 0.45);
+}
+.pbPersonCard.is-playing:not(.is-selected) {
+  border-color: #7ab8ff;
+  box-shadow: 0 0 0 2px rgba(122, 184, 255, 0.4);
+}
+.pbPersonCardFace {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pbPersonCardImgWrap {
+  display: flex;
+  aspect-ratio: 3 / 4;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #111827;
+}
+.pbPersonCardImgWrap img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.pbPersonCardCheck {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.pbPersonCardCheck.on {
+  background: #62b19b;
+  color: #0b1220;
+}
+.pbPersonCardMeta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: block;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.75);
+  text-align: left;
+}
+.pbPersonCardMetaLabel {
+  display: block;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: #bae6fd;
+  margin-bottom: 2px;
+}
+.pbPersonCardMetaTitle {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+.pbPersonCardMetaDate {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #e2e8f0;
+}
+.pbPersonCardOpen {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: #141414;
+  color: #bae6fd;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.pbPersonAlbumMobileOnly {
+  display: block;
+}
+.pbPersonAlbumDesktopOnly {
+  display: none;
+}
+.pbPersonAlbumHidden {
+  display: none !important;
+}
+@media (min-width: 768px) {
+  .pbPersonAlbumMobileOnly {
+    display: none;
+  }
+  .pbPersonAlbumDesktopOnly {
+    display: block;
+  }
+}
+@media (max-width: 1100px) {
+  .pbPersonAlbumGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .pbPersonAlbumGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.pbPersonAlbumModal {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 23, 0.72);
+  padding: 16px;
+}
+.pbPersonAlbumModalPanel {
+  width: min(1100px, 100%);
+  max-height: min(92vh, 900px);
+  overflow: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #0f172a;
+  padding: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+.pbPersonAlbumModalBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pbPersonAlbumModalBar h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #e2e8f0;
+}
+.pbPersonAlbumModalClose {
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+@media print {
+  .pbPersonAlbumModal {
+    position: static;
+    background: #fff;
+    padding: 0;
+  }
+  .pbPersonAlbumModalPanel {
+    max-height: none;
+    border: 0;
+    box-shadow: none;
+    background: #fff;
+    color: #111;
+  }
+  .pbPersonAlbumActions,
+  .pbPersonAlbumModalClose,
+  .pbPersonCardCheck,
+  .pbPersonCardOpen {
+    display: none !important;
+  }
+  .pbPersonAlbumMobileOnly {
+    display: none !important;
+  }
+  .pbPersonAlbumDesktopOnly {
+    display: block !important;
+  }
+  .pbPersonAlbumGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
