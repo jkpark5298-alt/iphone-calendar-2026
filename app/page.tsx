@@ -19,6 +19,13 @@ import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } fr
 import { PhotobookPersonAlbumGallery, PhotobookPersonAlbumScreen } from "../components/PhotobookPersonAlbumGallery";
 import { keepPersonPhotosFromDeletedItems } from "../lib/client-photobook-person-album";
 import { isPersonAlbumCategory, type PhotobookPersonSource } from "../lib/photobook-person-album";
+import {
+  loadInformationEntriesForMonth,
+  getInformationAppDayUrl,
+  getInformationAppItemUrl,
+  groupInformationEntriesByDay,
+  type InformationCalendarItem,
+} from "../lib/informationEntries";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
@@ -453,6 +460,8 @@ export default function HomePage() {
   const [redDates, setRedDates] = useState<Record<number, number[]>>({});
   const [redDateInput, setRedDateInput] = useState("");
   const [calendarMarks, setCalendarMarks] = useState<Record<string, CalendarMarkItem[]>>({});
+  const [informationItems, setInformationItems] = useState<InformationCalendarItem[]>([]);
+  const [informationItemsStatus, setInformationItemsStatus] = useState("");
   const [markDateInput, setMarkDateInput] = useState("");
   const [markType, setMarkType] = useState<CalendarMarkType>("C");
   const [markPlus, setMarkPlus] = useState(false);
@@ -1776,6 +1785,26 @@ export default function HomePage() {
         }
       });
   }, [currentYear]);
+
+
+  useEffect(() => {
+    let isActive = true;
+    setInformationItemsStatus("정보함 동기화 중...");
+    loadInformationEntriesForMonth(currentYear, currentMonth)
+      .then(items => {
+        if (!isActive) return;
+        setInformationItems(items);
+        setInformationItemsStatus(items.length ? `${items.length}개의 정보함 항목 표시 중` : "이번 달 정보함 항목이 없습니다.");
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setInformationItems([]);
+        setInformationItemsStatus("");
+      });
+    return () => {
+      isActive = false;
+    };
+  }, [currentYear, currentMonth]);
 
 
   useEffect(() => {
@@ -3596,11 +3625,13 @@ export default function HomePage() {
 
   function CalendarView() {
     const first = new Date(currentYear, currentMonth - 1, 1).getDay();
+    const infoByDay = groupInformationEntriesByDay(informationItems, currentYear, currentMonth);
     const cells = [];
     for (let i = 0; i < first; i++) cells.push(<div key={`empty-${i}`} className="day empty" />);
 
     for (let day = 1; day <= getDaysInMonth(currentYear, currentMonth); day++) {
       const k = key(currentMonth, day, currentYear);
+      const dayInfoItems = infoByDay[`${currentYear}-${pad(currentMonth)}-${pad(day)}`] || [];
       const manuallyRed = (redDates[currentMonth] || []).includes(day);
       const redMarked = manuallyRed;
       const isToday = todayDefault.month === currentMonth && todayDefault.day === day && todayDefault.year === currentYear;
@@ -3631,6 +3662,23 @@ export default function HomePage() {
             )}
           </div>
           {holidays[k] && <div className="holiday holiday-neutral">{holidays[k]}</div>}
+          {dayInfoItems.length > 0 && (
+            <div className="information-chip-list" aria-label={`${currentMonth}월 ${day}일 정보함 항목`}>
+              {dayInfoItems.slice(0, 3).map(item => (
+                <a
+                  key={item.id}
+                  className={`information-chip ${item.important ? "information-chip-important" : ""} ${item.checked ? "information-chip-checked" : ""}`}
+                  href={getInformationAppItemUrl(item.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                  title={`${item.title}${item.checked ? " (완료)" : ""}`}
+                >
+                  {item.important ? "⭐" : "📌"} {item.title}
+                </a>
+              ))}
+            </div>
+          )}
           <div className={`thumb ${calendarPhotos[k] ? "" : "empty-thumb"}`}>
             {calendarPhotos[k] ? (
               <button
@@ -3697,6 +3745,7 @@ export default function HomePage() {
           </h1>
           <div className="head-actions calendar-top-actions calendar-top-actions-redesign">
             <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("diary")}>일기장</button>
+            <a className="pill-btn compact-pill calendar-info-app-link" href={getInformationAppDayUrl(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`)} target="_blank" rel="noopener noreferrer" title="정보함 앱에서 이 날짜 보기">🔗 정보함 앱</a>
             <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfo(currentMonth, currentDay)}>정보보관소</button>
             <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
@@ -3718,6 +3767,9 @@ export default function HomePage() {
             <button type="button" className="soft-btn" onClick={() => void searchDiaryAndInfo()}>검색</button>
           </div>
           <div className="calendar-search-status">{searchStatus}</div>
+          {informationItemsStatus && (
+            <div className="information-sync-status">{informationItemsStatus}</div>
+          )}
           {searchResults.length > 0 && (
             <div className="calendar-search-results">
               {searchResults.map((result, index) => (

@@ -591,6 +591,51 @@ textarea {
 .selected-day {
   box-shadow: inset 0 0 0 2px rgba(83, 103, 94, 0.55);
 }
+.information-chip-list {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 5px;
+}
+.information-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 5px;
+  padding: 3px 5px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1f2421;
+  background: #e8f3ff;
+  text-decoration: none;
+}
+.information-chip:hover {
+  filter: brightness(0.96);
+}
+.information-chip-important {
+  background: #ffe9c2;
+}
+.information-chip-checked {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+.information-sync-status {
+  margin-top: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #3f7dbb;
+}
+.calendar-info-app-link {
+  text-decoration: none;
+}
 .schedule-chip-list {
   position: relative;
   z-index: 2;
