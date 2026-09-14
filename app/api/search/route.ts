@@ -55,11 +55,35 @@ const parseEntryDate = (value: string) => {
 
 const likePattern = (q: string) => `%${q}%`;
 
+const ALLOWED_ORIGIN = "https://builder-zeta-eight.vercel.app";
+
+const applyCors = (res: NextResponse, origin: string | null) => {
+  res.headers.set("Vary", "Origin");
+  res.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (origin && origin.replace(/\/+$/, "") === ALLOWED_ORIGIN) {
+    res.headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+  }
+  return res;
+};
+
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (origin && origin.replace(/\/+$/, "") === ALLOWED_ORIGIN) {
+    return applyCors(new NextResponse(null, { status: 204 }), origin);
+  }
+  return new NextResponse(null, { status: 204 });
+}
+
 export async function GET(request: NextRequest) {
+  const origin = request.headers.get("origin");
   try {
     const q = sanitizeQuery(request.nextUrl.searchParams.get("q") || "");
     if (!q) {
-      return NextResponse.json({ ok: true, results: [], status: "검색어를 입력하세요." });
+      return applyCors(
+        NextResponse.json({ ok: true, results: [], status: "검색어를 입력하세요." }),
+        origin,
+      );
     }
 
     const supabase = getSupabaseAdmin();
@@ -243,22 +267,28 @@ export async function GET(request: NextRequest) {
     }
     const finalResults = Array.from(unique.values()).slice(0, MAX_RESULTS);
 
-    return NextResponse.json({
-      ok: true,
-      results: finalResults,
-      status: finalResults.length ? `${finalResults.length}개 검색 결과` : "검색 결과가 없습니다.",
-      warnings: warnings.length ? warnings : undefined,
-    });
+    return applyCors(
+      NextResponse.json({
+        ok: true,
+        results: finalResults,
+        status: finalResults.length ? `${finalResults.length}개 검색 결과` : "검색 결과가 없습니다.",
+        warnings: warnings.length ? warnings : undefined,
+      }),
+      origin,
+    );
   } catch (error) {
     console.error("search api error:", error);
-    return NextResponse.json(
-      {
-        ok: false,
-        results: [],
-        status: "검색 중 오류가 발생했습니다.",
-        error: error instanceof Error ? error.message : "unknown",
-      },
-      { status: 500 },
+    return applyCors(
+      NextResponse.json(
+        {
+          ok: false,
+          results: [],
+          status: "검색 중 오류가 발생했습니다.",
+          error: error instanceof Error ? error.message : "unknown",
+        },
+        { status: 500 },
+      ),
+      origin,
     );
   }
 }
