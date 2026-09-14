@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { applyCorsHeaders, corsPreflightResponse } from "../../../lib/apiSecurity";
 
 export type UnifiedSearchResult = {
   type: "diary" | "info" | "information" | "general";
@@ -55,24 +56,8 @@ const parseEntryDate = (value: string) => {
 
 const likePattern = (q: string) => `%${q}%`;
 
-const ALLOWED_ORIGIN = "https://builder-zeta-eight.vercel.app";
-
-const applyCors = (res: NextResponse, origin: string | null) => {
-  res.headers.set("Vary", "Origin");
-  res.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (origin && origin.replace(/\/+$/, "") === ALLOWED_ORIGIN) {
-    res.headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
-  }
-  return res;
-};
-
 export async function OPTIONS(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  if (origin && origin.replace(/\/+$/, "") === ALLOWED_ORIGIN) {
-    return applyCors(new NextResponse(null, { status: 204 }), origin);
-  }
-  return new NextResponse(null, { status: 204 });
+  return corsPreflightResponse(request);
 }
 
 export async function GET(request: NextRequest) {
@@ -80,7 +65,7 @@ export async function GET(request: NextRequest) {
   try {
     const q = sanitizeQuery(request.nextUrl.searchParams.get("q") || "");
     if (!q) {
-      return applyCors(
+      return applyCorsHeaders(
         NextResponse.json({ ok: true, results: [], status: "검색어를 입력하세요." }),
         origin,
       );
@@ -267,7 +252,7 @@ export async function GET(request: NextRequest) {
     }
     const finalResults = Array.from(unique.values()).slice(0, MAX_RESULTS);
 
-    return applyCors(
+    return applyCorsHeaders(
       NextResponse.json({
         ok: true,
         results: finalResults,
@@ -278,7 +263,7 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error("search api error:", error);
-    return applyCors(
+    return applyCorsHeaders(
       NextResponse.json(
         {
           ok: false,

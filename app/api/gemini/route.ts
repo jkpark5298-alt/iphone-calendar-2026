@@ -5,28 +5,38 @@ import {
   clientIpFromRequest,
   genericApiError,
   getServerGeminiApiKey,
+  applyCorsHeaders,
+  corsPreflightResponse,
 } from "../../../lib/apiSecurity";
 
 const MAX_TEXT = 40_000;
 const MAX_BASE64 = 6_000_000; // ~4.5MB binary
 
+export async function OPTIONS(request: NextRequest) {
+  return corsPreflightResponse(request);
+}
+
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get("origin");
   const authError = assertAppApiAccess(request);
-  if (authError) return authError;
+  if (authError) return applyCorsHeaders(authError, origin);
 
   const rateError = assertRateLimit(
     `gemini:${clientIpFromRequest(request)}`,
     40,
     60_000,
   );
-  if (rateError) return rateError;
+  if (rateError) return applyCorsHeaders(rateError, origin);
 
   try {
     const apiKey = getServerGeminiApiKey(request);
     if (!apiKey) {
-      return NextResponse.json(
-        { error: "Gemini API key is not configured on the server." },
-        { status: 400 },
+      return applyCorsHeaders(
+        NextResponse.json(
+          { error: "Gemini API key is not configured on the server." },
+          { status: 400 },
+        ),
+        origin,
       );
     }
 
@@ -34,17 +44,26 @@ export async function POST(request: NextRequest) {
     const { action, text, imageBase64, mimeType } = body;
 
     if (typeof text === "string" && text.length > MAX_TEXT) {
-      return NextResponse.json({ error: "Text too long" }, { status: 413 });
+      return applyCorsHeaders(
+        NextResponse.json({ error: "Text too long" }, { status: 413 }),
+        origin,
+      );
     }
     if (typeof imageBase64 === "string" && imageBase64.length > MAX_BASE64) {
-      return NextResponse.json({ error: "Image too large" }, { status: 413 });
+      return applyCorsHeaders(
+        NextResponse.json({ error: "Image too large" }, { status: 413 }),
+        origin,
+      );
     }
 
     let contents: any[] = [];
 
     if (action === "ocr") {
       if (!imageBase64) {
-        return NextResponse.json({ error: "Image data is required for OCR" }, { status: 400 });
+        return applyCorsHeaders(
+          NextResponse.json({ error: "Image data is required for OCR" }, { status: 400 }),
+          origin,
+        );
       }
       contents = [
         {
@@ -64,7 +83,10 @@ export async function POST(request: NextRequest) {
       ];
     } else if (action === "classify") {
       if (!text) {
-        return NextResponse.json({ error: "Text is required for classification" }, { status: 400 });
+        return applyCorsHeaders(
+          NextResponse.json({ error: "Text is required for classification" }, { status: 400 }),
+          origin,
+        );
       }
       const prompt = `
 You are an AI text classifier and summarizer. Analyze the following text and:
@@ -85,7 +107,10 @@ Output strictly in JSON format. Do not write markdown blocks or any other format
       contents = [{ role: "user", parts: [{ text: prompt }] }];
     } else if (action === "fact-check") {
       if (!text && !imageBase64) {
-        return NextResponse.json({ error: "Text or image is required for fact-checking" }, { status: 400 });
+        return applyCorsHeaders(
+          NextResponse.json({ error: "Text or image is required for fact-checking" }, { status: 400 }),
+          origin,
+        );
       }
       const prompt = `
 You are an expert fact-checker. Please fact-check the following content. If an image is provided, examine it carefully and consider its visual context in relation to the text.
@@ -113,7 +138,10 @@ Output the report formatted in beautiful, readable Markdown.
       contents = [{ role: "user", parts }];
     } else if (action === "photobook-classify") {
       if (!text && !imageBase64) {
-        return NextResponse.json({ error: "Text or image is required for classification" }, { status: 400 });
+        return applyCorsHeaders(
+          NextResponse.json({ error: "Text or image is required for classification" }, { status: 400 }),
+          origin,
+        );
       }
       const prompt = `
 You are an AI photo classifier. Analyze the following photo (if provided) and/or description text:
@@ -139,7 +167,10 @@ Output strictly in JSON format. Do not write markdown blocks or any other format
       }
       contents = [{ role: "user", parts }];
     } else {
-      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+      return applyCorsHeaders(
+        NextResponse.json({ error: "Invalid action" }, { status: 400 }),
+        origin,
+      );
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -150,9 +181,12 @@ Output strictly in JSON format. Do not write markdown blocks or any other format
     });
 
     if (!response.ok) {
-      return NextResponse.json(
-        { error: "Gemini API request failed" },
-        { status: response.status >= 400 && response.status < 600 ? response.status : 502 },
+      return applyCorsHeaders(
+        NextResponse.json(
+          { error: "Gemini API request failed" },
+          { status: response.status >= 400 && response.status < 600 ? response.status : 502 },
+        ),
+        origin,
       );
     }
 
@@ -163,8 +197,8 @@ Output strictly in JSON format. Do not write markdown blocks or any other format
       resultText = resultText.replace(/```json/g, "").replace(/```/g, "").trim();
     }
 
-    return NextResponse.json({ result: resultText });
+    return applyCorsHeaders(NextResponse.json({ result: resultText }), origin);
   } catch {
-    return genericApiError(500);
+    return applyCorsHeaders(genericApiError(500), origin);
   }
 }

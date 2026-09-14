@@ -171,4 +171,37 @@ export const genericApiError = (status = 500) =>
     { status },
   );
 
+const DEFAULT_CORS_ORIGINS = ["https://builder-zeta-eight.vercel.app"];
+
+export const getAllowedCorsOrigins = () => {
+  const env = process.env.CORS_ALLOWED_ORIGINS;
+  if (env) return env.split(",").map((s) => s.trim()).filter(Boolean);
+  return DEFAULT_CORS_ORIGINS;
+};
+
+export const applyCorsHeaders = (res: NextResponse, origin: string | null) => {
+  const allowed = getAllowedCorsOrigins();
+  const normalized = origin ? origin.replace(/\/+$/, "") : "";
+  res.headers.set("Vary", "Origin");
+  res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (normalized && allowed.includes(normalized)) {
+    res.headers.set("Access-Control-Allow-Origin", normalized);
+  }
+  return res;
+};
+
+export const corsPreflightResponse = (request: NextRequest) => {
+  const origin = request.headers.get("origin");
+  const allowed = getAllowedCorsOrigins();
+  const normalized = origin ? origin.replace(/\/+$/, "") : "";
+  if (normalized && (allowed.includes(normalized) || allowed.includes("*"))) {
+    const res = new NextResponse(null, { status: 204 });
+    applyCorsHeaders(res, origin);
+    res.headers.set("Access-Control-Max-Age", "86400");
+    return res;
+  }
+  return new NextResponse(null, { status: 204 });
+};
+
 export { isProductionRuntime };
