@@ -73,7 +73,7 @@ export const getGeneralInfoInputCountText = (item: GeneralInfoItem) => {
 };
 
 export const getGeneralInfoCategoryPath = (item: GeneralInfoItem) =>
-  [item.primaryCategory, item.secondaryCategory, item.thirdCategory]
+  [item.primaryCategory, item.secondaryCategory]
     .filter(Boolean)
     .join(" > ") || "분류 미정";
 
@@ -1040,6 +1040,20 @@ export const getGeneralInfoDisplayMediaItems = (
   const filePreview = String(item.filePreview || "").trim();
   const fallbackPreview = /^(https?:\/\/|data:|blob:)/i.test(filePreview) ? filePreview : "";
 
+  // 정보 창고 대표: 본문에서 고른 filePreview 우선
+  if (fallbackPreview) {
+    return [
+      {
+        id: Number(item.id || Date.now()),
+        name: String(item.fileName || item.title || "대표 이미지"),
+        type: "image",
+        preview: fallbackPreview,
+        fileUrl: fallbackPreview,
+        storagePath: "",
+      },
+    ];
+  }
+
   const mediaItems = normalizeGeneralInfoMediaItems(item)
     .map((media) => {
       const preview = String(media.preview || "").trim();
@@ -1049,7 +1063,7 @@ export const getGeneralInfoDisplayMediaItems = (
         ? preview
         : /^(https?:\/\/|data:|blob:)/i.test(fileUrl)
           ? fileUrl
-          : makePublicUrlFromStoragePath(storagePath) || fallbackPreview;
+          : makePublicUrlFromStoragePath(storagePath) || "";
 
       return {
         ...media,
@@ -1062,14 +1076,17 @@ export const getGeneralInfoDisplayMediaItems = (
 
   if (mediaItems.length > 0) return mediaItems;
 
-  if (fallbackPreview) {
+  const bodySrc = extractMediaSrcFromHtml(String(item.formattedTextHtml || "")).find((src) =>
+    /^(https?:\/\/|data:|blob:)/i.test(src),
+  );
+  if (bodySrc) {
     return [
       {
         id: Number(item.id || Date.now()),
-        name: String(item.fileName || item.title || "대표 이미지"),
+        name: String(item.title || "본문 이미지"),
         type: "image",
-        preview: fallbackPreview,
-        fileUrl: fallbackPreview,
+        preview: bodySrc,
+        fileUrl: bodySrc,
         storagePath: "",
       },
     ];

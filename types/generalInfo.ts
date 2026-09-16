@@ -38,9 +38,18 @@ export interface GeneralInfoItem {
   summary: string;
   extraNote?: string;
   formattedTextHtml?: string;
+  /** 본문 단락 (최신 단락이 앞). 없으면 formattedTextHtml/text에서 복원 */
+  paragraphs?: GeneralInfoParagraph[];
   confirmed: boolean;
   createdAt: string;
   isPinned?: boolean;
+}
+
+export interface GeneralInfoParagraph {
+  id: string;
+  html: string;
+  text: string;
+  createdAt: string;
 }
 
 export interface GeneralInfoDraft {
@@ -61,5 +70,6 @@ export interface GeneralInfoDraft {
   factCheckStatus: GeneralInfoFactCheckStatus;
   factCheckSummary: string;
   formattedTextHtml?: string;
+  paragraphs?: GeneralInfoParagraph[];
   isPinned?: boolean;
 }

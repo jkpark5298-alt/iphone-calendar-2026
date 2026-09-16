@@ -27,12 +27,14 @@ type GeneralInfoPayload = {
   summary: string;
   factCheckStatus: string;
   factCheckSummary: string;
+  formattedTextHtml?: string;
   extraNote?: string;
   confirmed: boolean;
   createdAt: string;
 };
 
 const MAX_TEXT_LENGTH = 50000;
+const MAX_HTML_LENGTH = 200000;
 const MAX_KEYWORDS = 30;
 const MAX_INPUT_TYPES = 8;
 const MAX_MEDIA_ITEMS = 20;
@@ -109,6 +111,7 @@ const normalizePayload = (value: unknown): GeneralInfoPayload | null => {
     summary: normalizeString(source.summary, 4000),
     factCheckStatus: normalizeString(source.factCheckStatus, 80) || "확인 전",
     factCheckSummary: normalizeString(source.factCheckSummary, 4000),
+    formattedTextHtml: normalizeString(source.formattedTextHtml, MAX_HTML_LENGTH) || undefined,
     extraNote: normalizeString(source.extraNote, 4000) || undefined,
     confirmed: source.confirmed !== false,
     createdAt: normalizeString(source.createdAt, 80),
@@ -191,31 +194,37 @@ const getSupabaseAdmin = () => {
   });
 };
 
-const toDbRow = (item: GeneralInfoPayload) => ({
-  id: item.id,
-  title: item.title || "",
-  text: item.text || "",
-  source_url: item.sourceUrl || null,
-  file_name: item.fileName || null,
-  file_preview: item.filePreview || null,
-  file_type: item.fileType || "none",
-  media_items: Array.isArray(item.mediaItems) ? item.mediaItems : [],
+const toDbRow = (item: GeneralInfoPayload, includeFormattedHtml = true) => {
+  const row: Record<string, unknown> = {
+    id: item.id,
+    title: item.title || "",
+    text: item.text || "",
+    source_url: item.sourceUrl || null,
+    file_name: item.fileName || null,
+    file_preview: item.filePreview || null,
+    file_type: item.fileType || "none",
+    media_items: Array.isArray(item.mediaItems) ? item.mediaItems : [],
 
-  primary_category: item.primaryCategory || "사회",
-  secondary_category: item.secondaryCategory || "일반",
-  third_category: item.thirdCategory || "기타",
+    primary_category: item.primaryCategory || "사회",
+    secondary_category: item.secondaryCategory || "일반",
+    third_category: item.thirdCategory || "기타",
 
-  keywords: Array.isArray(item.keywords) ? item.keywords : [],
-  input_types: Array.isArray(item.inputTypes) ? item.inputTypes : [],
+    keywords: Array.isArray(item.keywords) ? item.keywords : [],
+    input_types: Array.isArray(item.inputTypes) ? item.inputTypes : [],
 
-  summary: item.summary || "",
-  fact_check_status: item.factCheckStatus || "확인 전",
-  fact_check_summary: item.factCheckSummary || "",
+    summary: item.summary || "",
+    fact_check_status: item.factCheckStatus || "확인 전",
+    fact_check_summary: item.factCheckSummary || "",
 
-  extra_note: item.extraNote || "",
-  confirmed: item.confirmed !== false,
-  created_at_text: item.createdAt || "",
-});
+    extra_note: item.extraNote || "",
+    confirmed: item.confirmed !== false,
+    created_at_text: item.createdAt || "",
+  };
+  if (includeFormattedHtml) {
+    row.formatted_text_html = item.formattedTextHtml || "";
+  }
+  return row;
+};
 
 const fromDbRow = (row: Record<string, unknown>): GeneralInfoPayload => {
   // media_items에서 storagePath로 공개 URL 복원
@@ -253,12 +262,61 @@ const fromDbRow = (row: Record<string, unknown>): GeneralInfoPayload => {
     summary: normalizeString(row.summary, 4000),
     factCheckStatus: normalizeString(row.fact_check_status, 80) || "확인 전",
     factCheckSummary: normalizeString(row.fact_check_summary, 4000),
+    formattedTextHtml:
+      normalizeString(row.formatted_text_html, MAX_HTML_LENGTH) || undefined,
 
     extraNote: normalizeString(row.extra_note, 4000),
     confirmed: row.confirmed !== false,
     createdAt:
       normalizeString(row.created_at_text, 80) ||
       (row.created_at ? new Date(String(row.created_at)).toLocaleString("ko-KR") : ""),
+    };
+};
+
+const isMissingFormattedHtmlColumn = (message: string) =>
+  /formatted_text_html/i.test(message) &&
+  (/column/i.test(message) || /schema/i.test(message) || /does not exist/i.test(message));
+
+const upsertGeneralInfoRow = async (
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  item: GeneralInfoPayload,
+) => {
+  const first = await supabase
+    .from("general_info_items")
+    .upsert(toDbRow(item, true))
+    .select("*")
+    .single();
+
+  if (!first.error) {
+    const mapped = fromDbRow(first.data as Record<string, unknown>);
+    return {
+      data: {
+        ...mapped,
+        formattedTextHtml: mapped.formattedTextHtml || item.formattedTextHtml || "",
+      },
+      error: null as null,
+    };
+  }
+
+  if (!isMissingFormattedHtmlColumn(String(first.error.message || ""))) {
+    return { data: null, error: first.error };
+  }
+
+  const second = await supabase
+    .from("general_info_items")
+    .upsert(toDbRow(item, false))
+    .select("*")
+    .single();
+
+  if (second.error) return { data: null, error: second.error };
+
+  const mapped = fromDbRow(second.data as Record<string, unknown>);
+  return {
+    data: {
+      ...mapped,
+      formattedTextHtml: item.formattedTextHtml || mapped.formattedTextHtml || "",
+    },
+    error: null as null,
   };
 };
 
@@ -316,12 +374,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
-
-    const { data, error } = await supabase
-      .from("general_info_items")
-      .upsert(toDbRow(item))
-      .select("*")
-      .single();
+    const { data, error } = await upsertGeneralInfoRow(supabase, item);
 
     if (error) {
       return NextResponse.json(
@@ -336,7 +389,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      item: fromDbRow(data),
+      item: data,
     });
   } catch (error) {
     return NextResponse.json(
@@ -368,11 +421,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
-      .from("general_info_items")
-      .upsert(toDbRow(item))
-      .select("*")
-      .single();
+    const { data, error } = await upsertGeneralInfoRow(supabase, item);
 
     if (error) {
       return NextResponse.json(
@@ -387,7 +436,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      item: fromDbRow(data),
+      item: data,
     });
   } catch (error) {
     return NextResponse.json(

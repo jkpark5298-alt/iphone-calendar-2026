@@ -16,6 +16,11 @@ import {
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
+import { stepCollectFontSize } from "../lib/collectFormatPalette";
+import { readClipboardImageFiles, runCollectRichCommand } from "../lib/collectRichFormat";
+import { CollectFormatToolbar } from "../components/CollectFormatToolbar";
+import { HandwritingModal } from "../components/HandwritingModal";
+import { TextToImageModal } from "../components/TextToImageModal";
 import { PhotobookPersonAlbumGallery, PhotobookPersonAlbumScreen } from "../components/PhotobookPersonAlbumGallery";
 import { keepPersonPhotosFromDeletedItems } from "../lib/client-photobook-person-album";
 import { isPersonAlbumCategory, type PhotobookPersonSource } from "../lib/photobook-person-album";
@@ -467,6 +472,7 @@ export default function HomePage() {
   const [infoPhotos, setInfoPhotos] = useState<Record<string, PhotoItem[]>>({});
   const [calendarPhotos, setCalendarPhotos] = useState<Record<string, string>>({});
   const [calendarPhotoIndexes, setCalendarPhotoIndexes] = useState<Record<string, number>>({});
+  const [selectedDiaryPhotoIndex, setSelectedDiaryPhotoIndex] = useState<number | null>(null);
   const [schedules, setSchedules] = useState<Record<string, ScheduleItem[]>>({});
   const [redDates, setRedDates] = useState<Record<number, number[]>>({});
   const [redDateInput, setRedDateInput] = useState("");
@@ -581,8 +587,7 @@ export default function HomePage() {
   const infoEditStartRef = useRef<{ key: string; infoText: string } | null>(null);
 
   function handleDiaryRichCommand(command: string, value?: string) {
-    diaryRichTextRef.current?.focus();
-    document.execCommand(command, false, value);
+    runCollectRichCommand(diaryRichTextRef.current, command, value);
   }
 
   /** 일기장 본문에 인라인 이미지 업로드 (insta-fact-library onUploadImages 방식) */
@@ -664,11 +669,45 @@ export default function HomePage() {
   }
 
   const diaryImageFileRef = useRef<HTMLInputElement | null>(null);
+  const [showDiaryHandwritingModal, setShowDiaryHandwritingModal] = useState(false);
+  const [showDiaryTextToImageModal, setShowDiaryTextToImageModal] = useState(false);
+  const [diaryCollectFontSizePx, setDiaryCollectFontSizePx] = useState(15);
 
   function handleDiaryRichImagePick(files: FileList | null) {
     const list = Array.from(files || []);
     if (!list.length) return;
     void insertDiaryInlineImages(list);
+  }
+
+  function insertDiaryDataUrl(dataUrl: string) {
+    const editor = diaryRichTextRef.current;
+    if (!editor || !dataUrl) return;
+    editor.focus();
+    enhanceRichInlineImages(editor);
+    const inserted = insertImagesAtSlotOrCaret(editor, [{ src: dataUrl }]);
+    if (inserted) {
+      enhanceRichInlineImages(editor);
+      saveDiary(editor.innerHTML || "", voiceText);
+    }
+  }
+
+  async function handleDiaryCollectPasteImage() {
+    try {
+      const files = await readClipboardImageFiles();
+      if (!files.length) {
+        alert("클립보드에서 이미지를 찾지 못했습니다. 이미지를 복사한 뒤 다시 눌러 주세요.");
+        return;
+      }
+      void insertDiaryInlineImages(files);
+    } catch {
+      alert("클립보드 이미지 읽기를 지원하지 않습니다. 본문에 직접 붙여넣기 하세요.");
+    }
+  }
+
+  function handleDiaryCollectFontSizeStep(delta: number) {
+    const next = stepCollectFontSize(diaryCollectFontSizePx, delta);
+    setDiaryCollectFontSizePx(next);
+    handleDiaryRichCommand("fontSizePx", String(next));
   }
 
   function resizeTextareaToContent(element: HTMLTextAreaElement | null) {
@@ -744,22 +783,6 @@ export default function HomePage() {
 
   function handleInfoTextPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     requestAnimationFrame(() => saveInfo(event.currentTarget.value));
-  }
-
-  async function pasteCopiedTextToDiary() {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (!text.trim()) {
-        alert("클립보드에 붙일 글이 없습니다.");
-        return;
-      }
-      beginDiaryTextUndoSession();
-      const nextText = diaryText ? `${diaryText}\n${text}` : text;
-      saveDiary(nextText, voiceText);
-      requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
-    } catch {
-      alert("브라우저에서 클립보드 읽기를 허용하지 않았습니다. 입력칸을 길게 눌러 붙여넣어 주세요.");
-    }
   }
 
   async function pasteCopiedTextToInfo() {
@@ -1922,6 +1945,7 @@ export default function HomePage() {
     setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);
+    setSelectedDiaryPhotoIndex(null);
     setView("diary");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -3483,39 +3507,6 @@ export default function HomePage() {
     closeOriginalImage();
   }
 
-
-  function getDiaryPhotoIndexFromUser(k: string, actionName: string) {
-    const items = photos[k] || [];
-    if (!items.length) {
-      alert("선택할 사진이 없습니다.");
-      return null;
-    }
-
-    const input = window.prompt(`${actionName}할 사진 번호를 입력하세요. (1~${items.length})`);
-    if (!input) return null;
-
-    const index = Number(input.trim()) - 1;
-    if (!Number.isInteger(index) || index < 0 || index >= items.length) {
-      alert("사진 번호가 올바르지 않습니다.");
-      return null;
-    }
-
-    return index;
-  }
-
-  async function attachDiaryPhotoToCalendar(k: string) {
-    const index = getDiaryPhotoIndexFromUser(k, "캘린더에 붙이기");
-    if (index === null) return;
-    await setCalendarPhoto(k, index);
-  }
-
-  async function deleteDiaryPhotoBySelect(k: string) {
-    const index = getDiaryPhotoIndexFromUser(k, "삭제");
-    if (index === null) return;
-    if (!window.confirm(`${index + 1}번 사진을 삭제할까요?`)) return;
-    await deletePhoto(k, index);
-  }
-
   async function pastePhotoFromClipboard() {
     try {
       const clipboard = navigator.clipboard as Clipboard & { read?: () => Promise<ClipboardItem[]> };
@@ -3964,6 +3955,7 @@ export default function HomePage() {
             )}
           </div>
           <div className="diary-photo-button-group">
+            <div className="diary-photo-group-label">사진</div>
             <div className="button-row diary-photo-import-row diary-photo-row-primary">
               <label className="soft-btn compact-photo-btn">
                 📷 사진찍기
@@ -3975,49 +3967,60 @@ export default function HomePage() {
               </label>
               <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
             </div>
-            <div className="button-row diary-photo-import-row diary-photo-row-secondary">
-              <button type="button" className="soft-btn compact-photo-btn" onClick={() => attachDiaryPhotoToCalendar(k)}>캘린더 붙이기</button>
-              <button type="button" className="soft-btn compact-photo-btn delete-btn" onClick={() => deleteDiaryPhotoBySelect(k)}>삭제</button>
-              <button type="button" className="soft-btn compact-photo-btn" onClick={pasteCopiedTextToDiary}>복사한 글 붙이기</button>
-            </div>
           </div>
         </div>
-        {/* ── Text 입력 / 편집 (일반정보저장함과 동일한 Rich Text 편집기) ── */}
+        {/* Text 입력 / 편집 (Builder FormatToolbar 이식) */}
         <div className="generalInfoTextBox generalInfoRichTextBox" style={{ margin: "10px 0" }}>
           <div className="generalInfoRichTextHeader">
             <strong>Text 입력 / 편집</strong>
-            <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄 편집 가능</span>
+            <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능 (Builder 서식)</span>
           </div>
-          <div className="generalInfoRichToolbar" aria-label="Text 편집 도구">
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("bold")}>B 굵게</button>
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("underline")}>U 밑줄</button>
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("removeFormat")}>서식 지우기</button>
-            <button type="button" className="generalInfoRichColorDefault" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#e2e8f0")}>● 기본</button>
-            <button type="button" className="generalInfoRichColorRed" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#f87171")}>● 빨강</button>
-            <button type="button" className="generalInfoRichColorYellow" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#facc15")}>● 노랑</button>
-            <button type="button" className="generalInfoRichColorBlue" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#60a5fa")}>● 파랑</button>
-            <button type="button" className="generalInfoRichColorGreen" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("foreColor", "#4ade80")}>● 초록</button>
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertImageSlot} title="이미지 칸 추가">＋ 칸</button>
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => diaryImageFileRef.current?.click()} title="이미지 파일 넣기">🖼 이미지</button>
-            <input
-              ref={diaryImageFileRef}
-              type="file"
-              accept="image/*,.heic,.heif,.jpeg,.jpg,.png,.webp"
-              multiple
-              style={{ display: "none" }}
-              onChange={(e) => {
-                handleDiaryRichImagePick(e.target.files);
-                e.target.value = "";
-              }}
-            />
+          <CollectFormatToolbar
+            onUndo={() => handleDiaryRichCommand("undo")}
+            onRedo={() => handleDiaryRichCommand("redo")}
+            onBold={() => handleDiaryRichCommand("bold")}
+            onUnderline={() => handleDiaryRichCommand("underline")}
+            onFontSize={(px) => {
+              setDiaryCollectFontSizePx(px);
+              handleDiaryRichCommand("fontSizePx", String(px));
+            }}
+            onFontSizeStep={handleDiaryCollectFontSizeStep}
+            onColor={(c) => handleDiaryRichCommand("foreColor", c)}
+            onHighlight={(c) => handleDiaryRichCommand("highlight", c)}
+            onInsertChar={(ch) => handleDiaryRichCommand("insertText", ch)}
+            onImage={() => diaryImageFileRef.current?.click()}
+            onPasteImage={() => {
+              void handleDiaryCollectPasteImage();
+            }}
+            onTextImage={() => setShowDiaryTextToImageModal(true)}
+            onHandwriting={() => setShowDiaryHandwritingModal(true)}
+          />
+          <div className="collectFormatSlotRow">
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertImageSlot} title="이미지 칸 추가">
+              ＋ 칸
+            </button>
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("removeFormat")}>
+              서식 지우기
+            </button>
           </div>
+          <input
+            ref={diaryImageFileRef}
+            type="file"
+            accept="image/*,.heic,.heif,.jpeg,.jpg,.png,.webp"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              handleDiaryRichImagePick(e.target.files);
+              e.target.value = "";
+            }}
+          />
           <div
             key={`diary-rich-${currentYear}-${currentMonth}-${currentDay}`}
             ref={(el) => {
               diaryRichTextRef.current = el;
               if (el && el.innerHTML === "") el.innerHTML = diaryText || "";
             }}
-            className="generalInfoRichTextEditor"
+            className="generalInfoRichTextEditor collectPaperEditor"
             contentEditable
             suppressContentEditableWarning
             role="textbox"
@@ -4041,8 +4044,8 @@ export default function HomePage() {
                 return;
               }
               e.preventDefault();
-              const text = e.clipboardData.getData("text/plain");
-              if (text) document.execCommand("insertText", false, text);
+              const pasteText = e.clipboardData.getData("text/plain");
+              if (pasteText) document.execCommand("insertText", false, pasteText);
             }}
             style={{
               display: "block",
@@ -4052,9 +4055,9 @@ export default function HomePage() {
               overflowY: "auto",
               boxSizing: "border-box",
               borderRadius: 14,
-              border: "1px solid rgba(56, 189, 248, 0.45)",
-              background: "#020617",
-              color: "#e2e8f0",
+              border: "1px solid #e2e8f0",
+              background: "#ffffff",
+              color: "#1a2430",
               padding: "14px 15px",
               fontSize: 15,
               lineHeight: 1.8,
@@ -4063,42 +4066,90 @@ export default function HomePage() {
             }}
           />
         </div>
+        {showDiaryHandwritingModal && (
+          <HandwritingModal
+            onCancel={() => setShowDiaryHandwritingModal(false)}
+            onInsert={(dataUrl) => {
+              insertDiaryDataUrl(dataUrl);
+              setShowDiaryHandwritingModal(false);
+            }}
+          />
+        )}
+        {showDiaryTextToImageModal && (
+          <TextToImageModal
+            initialText={String(diaryRichTextRef.current?.innerText || "").slice(0, 800)}
+            onCancel={() => setShowDiaryTextToImageModal(false)}
+            onInsert={(dataUrl) => {
+              insertDiaryDataUrl(dataUrl);
+              setShowDiaryTextToImageModal(false);
+            }}
+          />
+        )}
         <HyperlinkPreview text={diaryText} />
 
         <div className="diary-photo-section" onPaste={handlePhotoPaste} tabIndex={0}>
-          {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.</div>}
+          {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.<br />사진을 누르면 대표 설정·삭제가 나타납니다.</div>}
           <div className={`diary-photo-grid-safe diary-photo-gallery ${diaryPhotoCountClass}`}>
             {dayPhotos.map((photo, index) => {
               const isRepPhoto = calendarPhotoIndexes[k] === index || 
                 (calendarPhotos[k] && (calendarPhotos[k] === photo.url || calendarPhotos[k] === photo.storagePath));
+              const isSelected = selectedDiaryPhotoIndex === index;
               return (
                 <div
-                  className={`diary-photo-card-safe diary-gallery-photo diary-photo-item-with-delete ${isRepPhoto ? "diary-photo-representative" : ""}`}
+                  className={`diary-photo-card-safe diary-gallery-photo diary-photo-item-with-delete ${isRepPhoto ? "diary-photo-representative" : ""} ${isSelected ? "diary-photo-selected" : ""}`}
                   key={`${photo.name}-${index}`}
                   style={{ position: "relative" }}
+                  onClick={() => setSelectedDiaryPhotoIndex((prev) => (prev === index ? null : index))}
                 >
                   <button
                     type="button"
                     className="diary-photo-open-btn"
-                    onClick={() => openDiaryOriginalPhoto(k, index)}
-                    aria-label="일기 사진 원본 크게 보기"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedDiaryPhotoIndex(index);
+                    }}
+                    aria-label={`일기 사진 ${index + 1} 선택`}
+                    aria-pressed={isSelected}
                   >
                     <img src={photo.url} alt={`일기 사진 ${index + 1}`} />
                   </button>
-                  {isRepPhoto ? (
-                    <span className="diary-photo-rep-badge">★ 대표 사진</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="diary-photo-set-rep-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void setCalendarPhoto(k, index);
-                      }}
-                      title="캘린더 대표 사진으로 설정"
+                  {isRepPhoto && <span className="diary-photo-rep-badge">★ 대표</span>}
+                  {isSelected && (
+                    <div
+                      className="diary-photo-select-actions"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      ★ 대표로 설정
-                    </button>
+                      <button
+                        type="button"
+                        className="diary-photo-action-btn"
+                        onClick={() => openDiaryOriginalPhoto(k, index)}
+                      >
+                        크게 보기
+                      </button>
+                      {!isRepPhoto && (
+                        <button
+                          type="button"
+                          className="diary-photo-action-btn diary-photo-action-rep"
+                          onClick={() => {
+                            void setCalendarPhoto(k, index);
+                          }}
+                        >
+                          ★ 대표
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="diary-photo-action-btn diary-photo-action-delete"
+                        onClick={() => {
+                          if (!window.confirm(`${index + 1}번 사진을 삭제할까요?`)) return;
+                          void deletePhoto(k, index).then(() => {
+                            setSelectedDiaryPhotoIndex(null);
+                          });
+                        }}
+                      >
+                        삭제
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -5971,16 +6022,9 @@ ${photo.memoText}
           {infoSubView === "generalInfo" ? (
             /* Render Chapter 3 Component */
             <Chapter3Info
-              geminiApiKey={geminiApiKey}
-              setGeminiApiKey={setGeminiApiKey}
-              isGeneralInfoMobileLayout={infoState.isGeneralInfoMobileLayout}
               generalInfoDraft={infoState.generalInfoDraft}
               setGeneralInfoDraft={infoState.setGeneralInfoDraft}
-              generalInfoDraftBackup={infoState.generalInfoDraftBackup}
               generalInfoEditingId={infoState.generalInfoEditingId}
-              generalInfoImageLoadFailed={infoState.generalInfoImageLoadFailed}
-              setGeneralInfoImageLoadFailed={infoState.setGeneralInfoImageLoadFailed}
-              generalInfoKeywordText={infoState.generalInfoKeywordText}
               setGeneralInfoKeywordText={infoState.setGeneralInfoKeywordText}
               generalInfoRichTextEditorKey={infoState.generalInfoRichTextEditorKey}
               generalInfoRichTextRef={infoState.generalInfoRichTextRef}
@@ -5993,26 +6037,16 @@ ${photo.memoText}
               handleGeneralInfoRichImagePick={infoState.handleGeneralInfoRichImagePick}
               handleGeneralInfoInsertImageSlot={infoState.handleGeneralInfoInsertImageSlot}
               getGeneralInfoToolbarButtonStyle={infoState.getGeneralInfoToolbarButtonStyle}
-              makeGeneralInfoHtmlFromText={infoState.makeGeneralInfoHtmlFromText}
-              handleUndoGeneralInfoDraft={infoState.handleUndoGeneralInfoDraft}
               handleResetGeneralInfoDraft={infoState.handleResetGeneralInfoDraft}
-              handleCollectGeneralInfoFromClipboard={infoState.handleCollectGeneralInfoFromClipboard}
-              isCollectingGeneralInfoClipboard={infoState.isCollectingGeneralInfoClipboard}
-              handleExtractGeneralInfoUrl={infoState.handleExtractGeneralInfoUrl}
-              isExtractingGeneralInfoUrl={infoState.isExtractingGeneralInfoUrl}
+              handleAddGeneralInfoParagraph={infoState.handleAddGeneralInfoParagraph}
+              handleRemoveGeneralInfoParagraph={infoState.handleRemoveGeneralInfoParagraph}
               handleGeneralInfoFileUpload={infoState.handleGeneralInfoFileUpload}
-              handleGeneralInfoIphonePasteZonePaste={infoState.handleGeneralInfoIphonePasteZonePaste}
               handleClearGeneralInfoCoverImage={infoState.handleClearGeneralInfoCoverImage}
               handleRemoveGeneralInfoMediaItem={infoState.handleRemoveGeneralInfoMediaItem}
-              handleAnalyzeGeneralInfoDraft={infoState.handleAnalyzeGeneralInfoDraft}
-              isAnalyzingGeneralInfo={infoState.isAnalyzingGeneralInfo}
               handleConfirmGeneralInfo={infoState.handleConfirmGeneralInfo}
               handleCancelEditGeneralInfo={infoState.handleCancelEditGeneralInfo}
               handleStartEditGeneralInfo={infoState.handleStartEditGeneralInfo}
               generalInfoItems={infoState.generalInfoItems}
-              filteredGeneralInfoItems={infoState.filteredGeneralInfoItems}
-              generalInfoSearchTerm={infoState.generalInfoSearchTerm}
-              setGeneralInfoSearchTerm={infoState.setGeneralInfoSearchTerm}
               setGeneralInfoDetailId={infoState.setGeneralInfoDetailId}
               generalInfoDetailId={infoState.generalInfoDetailId}
               generalInfoActiveTab={infoState.generalInfoActiveTab}
@@ -7133,14 +7167,8 @@ ${photo.memoText}
         <GeneralInfoDetailModal
           item={infoState.selectedGeneralInfoItem}
           onClose={() => infoState.setGeneralInfoDetailId(null)}
-          onGenerateReport={infoState.handleGenerateGeneralInfoReport}
-          onRunFactCheck={infoState.handleRunPreciseGeneralInfoFactCheck}
           onEdit={infoState.handleStartEditGeneralInfo}
           onDelete={(item) => infoState.handleDeleteGeneralInfo(item.id)}
-          onSavePdf={(item) => {
-            window.print();
-          }}
-          onShareReport={infoState.handleShareGeneralInfoReport}
         />
       )}
   

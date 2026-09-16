@@ -2,11 +2,22 @@ import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
 import { initialGeneralInfoDraft, generalInfoCategories, mockAnalyzeGeneralInfo } from "../lib/generalInfoMock";
 import { persistGeneralInfoItemsToLocalStorage, readGeneralInfoItemsFromLocalStorage } from "../lib/generalInfoStorage";
+import { extractFirstSentence, categoryKeywordsList, formatCategoryKeywords } from "../lib/generalInfoText";
+import {
+  createEmptyParagraph,
+  isParagraphEmpty,
+  normalizeParagraph,
+  parseParagraphsFromHtml,
+  paragraphsToPlainText,
+  serializeParagraphsToHtml,
+} from "../lib/generalInfoParagraphs";
+import type { GeneralInfoParagraph } from "../types/generalInfo";
 
 import { supabase } from "../lib/supabaseClient";
 
 
-import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, extractMediaSrcFromHtml, replaceHtmlMediaSources } from "../lib/generalInfoHelpers";
+import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoFormattedHtml, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, extractMediaSrcFromHtml, replaceHtmlMediaSources } from "../lib/generalInfoHelpers";
+import { sanitizeGeneralInfoHtml } from "../lib/sanitizeHtml";
 import {
   enhanceRichInlineImages,
   insertImagesAtSlotOrCaret,
@@ -15,6 +26,7 @@ import {
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
+import { runCollectRichCommand } from "../lib/collectRichFormat";
 
 
 const TRAVEL_DIARY_BUCKET = "info-photos";
@@ -119,7 +131,13 @@ export function useTravelDiaryGeneralInfoState({
               return {
                 ...data.item,
                 mediaItems: mergedMediaItems,
-                isPinned: prevItem.isPinned || data.item.isPinned
+                isPinned: prevItem.isPinned || data.item.isPinned,
+                formattedTextHtml:
+                  data.item.formattedTextHtml || prevItem.formattedTextHtml || "",
+                paragraphs: data.item.paragraphs?.length
+                  ? data.item.paragraphs
+                  : prevItem.paragraphs,
+                filePreview: data.item.filePreview || prevItem.filePreview,
               };
             }
             return prevItem;
@@ -242,6 +260,11 @@ export function useTravelDiaryGeneralInfoState({
                 isPinned,
                 mediaItems,
                 filePreview: remoteItem.filePreview || localItem.filePreview,
+                formattedTextHtml:
+                  remoteItem.formattedTextHtml || localItem.formattedTextHtml || "",
+                paragraphs: remoteItem.paragraphs?.length
+                  ? remoteItem.paragraphs
+                  : localItem.paragraphs,
               });
             } else {
               map.set(remoteItem.id, remoteItem);
@@ -311,9 +334,11 @@ export function useTravelDiaryGeneralInfoState({
   }, [generalInfoDraft]);
 
   const resetGeneralInfoRichTextEditor = useCallback((text = "", html = "") => {
-    setGeneralInfoRichTextInitialHtml(
-      html && html.trim() ? html : makeGeneralInfoHtmlFromText(text),
-    );
+    const nextHtml =
+      html && html.trim()
+        ? sanitizeGeneralInfoHtml(html)
+        : makeGeneralInfoHtmlFromText(text);
+    setGeneralInfoRichTextInitialHtml(nextHtml);
     setGeneralInfoRichTextEditorKey((prev) => prev + 1);
   }, []);
 
@@ -322,7 +347,10 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoImageLoadFailed(false);
     setGeneralInfoEditingId(null);
     setGeneralInfoKeywordText("");
-    setGeneralInfoDraft(initialGeneralInfoDraft);
+    setGeneralInfoDraft({
+      ...initialGeneralInfoDraft,
+      paragraphs: [createEmptyParagraph()],
+    });
     resetGeneralInfoRichTextEditor("", "");
     showPasteHint("🧹 일반 정보 현재 입력을 삭제했습니다. 필요하면 [직전 입력 되돌리기]로 복원할 수 있습니다.");
   }, [backupCurrentGeneralInfoDraft, resetGeneralInfoRichTextEditor, showPasteHint]);
@@ -415,30 +443,121 @@ export function useTravelDiaryGeneralInfoState({
     applyExtractedGeneralInfoUrlResult(data.result || {}, targetUrl);
   }, [applyExtractedGeneralInfoUrlResult]);
 
+  const getDraftParagraphs = useCallback((draft: GeneralInfoDraft): GeneralInfoParagraph[] => {
+    if (Array.isArray(draft.paragraphs) && draft.paragraphs.length > 0) {
+      return draft.paragraphs.map(normalizeParagraph);
+    }
+    if (String(draft.formattedTextHtml || "").trim()) {
+      return parseParagraphsFromHtml(String(draft.formattedTextHtml || ""));
+    }
+    if (String(draft.text || "").trim()) {
+      return [
+        normalizeParagraph({
+          html: makeGeneralInfoHtmlFromText(draft.text),
+          text: draft.text,
+          createdAt: nowText(),
+        }),
+      ];
+    }
+    return [createEmptyParagraph()];
+  }, []);
+
   const getCurrentGeneralInfoRichTextHtml = useCallback(() => {
-    const html = String(generalInfoRichTextRef.current?.innerHTML || "").trim();
-    if (html) return html;
-    if (generalInfoRichTextInitialHtml.trim()) return generalInfoRichTextInitialHtml;
-    return makeGeneralInfoHtmlFromText(generalInfoDraft.text || "");
-  }, [generalInfoDraft.text, generalInfoRichTextInitialHtml]);
+    const live = String(generalInfoRichTextRef.current?.innerHTML || "").trim();
+    const paragraphs = getDraftParagraphs(generalInfoDraft).map((p, index) => {
+      if (index !== 0) return p;
+      const html = live || p.html || generalInfoRichTextInitialHtml;
+      const text = String(generalInfoRichTextRef.current?.innerText || p.text || "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\n{4,}/g, "\n\n\n");
+      return normalizeParagraph({ ...p, html, text });
+    });
+    return serializeParagraphsToHtml(paragraphs) || live || generalInfoRichTextInitialHtml;
+  }, [generalInfoDraft, generalInfoRichTextInitialHtml, getDraftParagraphs]);
 
   const syncGeneralInfoRichTextToDraft = useCallback(() => {
     const plainText = String(generalInfoRichTextRef.current?.innerText || "")
       .replace(/\u00a0/g, " ")
       .replace(/\n{4,}/g, "\n\n\n");
+    const html = sanitizeGeneralInfoHtml(
+      String(generalInfoRichTextRef.current?.innerHTML || "").trim(),
+    );
 
     setGeneralInfoDraft((prev) => {
-      if (prev.text === plainText) return prev; // 변경 없으면 리렌더 스킵
-      return { ...prev, text: plainText };
+      const paragraphs = getDraftParagraphs(prev).map((p, index) =>
+        index === 0 ? normalizeParagraph({ ...p, html, text: plainText }) : p,
+      );
+      const formattedTextHtml = serializeParagraphsToHtml(paragraphs);
+      const text = paragraphsToPlainText(paragraphs);
+      return { ...prev, paragraphs, text, formattedTextHtml };
     });
-  }, []);
+  }, [getDraftParagraphs]);
+
+  const handleAddGeneralInfoParagraph = useCallback(() => {
+    const liveHtml = sanitizeGeneralInfoHtml(
+      String(generalInfoRichTextRef.current?.innerHTML || "").trim(),
+    );
+    const liveText = String(generalInfoRichTextRef.current?.innerText || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\n{4,}/g, "\n\n\n");
+
+    setGeneralInfoDraft((prev) => {
+      const currentList = getDraftParagraphs(prev);
+      const sealed = normalizeParagraph({
+        ...currentList[0],
+        html: liveHtml || currentList[0]?.html || "",
+        text: liveText || currentList[0]?.text || "",
+        createdAt: currentList[0]?.createdAt || nowText(),
+      });
+
+      if (isParagraphEmpty(sealed)) {
+        showPasteHint("현재 단락이 비어 있습니다. 내용을 입력한 뒤 단락을 추가하세요.");
+        return prev;
+      }
+
+      const nextActive = createEmptyParagraph(nowText());
+      const paragraphs = [nextActive, sealed, ...currentList.slice(1)];
+      return {
+        ...prev,
+        paragraphs,
+        text: paragraphsToPlainText(paragraphs),
+        formattedTextHtml: serializeParagraphsToHtml(paragraphs),
+      };
+    });
+
+    resetGeneralInfoRichTextEditor("", "");
+    showPasteHint("새 단락을 추가했습니다. 이전 단락은 아래로 이동했습니다.");
+  }, [getDraftParagraphs, resetGeneralInfoRichTextEditor, showPasteHint]);
+
+  const handleRemoveGeneralInfoParagraph = useCallback((paragraphId: string) => {
+    const currentList = getDraftParagraphs(generalInfoDraft);
+    const removingActive = currentList[0]?.id === paragraphId;
+    const nextList = currentList.filter((p) => p.id !== paragraphId);
+    const paragraphs = nextList.length > 0 ? nextList : [createEmptyParagraph()];
+
+    setGeneralInfoDraft((prev) => ({
+      ...prev,
+      paragraphs,
+      text: paragraphsToPlainText(paragraphs),
+      formattedTextHtml: serializeParagraphsToHtml(paragraphs),
+    }));
+
+    if (removingActive) {
+      const active = paragraphs[0];
+      resetGeneralInfoRichTextEditor(active.text || "", active.html || "");
+    }
+  }, [generalInfoDraft, getDraftParagraphs, resetGeneralInfoRichTextEditor]);
 
   // DOM ref에서 직접 최신 텍스트를 읽는 헬퍼 (state 업데이트 없이 버튼 핸들러에서 사용)
   const getCurrentGeneralInfoRichTextPlain = useCallback(() => {
-    return String(generalInfoRichTextRef.current?.innerText || "")
+    const live = String(generalInfoRichTextRef.current?.innerText || "")
       .replace(/\u00a0/g, " ")
       .replace(/\n{4,}/g, "\n\n\n");
-  }, []);
+    const paragraphs = getDraftParagraphs(generalInfoDraft).map((p, index) =>
+      index === 0 ? normalizeParagraph({ ...p, text: live || p.text }) : p,
+    );
+    return paragraphsToPlainText(paragraphs) || live;
+  }, [generalInfoDraft, getDraftParagraphs]);
 
   const getGeneralInfoToolbarButtonStyle = useCallback((
     color = "#e5e7eb",
@@ -465,8 +584,7 @@ export function useTravelDiaryGeneralInfoState({
   }), []);
 
   const handleGeneralInfoRichCommand = useCallback((command: string, value?: string) => {
-    generalInfoRichTextRef.current?.focus();
-    document.execCommand(command, false, value);
+    runCollectRichCommand(generalInfoRichTextRef.current, command, value);
     syncGeneralInfoRichTextToDraft();
   }, [syncGeneralInfoRichTextToDraft]);
 
@@ -561,12 +679,10 @@ export function useTravelDiaryGeneralInfoState({
     if (fileList.length === 0) return;
 
     let loadedCount = 0;
-    const loadedItems: Array<{
-      id: number;
-      name: string;
-      type: "none" | "image" | "video";
-      preview: string;
-    }> = [];
+    const loadedItems: GeneralInfoMediaItem[] = [];
+    const captionFromBody = extractFirstSentence(
+      String(generalInfoRichTextRef.current?.innerText || generalInfoDraft.text || ""),
+    );
 
     fileList.forEach((file) => {
       const fileType = file.type.startsWith("video/") ? "video" : "image";
@@ -575,7 +691,11 @@ export function useTravelDiaryGeneralInfoState({
       reader.onload = (event) => {
         const preview = String(event.target?.result || "");
         if (preview) {
-          loadedItems.push(makeGeneralInfoMediaItem(file.name, fileType, preview));
+          const item = makeGeneralInfoMediaItem(file.name, fileType, preview);
+          loadedItems.push({
+            ...item,
+            memo: captionFromBody || item.memo,
+          });
         }
 
         loadedCount += 1;
@@ -598,17 +718,15 @@ export function useTravelDiaryGeneralInfoState({
 
           showPasteHint(
             fileList.length > 1
-              ? `✅ 이미지/동영상 자료 ${fileList.length}개 추가`
-              : loadedItems[0]?.type === "video"
-                ? "✅ 동영상 자료 추가"
-                : "✅ 이미지 자료 추가",
+              ? `인포그래픽 ${fileList.length}개 추가`
+              : "인포그래픽 추가",
           );
         }
       };
 
       reader.readAsDataURL(file);
     });
-  }, [showPasteHint]);
+  }, [generalInfoDraft.text, showPasteHint]);
 
   const handleGeneralInfoRichPaste = useCallback((
     event: React.ClipboardEvent<HTMLDivElement>,
@@ -672,8 +790,8 @@ export function useTravelDiaryGeneralInfoState({
     const slotId = tryConsumeImageTriggerToSlot(editor);
     if (slotId) {
       enhanceRichInlineImages(editor);
-      syncGeneralInfoRichTextToDraft();
     }
+    syncGeneralInfoRichTextToDraft();
   }, [syncGeneralInfoRichTextToDraft]);
 
   /** 에디터 내 ×(이미지/칸 삭제) 클릭 처리. true 반환 시 기본 동작 중단 */
@@ -1101,12 +1219,12 @@ export function useTravelDiaryGeneralInfoState({
   /** 본문 rich HTML 안 인라인 data: 이미지를 Supabase 업로드 → 공개 URL로 치환 */
   const uploadGeneralInfoRichHtmlImages = useCallback(async (
     html: string,
-  ): Promise<string> => {
+  ): Promise<{ html: string; replacements: Array<{ from: string; to: string }> }> => {
     let next = String(html || "");
     const sources = extractMediaSrcFromHtml(next).filter((src) =>
       src.startsWith("data:"),
     );
-    if (!sources.length) return next;
+    if (!sources.length) return { html: next, replacements: [] };
     const replacements: Array<{ from: string; to: string }> = [];
     for (const src of sources) {
       try {
@@ -1124,7 +1242,7 @@ export function useTravelDiaryGeneralInfoState({
     if (replacements.length) {
       next = replaceHtmlMediaSources(next, replacements);
     }
-    return next;
+    return { html: next, replacements };
   }, [dataUrlToGeneralInfoFile]);
 
   const handleSaveTemporaryGeneralInfoDraft = useCallback(() => {
@@ -1140,23 +1258,40 @@ export function useTravelDiaryGeneralInfoState({
   }, [generalInfoDraft, generalInfoKeywordText, getCurrentGeneralInfoRichTextHtml, generalInfoEditingId, showPasteHint]);
 
   const handleConfirmGeneralInfo = useCallback(async () => {
-    // 버튼 클릭 시 onBlur가 스킵될 수 있으므로 DOM ref에서 직접 최신 텍스트를 읽음
-    const latestText = getCurrentGeneralInfoRichTextPlain();
-    const draftWithLatestText = latestText !== generalInfoDraft.text
-      ? { ...generalInfoDraft, text: latestText }
-      : generalInfoDraft;
+    const liveHtml = sanitizeGeneralInfoHtml(
+      String(generalInfoRichTextRef.current?.innerHTML || "").trim(),
+    );
+    const liveText = String(generalInfoRichTextRef.current?.innerText || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\n{4,}/g, "\n\n\n");
 
-    const analyzed =
-      draftWithLatestText.primaryCategory ||
-      draftWithLatestText.secondaryCategory ||
-      draftWithLatestText.thirdCategory ||
-      draftWithLatestText.summary ||
-      draftWithLatestText.keywords.length > 0
-        ? draftWithLatestText
-        : mockAnalyzeGeneralInfo(draftWithLatestText);
+    const paragraphs = getDraftParagraphs(generalInfoDraft).map((p, index) =>
+      index === 0
+        ? normalizeParagraph({
+            ...p,
+            html: liveHtml || p.html,
+            text: liveText || p.text,
+          })
+        : p,
+    );
+    const analyzed = {
+      ...generalInfoDraft,
+      paragraphs,
+      text: paragraphsToPlainText(paragraphs),
+      formattedTextHtml: serializeParagraphsToHtml(paragraphs),
+    };
+
+    const keywords = categoryKeywordsList(
+      analyzed.primaryCategory,
+      analyzed.secondaryCategory,
+    );
 
     const inputTypes: GeneralInfoItem["inputTypes"] = [];
-    const draftMediaItems = normalizeGeneralInfoMediaItems(analyzed);
+    const firstSentence = extractFirstSentence(analyzed.text);
+    const draftMediaItems = normalizeGeneralInfoMediaItems(analyzed).map((media) => ({
+      ...media,
+      memo: media.memo?.trim() || firstSentence || media.memo,
+    }));
 
     const hasDraftImage = draftMediaItems.some((media) => media.type === "image");
     const hasDraftVideo = draftMediaItems.some((media) => media.type === "video");
@@ -1164,70 +1299,74 @@ export function useTravelDiaryGeneralInfoState({
     let uploadedDraftMediaItems = draftMediaItems;
 
     if (hasDraftImage) {
-      showPasteHint("⏳ 일반 정보 이미지 Supabase Storage 업로드 중");
+      showPasteHint("일반 정보 이미지 업로드 중");
       uploadedDraftMediaItems = await uploadGeneralInfoMediaItemsToSupabaseStorage(draftMediaItems);
-      showPasteHint("✅ 일반 정보 이미지 Supabase Storage 업로드 완료");
+      showPasteHint("일반 정보 이미지 업로드 완료");
     }
 
     const uploadedMainMedia = uploadedDraftMediaItems[0];
 
     // 본문 인라인 이미지(data:) 업로드 및 공개 URL 치환
-    const rawFormattedHtml = getCurrentGeneralInfoRichTextHtml();
-    const uploadedFormattedHtml = await uploadGeneralInfoRichHtmlImages(rawFormattedHtml);
+    const rawFormattedHtml = serializeParagraphsToHtml(paragraphs);
+    const { html: uploadedFormattedHtml, replacements } =
+      await uploadGeneralInfoRichHtmlImages(rawFormattedHtml);
+
+    const uploadedParagraphs = parseParagraphsFromHtml(uploadedFormattedHtml).map((p, index) => {
+      const source = paragraphs[index] || p;
+      let html = p.html || source.html;
+      for (const { from, to } of replacements) {
+        if (html.includes(from)) html = html.split(from).join(to);
+      }
+      return normalizeParagraph({ ...source, ...p, html });
+    });
+
+    const bodySrcs = extractMediaSrcFromHtml(uploadedFormattedHtml);
+    let coverPreview = String(analyzed.filePreview || "").trim();
+    for (const { from, to } of replacements) {
+      if (coverPreview === from) coverPreview = to;
+    }
+    if (!coverPreview && bodySrcs[0]) coverPreview = bodySrcs[0];
 
     if (analyzed.text.trim()) inputTypes.push("text");
-    if (analyzed.sourceUrl.trim()) inputTypes.push("url");
-    if (analyzed.fileType === "image" || hasDraftImage) inputTypes.push("image");
+    if (coverPreview || analyzed.fileType === "image" || hasDraftImage) inputTypes.push("image");
     if (analyzed.fileType === "video" || hasDraftVideo) inputTypes.push("video");
 
     if (
       !analyzed.title.trim() &&
       !analyzed.text.trim() &&
-      !analyzed.sourceUrl.trim() &&
-      draftMediaItems.length === 0
+      draftMediaItems.length === 0 &&
+      !coverPreview
     ) {
-      showPasteHint("⚠️ 저장할 일반 정보가 없습니다.");
+      showPasteHint("저장할 일반 정보가 없습니다.");
       return;
     }
 
-    const finalTitle = (() => {
-      const t = (analyzed.title || "").trim();
-      const isGeneric = !t || [
-        "일반 정보 자료",
-        "붙여넣은 text 자료",
-        "클립보드 text 자료",
-        "url 자료",
-        "클립보드 이미지 자료"
-      ].includes(t.toLowerCase());
-      
-      if (isGeneric && analyzed.text.trim()) {
-        const lines = analyzed.text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        if (lines.length > 0) {
-          const firstLine = lines[0].replace(/<[^>]*>/g, "").trim();
-          if (firstLine) {
-            return firstLine.length > 40 ? firstLine.slice(0, 40) + "..." : firstLine;
-          }
-        }
-      }
-      return analyzed.title || analyzed.summary || analyzed.sourceUrl || analyzed.fileName || "일반 정보 자료";
-    })();
+    const finalTitle =
+      analyzed.title.trim() ||
+      firstSentence ||
+      analyzed.summary.trim() ||
+      analyzed.fileName ||
+      "일반 정보 자료";
 
     const item: GeneralInfoItem = {
       id: Date.now(),
       title: finalTitle,
       inputTypes,
-      text: analyzed.text,
-      formattedTextHtml: uploadedFormattedHtml,
-      sourceUrl: analyzed.sourceUrl || undefined,
-      fileName: analyzed.fileName || uploadedMainMedia?.name || undefined,
-      filePreview: uploadedMainMedia?.preview || analyzed.filePreview || undefined,
+      text: paragraphsToPlainText(uploadedParagraphs),
+      formattedTextHtml: serializeParagraphsToHtml(uploadedParagraphs) || uploadedFormattedHtml,
+      paragraphs: uploadedParagraphs,
+      sourceUrl: undefined,
+      fileName: coverPreview
+        ? analyzed.fileName || "본문 대표 이미지"
+        : analyzed.fileName || uploadedMainMedia?.name || undefined,
+      filePreview: coverPreview || uploadedMainMedia?.preview || analyzed.filePreview || undefined,
       mediaItems: uploadedDraftMediaItems,
-      primaryCategory: analyzed.primaryCategory || "사회",
-      secondaryCategory: analyzed.secondaryCategory || "일반",
-      thirdCategory: analyzed.thirdCategory || "기타",
-      keywords: analyzed.keywords,
-      factCheckStatus: analyzed.factCheckStatus,
-      factCheckSummary: analyzed.factCheckSummary,
+      primaryCategory: analyzed.primaryCategory || "",
+      secondaryCategory: analyzed.secondaryCategory || "",
+      thirdCategory: "",
+      keywords,
+      factCheckStatus: "확인 전",
+      factCheckSummary: "",
       summary: analyzed.summary,
       extraNote: "",
       confirmed: true,
@@ -1244,8 +1383,10 @@ export function useTravelDiaryGeneralInfoState({
         id: existingGeneralInfoItem?.id || generalInfoEditingId,
         createdAt: existingGeneralInfoItem?.createdAt || item.createdAt,
         extraNote: existingGeneralInfoItem?.extraNote || "",
-        filePreview: uploadedMainMedia?.preview || item.filePreview || existingGeneralInfoItem?.filePreview,
+        filePreview: coverPreview || item.filePreview || existingGeneralInfoItem?.filePreview,
         mediaItems: uploadedDraftMediaItems,
+        paragraphs: item.paragraphs,
+        formattedTextHtml: item.formattedTextHtml,
         isPinned: existingGeneralInfoItem?.isPinned || false,
       };
 
@@ -1263,7 +1404,10 @@ export function useTravelDiaryGeneralInfoState({
       setGeneralInfoImageLoadFailed(false);
       setGeneralInfoEditingId(null);
       setGeneralInfoKeywordText("");
-      setGeneralInfoDraft(initialGeneralInfoDraft);
+      setGeneralInfoDraft({
+        ...initialGeneralInfoDraft,
+        paragraphs: [createEmptyParagraph()],
+      });
       resetGeneralInfoRichTextEditor("", "");
       localStorage.removeItem("travel_diary_general_info_temp_draft");
       showPasteHint("✅ 수정 저장 완료 · 새 일반 정보 입력 준비 완료");
@@ -1281,7 +1425,10 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoDraftBackup(null);
     setGeneralInfoImageLoadFailed(false);
     setGeneralInfoKeywordText("");
-    setGeneralInfoDraft(initialGeneralInfoDraft);
+    setGeneralInfoDraft({
+      ...initialGeneralInfoDraft,
+      paragraphs: [createEmptyParagraph()],
+    });
     resetGeneralInfoRichTextEditor("", "");
     localStorage.removeItem("travel_diary_general_info_temp_draft");
     showPasteHint("✅ 저장 완료 · 새 일반 정보 입력 준비 완료");
@@ -1289,8 +1436,7 @@ export function useTravelDiaryGeneralInfoState({
     generalInfoDraft,
     generalInfoEditingId,
     generalInfoItems,
-    getCurrentGeneralInfoRichTextHtml,
-    getCurrentGeneralInfoRichTextPlain,
+    getDraftParagraphs,
     resetGeneralInfoRichTextEditor,
     showPasteHint,
     syncGeneralInfoItemToSupabase,
@@ -1304,37 +1450,49 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoDetailId(null);
     setGeneralInfoActiveTab("collect"); // 수정 시 자동으로 수집 탭 전환
 
+    const bodyHtml = getGeneralInfoFormattedHtml(item);
+    const paragraphs =
+      Array.isArray(item.paragraphs) && item.paragraphs.length > 0
+        ? item.paragraphs.map(normalizeParagraph)
+        : parseParagraphsFromHtml(bodyHtml);
+    const active = paragraphs[0] || createEmptyParagraph();
+
     setGeneralInfoKeywordText(
-      (item.keywords || []).map((keyword) => `#${String(keyword).replace(/^#+/, "")}`).join(", "),
+      formatCategoryKeywords(item.primaryCategory || "", item.secondaryCategory || "") ||
+        (item.keywords || []).map((keyword) => `#${String(keyword).replace(/^#+/, "")}`).join(""),
     );
 
-    resetGeneralInfoRichTextEditor(
-      item.text || "",
-      String(item.formattedTextHtml || ""),
-    );
+    resetGeneralInfoRichTextEditor(active.text || "", active.html || "");
+
+    const bodyCover =
+      String(item.filePreview || "").trim() ||
+      extractMediaSrcFromHtml(serializeParagraphsToHtml(paragraphs) || bodyHtml)[0] ||
+      "";
 
     setGeneralInfoDraft({
       title: item.title || "",
-      text: item.text || "",
+      text: paragraphsToPlainText(paragraphs) || item.text || "",
       sourceUrl: item.sourceUrl || "",
-      fileName: item.fileName || "",
-      filePreview: item.filePreview || "",
+      fileName: item.fileName || (bodyCover ? "본문 대표 이미지" : ""),
+      filePreview: bodyCover,
       mediaItems: normalizeGeneralInfoMediaItems(item),
       fileType: item.inputTypes.includes("video")
         ? "video"
-        : item.inputTypes.includes("image")
+        : item.inputTypes.includes("image") || bodyCover
           ? "image"
           : "none",
       primaryCategory: item.primaryCategory || "",
       secondaryCategory: item.secondaryCategory || "",
-      thirdCategory: item.thirdCategory || "",
-      keywords: item.keywords || [],
+      thirdCategory: "",
+      keywords: categoryKeywordsList(item.primaryCategory || "", item.secondaryCategory || ""),
       summary: item.summary || "",
       factCheckStatus: item.factCheckStatus || "확인 전",
       factCheckSummary: item.factCheckSummary || "",
+      formattedTextHtml: serializeParagraphsToHtml(paragraphs) || bodyHtml,
+      paragraphs,
     });
 
-    showPasteHint("✏️ 저장된 일반 정보를 수정 모드로 불러왔습니다.");
+    showPasteHint("저장된 일반 정보를 수정 모드로 불러왔습니다.");
 
     // Scroll to the edit form and focus the title input for direct editing
     setTimeout(() => {
@@ -1342,7 +1500,9 @@ export function useTravelDiaryGeneralInfoState({
       if (editForm) {
         editForm.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-      const titleInput = document.querySelector(".generalInfoLayoutGrid input[placeholder*='정보 제목']");
+      const titleInput = document.querySelector(
+        '.generalInfoLeftColumn input[placeholder*="제목"]',
+      );
       if (titleInput instanceof HTMLInputElement) {
         titleInput.focus();
       }
@@ -1353,7 +1513,10 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoImageLoadFailed(false);
     setGeneralInfoEditingId(null);
     setGeneralInfoKeywordText("");
-    setGeneralInfoDraft(initialGeneralInfoDraft);
+    setGeneralInfoDraft({
+      ...initialGeneralInfoDraft,
+      paragraphs: [createEmptyParagraph()],
+    });
     resetGeneralInfoRichTextEditor("", "");
     showPasteHint("수정 모드를 취소했습니다.");
   }, [resetGeneralInfoRichTextEditor, showPasteHint]);
@@ -1915,6 +2078,8 @@ export function useTravelDiaryGeneralInfoState({
     handleRemoveGeneralInfoMediaItem,
     handleAnalyzeGeneralInfoDraft,
     handleConfirmGeneralInfo,
+    handleAddGeneralInfoParagraph,
+    handleRemoveGeneralInfoParagraph,
     filteredGeneralInfoItems,
     generalInfoCategories,
     normalizeGeneralInfoMediaItems,

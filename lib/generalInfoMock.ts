@@ -1,4 +1,5 @@
 import type { GeneralInfoDraft } from "../types/generalInfo";
+import { createEmptyParagraph } from "./generalInfoParagraphs";
 
 export const generalInfoCategories = [
   "정치",
@@ -33,6 +34,7 @@ export const initialGeneralInfoDraft: GeneralInfoDraft = {
   factCheckStatus: "확인 전",
   factCheckSummary: "",
   formattedTextHtml: "",
+  paragraphs: [createEmptyParagraph()],
   isPinned: false,
 };
 
