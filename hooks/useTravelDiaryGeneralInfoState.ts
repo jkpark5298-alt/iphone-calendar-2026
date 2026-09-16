@@ -1288,7 +1288,7 @@ export function useTravelDiaryGeneralInfoState({
 
     const inputTypes: GeneralInfoItem["inputTypes"] = [];
     const firstSentence = extractFirstSentence(analyzed.text);
-    const draftMediaItems = normalizeGeneralInfoMediaItems(analyzed).map((media) => ({
+    const draftMediaItems: GeneralInfoMediaItem[] = normalizeGeneralInfoMediaItems(analyzed).map((media) => ({
       ...media,
       memo: media.memo?.trim() || firstSentence || media.memo,
     }));
@@ -1296,7 +1296,7 @@ export function useTravelDiaryGeneralInfoState({
     const hasDraftImage = draftMediaItems.some((media) => media.type === "image");
     const hasDraftVideo = draftMediaItems.some((media) => media.type === "video");
 
-    let uploadedDraftMediaItems = draftMediaItems;
+    let uploadedDraftMediaItems: GeneralInfoMediaItem[] = draftMediaItems;
 
     if (hasDraftImage) {
       showPasteHint("일반 정보 이미지 업로드 중");
