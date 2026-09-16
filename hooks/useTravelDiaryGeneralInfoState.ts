@@ -13,6 +13,12 @@ import {
 } from "../lib/generalInfoParagraphs";
 import type { GeneralInfoParagraph } from "../types/generalInfo";
 
+import {
+  downloadGeneralInfoAppFile,
+  downloadGeneralInfoPdf,
+  parseGeneralInfoAppFile,
+  shareGeneralInfoPdfForGoodNotes,
+} from "../lib/generalInfoExport";
 import { supabase } from "../lib/supabaseClient";
 
 
@@ -75,6 +81,7 @@ export function useTravelDiaryGeneralInfoState({
   const [generalInfoSearchTerm, setGeneralInfoSearchTerm] = useState("");
   const [isExtractingGeneralInfoUrl, setIsExtractingGeneralInfoUrl] = useState(false);
   const [generalInfoDetailId, setGeneralInfoDetailId] = useState<number | null>(null);
+  const [generalInfoExportItem, setGeneralInfoExportItem] = useState<GeneralInfoItem | null>(null);
   const [generalInfoActiveTab, setGeneralInfoActiveTab] = useState<"storage" | "collect">("storage");
   const [generalInfoEditingId, setGeneralInfoEditingId] = useState<number | null>(null);
   const [isCollectingGeneralInfoClipboard, setIsCollectingGeneralInfoClipboard] = useState(false);
@@ -1410,7 +1417,9 @@ export function useTravelDiaryGeneralInfoState({
       });
       resetGeneralInfoRichTextEditor("", "");
       localStorage.removeItem("travel_diary_general_info_temp_draft");
-      showPasteHint("✅ 수정 저장 완료 · 새 일반 정보 입력 준비 완료");
+      setGeneralInfoExportItem(updatedItem);
+      setGeneralInfoActiveTab("storage");
+      showPasteHint("수정 저장 완료 · PDF/공유/앱파일 저장을 선택할 수 있습니다.");
       return;
     }
 
@@ -1431,7 +1440,9 @@ export function useTravelDiaryGeneralInfoState({
     });
     resetGeneralInfoRichTextEditor("", "");
     localStorage.removeItem("travel_diary_general_info_temp_draft");
-    showPasteHint("✅ 저장 완료 · 새 일반 정보 입력 준비 완료");
+    setGeneralInfoExportItem(item);
+    setGeneralInfoActiveTab("storage");
+    showPasteHint("저장 완료 · PDF/공유/앱파일 저장을 선택할 수 있습니다.");
   }, [
     generalInfoDraft,
     generalInfoEditingId,
@@ -1520,6 +1531,69 @@ export function useTravelDiaryGeneralInfoState({
     resetGeneralInfoRichTextEditor("", "");
     showPasteHint("수정 모드를 취소했습니다.");
   }, [resetGeneralInfoRichTextEditor, showPasteHint]);
+
+  const handleImportGeneralInfoAppFile = useCallback(async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    try {
+      const imported = await parseGeneralInfoAppFile(file);
+      const nextItem: GeneralInfoItem = {
+        ...imported,
+        id: Date.now(),
+        createdAt: imported.createdAt || nowText(),
+        confirmed: true,
+      };
+
+      setGeneralInfoItems((prev) => {
+        const nextItems = [nextItem, ...prev.filter((item) => item.id !== nextItem.id)];
+        persistGeneralInfoItemsToLocalStorage(nextItems);
+        return nextItems;
+      });
+      void syncGeneralInfoItemToSupabase(nextItem, "POST");
+      setGeneralInfoActiveTab("storage");
+      setGeneralInfoDetailId(nextItem.id);
+      showPasteHint("앱파일을 불러와 정보 창고에 추가했습니다.");
+    } catch (error) {
+      console.error(error);
+      showPasteHint(error instanceof Error ? error.message : "앱파일 불러오기에 실패했습니다.");
+    }
+  }, [showPasteHint, syncGeneralInfoItemToSupabase]);
+
+  const handleDownloadGeneralInfoPdf = useCallback(async (item: GeneralInfoItem) => {
+    try {
+      showPasteHint("PDF 작성 중…");
+      const filename = await downloadGeneralInfoPdf(item);
+      showPasteHint(`PDF 저장 완료 · ${filename}`);
+    } catch (error) {
+      console.error(error);
+      showPasteHint(error instanceof Error ? error.message : "PDF 저장 실패");
+    }
+  }, [showPasteHint]);
+
+  const handleShareGeneralInfoPdf = useCallback(async (item: GeneralInfoItem) => {
+    try {
+      showPasteHint("GoodNotes용 PDF 준비 중…");
+      const result = await shareGeneralInfoPdfForGoodNotes(item);
+      showPasteHint(
+        result.mode === "share"
+          ? "공유 시트를 열었습니다. GoodNotes를 선택하세요."
+          : `PDF 다운로드 · ${result.filename} (GoodNotes에서 가져오기)`,
+      );
+    } catch (error) {
+      console.error(error);
+      showPasteHint(error instanceof Error ? error.message : "공유 실패");
+    }
+  }, [showPasteHint]);
+
+  const handleDownloadGeneralInfoAppFile = useCallback((item: GeneralInfoItem) => {
+    try {
+      const filename = downloadGeneralInfoAppFile(item);
+      showPasteHint(`앱파일 저장 완료 · ${filename}`);
+    } catch (error) {
+      console.error(error);
+      showPasteHint(error instanceof Error ? error.message : "앱파일 저장 실패");
+    }
+  }, [showPasteHint]);
 
   const handleUpdateGeneralInfoExtraNote = useCallback(async (itemId: number, value: string) => {
     const targetItem = generalInfoItems.find((item) => item.id === itemId);
@@ -2036,6 +2110,8 @@ export function useTravelDiaryGeneralInfoState({
     setIsExtractingGeneralInfoUrl,
     generalInfoDetailId,
     setGeneralInfoDetailId,
+    generalInfoExportItem,
+    setGeneralInfoExportItem,
     generalInfoActiveTab,
     setGeneralInfoActiveTab,
     generalInfoEditingId,
@@ -2066,6 +2142,10 @@ export function useTravelDiaryGeneralInfoState({
     handleCancelEditGeneralInfo,
     handleUpdateGeneralInfoExtraNote,
     handleDeleteGeneralInfo,
+    handleImportGeneralInfoAppFile,
+    handleDownloadGeneralInfoPdf,
+    handleShareGeneralInfoPdf,
+    handleDownloadGeneralInfoAppFile,
     loadGeneralInfoItemsFromSupabase,
     handleUndoGeneralInfoDraft,
     handleResetGeneralInfoDraft,

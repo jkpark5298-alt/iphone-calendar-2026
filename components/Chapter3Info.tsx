@@ -54,6 +54,8 @@ export interface Chapter3InfoProps {
   handleCancelEditGeneralInfo: () => void;
   handleStartEditGeneralInfo: (item: GeneralInfoItem) => void;
 
+  handleImportGeneralInfoAppFile: (files: FileList | null) => void;
+
   generalInfoItems: GeneralInfoItem[];
   generalInfoDetailId: number | null;
   setGeneralInfoDetailId: (id: number | null) => void;
@@ -94,6 +96,7 @@ export function Chapter3Info({
   handleSaveTemporaryGeneralInfoDraft,
   handleCancelEditGeneralInfo,
   handleStartEditGeneralInfo,
+  handleImportGeneralInfoAppFile,
   generalInfoItems,
   generalInfoDetailId,
   setGeneralInfoDetailId,
@@ -627,19 +630,33 @@ export function Chapter3Info({
             맨 위로 ↑
           </button>
           <Card number="2" title="정보 창고" subtitle="저장된 일반 정보 목록">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
               <p className="mutedText" style={{ margin: 0 }}>
                 전체 {generalInfoItems.length}건
               </p>
-              <button
-                className="secondaryButton"
-                type="button"
-                onClick={() => {
-                  void loadGeneralInfoItemsFromSupabase();
-                }}
-              >
-                동기화
-              </button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <label className="secondaryButton" style={{ margin: 0, cursor: "pointer" }}>
+                  앱파일 불러오기
+                  <input
+                    type="file"
+                    accept=".json,.airzeta-gi.json,application/json"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      handleImportGeneralInfoAppFile(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <button
+                  className="secondaryButton"
+                  type="button"
+                  onClick={() => {
+                    void loadGeneralInfoItemsFromSupabase();
+                  }}
+                >
+                  동기화
+                </button>
+              </div>
             </div>
             <span className="mutedText" style={{ fontSize: 11 }}>
               {generalInfoSupabaseStatus}

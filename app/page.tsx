@@ -2,6 +2,7 @@
 
 import { Chapter3Info } from "../components/Chapter3Info";
 import GeneralInfoDetailModal from "../components/GeneralInfoDetailModal";
+import { GeneralInfoExportActionsModal } from "../components/GeneralInfoExportActionsModal";
 import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralInfoState";
 
 
@@ -6046,6 +6047,7 @@ ${photo.memoText}
               handleConfirmGeneralInfo={infoState.handleConfirmGeneralInfo}
               handleCancelEditGeneralInfo={infoState.handleCancelEditGeneralInfo}
               handleStartEditGeneralInfo={infoState.handleStartEditGeneralInfo}
+              handleImportGeneralInfoAppFile={infoState.handleImportGeneralInfoAppFile}
               generalInfoItems={infoState.generalInfoItems}
               setGeneralInfoDetailId={infoState.setGeneralInfoDetailId}
               generalInfoDetailId={infoState.generalInfoDetailId}
@@ -7169,6 +7171,16 @@ ${photo.memoText}
           onClose={() => infoState.setGeneralInfoDetailId(null)}
           onEdit={infoState.handleStartEditGeneralInfo}
           onDelete={(item) => infoState.handleDeleteGeneralInfo(item.id)}
+          onDownloadPdf={infoState.handleDownloadGeneralInfoPdf}
+          onShareGoodNotes={infoState.handleShareGeneralInfoPdf}
+          onDownloadAppFile={infoState.handleDownloadGeneralInfoAppFile}
+        />
+      )}
+
+      {infoState.generalInfoExportItem && (
+        <GeneralInfoExportActionsModal
+          item={infoState.generalInfoExportItem}
+          onClose={() => infoState.setGeneralInfoExportItem(null)}
         />
       )}
   

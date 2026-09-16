@@ -11205,3 +11205,25 @@ body {
   cursor: pointer;
 }
 
+/* 일반 정보 PDF/인쇄 — 이미지 절단 방지 */
+@media print {
+  .gi-export-doc,
+  .gi-export-block,
+  .gi-export-image-wrap,
+  .gi-export-body img,
+  .gi-export-image-wrap img {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .gi-export-body img,
+  .gi-export-image-wrap img {
+    display: block;
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: 240mm;
+    object-fit: contain;
+  }
+}
+

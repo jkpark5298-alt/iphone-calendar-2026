@@ -13,6 +13,9 @@ interface Props {
   onClose: () => void;
   onEdit: (item: GeneralInfoItem) => void;
   onDelete?: (item: GeneralInfoItem) => void;
+  onDownloadPdf?: (item: GeneralInfoItem) => void;
+  onShareGoodNotes?: (item: GeneralInfoItem) => void;
+  onDownloadAppFile?: (item: GeneralInfoItem) => void;
 }
 
 export default function GeneralInfoDetailModal({
@@ -20,6 +23,9 @@ export default function GeneralInfoDetailModal({
   onClose,
   onEdit,
   onDelete,
+  onDownloadPdf,
+  onShareGoodNotes,
+  onDownloadAppFile,
 }: Props) {
   if (!item) return null;
 
@@ -202,6 +208,33 @@ export default function GeneralInfoDetailModal({
         </div>
 
         <div className="modalFooter">
+          {onDownloadPdf && (
+            <button
+              className="secondaryButton"
+              type="button"
+              onClick={() => onDownloadPdf(item)}
+            >
+              PDF 저장
+            </button>
+          )}
+          {onShareGoodNotes && (
+            <button
+              className="secondaryButton"
+              type="button"
+              onClick={() => onShareGoodNotes(item)}
+            >
+              GoodNotes 공유
+            </button>
+          )}
+          {onDownloadAppFile && (
+            <button
+              className="secondaryButton"
+              type="button"
+              onClick={() => onDownloadAppFile(item)}
+            >
+              앱파일 저장
+            </button>
+          )}
           <button className="primaryButton" type="button" onClick={() => onEdit(item)}>
             수정
           </button>
