@@ -99,6 +99,8 @@ export function useTravelDiaryGeneralInfoState({
   const [generalInfoFactCheckItem, setGeneralInfoFactCheckItem] = useState<GeneralInfoItem | null>(null);
   const [generalInfoFactCheckResult, setGeneralInfoFactCheckResult] = useState("");
   const [isRunningGeneralInfoFactCheck, setIsRunningGeneralInfoFactCheck] = useState(false);
+  /** 사용자가 이 기기에서 삭제한 ID — 동기화 시 로컬 전용 항목을 잘못 지우지 않기 위해 사용 */
+  const locallyDeletedGeneralInfoIdsRef = useRef<Set<number>>(new Set());
 
   const syncGeneralInfoItemToSupabase = useCallback(async (
     item: GeneralInfoItem,
@@ -223,40 +225,36 @@ export function useTravelDiaryGeneralInfoState({
 
       setGeneralInfoItems((prev) => {
         const map = new Map<number, GeneralInfoItem>();
+        const deletedIds = locallyDeletedGeneralInfoIdsRef.current;
 
-        const remoteIdsSet = new Set(restoredItems.map((r) => r.id));
-        const minRemoteId = restoredItems.length > 0
-          ? Math.min(...restoredItems.map((r) => r.id))
-          : Infinity;
-        const now = Date.now();
-        const FIVE_MINUTES = 5 * 60 * 1000;
-
-        // 1. Register existing local items first, but filter out those that were deleted from Supabase.
-        // Keep them if: they exist on remote, they are newly created locally (< 5 min ago), or they might be beyond the 300-limit.
+        // 1. Keep local items unless this device explicitly deleted them.
+        // (Do NOT drop local-only saves when Supabase sync failed or lagged.)
         prev.forEach((item) => {
-          if (item && typeof item.id === "number") {
-            const isRemotePresent = remoteIdsSet.has(item.id);
-            const isNewLocalItem = (now - item.id) < FIVE_MINUTES;
-            const isPossiblyBeyondLimit = remoteItems.length >= 300 && item.id < minRemoteId;
-
-            if (isRemotePresent || isNewLocalItem || isPossiblyBeyondLimit) {
-              map.set(item.id, item);
-            } else {
-              console.log(`Filtering out deleted general info item locally: ID=${item.id}, Title="${item.title}"`);
-            }
+          if (item && typeof item.id === "number" && !deletedIds.has(item.id)) {
+            map.set(item.id, item);
           }
         });
 
-        // 2. Overwrite local items with remote items from Supabase (preserving isPinned UI state)
+        // 2. Merge remote items from Supabase (preserving isPinned / richer local media/html)
         restoredItems.forEach((remoteItem) => {
           if (remoteItem && typeof remoteItem.id === "number") {
+            if (deletedIds.has(remoteItem.id)) return;
+
             const localItem = map.get(remoteItem.id);
             if (localItem) {
               const isPinned = !!(localItem.isPinned || remoteItem.isPinned);
-              
-              const remoteHasMedia = !!(remoteItem.mediaItems && remoteItem.mediaItems.length > 0 && remoteItem.mediaItems[0].preview);
-              const localHasMedia = !!(localItem.mediaItems && localItem.mediaItems.length > 0 && localItem.mediaItems[0].preview);
-              
+
+              const remoteHasMedia = !!(
+                remoteItem.mediaItems &&
+                remoteItem.mediaItems.length > 0 &&
+                remoteItem.mediaItems[0].preview
+              );
+              const localHasMedia = !!(
+                localItem.mediaItems &&
+                localItem.mediaItems.length > 0 &&
+                localItem.mediaItems[0].preview
+              );
+
               let mediaItems = remoteItem.mediaItems;
               if (!remoteHasMedia && localHasMedia) {
                 mediaItems = localItem.mediaItems;
@@ -280,8 +278,7 @@ export function useTravelDiaryGeneralInfoState({
         });
 
         const sortedResult = Array.from(map.values()).sort((a, b) => b.id - a.id);
-        
-        // Sync to LocalStorage immediately
+
         persistGeneralInfoItemsToLocalStorage(sortedResult);
 
         return sortedResult;
@@ -1362,7 +1359,7 @@ export function useTravelDiaryGeneralInfoState({
       text: paragraphsToPlainText(uploadedParagraphs),
       formattedTextHtml: serializeParagraphsToHtml(uploadedParagraphs) || uploadedFormattedHtml,
       paragraphs: uploadedParagraphs,
-      sourceUrl: undefined,
+      sourceUrl: String(analyzed.sourceUrl || "").trim() || undefined,
       fileName: coverPreview
         ? analyzed.fileName || "본문 대표 이미지"
         : analyzed.fileName || uploadedMainMedia?.name || undefined,
@@ -1385,17 +1382,48 @@ export function useTravelDiaryGeneralInfoState({
         (prevItem) => prevItem.id === generalInfoEditingId,
       );
 
+      // 임시저장 복원 등으로 editingId만 남아 목록에 없으면 수정(map no-op) 대신 신규 저장
+      if (!existingGeneralInfoItem) {
+        locallyDeletedGeneralInfoIdsRef.current.delete(item.id);
+        setGeneralInfoItems((prev) => {
+          const nextItems = [item, ...prev];
+          persistGeneralInfoItemsToLocalStorage(nextItems);
+          return nextItems;
+        });
+        void syncGeneralInfoItemToSupabase(item, "POST");
+        setGeneralInfoDraftBackup(null);
+        setGeneralInfoImageLoadFailed(false);
+        setGeneralInfoEditingId(null);
+        setGeneralInfoKeywordText("");
+        setGeneralInfoDraft({
+          ...initialGeneralInfoDraft,
+          paragraphs: [createEmptyParagraph()],
+        });
+        resetGeneralInfoRichTextEditor("", "");
+        localStorage.removeItem("travel_diary_general_info_temp_draft");
+        setGeneralInfoExportItem(item);
+        setGeneralInfoActiveTab("storage");
+        showPasteHint("저장 완료 · 이전 수정 대상을 찾지 못해 새 항목으로 저장했습니다.");
+        return;
+      }
+
       const updatedItem: GeneralInfoItem = {
         ...item,
-        id: existingGeneralInfoItem?.id || generalInfoEditingId,
-        createdAt: existingGeneralInfoItem?.createdAt || item.createdAt,
-        extraNote: existingGeneralInfoItem?.extraNote || "",
-        filePreview: coverPreview || item.filePreview || existingGeneralInfoItem?.filePreview,
+        id: existingGeneralInfoItem.id,
+        createdAt: existingGeneralInfoItem.createdAt || item.createdAt,
+        extraNote: existingGeneralInfoItem.extraNote || "",
+        sourceUrl:
+          String(analyzed.sourceUrl || "").trim() ||
+          existingGeneralInfoItem.sourceUrl ||
+          undefined,
+        filePreview: coverPreview || item.filePreview || existingGeneralInfoItem.filePreview,
         mediaItems: uploadedDraftMediaItems,
         paragraphs: item.paragraphs,
         formattedTextHtml: item.formattedTextHtml,
-        isPinned: existingGeneralInfoItem?.isPinned || false,
+        isPinned: existingGeneralInfoItem.isPinned || false,
       };
+
+      locallyDeletedGeneralInfoIdsRef.current.delete(updatedItem.id);
 
       setGeneralInfoItems((prev) => {
         const nextItems = prev.map((prevItem) =>
@@ -1422,6 +1450,8 @@ export function useTravelDiaryGeneralInfoState({
       showPasteHint("수정 저장 완료 · PDF/공유/앱파일 저장을 선택할 수 있습니다.");
       return;
     }
+
+    locallyDeletedGeneralInfoIdsRef.current.delete(item.id);
 
     setGeneralInfoItems((prev) => {
       const nextItems = [item, ...prev];
@@ -1612,6 +1642,8 @@ export function useTravelDiaryGeneralInfoState({
     const targetItem = generalInfoItems.find((item) => item.id === itemId);
     const ok = window.confirm("이 일반 정보 자료를 정말 삭제할까요?");
     if (!ok) return;
+
+    locallyDeletedGeneralInfoIdsRef.current.add(itemId);
 
     setGeneralInfoItems((prev) => {
       const nextItems = prev.filter((item) => item.id !== itemId);
@@ -2035,24 +2067,48 @@ export function useTravelDiaryGeneralInfoState({
 
   // Load temporary draft from localStorage on mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("travel_diary_general_info_temp_draft");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed && parsed.draft) {
-            setGeneralInfoDraft(parsed.draft);
-            if (parsed.keywordText !== undefined) setGeneralInfoKeywordText(parsed.keywordText);
-            if (parsed.editingId !== undefined) setGeneralInfoEditingId(parsed.editingId);
-            if (parsed.richTextHtml !== undefined) {
-              resetGeneralInfoRichTextEditor(parsed.draft.text || "", parsed.richTextHtml);
-            }
-            showPasteHint("📂 이전에 임시 저장된 내용을 불러왔습니다.");
+    if (typeof window === "undefined") return;
+
+    const saved = localStorage.getItem("travel_diary_general_info_temp_draft");
+    if (!saved) return;
+
+    try {
+      const parsed = JSON.parse(saved);
+      if (!parsed || !parsed.draft) return;
+
+      setGeneralInfoDraft(parsed.draft);
+      if (parsed.keywordText !== undefined) setGeneralInfoKeywordText(parsed.keywordText);
+
+      const restoredEditingId =
+        typeof parsed.editingId === "number" ? parsed.editingId : null;
+      const localItems = readGeneralInfoItemsFromLocalStorage();
+      const editingStillExists =
+        restoredEditingId != null &&
+        localItems.some((item) => item.id === restoredEditingId);
+
+      if (editingStillExists) {
+        setGeneralInfoEditingId(restoredEditingId);
+      } else {
+        setGeneralInfoEditingId(null);
+        if (restoredEditingId != null) {
+          // stale 수정 모드가 남아 저장이 무시되지 않도록 임시저장도 정리
+          try {
+            localStorage.setItem(
+              "travel_diary_general_info_temp_draft",
+              JSON.stringify({ ...parsed, editingId: null }),
+            );
+          } catch {
+            /* ignore */
           }
-        } catch (e) {
-          console.error("Failed to parse temp draft", e);
         }
       }
+
+      if (parsed.richTextHtml !== undefined) {
+        resetGeneralInfoRichTextEditor(parsed.draft.text || "", parsed.richTextHtml);
+      }
+      showPasteHint("📂 이전에 임시 저장된 내용을 불러왔습니다.");
+    } catch (e) {
+      console.error("Failed to parse temp draft", e);
     }
   }, [resetGeneralInfoRichTextEditor, showPasteHint]);
 
