@@ -77,6 +77,9 @@ type CalendarMarkItem = {
   type: CalendarMarkType;
   plus: boolean;
 };
+const CALENDAR_MARK_TYPES: CalendarMarkType[] = ["C", "A", "당", "심야", "노조", "休"];
+const isCalendarMarkType = (value: unknown): value is CalendarMarkType =>
+  typeof value === "string" && (CALENDAR_MARK_TYPES as string[]).includes(value);
 
 type SearchResult = {
   type: "diary" | "info";
@@ -478,6 +481,8 @@ export default function HomePage() {
   const [redDates, setRedDates] = useState<Record<number, number[]>>({});
   const [redDateInput, setRedDateInput] = useState("");
   const [calendarMarks, setCalendarMarks] = useState<Record<string, CalendarMarkItem[]>>({});
+  /** 가져오기/수동 저장 중 늦게 도착한 Supabase 불러오기가 덮어쓰지 않도록 */
+  const calendarMarksWriteGenRef = useRef(0);
   const [informationItems, setInformationItems] = useState<InformationCalendarItem[]>([]);
   const [informationItemsStatus, setInformationItemsStatus] = useState("");
   const [markDateInput, setMarkDateInput] = useState("");
@@ -981,6 +986,8 @@ export default function HomePage() {
   async function loadCalendarMarksFromSupabase() {
     if (!isSupabaseConfigured || !supabase) return;
 
+    const genAtStart = calendarMarksWriteGenRef.current;
+
     const { data, error } = await supabase
       .from("calendar_marks")
       .select("id, month, day, mark_type, plus")
@@ -992,6 +999,9 @@ export default function HomePage() {
       return;
     }
 
+    // 불러오는 동안 사용자가 가져오기/저장했으면 서버 결과로 덮지 않음
+    if (calendarMarksWriteGenRef.current !== genAtStart) return;
+
     const nextMarks: Record<string, CalendarMarkItem[]> = {};
     (data || []).forEach((row: any) => {
       let month = Number(row.month);
@@ -1001,10 +1011,11 @@ export default function HomePage() {
         month = month % 100;
       }
       const day = Number(row.day);
-      const type = row.mark_type as CalendarMarkType;
+      const type = row.mark_type;
       const maxDay = getDaysInMonth(year, month);
       if (day < 1 || day > maxDay) return;
-      if (!["C", "A", "심야", "노조"].includes(type)) return;
+      // 당·休 포함 — 이전에는 C/A/심야/노조만 허용해 가져오기 후 새로고침 시 표시가 사라졌음
+      if (!isCalendarMarkType(type)) return;
 
       const markKey = key(month, day, year);
       nextMarks[markKey] = [
@@ -1016,6 +1027,8 @@ export default function HomePage() {
         },
       ];
     });
+
+    if (calendarMarksWriteGenRef.current !== genAtStart) return;
 
     setCalendarMarks(nextMarks);
     localStorage.setItem("iphone-calendar-2026-marks", JSON.stringify(nextMarks));
@@ -2050,6 +2063,7 @@ export default function HomePage() {
   }
 
   function saveCalendarMarks(nextMarks: Record<string, CalendarMarkItem[]>) {
+    calendarMarksWriteGenRef.current += 1;
     setCalendarMarks(nextMarks);
     localStorage.setItem("iphone-calendar-2026-marks", JSON.stringify(nextMarks));
   }
@@ -2191,6 +2205,30 @@ export default function HomePage() {
       if (isSupabaseConfigured && supabase) {
         const dbMonth = year === 2026 ? month : year * 100 + month;
         const saveErrors: string[] = [];
+        const keepKeys = new Set(
+          result.marks.map((mark) => `${mark.day}|${mark.type}|${mark.plus ? 1 : 0}`),
+        );
+
+        // 같은 달·가져오기 타입 중 더 이상 없는 표시는 서버에서도 삭제
+        const { data: existingRows, error: existingError } = await supabase
+          .from("calendar_marks")
+          .select("id, day, mark_type, plus")
+          .eq("month", dbMonth);
+
+        if (existingError) {
+          saveErrors.push(existingError.message);
+        } else {
+          await Promise.all(
+            (existingRows || []).map(async (row: { id: string; day: number; mark_type: string; plus: boolean }) => {
+              if (!importTypes.has(row.mark_type as ImportedWorkMarkType)) return;
+              const rowKey = `${row.day}|${row.mark_type}|${row.plus ? 1 : 0}`;
+              if (keepKeys.has(rowKey)) return;
+              const { error } = await supabase!.from("calendar_marks").delete().eq("id", row.id);
+              if (error) saveErrors.push(error.message);
+            }),
+          );
+        }
+
         await Promise.all(
           result.marks.map(async (mark) => {
             const { error } = await supabase!.from("calendar_marks").upsert(
