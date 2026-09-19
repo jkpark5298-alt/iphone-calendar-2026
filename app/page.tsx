@@ -6085,8 +6085,12 @@ ${photo.memoText}
               handleConfirmGeneralInfo={infoState.handleConfirmGeneralInfo}
               handleCancelEditGeneralInfo={infoState.handleCancelEditGeneralInfo}
               handleStartEditGeneralInfo={infoState.handleStartEditGeneralInfo}
+              handleDeleteGeneralInfo={infoState.handleDeleteGeneralInfo}
               handleImportGeneralInfoAppFile={infoState.handleImportGeneralInfoAppFile}
               generalInfoItems={infoState.generalInfoItems}
+              filteredGeneralInfoItems={infoState.filteredGeneralInfoItems}
+              generalInfoSearchTerm={infoState.generalInfoSearchTerm}
+              setGeneralInfoSearchTerm={infoState.setGeneralInfoSearchTerm}
               setGeneralInfoDetailId={infoState.setGeneralInfoDetailId}
               generalInfoDetailId={infoState.generalInfoDetailId}
               generalInfoActiveTab={infoState.generalInfoActiveTab}
@@ -7219,6 +7223,7 @@ ${photo.memoText}
         <GeneralInfoExportActionsModal
           item={infoState.generalInfoExportItem}
           onClose={() => infoState.setGeneralInfoExportItem(null)}
+          onPdfExported={(item) => infoState.markGeneralInfoPdfSaved(item.id)}
         />
       )}
   

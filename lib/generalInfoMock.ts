@@ -16,6 +16,7 @@ export const generalInfoCategories = [
   "외교",
   "국방",
   "안보",
+  "애플/건강",
 ];
 
 export const initialGeneralInfoDraft: GeneralInfoDraft = {
@@ -78,6 +79,9 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
     if (/외교|정상회담|협정|대사|동맹/.test(source)) return "외교";
     if (/국방|군|방산|무기|훈련/.test(source)) return "국방";
     if (/안보|북한|핵|테러|사이버안보/.test(source)) return "안보";
+    if (/애플|apple|아이폰|iphone|아이패드|ipad|워치|건강|헬스|운동|의료|병원|다이어트/.test(source)) {
+      return "애플/건강";
+    }
     if (/국제|미국|중국|일본|유럽|해외|global/.test(source)) return "국제";
     if (/사회|사건|사고|복지|노동|인구|지역/.test(source)) return "사회";
     return "사회";
@@ -98,6 +102,10 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
     if (primaryCategory === "기술") return "AI/디지털";
     if (primaryCategory === "교육") return "교육정책/학교";
     if (primaryCategory === "국방") return "안보/방산";
+    if (primaryCategory === "애플/건강") {
+      if (/애플|apple|아이폰|iphone|아이패드|ipad|워치/.test(source)) return "애플/기기";
+      return "건강/웰니스";
+    }
     return "일반";
   };
 

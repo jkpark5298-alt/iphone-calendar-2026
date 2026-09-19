@@ -43,6 +43,8 @@ export interface GeneralInfoItem {
   confirmed: boolean;
   createdAt: string;
   isPinned?: boolean;
+  /** PDF 저장(다운로드/공유)을 한 적 있으면 목록에 별표 표시 */
+  pdfSaved?: boolean;
 }
 
 export interface GeneralInfoParagraph {

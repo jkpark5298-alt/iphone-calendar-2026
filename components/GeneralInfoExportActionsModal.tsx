@@ -11,10 +11,11 @@ import {
 type Props = {
   item: GeneralInfoItem;
   onClose: () => void;
+  onPdfExported?: (item: GeneralInfoItem) => void;
   busyLabel?: string;
 };
 
-export function GeneralInfoExportActionsModal({ item, onClose }: Props) {
+export function GeneralInfoExportActionsModal({ item, onClose, onPdfExported }: Props) {
   const [busy, setBusy] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState("");
 
@@ -24,6 +25,9 @@ export function GeneralInfoExportActionsModal({ item, onClose }: Props) {
       setMessage("");
       try {
         const result = await action();
+        if (label === "pdf" || label === "share") {
+          onPdfExported?.(item);
+        }
         if (label === "pdf") setMessage("PDF를 저장했습니다. 이미지는 잘리지 않도록 페이지에 맞춰 축소됩니다.");
         if (label === "share") {
           const mode = (result as { mode?: string } | undefined)?.mode;
@@ -41,7 +45,7 @@ export function GeneralInfoExportActionsModal({ item, onClose }: Props) {
         setBusy(null);
       }
     },
-    [],
+    [item, onPdfExported],
   );
 
   return (

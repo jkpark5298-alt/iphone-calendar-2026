@@ -74,6 +74,7 @@ export default function GeneralInfoDetailModal({
               {[item.primaryCategory, item.secondaryCategory]
                 .filter(Boolean)
                 .join(" > ") || "분류 없음"}
+              {item.pdfSaved ? " · ★ PDF 저장됨" : ""}
             </p>
           </section>
 

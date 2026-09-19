@@ -53,10 +53,14 @@ export interface Chapter3InfoProps {
   handleSaveTemporaryGeneralInfoDraft: () => void;
   handleCancelEditGeneralInfo: () => void;
   handleStartEditGeneralInfo: (item: GeneralInfoItem) => void;
+  handleDeleteGeneralInfo: (itemId: number) => void;
 
   handleImportGeneralInfoAppFile: (files: FileList | null) => void;
 
   generalInfoItems: GeneralInfoItem[];
+  filteredGeneralInfoItems: GeneralInfoItem[];
+  generalInfoSearchTerm: string;
+  setGeneralInfoSearchTerm: (value: string) => void;
   generalInfoDetailId: number | null;
   setGeneralInfoDetailId: (id: number | null) => void;
   handleTogglePinGeneralInfo: (itemId: number) => void;
@@ -96,8 +100,12 @@ export function Chapter3Info({
   handleSaveTemporaryGeneralInfoDraft,
   handleCancelEditGeneralInfo,
   handleStartEditGeneralInfo,
+  handleDeleteGeneralInfo,
   handleImportGeneralInfoAppFile,
   generalInfoItems,
+  filteredGeneralInfoItems,
+  generalInfoSearchTerm,
+  setGeneralInfoSearchTerm,
   generalInfoDetailId,
   setGeneralInfoDetailId,
   handleTogglePinGeneralInfo,
@@ -119,6 +127,67 @@ export function Chapter3Info({
   const infographicTitle = extractFirstSentence(bodyPlain) || "본문 첫 문장이 제목으로 사용됩니다";
 
   const mediaItems = normalizeGeneralInfoMediaItems(generalInfoDraft);
+  const isEditing = Boolean(generalInfoEditingId);
+
+  const categoryKeywordFields = (
+    <>
+      <div className="generalInfoGrid" style={{ marginTop: 12 }}>
+        <label>
+          1차 분류
+          <select
+            value={generalInfoDraft.primaryCategory}
+            onChange={(e) => {
+              const primaryCategory = e.target.value;
+              setGeneralInfoDraft((prev) => {
+                const keywords = categoryKeywordsList(primaryCategory, prev.secondaryCategory);
+                setGeneralInfoKeywordText(
+                  formatCategoryKeywords(primaryCategory, prev.secondaryCategory),
+                );
+                return { ...prev, primaryCategory, keywords };
+              });
+            }}
+          >
+            <option value="">선택</option>
+            {generalInfoCategories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+            {!generalInfoCategories.includes("기타") && <option value="기타">기타</option>}
+          </select>
+        </label>
+        <label>
+          2차 분류
+          <input
+            className="generalInfoEditableInput"
+            value={generalInfoDraft.secondaryCategory}
+            onChange={(e) => {
+              const secondaryCategory = e.target.value;
+              setGeneralInfoDraft((prev) => {
+                const keywords = categoryKeywordsList(prev.primaryCategory, secondaryCategory);
+                setGeneralInfoKeywordText(
+                  formatCategoryKeywords(prev.primaryCategory, secondaryCategory),
+                );
+                return { ...prev, secondaryCategory, keywords };
+              });
+            }}
+            placeholder="예: 외교/해외동향"
+          />
+        </label>
+      </div>
+
+      <div className="generalInfoResultBox generalInfoKeywordInputBox" style={{ marginTop: 12 }}>
+        <strong>키워드</strong>
+        <div className="miniTags" style={{ marginTop: 8 }}>
+          {generalInfoDraft.keywords.length > 0 ? (
+            <span>{formatCategoryKeywords(generalInfoDraft.primaryCategory, generalInfoDraft.secondaryCategory)}</span>
+          ) : (
+            <span className="mutedText">1·2차 분류를 선택하면 #1차#2차 로 표시됩니다.</span>
+          )}
+        </div>
+      </div>
+    </>
+  );
 
   const bodyImageSrcs = React.useMemo(() => {
     const liveHtml = String(generalInfoRichTextRef.current?.innerHTML || "");
@@ -261,61 +330,7 @@ export function Chapter3Info({
               />
             </label>
 
-            <div className="generalInfoGrid" style={{ marginTop: 12 }}>
-              <label>
-                1차 분류
-                <select
-                  value={generalInfoDraft.primaryCategory}
-                  onChange={(e) => {
-                    const primaryCategory = e.target.value;
-                    setGeneralInfoDraft((prev) => {
-                      const keywords = categoryKeywordsList(primaryCategory, prev.secondaryCategory);
-                      setGeneralInfoKeywordText(
-                        formatCategoryKeywords(primaryCategory, prev.secondaryCategory),
-                      );
-                      return { ...prev, primaryCategory, keywords };
-                    });
-                  }}
-                >
-                  <option value="">선택</option>
-                  {generalInfoCategories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                  {!generalInfoCategories.includes("기타") && <option value="기타">기타</option>}
-                </select>
-              </label>
-              <label>
-                2차 분류
-                <input
-                  className="generalInfoEditableInput"
-                  value={generalInfoDraft.secondaryCategory}
-                  onChange={(e) => {
-                    const secondaryCategory = e.target.value;
-                    setGeneralInfoDraft((prev) => {
-                      const keywords = categoryKeywordsList(prev.primaryCategory, secondaryCategory);
-                      setGeneralInfoKeywordText(
-                        formatCategoryKeywords(prev.primaryCategory, secondaryCategory),
-                      );
-                      return { ...prev, secondaryCategory, keywords };
-                    });
-                  }}
-                  placeholder="예: 외교/해외동향"
-                />
-              </label>
-            </div>
-
-            <div className="generalInfoResultBox generalInfoKeywordInputBox" style={{ marginTop: 12 }}>
-              <strong>키워드</strong>
-              <div className="miniTags" style={{ marginTop: 8 }}>
-                {generalInfoDraft.keywords.length > 0 ? (
-                  <span>{formatCategoryKeywords(generalInfoDraft.primaryCategory, generalInfoDraft.secondaryCategory)}</span>
-                ) : (
-                  <span className="mutedText">1·2차 분류를 선택하면 #1차#2차 로 표시됩니다.</span>
-                )}
-              </div>
-            </div>
+            {!isEditing && categoryKeywordFields}
 
             <div className="generalInfoTextBox generalInfoRichTextBox" style={{ marginTop: 14 }}>
               <div className="generalInfoRichTextHeader">
@@ -585,6 +600,8 @@ export function Chapter3Info({
               </div>
             )}
 
+            {isEditing && categoryKeywordFields}
+
             <div className="generalInfoActionRow" style={{ marginTop: 16 }}>
               <button className="gradientButton" type="button" onClick={handleConfirmGeneralInfo}>
                 {generalInfoEditingId ? "수정 저장" : "저장"}
@@ -632,7 +649,9 @@ export function Chapter3Info({
           <Card number="2" title="정보 창고" subtitle="저장된 일반 정보 목록">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
               <p className="mutedText" style={{ margin: 0 }}>
-                전체 {generalInfoItems.length}건
+                {generalInfoSearchTerm.trim()
+                  ? `검색 ${filteredGeneralInfoItems.length}건 / 전체 ${generalInfoItems.length}건`
+                  : `전체 ${generalInfoItems.length}건`}
               </p>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <label className="secondaryButton" style={{ margin: 0, cursor: "pointer" }}>
@@ -658,15 +677,38 @@ export function Chapter3Info({
                 </button>
               </div>
             </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+              <input
+                type="text"
+                className="info-sidebar-search"
+                style={{ marginBottom: 0, flex: 1 }}
+                placeholder="제목/본문/키워드/분류 검색..."
+                value={generalInfoSearchTerm}
+                onChange={(e) => setGeneralInfoSearchTerm(e.target.value)}
+                aria-label="정보 창고 검색"
+              />
+              {generalInfoSearchTerm.trim() && (
+                <button
+                  className="secondaryButton"
+                  type="button"
+                  style={{ margin: 0, flexShrink: 0 }}
+                  onClick={() => setGeneralInfoSearchTerm("")}
+                >
+                  지우기
+                </button>
+              )}
+            </div>
             <span className="mutedText" style={{ fontSize: 11 }}>
               {generalInfoSupabaseStatus}
             </span>
 
             {generalInfoItems.length === 0 ? (
               <EmptyState icon="🗂️" text="저장된 일반 정보가 없습니다." />
+            ) : filteredGeneralInfoItems.length === 0 ? (
+              <EmptyState icon="🔍" text="검색 결과가 없습니다." />
             ) : (
               <div className="generalInfoList">
-                {generalInfoItems.map((item) => (
+                {filteredGeneralInfoItems.map((item) => (
                   <article
                     className={`generalInfoCard ${item.isPinned ? "pinned" : ""} ${generalInfoDetailId === item.id ? "active" : ""}`}
                     key={item.id}
@@ -699,6 +741,11 @@ export function Chapter3Info({
                       onClick={() => setGeneralInfoDetailId(item.id)}
                     >
                       <strong>
+                        {item.pdfSaved && (
+                          <span className="generalInfoCardPdfMark" title="PDF 저장됨">
+                            ★
+                          </span>
+                        )}
                         {item.isPinned && <span className="generalInfoCardPinMark">📌</span>}
                         {item.title}
                       </strong>
@@ -728,6 +775,17 @@ export function Chapter3Info({
                         }}
                       >
                         상세보기
+                      </button>
+                      <button
+                        className="generalInfoCardDeleteButton"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteGeneralInfo(item.id);
+                        }}
+                        title="삭제"
+                      >
+                        삭제
                       </button>
                       <button
                         className={`generalInfoCardPinButton ${item.isPinned ? "pinned" : ""}`}
