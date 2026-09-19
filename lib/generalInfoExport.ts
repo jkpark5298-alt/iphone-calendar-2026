@@ -405,6 +405,7 @@ export async function parseGeneralInfoAppFile(file: File): Promise<GeneralInfoIt
     createdAt: String(itemRaw.createdAt || new Date().toLocaleString("ko-KR")),
     isPinned: Boolean(itemRaw.isPinned),
     pdfSaved: Boolean(itemRaw.pdfSaved),
+    appFileSaved: Boolean(itemRaw.appFileSaved),
   };
 }
 

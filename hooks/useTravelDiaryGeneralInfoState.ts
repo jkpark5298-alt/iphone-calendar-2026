@@ -142,6 +142,7 @@ export function useTravelDiaryGeneralInfoState({
                 mediaItems: mergedMediaItems,
                 isPinned: prevItem.isPinned || data.item.isPinned,
                 pdfSaved: prevItem.pdfSaved || data.item.pdfSaved,
+                appFileSaved: prevItem.appFileSaved || data.item.appFileSaved,
                 formattedTextHtml:
                   data.item.formattedTextHtml || prevItem.formattedTextHtml || "",
                 paragraphs: data.item.paragraphs?.length
@@ -236,7 +237,7 @@ export function useTravelDiaryGeneralInfoState({
           }
         });
 
-        // 2. Merge remote items from Supabase (preserving isPinned / pdfSaved / richer local media/html)
+        // 2. Merge remote items from Supabase (preserving isPinned / pdfSaved / appFileSaved / richer local media/html)
         restoredItems.forEach((remoteItem) => {
           if (remoteItem && typeof remoteItem.id === "number") {
             if (deletedIds.has(remoteItem.id)) return;
@@ -245,6 +246,7 @@ export function useTravelDiaryGeneralInfoState({
             if (localItem) {
               const isPinned = !!(localItem.isPinned || remoteItem.isPinned);
               const pdfSaved = !!(localItem.pdfSaved || remoteItem.pdfSaved);
+              const appFileSaved = !!(localItem.appFileSaved || remoteItem.appFileSaved);
 
               const remoteHasMedia = !!(
                 remoteItem.mediaItems &&
@@ -266,6 +268,7 @@ export function useTravelDiaryGeneralInfoState({
                 ...remoteItem,
                 isPinned,
                 pdfSaved,
+                appFileSaved,
                 mediaItems,
                 filePreview: remoteItem.filePreview || localItem.filePreview,
                 formattedTextHtml:
@@ -1425,6 +1428,7 @@ export function useTravelDiaryGeneralInfoState({
         formattedTextHtml: item.formattedTextHtml,
         isPinned: existingGeneralInfoItem.isPinned || false,
         pdfSaved: existingGeneralInfoItem.pdfSaved || false,
+        appFileSaved: existingGeneralInfoItem.appFileSaved || false,
       };
 
       locallyDeletedGeneralInfoIdsRef.current.delete(updatedItem.id);
@@ -1608,6 +1612,21 @@ export function useTravelDiaryGeneralInfoState({
     });
   }, []);
 
+  const markGeneralInfoAppFileSaved = useCallback((itemId: number) => {
+    setGeneralInfoItems((prev) => {
+      let changed = false;
+      const nextItems = prev.map((item) => {
+        if (item.id !== itemId || item.appFileSaved) return item;
+        changed = true;
+        return { ...item, appFileSaved: true };
+      });
+      if (changed) {
+        persistGeneralInfoItemsToLocalStorage(nextItems);
+      }
+      return changed ? nextItems : prev;
+    });
+  }, []);
+
   const handleDownloadGeneralInfoPdf = useCallback(async (item: GeneralInfoItem) => {
     try {
       showPasteHint("PDF 작성 중…");
@@ -1639,12 +1658,13 @@ export function useTravelDiaryGeneralInfoState({
   const handleDownloadGeneralInfoAppFile = useCallback((item: GeneralInfoItem) => {
     try {
       const filename = downloadGeneralInfoAppFile(item);
+      markGeneralInfoAppFileSaved(item.id);
       showPasteHint(`앱파일 저장 완료 · ${filename}`);
     } catch (error) {
       console.error(error);
       showPasteHint(error instanceof Error ? error.message : "앱파일 저장 실패");
     }
-  }, [showPasteHint]);
+  }, [showPasteHint, markGeneralInfoAppFileSaved]);
 
   const handleUpdateGeneralInfoExtraNote = useCallback(async (itemId: number, value: string) => {
     const targetItem = generalInfoItems.find((item) => item.id === itemId);
@@ -2224,6 +2244,7 @@ export function useTravelDiaryGeneralInfoState({
     handleShareGeneralInfoPdf,
     handleDownloadGeneralInfoAppFile,
     markGeneralInfoPdfSaved,
+    markGeneralInfoAppFileSaved,
     loadGeneralInfoItemsFromSupabase,
     handleUndoGeneralInfoDraft,
     handleResetGeneralInfoDraft,

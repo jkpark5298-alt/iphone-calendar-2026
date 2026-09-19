@@ -741,9 +741,14 @@ export function Chapter3Info({
                       onClick={() => setGeneralInfoDetailId(item.id)}
                     >
                       <strong>
+                        {item.appFileSaved && (
+                          <span className="generalInfoCardAppFileMark" title="앱파일 저장됨">
+                            ★
+                          </span>
+                        )}
                         {item.pdfSaved && (
                           <span className="generalInfoCardPdfMark" title="PDF 저장됨">
-                            ★
+                            ▲
                           </span>
                         )}
                         {item.isPinned && <span className="generalInfoCardPinMark">📌</span>}

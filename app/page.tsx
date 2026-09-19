@@ -7224,6 +7224,7 @@ ${photo.memoText}
           item={infoState.generalInfoExportItem}
           onClose={() => infoState.setGeneralInfoExportItem(null)}
           onPdfExported={(item) => infoState.markGeneralInfoPdfSaved(item.id)}
+          onAppFileExported={(item) => infoState.markGeneralInfoAppFileSaved(item.id)}
         />
       )}
   
