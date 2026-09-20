@@ -441,6 +441,20 @@ textarea {
   body { background: #111; color: #ddd; }
   .app, .box, .day { background: #171b1a; }
   .day.empty { background: #211b12; }
+  .weekday {
+    background: #232826;
+    color: #e6e8ea;
+  }
+  .num { color: #e6e8ea; }
+  .num-red { color: #ff6b6b; }
+  .holiday-day { background: #1c1717; }
+  .today-day {
+    background: #2a2614;
+    box-shadow: inset 0 0 0 4px #ffcc00 !important;
+  }
+  .today-day.selected-day {
+    box-shadow: inset 0 0 0 4px #ffcc00 !important;
+  }
   .thumb { background: #28251c; color: #c9c3b9; }
   textarea { background: #111; color: #eee; border-color: #444; }
 }
