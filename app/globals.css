@@ -1806,6 +1806,22 @@ textarea {
   color: #e24141 !important;
 }
 
+@media (prefers-color-scheme: dark) {
+  .weekday {
+    background: #232826;
+    color: #e6e8ea;
+  }
+  .num { color: #e6e8ea; }
+  .num-red { color: #ff6b6b; }
+  .holiday-day { background: #1c1717; }
+  .today-day {
+    background: #2a2614;
+  }
+  .today-day .today-num.num-red {
+    color: #ff6b6b !important;
+  }
+}
+
 .holiday,
 .holiday-neutral {
   white-space: nowrap;
