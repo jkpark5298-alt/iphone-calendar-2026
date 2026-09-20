@@ -97,7 +97,6 @@ type GoogleScheduleItem = {
 };
 
 const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-const weekdayLabels = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const monthDays: Record<number, number> = { 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
 const scheduleColorLabels: Record<ScheduleColor, string> = {
   yellow: "노란색",
@@ -3932,7 +3931,7 @@ export default function HomePage() {
         </div>
 
         <div className="calendar">
-          {weekdayLabels.map(label => <div key={label} className="weekday">{label}</div>)}
+          {weekdays.map(label => <div key={label} className="weekday">{label}</div>)}
           {cells}
         </div>
       </section>
