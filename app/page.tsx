@@ -3791,7 +3791,7 @@ export default function HomePage() {
               </div>
             )}
           </div>
-          {holidays[k] && <div className="holiday holiday-neutral">{holidays[k]}</div>}
+          {holidays[k] && <div className="holiday">{holidays[k]}</div>}
           {dayInfoItems.length > 0 && (
             <div className="information-chip-list" aria-label={`${currentMonth}월 ${day}일 정보함 항목`}>
               {dayInfoItems.slice(0, 3).map(item => (

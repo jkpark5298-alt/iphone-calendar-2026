@@ -292,12 +292,22 @@ button { touch-action: manipulation; }
 .holiday {
   position: relative;
   z-index: 2;
-  color: var(--danger);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.2;
+  display: block;
+  box-sizing: border-box;
   width: 100%;
   margin-top: 2px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #e53935;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.04em;
 }
 .thumb {
   position: relative;
@@ -474,7 +484,7 @@ textarea {
   .num { font-size: 11px; font-weight: 500; }
   .mini-btn { min-width: 32px; min-height: 32px; font-size: 13px; padding: 4px 7px; }
   .only-info { min-width: 24px; width: 24px; height: 24px; min-height: 24px; font-size: 12px; }
-  .holiday { font-size: 10px; }
+  .holiday { font-size: 9px; }
   .thumb { height: 42px; }
   .info-title { font-size: 20px; white-space: nowrap; }
   .info-sub-date { font-size: 13px; }
@@ -842,9 +852,9 @@ textarea {
 }
 
 
-/* 추가 수정: 공휴일 기본 빨간색 해제, 직접 지정 날짜만 빨간색 */
+/* 공휴일은 빨간 배지 + 흰 글씨로 표시 */
 .holiday-neutral {
-  color: #8f8f8f !important;
+  color: #ffffff !important;
   font-weight: 700;
 }
 
@@ -1827,8 +1837,14 @@ textarea {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: clamp(8px, 1.1vw, 11px) !important;
+  font-size: clamp(8px, 1.05vw, 10px) !important;
   letter-spacing: -0.04em;
+  background: #e53935;
+  color: #ffffff !important;
+  border-radius: 4px;
+  padding: 2px 4px;
+  text-align: center;
+  font-weight: 700;
 }
 
 /* 일기장 사진: 숫자/좌우 이동 없이 장수에 따라 자동 크기 배치 */
@@ -1937,7 +1953,8 @@ textarea {
   }
   .holiday,
   .holiday-neutral {
-    font-size: 8px !important;
+    font-size: 9px !important;
+    padding: 2px 3px;
   }
 }
 
