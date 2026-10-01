@@ -1,6 +1,6 @@
 import type { GeneralInfoItem } from "../types/generalInfo";
 import {
-  getGeneralInfoDisplayMediaItems,
+  getGeneralInfoInfographicItems,
   getGeneralInfoFormattedHtml,
 } from "./generalInfoHelpers";
 import { formatCategoryKeywords } from "./generalInfoText";
@@ -10,6 +10,7 @@ import {
 } from "./generalInfoParagraphs";
 
 export const GENERAL_INFO_APP_FILE_FORMAT = "airzeta-general-info";
+export const GENERAL_INFO_APP_BUNDLE_FORMAT = "airzeta-general-info-bundle";
 export const GENERAL_INFO_APP_FILE_VERSION = 1;
 export const GENERAL_INFO_APP_FILE_EXT = ".airzeta-gi.json";
 
@@ -18,6 +19,13 @@ export type GeneralInfoAppFile = {
   version: number;
   exportedAt: string;
   item: GeneralInfoItem;
+};
+
+export type GeneralInfoAppBundle = {
+  format: typeof GENERAL_INFO_APP_BUNDLE_FORMAT;
+  version: number;
+  exportedAt: string;
+  items: GeneralInfoItem[];
 };
 
 declare global {
@@ -98,7 +106,7 @@ export function buildGeneralInfoExportDocumentHtml(item: GeneralInfoItem) {
     || (item.keywords || []).map((k) => `#${String(k).replace(/^#+/, "")}`).join("");
   const category = [item.primaryCategory, item.secondaryCategory].filter(Boolean).join(" > ") || "분류 없음";
   const paragraphs = getGeneralInfoParagraphsForExport(item);
-  const media = getGeneralInfoDisplayMediaItems(item);
+  const media = getGeneralInfoInfographicItems(item);
 
   const paragraphBlocks = paragraphs
     .map((p) => {
@@ -349,35 +357,30 @@ export function downloadGeneralInfoAppFile(item: GeneralInfoItem) {
   return filename;
 }
 
-export async function parseGeneralInfoAppFile(file: File): Promise<GeneralInfoItem> {
-  const text = await file.text();
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new Error("앱파일 JSON을 읽지 못했습니다.");
-  }
+export function downloadGeneralInfoAppBundle(items: GeneralInfoItem[]) {
+  const payload: GeneralInfoAppBundle = {
+    format: GENERAL_INFO_APP_BUNDLE_FORMAT,
+    version: GENERAL_INFO_APP_FILE_VERSION,
+    exportedAt: new Date().toISOString(),
+    items: items.map((item) => buildGeneralInfoAppFile({ ...item, appFileSaved: true }).item),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json",
+  });
+  const filename = `일반정보수집-${items.length}건${GENERAL_INFO_APP_FILE_EXT}`;
+  triggerBlobDownload(blob, filename);
+  return filename;
+}
 
-  const root = parsed as Record<string, unknown>;
-  const itemRaw =
-    root.format === GENERAL_INFO_APP_FILE_FORMAT && root.item && typeof root.item === "object"
-      ? (root.item as Record<string, unknown>)
-      : root;
-
+function normalizeGeneralInfoAppItem(itemRaw: Record<string, unknown>): GeneralInfoItem | null {
   const id = Number(itemRaw.id);
-  if (!Number.isFinite(id) || id <= 0) {
-    throw new Error("유효한 일반 정보 앱파일이 아닙니다.");
-  }
-
   const title = String(itemRaw.title || "").trim();
-  if (!title) throw new Error("앱파일에 제목이 없습니다.");
-
+  if (!title) return null;
   const paragraphs = Array.isArray(itemRaw.paragraphs)
     ? (itemRaw.paragraphs as GeneralInfoItem["paragraphs"])
     : parseParagraphsFromHtml(String(itemRaw.formattedTextHtml || ""));
-
   return {
-    id,
+    id: Number.isFinite(id) && id > 0 ? id : Date.now(),
     title,
     inputTypes: Array.isArray(itemRaw.inputTypes)
       ? (itemRaw.inputTypes as GeneralInfoItem["inputTypes"])
@@ -392,9 +395,7 @@ export async function parseGeneralInfoAppFile(file: File): Promise<GeneralInfoIt
     primaryCategory: String(itemRaw.primaryCategory || ""),
     secondaryCategory: String(itemRaw.secondaryCategory || ""),
     thirdCategory: String(itemRaw.thirdCategory || ""),
-    keywords: Array.isArray(itemRaw.keywords)
-      ? itemRaw.keywords.map((k) => String(k))
-      : [],
+    keywords: Array.isArray(itemRaw.keywords) ? itemRaw.keywords.map((k) => String(k)) : [],
     factCheckStatus: (itemRaw.factCheckStatus as GeneralInfoItem["factCheckStatus"]) || "확인 전",
     factCheckSummary: String(itemRaw.factCheckSummary || ""),
     summary: String(itemRaw.summary || ""),
@@ -407,6 +408,51 @@ export async function parseGeneralInfoAppFile(file: File): Promise<GeneralInfoIt
     pdfSaved: Boolean(itemRaw.pdfSaved),
     appFileSaved: Boolean(itemRaw.appFileSaved),
   };
+}
+
+export async function readGeneralInfoAppFileItems(file: File): Promise<GeneralInfoItem[]> {
+  const text = await file.text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("앱파일 JSON을 읽지 못했습니다.");
+  }
+  const root = parsed as Record<string, unknown>;
+  if (root.format === GENERAL_INFO_APP_BUNDLE_FORMAT && Array.isArray(root.items)) {
+    const items = root.items
+      .filter((row) => row && typeof row === "object")
+      .map((row) => normalizeGeneralInfoAppItem(row as Record<string, unknown>))
+      .filter((item): item is GeneralInfoItem => Boolean(item));
+    if (!items.length) throw new Error("앱파일에 일반정보수집 항목이 없습니다.");
+    return items;
+  }
+  if (Array.isArray(parsed)) {
+    const items = parsed
+      .filter((row) => row && typeof row === "object")
+      .map((row) => {
+        const record = row as Record<string, unknown>;
+        const nested = record.item && typeof record.item === "object" ? (record.item as Record<string, unknown>) : record;
+        return normalizeGeneralInfoAppItem(nested);
+      })
+      .filter((item): item is GeneralInfoItem => Boolean(item));
+    if (!items.length) throw new Error("앱파일에 일반정보수집 항목이 없습니다.");
+    return items;
+  }
+  const itemRaw =
+    root.format === GENERAL_INFO_APP_FILE_FORMAT && root.item && typeof root.item === "object"
+      ? (root.item as Record<string, unknown>)
+      : root;
+  const item = normalizeGeneralInfoAppItem(itemRaw);
+  if (!item || !Number.isFinite(Number(itemRaw.id)) || Number(itemRaw.id) <= 0) {
+    throw new Error("유효한 일반 정보 앱파일이 아닙니다.");
+  }
+  return [item];
+}
+
+export async function parseGeneralInfoAppFile(file: File): Promise<GeneralInfoItem> {
+  const items = await readGeneralInfoAppFileItems(file);
+  return items[0];
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {

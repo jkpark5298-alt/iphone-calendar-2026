@@ -1,6 +1,6 @@
 /** 본문 복사 후 외부 AI 앱으로 이동할 때 쓰는 딥링크/폴백 URL */
 
-export type ExternalAppTarget = "gemini" | "daglo";
+export type ExternalAppTarget = "gemini" | "daglo" | "chatgpt";
 
 type AppOpenConfig = {
   label: string;
@@ -12,15 +12,20 @@ type AppOpenConfig = {
 
 const APP_OPEN_CONFIG: Record<ExternalAppTarget, AppOpenConfig> = {
   gemini: {
-    label: "Gemini",
+    label: "제미나이",
     schemes: ["googlegemini://", "googleapp://robin"],
     fallbackUrl: "https://gemini.google.com/app",
   },
   daglo: {
-    label: "Daglo",
+    label: "다글로",
     // 다글로는 daglo.ai 유니버설 링크로 앱 실행 (AASA paths: *)
     schemes: ["daglo://"],
     fallbackUrl: "https://daglo.ai/",
+  },
+  chatgpt: {
+    label: "ChatGPT",
+    schemes: ["chatgpt://"],
+    fallbackUrl: "https://chatgpt.com/",
   },
 };
 

@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       }
       const prompt = `
 You are an AI text classifier and summarizer. Analyze the following text and:
-1. Classify it into exactly one of these categories: 정치, 행정, 경제, 산업, 사회, 교육, 문화, 예술, 과학, 기술, 국제, 외교, 국방, 안보, 기타.
+1. Classify it into exactly one of these categories: 애플, 과학, 경제, 사회, 기술, 국제, 건강, 외교, 기타.
 2. Extract a single representative keyword (1-3 words) for the content.
 3. Generate a concise and clear title (제목) (in Korean, 10 words or less) representing the core content.
 

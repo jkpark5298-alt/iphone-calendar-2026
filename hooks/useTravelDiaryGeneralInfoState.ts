@@ -1,28 +1,45 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
 import { initialGeneralInfoDraft, generalInfoCategories, mockAnalyzeGeneralInfo } from "../lib/generalInfoMock";
-import { persistGeneralInfoItemsToLocalStorage, readGeneralInfoItemsFromLocalStorage } from "../lib/generalInfoStorage";
+import {
+  addGeneralInfoRemoteIds,
+  GENERAL_INFO_TEMP_DRAFT_EVENT,
+  GENERAL_INFO_TEMP_DRAFT_KEY,
+  persistGeneralInfoItemsToLocalStorage,
+  persistGeneralInfoRemoteIds,
+  readGeneralInfoItemsFromLocalStorage,
+  readGeneralInfoRemoteIds,
+  readGeneralInfoTempDraftIndex,
+  removeGeneralInfoRemoteIds,
+} from "../lib/generalInfoStorage";
 import { extractFirstSentence, categoryKeywordsList, formatCategoryKeywords } from "../lib/generalInfoText";
 import {
   createEmptyParagraph,
   isParagraphEmpty,
   normalizeParagraph,
   parseParagraphsFromHtml,
+  htmlForActiveEditor,
   paragraphsToPlainText,
   serializeParagraphsToHtml,
 } from "../lib/generalInfoParagraphs";
 import type { GeneralInfoParagraph } from "../types/generalInfo";
 
 import {
+  downloadGeneralInfoAppBundle,
   downloadGeneralInfoAppFile,
   downloadGeneralInfoPdf,
-  parseGeneralInfoAppFile,
+  readGeneralInfoAppFileItems,
   shareGeneralInfoPdfForGoodNotes,
 } from "../lib/generalInfoExport";
+import {
+  archiveRemovedAppFileIndex,
+  forgetAppFileIndexArchive,
+  forgetAppFileIndexArchiveMatch,
+} from "../lib/infoIndex";
 import { supabase } from "../lib/supabaseClient";
 
 
-import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoFormattedHtml, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, extractMediaSrcFromHtml, replaceHtmlMediaSources } from "../lib/generalInfoHelpers";
+import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, getGeneralInfoInfographicItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoFormattedHtml, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, extractMediaSrcFromHtml, pickGeneralInfoCoverSrc, replaceHtmlMediaSources, escapeGeneralInfoHtml } from "../lib/generalInfoHelpers";
 import { sanitizeGeneralInfoHtml } from "../lib/sanitizeHtml";
 import {
   enhanceRichInlineImages,
@@ -33,10 +50,34 @@ import {
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
 import { runCollectRichCommand } from "../lib/collectRichFormat";
+import {
+  cleanInstagramCaption,
+  isInstagramHostText,
+  isInstagramPostUrl,
+  isInstagramScrapeGarbage,
+  splitInstagramShareText,
+  isInstagramShareJunk,
+  titleFromInstagramCaption,
+} from "../lib/instagramMeta";
 
 
 const TRAVEL_DIARY_BUCKET = "info-photos";
+function notifyGeneralInfoTempDraft() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(GENERAL_INFO_TEMP_DRAFT_EVENT));
+}
 const nowText = () => new Date().toLocaleString("ko-KR");
+
+const generalInfoHtmlLooksEmpty = (html: string) => {
+  const raw = String(html || "");
+  if (/<img\b/i.test(raw)) return false;
+  return !raw
+    .replace(/<br\s*\/?>/gi, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+};
 
 const uploadFileToSupabaseStorage = async (file: File): Promise<{ storagePath: string; fileUrl: string }> => {
   if (!supabase) throw new Error("Supabase가 연결되지 않았습니다.");
@@ -101,15 +142,39 @@ export function useTravelDiaryGeneralInfoState({
   const [isRunningGeneralInfoFactCheck, setIsRunningGeneralInfoFactCheck] = useState(false);
   /** 사용자가 이 기기에서 삭제한 ID — 동기화 시 로컬 전용 항목을 잘못 지우지 않기 위해 사용 */
   const locallyDeletedGeneralInfoIdsRef = useRef<Set<number>>(new Set());
+  const generalInfoDraftRef = useRef(generalInfoDraft);
+  generalInfoDraftRef.current = generalInfoDraft;
+  const generalInfoKeywordTextRef = useRef(generalInfoKeywordText);
+  generalInfoKeywordTextRef.current = generalInfoKeywordText;
+  const generalInfoEditingIdRef = useRef(generalInfoEditingId);
+  generalInfoEditingIdRef.current = generalInfoEditingId;
+  const generalInfoActiveTabRef = useRef(generalInfoActiveTab);
+  generalInfoActiveTabRef.current = generalInfoActiveTab;
+  const tempRestorePromptedRef = useRef(false);
+  const deleteUndoTimerRef = useRef<number | null>(null);
+  const [generalInfoDeleteUndo, setGeneralInfoDeleteUndo] = useState<GeneralInfoItem | null>(null);
+  const [generalInfoUrlMeta, setGeneralInfoUrlMeta] = useState<{
+    url: string;
+    title: string;
+    description: string;
+    image: string;
+    siteName: string;
+    text: string;
+  } | null>(null);
+  const [generalInfoUrlNotice, setGeneralInfoUrlNotice] = useState("");
 
   const syncGeneralInfoItemToSupabase = useCallback(async (
     item: GeneralInfoItem,
     method: "POST" | "PUT",
+    options?: { silent?: boolean },
   ) => {
+    const silent = Boolean(options?.silent);
     try {
-      const nextStatus = method === "POST" ? "일반 정보 Supabase 저장 중" : "일반 정보 Supabase 수정 중";
-      if (generalInfoSupabaseStatusRef.current !== nextStatus) {
-        setGeneralInfoSupabaseStatus(nextStatus);
+      if (!silent) {
+        const nextStatus = method === "POST" ? "일반 정보 Supabase 저장 중" : "일반 정보 Supabase 수정 중";
+        if (generalInfoSupabaseStatusRef.current !== nextStatus) {
+          setGeneralInfoSupabaseStatus(nextStatus);
+        }
       }
 
       const response = await fetch("/api/general-info", {
@@ -117,7 +182,10 @@ export function useTravelDiaryGeneralInfoState({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(item),
+        body: JSON.stringify({
+          ...item,
+          title: String(item.title || "").trim() || "(제목 없음)",
+        }),
       });
 
       const data = await response.json();
@@ -125,6 +193,8 @@ export function useTravelDiaryGeneralInfoState({
       if (!response.ok || !data.ok) {
         throw new Error(data.detail || data.error || "일반 정보 Supabase 저장 실패");
       }
+
+      addGeneralInfoRemoteIds([item.id, data.item?.id].filter((id): id is number => typeof id === "number"));
 
       if (data.item) {
         setGeneralInfoItems((prev) =>
@@ -156,152 +226,207 @@ export function useTravelDiaryGeneralInfoState({
         );
       }
 
-      const successStatus = method === "POST" ? "일반 정보 Supabase 저장 완료" : "일반 정보 Supabase 수정 완료";
-      if (generalInfoSupabaseStatusRef.current !== successStatus) {
-        setGeneralInfoSupabaseStatus(successStatus);
+      if (!silent) {
+        const successStatus = method === "POST" ? "일반 정보 Supabase 저장 완료" : "일반 정보 Supabase 수정 완료";
+        if (generalInfoSupabaseStatusRef.current !== successStatus) {
+          setGeneralInfoSupabaseStatus(successStatus);
+        }
+        showPasteHint(`✅ ${successStatus}`);
       }
-      showPasteHint(`✅ ${successStatus}`);
+      return true;
     } catch (error) {
       console.error("travel-diary general info sync failed", error);
-      const failStatus = method === "POST"
-        ? "이 기기에는 저장됨 · Supabase 저장 실패"
-        : "이 기기에는 수정됨 · Supabase 수정 실패";
-      if (generalInfoSupabaseStatusRef.current !== failStatus) {
-        setGeneralInfoSupabaseStatus(failStatus);
+      if (!silent) {
+        const failStatus = method === "POST"
+          ? "이 기기에는 저장됨 · Supabase 저장 실패"
+          : "이 기기에는 수정됨 · Supabase 수정 실패";
+        if (generalInfoSupabaseStatusRef.current !== failStatus) {
+          setGeneralInfoSupabaseStatus(failStatus);
+        }
+        showPasteHint(`⚠️ ${failStatus} · 인터넷 연결 및 API 권한을 확인하세요.`);
       }
-      showPasteHint(`⚠️ ${failStatus} · 인터넷 연결 및 API 권한을 확인하세요.`);
+      return false;
     }
   }, [showPasteHint]);
 
+  const syncGeneralInfoItemToSupabaseRef = useRef(syncGeneralInfoItemToSupabase);
+  syncGeneralInfoItemToSupabaseRef.current = syncGeneralInfoItemToSupabase;
+  const generalInfoLoadInFlightRef = useRef(false);
+  const generalInfoLoadAgainRef = useRef(false);
+
   // --- Chapter 3 일반 정보 Supabase CRUD 헬퍼 (API Router 호출 복원) ---
   const loadGeneralInfoItemsFromSupabase = useCallback(async () => {
+    if (generalInfoLoadInFlightRef.current) {
+      generalInfoLoadAgainRef.current = true;
+      return;
+    }
+    generalInfoLoadInFlightRef.current = true;
+
     try {
-      if (generalInfoSupabaseStatusRef.current !== "일반 정보 Supabase 불러오는 중") {
-        setGeneralInfoSupabaseStatus("일반 정보 Supabase 불러오는 중");
-      }
+      do {
+        generalInfoLoadAgainRef.current = false;
 
-      const response = await fetch("/api/general-info", {
-        method: "GET",
-      });
+        if (generalInfoSupabaseStatusRef.current !== "일반 정보 Supabase 불러오는 중") {
+          setGeneralInfoSupabaseStatus("일반 정보 Supabase 불러오는 중");
+        }
 
-      const data = await response.json();
-
-      if (!response.ok || !data.ok) {
-        throw new Error(data.detail || data.error || "일반 정보 불러오기 실패");
-      }
-
-      const remoteItems = Array.isArray(data.items) ? data.items : [];
-
-      // 이미지 복원 로직: storagePath가 있으면 공개 URL로 복원 (영구 URL, 새로고침 후에도 유지)
-      const restoredItems: GeneralInfoItem[] = remoteItems.map((item: GeneralInfoItem) => {
-        const mediaItems = item.mediaItems || [];
-        
-        const restoredMediaItems = mediaItems.map((media) => {
-          // preview가 없거나 blob: (임시 URL)이면 storagePath/fileUrl로 복원
-          const preview = String(media.preview || "").trim();
-          const fileUrl = String(media.fileUrl || "").trim();
-          const storagePath = String(media.storagePath || "").trim();
-
-          if ((!preview || preview.startsWith("blob:")) && storagePath) {
-            try {
-              const { data } = supabase!.storage
-                .from(TRAVEL_DIARY_BUCKET)
-                .getPublicUrl(storagePath);
-              const publicUrl = data?.publicUrl || fileUrl || "";
-              return { ...media, preview: publicUrl, fileUrl: publicUrl };
-            } catch (error) {
-              console.error("일반 정보 미디어 공개 URL 복원 실패:", error);
-            }
-          }
-          
-          // preview가 이미 있거나 storagePath가 없으면 그대로 반환
-          if ((!preview || preview.startsWith("blob:")) && fileUrl) {
-            return { ...media, preview: fileUrl };
-          }
-          
-          return media;
-        });
-        
-        return { ...item, mediaItems: restoredMediaItems };
-      });
-
-      setGeneralInfoItems((prev) => {
-        const map = new Map<number, GeneralInfoItem>();
-        const deletedIds = locallyDeletedGeneralInfoIdsRef.current;
-
-        // 1. Keep local items unless this device explicitly deleted them.
-        // (Do NOT drop local-only saves when Supabase sync failed or lagged.)
-        prev.forEach((item) => {
-          if (item && typeof item.id === "number" && !deletedIds.has(item.id)) {
-            map.set(item.id, item);
-          }
+        const response = await fetch("/api/general-info", {
+          method: "GET",
         });
 
-        // 2. Merge remote items from Supabase (preserving isPinned / pdfSaved / appFileSaved / richer local media/html)
-        restoredItems.forEach((remoteItem) => {
-          if (remoteItem && typeof remoteItem.id === "number") {
-            if (deletedIds.has(remoteItem.id)) return;
+        const data = await response.json();
 
-            const localItem = map.get(remoteItem.id);
-            if (localItem) {
-              const isPinned = !!(localItem.isPinned || remoteItem.isPinned);
-              const pdfSaved = !!(localItem.pdfSaved || remoteItem.pdfSaved);
-              const appFileSaved = !!(localItem.appFileSaved || remoteItem.appFileSaved);
+        if (!response.ok || !data.ok) {
+          throw new Error(data.detail || data.error || "일반 정보 불러오기 실패");
+        }
 
-              const remoteHasMedia = !!(
-                remoteItem.mediaItems &&
-                remoteItem.mediaItems.length > 0 &&
-                remoteItem.mediaItems[0].preview
-              );
-              const localHasMedia = !!(
-                localItem.mediaItems &&
-                localItem.mediaItems.length > 0 &&
-                localItem.mediaItems[0].preview
-              );
+        const remoteItems = Array.isArray(data.items) ? data.items : [];
+        const remoteIdSet = new Set<number>();
+        const knownRemoteIds = readGeneralInfoRemoteIds();
 
-              let mediaItems = remoteItem.mediaItems;
-              if (!remoteHasMedia && localHasMedia) {
-                mediaItems = localItem.mediaItems;
+        // 이미지 복원 로직: storagePath가 있으면 공개 URL로 복원 (영구 URL, 새로고침 후에도 유지)
+        const restoredItems: GeneralInfoItem[] = remoteItems.map((item: GeneralInfoItem) => {
+          if (item && typeof item.id === "number") remoteIdSet.add(item.id);
+
+          const mediaItems = item.mediaItems || [];
+
+          const restoredMediaItems = mediaItems.map((media) => {
+            // preview가 없거나 blob: (임시 URL)이면 storagePath/fileUrl로 복원
+            const preview = String(media.preview || "").trim();
+            const fileUrl = String(media.fileUrl || "").trim();
+            const storagePath = String(media.storagePath || "").trim();
+
+            if ((!preview || preview.startsWith("blob:")) && storagePath) {
+              try {
+                const { data } = supabase!.storage
+                  .from(TRAVEL_DIARY_BUCKET)
+                  .getPublicUrl(storagePath);
+                const publicUrl = data?.publicUrl || fileUrl || "";
+                return { ...media, preview: publicUrl, fileUrl: publicUrl };
+              } catch (error) {
+                console.error("일반 정보 미디어 공개 URL 복원 실패:", error);
               }
-
-              map.set(remoteItem.id, {
-                ...remoteItem,
-                isPinned,
-                pdfSaved,
-                appFileSaved,
-                mediaItems,
-                filePreview: remoteItem.filePreview || localItem.filePreview,
-                formattedTextHtml:
-                  remoteItem.formattedTextHtml || localItem.formattedTextHtml || "",
-                paragraphs: remoteItem.paragraphs?.length
-                  ? remoteItem.paragraphs
-                  : localItem.paragraphs,
-              });
-            } else {
-              map.set(remoteItem.id, remoteItem);
             }
-          }
+
+            // preview가 이미 있거나 storagePath가 없으면 그대로 반환
+            if ((!preview || preview.startsWith("blob:")) && fileUrl) {
+              return { ...media, preview: fileUrl };
+            }
+
+            return media;
+          });
+
+          return { ...item, mediaItems: restoredMediaItems };
         });
 
-        const sortedResult = Array.from(map.values()).sort((a, b) => b.id - a.id);
+        persistGeneralInfoRemoteIds(remoteIdSet);
 
-        persistGeneralInfoItemsToLocalStorage(sortedResult);
+        let localOnlyItems: GeneralInfoItem[] = [];
 
-        return sortedResult;
-      });
+        setGeneralInfoItems((prev) => {
+          const map = new Map<number, GeneralInfoItem>();
+          const deletedIds = locallyDeletedGeneralInfoIdsRef.current;
 
-      const nextStatus = remoteItems.length > 0
-        ? `일반 정보 Supabase 불러오기 완료 ${remoteItems.length}건`
-        : "일반 정보 Supabase 저장자료 없음";
-        
-      if (generalInfoSupabaseStatusRef.current !== nextStatus) {
-        setGeneralInfoSupabaseStatus(nextStatus);
-      }
+          // 1. Keep local items unless this device deleted them, or another device
+          //    already removed a previously-synced row from Supabase.
+          prev.forEach((item) => {
+            if (!item || typeof item.id !== "number" || deletedIds.has(item.id)) return;
+            if (knownRemoteIds.has(item.id) && !remoteIdSet.has(item.id)) return;
+            map.set(item.id, item);
+          });
+
+          // 2. Merge remote items from Supabase (preserving isPinned / pdfSaved / appFileSaved / richer local media/html)
+          restoredItems.forEach((remoteItem) => {
+            if (remoteItem && typeof remoteItem.id === "number") {
+              if (deletedIds.has(remoteItem.id)) return;
+
+              const localItem = map.get(remoteItem.id);
+              if (localItem) {
+                const isPinned = !!(localItem.isPinned || remoteItem.isPinned);
+                const pdfSaved = !!(localItem.pdfSaved || remoteItem.pdfSaved);
+                const appFileSaved = !!(localItem.appFileSaved || remoteItem.appFileSaved);
+
+                const remoteHasMedia = !!(
+                  remoteItem.mediaItems &&
+                  remoteItem.mediaItems.length > 0 &&
+                  remoteItem.mediaItems[0].preview
+                );
+                const localHasMedia = !!(
+                  localItem.mediaItems &&
+                  localItem.mediaItems.length > 0 &&
+                  localItem.mediaItems[0].preview
+                );
+
+                let mediaItems = remoteItem.mediaItems;
+                if (!remoteHasMedia && localHasMedia) {
+                  mediaItems = localItem.mediaItems;
+                }
+
+                map.set(remoteItem.id, {
+                  ...remoteItem,
+                  isPinned,
+                  pdfSaved,
+                  appFileSaved,
+                  mediaItems,
+                  filePreview: remoteItem.filePreview || localItem.filePreview,
+                  formattedTextHtml:
+                    remoteItem.formattedTextHtml || localItem.formattedTextHtml || "",
+                  paragraphs: remoteItem.paragraphs?.length
+                    ? remoteItem.paragraphs
+                    : localItem.paragraphs,
+                });
+              } else {
+                map.set(remoteItem.id, remoteItem);
+              }
+            }
+          });
+
+          const sortedResult = Array.from(map.values()).sort((a, b) => b.id - a.id);
+          localOnlyItems = sortedResult.filter((item) => !remoteIdSet.has(item.id));
+
+          persistGeneralInfoItemsToLocalStorage(sortedResult);
+
+          return sortedResult;
+        });
+
+        let uploadedCount = 0;
+        if (localOnlyItems.length > 0) {
+          const uploadStatus = `이 기기 전용 ${localOnlyItems.length}건 Supabase 업로드 중`;
+          if (generalInfoSupabaseStatusRef.current !== uploadStatus) {
+            setGeneralInfoSupabaseStatus(uploadStatus);
+          }
+
+          for (const localItem of localOnlyItems) {
+            const uploaded = await syncGeneralInfoItemToSupabaseRef.current(localItem, "POST", {
+              silent: true,
+            });
+            if (uploaded) uploadedCount += 1;
+          }
+        }
+
+        const failedCount = localOnlyItems.length - uploadedCount;
+        const nextStatus = failedCount > 0
+          ? `일반 정보 동기화 완료 · 서버 ${remoteItems.length}건 · 이 기기 전용 ${uploadedCount}건 올림 · ${failedCount}건 실패`
+          : localOnlyItems.length > 0
+            ? `일반 정보 동기화 완료 · 서버 ${remoteItems.length}건 · 이 기기 전용 ${uploadedCount}건 올림`
+            : remoteItems.length > 0
+              ? `일반 정보 Supabase 불러오기 완료 ${remoteItems.length}건`
+              : "일반 정보 Supabase 저장자료 없음";
+
+        if (generalInfoSupabaseStatusRef.current !== nextStatus) {
+          setGeneralInfoSupabaseStatus(nextStatus);
+        }
+        if (uploadedCount > 0) {
+          showPasteHint(`✅ 이 기기 전용 ${uploadedCount}건을 서버에 올렸습니다. 다른 기기에서 동기화하면 보입니다.`);
+        }
+      } while (generalInfoLoadAgainRef.current);
     } catch (error) {
       console.error("travel-diary general info load failed", error);
       if (generalInfoSupabaseStatusRef.current !== "일반 정보 Supabase 불러오기 실패 · 이 기기 자료 유지") {
         setGeneralInfoSupabaseStatus("일반 정보 Supabase 불러오기 실패 · 이 기기 자료 유지");
       }
+    } finally {
+      generalInfoLoadInFlightRef.current = false;
     }
   }, []);
 
@@ -330,11 +455,13 @@ export function useTravelDiaryGeneralInfoState({
       if (generalInfoSupabaseStatusRef.current !== "일반 정보 Supabase 삭제 완료") {
         setGeneralInfoSupabaseStatus("일반 정보 Supabase 삭제 완료");
       }
+      return true;
     } catch (error) {
       console.error("travel-diary general info delete failed", error);
-      if (generalInfoSupabaseStatusRef.current !== "이 기기에는 삭제됨 · Supabase 삭제 실패") {
-        setGeneralInfoSupabaseStatus("이 기기에는 삭제됨 · Supabase 삭제 실패");
+      if (generalInfoSupabaseStatusRef.current !== "일반 정보 Supabase 삭제 실패 · 목록을 되돌림") {
+        setGeneralInfoSupabaseStatus("일반 정보 Supabase 삭제 실패 · 목록을 되돌림");
       }
+      return false;
     }
   }, []);
 
@@ -344,15 +471,22 @@ export function useTravelDiaryGeneralInfoState({
   }, [generalInfoDraft]);
 
   const resetGeneralInfoRichTextEditor = useCallback((text = "", html = "") => {
+    const unwrapped = htmlForActiveEditor(html);
     const nextHtml =
-      html && html.trim()
-        ? sanitizeGeneralInfoHtml(html)
+      unwrapped && unwrapped.trim()
+        ? sanitizeGeneralInfoHtml(unwrapped)
         : makeGeneralInfoHtmlFromText(text);
     setGeneralInfoRichTextInitialHtml(nextHtml);
     setGeneralInfoRichTextEditorKey((prev) => prev + 1);
+    if (generalInfoRichTextRef.current) {
+      generalInfoRichTextRef.current.innerHTML = nextHtml;
+    }
   }, []);
 
   const handleResetGeneralInfoDraft = useCallback(() => {
+    const ok = window.confirm("현재 입력 중인 내용을 지울까요? 직전 입력으로 되돌릴 수 있습니다.");
+    if (!ok) return;
+
     backupCurrentGeneralInfoDraft();
     setGeneralInfoImageLoadFailed(false);
     setGeneralInfoEditingId(null);
@@ -362,7 +496,14 @@ export function useTravelDiaryGeneralInfoState({
       paragraphs: [createEmptyParagraph()],
     });
     resetGeneralInfoRichTextEditor("", "");
-    showPasteHint("🧹 일반 정보 현재 입력을 삭제했습니다. 필요하면 [직전 입력 되돌리기]로 복원할 수 있습니다.");
+    setGeneralInfoUrlMeta(null);
+    try {
+      localStorage.removeItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+      notifyGeneralInfoTempDraft();
+    } catch {
+      /* ignore */
+    }
+    showPasteHint("현재 입력을 삭제했습니다. [되돌리기]로 복원할 수 있습니다.");
   }, [backupCurrentGeneralInfoDraft, resetGeneralInfoRichTextEditor, showPasteHint]);
 
   const handleUndoGeneralInfoDraft = useCallback(() => {
@@ -382,6 +523,78 @@ export function useTravelDiaryGeneralInfoState({
   }, [generalInfoDraftBackup, resetGeneralInfoRichTextEditor, showPasteHint]);
 
   // --- URL 추출 및 편집기 도우미 ---
+  const lastInstagramPreviewUrlRef = useRef("");
+  const lastAppliedInstagramCaptionRef = useRef("");
+
+  const writeInstagramCaptionIntoBody = useCallback((
+    caption: string,
+    options?: { image?: string; url?: string },
+  ) => {
+    const cleaned =
+      isInstagramScrapeGarbage(caption) || isInstagramShareJunk(caption)
+        ? ""
+        : cleanInstagramCaption(caption);
+    const image = String(options?.image || "").trim();
+    const url = String(options?.url || "").trim();
+    const realImage =
+      /^(https?:\/\/|data:|blob:)/i.test(image) &&
+      !/static\.cdninstagram\.com\/rsrc|rsrc\.php/i.test(image);
+
+    if (!cleaned && !realImage) return false;
+
+    const liveHtml = String(generalInfoRichTextRef.current?.innerHTML || "").trim();
+    const liveText = String(generalInfoRichTextRef.current?.innerText || "")
+      .replace(/\u00a0/g, " ")
+      .trim();
+    const empty = generalInfoHtmlLooksEmpty(liveHtml) && !liveText;
+    const garbage =
+      isInstagramScrapeGarbage(`${liveText}\n${liveHtml}`) ||
+      isInstagramShareJunk(liveText);
+    if (!empty && !garbage) {
+      setGeneralInfoDraft((prev) => ({
+        ...prev,
+        sourceUrl: url || prev.sourceUrl,
+        title:
+          isInstagramScrapeGarbage(prev.title) || !prev.title
+            ? titleFromInstagramCaption(cleaned) || prev.title
+            : prev.title,
+      }));
+      return true;
+    }
+
+    const imageHtml = realImage
+      ? `<p><img src="${escapeGeneralInfoHtml(image)}" alt="${escapeGeneralInfoHtml(cleaned || "미리보기")}" /></p>`
+      : "";
+    const textHtml = cleaned ? makeGeneralInfoHtmlFromText(cleaned) : "";
+    const nextHtml = sanitizeGeneralInfoHtml(`${imageHtml}${textHtml}`);
+    const nextText = cleaned;
+    const titleGuess = titleFromInstagramCaption(cleaned);
+    const paragraph = normalizeParagraph({
+      html: nextHtml,
+      text: nextText,
+      createdAt: nowText(),
+    });
+
+    if (cleaned) lastAppliedInstagramCaptionRef.current = cleaned;
+
+    setGeneralInfoDraft((prev) => ({
+      ...prev,
+      text: nextText,
+      paragraphs: [paragraph],
+      sourceUrl: url || prev.sourceUrl,
+      formattedTextHtml: nextHtml,
+      title:
+        isInstagramScrapeGarbage(prev.title) || !prev.title || prev.title === "Instagram"
+          ? titleGuess
+          : prev.title,
+      fileName: realImage ? "본문 대표 이미지" : "",
+      filePreview: realImage ? image : "",
+      fileType: realImage ? "image" : "none",
+    }));
+    resetGeneralInfoRichTextEditor(nextText, nextHtml);
+    return true;
+  }, [resetGeneralInfoRichTextEditor]);
+
   const applyExtractedGeneralInfoUrlResult = useCallback((
     result: {
       url?: string;
@@ -394,41 +607,114 @@ export function useTravelDiaryGeneralInfoState({
     fallbackUrl: string,
   ) => {
     const title = String(result.title || "").trim();
-    const text = String(result.text || result.description || "").trim();
+    const description = String(result.description || "").trim();
+    const rawText = String(result.text || description || "").trim();
+    const garbageText =
+      /InstagramUserAgent|is_edge_chromium|is_edge_legacy|"is_chrome"\s*:|KHTML, like Gecko/i.test(
+        rawText,
+      );
+    const url = String(result.url || fallbackUrl || "").trim();
+    const instagram = isInstagramHostText(url) || isInstagramPostUrl(url);
+    const caption = instagram
+      ? cleanInstagramCaption(
+          garbageText
+            ? ""
+            : description || (!/^instagram$/i.test(title) ? title : "") || rawText,
+        )
+      : garbageText
+        ? ""
+        : rawText;
     const image = String(result.image || "").trim();
     const siteName = String(result.siteName || "").trim();
+    const realImage =
+      /^(https?:\/\/|data:|blob:)/i.test(image) &&
+      !/static\.cdninstagram\.com\/rsrc|rsrc\.php/i.test(image);
+
+    if (instagram && !realImage && !caption) {
+      setGeneralInfoDraft((prev) => ({ ...prev, sourceUrl: url || prev.sourceUrl }));
+      showPasteHint(
+        lastAppliedInstagramCaptionRef.current
+          ? "공개 메타데이터는 못 읽었습니다. 붙여넣은 캡션은 본문에 그대로 둡니다."
+          : "공개 메타데이터를 읽지 못했습니다. 게시물 캡션을 본문에 붙여넣으세요.",
+      );
+      return;
+    }
+
+    if (!instagram && !realImage && !caption && /^instagram$/i.test(title || siteName)) {
+      setGeneralInfoDraft((prev) => ({ ...prev, sourceUrl: url || prev.sourceUrl }));
+      showPasteHint(
+        "공개 메타데이터를 읽지 못했습니다. 게시물 사진·캡션을 본문에 직접 붙여넣으세요.",
+      );
+      return;
+    }
 
     if (image) {
       setGeneralInfoImageLoadFailed(false);
     }
 
-    const nextText = [generalInfoDraft.text, text].filter(Boolean).join(generalInfoDraft.text && text ? "\n\n" : "");
+    if (instagram) {
+      setGeneralInfoUrlMeta(null);
+      setGeneralInfoUrlNotice("");
+      writeInstagramCaptionIntoBody(caption, { image: realImage ? image : "", url });
+      showPasteHint(
+        realImage
+          ? "메타보기를 본문 단락에 넣었습니다."
+          : "캡션을 본문 단락에 넣었습니다.",
+      );
+      return;
+    }
+
+    setGeneralInfoUrlMeta({
+      url,
+      title: garbageText && !realImage ? "" : title,
+      description: caption,
+      image: realImage ? image : "",
+      siteName,
+      text: caption,
+    });
+
+    const liveHtml = String(
+      generalInfoRichTextRef.current?.innerHTML ||
+        generalInfoRichTextInitialHtml ||
+        "",
+    ).trim();
+    const imageHtml = realImage
+      ? `<p><img src="${escapeGeneralInfoHtml(image)}" alt="${escapeGeneralInfoHtml(title || "미리보기")}" /></p>`
+      : "";
+    const textHtml = makeGeneralInfoHtmlFromText(
+      [title === "Instagram" ? "" : title, caption, url].filter(Boolean).join("\n\n"),
+    );
+    const nextHtml = sanitizeGeneralInfoHtml(
+      [liveHtml, imageHtml, textHtml].filter(Boolean).join(""),
+    );
+    const nextText = String(
+      `${String(generalInfoRichTextRef.current?.innerText || generalInfoDraft.text || "").trim()}\n\n${[title, caption, url].filter(Boolean).join("\n\n")}`.trim(),
+    );
 
     setGeneralInfoDraft((prev) => ({
       ...prev,
-      title: prev.title || title || siteName || fallbackUrl,
-      text: nextText,
-      sourceUrl: String(result.url || fallbackUrl),
-      fileName: image ? title || siteName || "URL 대표 이미지" : prev.fileName,
-      filePreview: image || prev.filePreview,
-      fileType: image ? "image" : prev.fileType,
-      mediaItems: image
-        ? [
-            ...normalizeGeneralInfoMediaItems(prev),
-            makeGeneralInfoMediaItem(title || siteName || "URL 대표 이미지", "image", image),
-          ]
-        : normalizeGeneralInfoMediaItems(prev),
-      summary: text ? text.slice(0, 160) : prev.summary,
+      text: nextText || prev.text,
+      sourceUrl: url || prev.sourceUrl,
+      formattedTextHtml: nextHtml || prev.formattedTextHtml,
+      fileName: prev.fileName || (realImage ? "본문 대표 이미지" : ""),
+      filePreview: prev.filePreview || (realImage ? image : ""),
+      fileType: prev.filePreview || realImage ? "image" : prev.fileType,
     }));
 
-    resetGeneralInfoRichTextEditor(nextText, "");
+    resetGeneralInfoRichTextEditor(nextText, nextHtml);
 
     showPasteHint(
       image
-        ? "✅ URL 대표 이미지와 본문을 안전하게 가져왔습니다."
-        : "✅ URL 본문 텍스트를 가져왔습니다.",
+        ? "메타보기를 본문 단락에 넣었습니다."
+        : "메타 텍스트를 본문 단락에 넣었습니다.",
     );
-  }, [generalInfoDraft.text, resetGeneralInfoRichTextEditor, showPasteHint]);
+  }, [
+    generalInfoDraft.text,
+    generalInfoRichTextInitialHtml,
+    resetGeneralInfoRichTextEditor,
+    showPasteHint,
+    writeInstagramCaptionIntoBody,
+  ]);
 
   const extractGeneralInfoUrl = useCallback(async (targetUrl: string) => {
     const response = await fetch("/api/extract-url", {
@@ -484,6 +770,161 @@ export function useTravelDiaryGeneralInfoState({
     });
     return serializeParagraphsToHtml(paragraphs) || live || generalInfoRichTextInitialHtml;
   }, [generalInfoDraft, generalInfoRichTextInitialHtml, getDraftParagraphs]);
+
+  const persistGeneralInfoTempDraft = useCallback((silent = false) => {
+    const html = getCurrentGeneralInfoRichTextHtml();
+    const draftToSave = {
+      draft: generalInfoDraftRef.current,
+      keywordText: generalInfoKeywordTextRef.current,
+      richTextHtml: html,
+      editingId: generalInfoEditingIdRef.current,
+      savedAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem(GENERAL_INFO_TEMP_DRAFT_KEY, JSON.stringify(draftToSave));
+      notifyGeneralInfoTempDraft();
+      if (!silent) showPasteHint("현재 입력 중인 내용이 임시 저장되었습니다.");
+    } catch {
+      if (!silent) showPasteHint("임시 저장에 실패했습니다.");
+    }
+  }, [getCurrentGeneralInfoRichTextHtml, showPasteHint]);
+
+  const applyGeneralInfoTempDraft = useCallback((parsed: {
+    draft?: GeneralInfoDraft;
+    keywordText?: string;
+    richTextHtml?: string;
+    editingId?: number | null;
+  }) => {
+    if (!parsed?.draft) return;
+    const restoredBlob = [
+      parsed.draft.text,
+      parsed.draft.summary,
+      parsed.draft.title,
+      parsed.richTextHtml,
+    ].join("\n");
+    if (isInstagramScrapeGarbage(restoredBlob)) {
+      try {
+        localStorage.removeItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+      notifyGeneralInfoTempDraft();
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    setGeneralInfoDraft(parsed.draft);
+    if (parsed.keywordText !== undefined) setGeneralInfoKeywordText(parsed.keywordText);
+
+    const restoredEditingId =
+      typeof parsed.editingId === "number" ? parsed.editingId : null;
+    const localItems = readGeneralInfoItemsFromLocalStorage();
+    const editingStillExists =
+      restoredEditingId != null &&
+      localItems.some((item) => item.id === restoredEditingId);
+
+    if (editingStillExists) {
+      setGeneralInfoEditingId(restoredEditingId);
+    } else {
+      setGeneralInfoEditingId(null);
+    }
+
+    const restoredHtml = String(parsed.richTextHtml || parsed.draft.formattedTextHtml || "");
+    const restoredParagraphs = /data-gi-paragraph|gi-paragraph-date/i.test(restoredHtml)
+      ? parseParagraphsFromHtml(restoredHtml)
+      : parsed.draft.paragraphs;
+    if (Array.isArray(restoredParagraphs) && restoredParagraphs.length > 0) {
+      setGeneralInfoDraft({ ...parsed.draft, paragraphs: restoredParagraphs });
+    }
+    const active = (restoredParagraphs && restoredParagraphs[0]) || parsed.draft;
+    resetGeneralInfoRichTextEditor(
+      String(active?.text || parsed.draft.text || ""),
+      String(active && "html" in active ? active.html : "") || htmlForActiveEditor(restoredHtml),
+    );
+  }, [resetGeneralInfoRichTextEditor]);
+
+  const isGeneralInfoDraftDirty = useCallback(() => {
+    const draft = generalInfoDraftRef.current;
+    const html = getCurrentGeneralInfoRichTextHtml();
+    if (String(draft.title || "").trim()) return true;
+    if (String(draft.text || "").trim()) return true;
+    if (String(draft.sourceUrl || "").trim()) return true;
+    if (String(draft.summary || "").trim()) return true;
+    if (String(draft.filePreview || "").trim()) return true;
+    if ((draft.mediaItems || []).length > 0) return true;
+    if ((draft.keywords || []).length > 0) return true;
+    if (String(draft.primaryCategory || "").trim()) return true;
+    if (String(draft.secondaryCategory || "").trim()) return true;
+    if (!generalInfoHtmlLooksEmpty(html)) return true;
+    if (
+      Array.isArray(draft.paragraphs) &&
+      draft.paragraphs.some((paragraph) => {
+        if (String(paragraph.text || "").trim()) return true;
+        return !generalInfoHtmlLooksEmpty(String(paragraph.html || ""));
+      })
+    ) {
+      return true;
+    }
+    return generalInfoEditingIdRef.current != null;
+  }, [getCurrentGeneralInfoRichTextHtml]);
+
+  const confirmLeaveGeneralInfoCollect = useCallback(() => {
+    if (generalInfoActiveTabRef.current !== "collect") return true;
+    if (!isGeneralInfoDraftDirty()) return true;
+    persistGeneralInfoTempDraft(true);
+    return window.confirm("작성 중인 내용이 있습니다. 나가도 임시 저장은 유지됩니다. 나갈까요?");
+  }, [isGeneralInfoDraftDirty, persistGeneralInfoTempDraft]);
+
+  const resetGeneralInfoCollectToBlank = useCallback(() => {
+    setGeneralInfoImageLoadFailed(false);
+    setGeneralInfoEditingId(null);
+    setGeneralInfoKeywordText("");
+    setGeneralInfoDraft({
+      ...initialGeneralInfoDraft,
+      paragraphs: [createEmptyParagraph()],
+    });
+    resetGeneralInfoRichTextEditor("", "");
+    setGeneralInfoUrlMeta(null);
+    setGeneralInfoUrlNotice("");
+    lastInstagramPreviewUrlRef.current = "";
+    lastAppliedInstagramCaptionRef.current = "";
+    try {
+      localStorage.removeItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+      notifyGeneralInfoTempDraft();
+    } catch {
+      /* ignore */
+    }
+    setGeneralInfoActiveTab("collect");
+  }, [resetGeneralInfoRichTextEditor]);
+
+  const handleStartNewGeneralInfo = useCallback(() => {
+    const editing = generalInfoEditingIdRef.current != null;
+    const onCollect = generalInfoActiveTabRef.current === "collect";
+    const dirty = isGeneralInfoDraftDirty();
+
+    if (!editing) {
+      setGeneralInfoActiveTab("collect");
+      if (!dirty) {
+        showPasteHint("새 항목입니다. 본문 단락에 글이나 사진을 넣으세요.");
+      }
+      return;
+    }
+
+    if (onCollect && dirty) {
+      const ok = window.confirm("수정 중인 글을 닫고 새 항목을 입력할까요?");
+      if (!ok) return;
+      backupCurrentGeneralInfoDraft();
+    } else {
+      persistGeneralInfoTempDraft(true);
+    }
+
+    resetGeneralInfoCollectToBlank();
+    showPasteHint("새 항목입니다. 본문 단락에 글이나 사진을 넣으세요.");
+  }, [
+    backupCurrentGeneralInfoDraft,
+    isGeneralInfoDraftDirty,
+    persistGeneralInfoTempDraft,
+    resetGeneralInfoCollectToBlank,
+    showPasteHint,
+  ]);
 
   const syncGeneralInfoRichTextToDraft = useCallback(() => {
     const plainText = String(generalInfoRichTextRef.current?.innerText || "")
@@ -605,7 +1046,7 @@ export function useTravelDiaryGeneralInfoState({
   const handleGeneralInfoUploadRichImages = useCallback(async (
     files: File[],
   ): Promise<string[]> => {
-    const ready = filterUploadImageFiles(files).slice(0, 8);
+    const ready = filterUploadImageFiles(files);
     const urls: string[] = [];
     for (const file of ready) {
       try {
@@ -764,6 +1205,22 @@ export function useTravelDiaryGeneralInfoState({
     }
 
     const cleanedText = decodeGeneralInfoPastedText(pastedText);
+    const instagramShare = splitInstagramShareText(cleanedText);
+    if (instagramShare.url && !instagramShare.caption) {
+      setGeneralInfoDraft((prev) => ({ ...prev, sourceUrl: instagramShare.url }));
+      lastInstagramPreviewUrlRef.current = instagramShare.url;
+      void extractGeneralInfoUrl(instagramShare.url)
+        .then(() => showPasteHint("✅ Instagram 캡션을 본문에 넣었습니다."))
+        .catch((error) => {
+          console.error("travel-diary pasted url extract failed", error);
+          showPasteHint(
+            error instanceof Error
+              ? error.message
+              : "공개 메타데이터를 읽지 못했습니다. 캡션을 본문에 붙여넣으세요.",
+          );
+        });
+      return;
+    }
 
     // execCommand is deprecated; try it first and fall back to Selection API (needed for iOS Safari)
     const inserted = document.execCommand("insertText", false, cleanedText);
@@ -788,7 +1245,14 @@ export function useTravelDiaryGeneralInfoState({
     // Sync state after paste (onInput is not attached, so call explicitly)
     syncGeneralInfoRichTextToDraft();
     showPasteHint("✅ Text를 편집기에 붙여넣었습니다.");
-  }, [decodeGeneralInfoPastedText, syncGeneralInfoRichTextToDraft, showPasteHint, insertGeneralInfoRichImages, generalInfoRichTextRef]);
+  }, [
+    decodeGeneralInfoPastedText,
+    extractGeneralInfoUrl,
+    syncGeneralInfoRichTextToDraft,
+    showPasteHint,
+    insertGeneralInfoRichImages,
+    generalInfoRichTextRef,
+  ]);
 
   /**
    * insta-fact-library 의 handleInput(): 문장 끝 S/s/ㄴ 입력 시 이미지 칸(S1…) 생성.
@@ -827,30 +1291,116 @@ export function useTravelDiaryGeneralInfoState({
     void insertGeneralInfoRichImages(list);
   }, [insertGeneralInfoRichImages]);
 
-  const handleExtractGeneralInfoUrl = useCallback(async () => {
-    const targetUrl = generalInfoDraft.sourceUrl.trim();
+  const handleExtractGeneralInfoUrl = useCallback(async (rawUrl?: string, force = false) => {
+    const raw = String(rawUrl ?? generalInfoDraft.sourceUrl).trim();
+    const parsed = splitInstagramShareText(raw);
+    const looksInstagram = isInstagramHostText(raw) || Boolean(parsed.url);
 
-    if (!targetUrl) {
-      showPasteHint("⚠️ 출처 URL을 먼저 입력하세요.");
+    if (!raw) {
+      const emptyHint = "Instagram URL을 먼저 입력하세요.";
+      setGeneralInfoUrlNotice(emptyHint);
+      showPasteHint(emptyHint);
       return;
     }
 
+    if (looksInstagram) {
+      if (!parsed.url) {
+        const homeHint =
+          "지금 칸은 Instagram 홈(또는 프로필) 주소입니다. 원문 열기를 누르면 로그인 화면만 나옵니다. 게시물에서 「링크 복사」한 주소(예: https://www.instagram.com/p/XXXX/)를 붙여넣으세요.";
+        setGeneralInfoDraft((prev) => ({ ...prev, sourceUrl: raw }));
+        setGeneralInfoUrlMeta(null);
+        setGeneralInfoUrlNotice(homeHint);
+        showPasteHint(homeHint);
+        return;
+      }
+
+      const liveBlob = [
+        generalInfoDraft.text,
+        generalInfoDraft.summary,
+        generalInfoDraft.formattedTextHtml,
+        String(generalInfoRichTextRef.current?.innerHTML || ""),
+      ].join("\n");
+      const wipeLeftover =
+        isInstagramScrapeGarbage(liveBlob) ||
+        isInstagramShareJunk(String(generalInfoRichTextRef.current?.innerText || generalInfoDraft.text || "")) ||
+        (generalInfoHtmlLooksEmpty(String(generalInfoRichTextRef.current?.innerHTML || "")) &&
+          !String(generalInfoDraft.text || "").trim());
+      if (wipeLeftover) {
+        setGeneralInfoDraft((prev) => ({
+          ...prev,
+          sourceUrl: parsed.url,
+          text: "",
+          paragraphs: [createEmptyParagraph()],
+          formattedTextHtml: "",
+          title: isInstagramScrapeGarbage(prev.title) ? "" : prev.title,
+          summary: isInstagramScrapeGarbage(prev.summary) ? "" : prev.summary,
+          fileName: "",
+          filePreview: "",
+          fileType: "none",
+        }));
+        resetGeneralInfoRichTextEditor("", "");
+      } else {
+        setGeneralInfoDraft((prev) => ({ ...prev, sourceUrl: parsed.url }));
+      }
+      if (parsed.caption) {
+        writeInstagramCaptionIntoBody(parsed.caption, { url: parsed.url });
+      }
+
+      if (!force && lastInstagramPreviewUrlRef.current === parsed.url) {
+        return;
+      }
+
+      lastInstagramPreviewUrlRef.current = parsed.url;
+
+      try {
+        setIsExtractingGeneralInfoUrl(true);
+        setGeneralInfoUrlNotice("메타 보기 실행 중…");
+        showPasteHint("메타 보기 실행 중…");
+        await extractGeneralInfoUrl(parsed.url);
+        setGeneralInfoUrlNotice("");
+      } catch (error) {
+        console.error("travel-diary extract url error", error);
+        const failHint =
+          parsed.caption || lastAppliedInstagramCaptionRef.current
+            ? "공개 메타데이터는 못 읽었습니다. 붙여넣은 캡션은 본문에 그대로 둡니다."
+            : error instanceof Error
+              ? error.message
+              : "공개 메타데이터를 읽지 못했습니다. Instagram은 로그인 화면만 보여주는 경우가 많습니다. 캡션을 본문에 붙여넣으세요.";
+        setGeneralInfoUrlNotice(failHint);
+        showPasteHint(failHint);
+      } finally {
+        setIsExtractingGeneralInfoUrl(false);
+      }
+      return;
+    }
+
+    let targetUrl = raw;
     if (!/^https?:\/\//i.test(targetUrl)) {
-      showPasteHint("⚠️ http 또는 https로 시작하는 URL을 입력하세요.");
-      return;
+      targetUrl = `https://${targetUrl}`;
     }
+
+    setGeneralInfoDraft((prev) => ({ ...prev, sourceUrl: targetUrl }));
 
     try {
       setIsExtractingGeneralInfoUrl(true);
-      showPasteHint("🔎 URL 내용을 자동으로 가져오는 중입니다.");
+      showPasteHint("메타보기를 가져오는 중입니다.");
       await extractGeneralInfoUrl(targetUrl);
     } catch (error) {
       console.error("travel-diary extract url error", error);
-      showPasteHint("⚠️ URL 자동 가져오기 중 오류가 발생했습니다.");
+      showPasteHint(error instanceof Error ? error.message : "메타보기를 가져오지 못했습니다.");
     } finally {
       setIsExtractingGeneralInfoUrl(false);
     }
-  }, [generalInfoDraft.sourceUrl, extractGeneralInfoUrl, showPasteHint]);
+  }, [
+    generalInfoDraft.sourceUrl,
+    generalInfoDraft.text,
+    generalInfoDraft.summary,
+    generalInfoDraft.formattedTextHtml,
+    extractGeneralInfoUrl,
+    resetGeneralInfoRichTextEditor,
+    showPasteHint,
+    writeInstagramCaptionIntoBody,
+  ]);
 
   const applyGeneralInfoPastedText = useCallback(async (rawText: string, sourceLabel = "외부 앱") => {
     const text = rawText.trim();
@@ -861,10 +1411,39 @@ export function useTravelDiaryGeneralInfoState({
 
     backupCurrentGeneralInfoDraft();
 
+    const instagramShare = splitInstagramShareText(text);
     const urlMatch = text.match(/https?:\/\/\S+/i);
-    const firstUrl = urlMatch?.[0]?.replace(/[),.\]]+$/g, "") || "";
+    const firstUrl =
+      instagramShare.url || urlMatch?.[0]?.replace(/[),.\]]+$/g, "") || "";
 
     if (firstUrl) {
+      if (instagramShare.url) {
+        setGeneralInfoDraft((prev) => ({
+          ...prev,
+          sourceUrl: instagramShare.url,
+          title:
+            prev.title ||
+            titleFromInstagramCaption(instagramShare.caption) ||
+            prev.title,
+        }));
+        if (instagramShare.caption) {
+          writeInstagramCaptionIntoBody(instagramShare.caption, { url: instagramShare.url });
+        }
+        lastInstagramPreviewUrlRef.current = instagramShare.url;
+        try {
+          await extractGeneralInfoUrl(instagramShare.url);
+          showPasteHint("✅ Instagram 캡션을 본문에 넣었습니다.");
+        } catch (error) {
+          console.error("travel-diary pasted url extract failed", error);
+          showPasteHint(
+            instagramShare.caption
+              ? "공개 메타데이터는 못 읽었습니다. 붙여넣은 캡션은 본문에 그대로 둡니다."
+              : "⚠️ URL은 입력했지만 자동 가져오기는 실패했습니다.",
+          );
+        }
+        return;
+      }
+
       setGeneralInfoDraft((prev) => ({
         ...prev,
         sourceUrl: firstUrl,
@@ -892,13 +1471,19 @@ export function useTravelDiaryGeneralInfoState({
       ...prev,
       title: prev.title || firstLine.slice(0, 80) || "붙여넣은 Text 자료",
       text: nextText,
-      summary: prev.summary || text.slice(0, 160),
     }));
 
     resetGeneralInfoRichTextEditor(nextText, "");
 
     showPasteHint("✅ Text를 일반 정보 자료로 붙여넣었습니다.");
-  }, [generalInfoDraft.text, backupCurrentGeneralInfoDraft, extractGeneralInfoUrl, resetGeneralInfoRichTextEditor, showPasteHint]);
+  }, [
+    generalInfoDraft.text,
+    backupCurrentGeneralInfoDraft,
+    extractGeneralInfoUrl,
+    resetGeneralInfoRichTextEditor,
+    showPasteHint,
+    writeInstagramCaptionIntoBody,
+  ]);
 
   const handleGeneralInfoManualPaste = useCallback(async (
     event: React.ClipboardEvent<HTMLTextAreaElement>,
@@ -1008,7 +1593,6 @@ export function useTravelDiaryGeneralInfoState({
             ...prev,
             title: prev.title || firstLine.slice(0, 80) || "클립보드 Text 자료",
             text: nextText,
-            summary: prev.summary || text.slice(0, 160),
           }));
 
           resetGeneralInfoRichTextEditor(nextText, "");
@@ -1035,28 +1619,30 @@ export function useTravelDiaryGeneralInfoState({
       ...prev,
       fileName: "",
       filePreview: "",
-      fileType: "none",
+      fileType: prev.mediaItems?.length ? prev.fileType : "none",
+    }));
+    showPasteHint("정보 창고 대표 이미지를 해제했습니다.");
+  }, [showPasteHint]);
+
+  const handleClearGeneralInfoInfographics = useCallback(() => {
+    setGeneralInfoDraft((prev) => ({
+      ...prev,
       mediaItems: [],
     }));
-    showPasteHint("대표 이미지와 추가 이미지를 모두 삭제했습니다.");
+    showPasteHint("인포그래픽을 모두 삭제했습니다.");
   }, [showPasteHint]);
 
   const handleRemoveGeneralInfoMediaItem = useCallback((targetIndex: number) => {
     setGeneralInfoImageLoadFailed(false);
     setGeneralInfoDraft((prev) => {
-      const currentMediaItems = normalizeGeneralInfoMediaItems(prev);
+      const currentMediaItems = getGeneralInfoInfographicItems(prev);
       const nextMediaItems = currentMediaItems.filter((_, index) => index !== targetIndex);
-      const mainMedia = nextMediaItems[0];
-
       return {
         ...prev,
-        fileName: mainMedia?.name || "",
-        filePreview: mainMedia?.preview || "",
-        fileType: mainMedia?.type || "none",
         mediaItems: nextMediaItems,
       };
     });
-    showPasteHint("🗑️ 이미지/동영상 자료를 삭제했습니다.");
+    showPasteHint("인포그래픽을 삭제했습니다.");
   }, [showPasteHint]);
 
   const handleGeneralInfoIphonePasteZonePaste = useCallback((
@@ -1167,7 +1753,7 @@ export function useTravelDiaryGeneralInfoState({
       setGeneralInfoDraft((prev) => ({
         ...prev,
         title: result.title || prev.title,
-        summary: result.summary || prev.summary,
+        summary: prev.summary,
         primaryCategory: result.primaryCategory || prev.primaryCategory,
         secondaryCategory: result.secondaryCategory || prev.secondaryCategory,
         thirdCategory: result.thirdCategory || prev.thirdCategory,
@@ -1181,9 +1767,9 @@ export function useTravelDiaryGeneralInfoState({
       console.error("travel-diary general info Gemini analysis failed", error);
       const analyzed = mockAnalyzeGeneralInfo(generalInfoDraft);
       setGeneralInfoKeywordText(
-        analyzed.keywords.map((keyword) => `#${String(keyword).replace(/^#+/, "")}`).join(", "),
+        analyzed.keywords.map((keyword) => `#${String(keyword).replace(/^#+/, "")}`).join(", ")
       );
-      setGeneralInfoDraft(analyzed);
+      setGeneralInfoDraft({ ...analyzed, summary: generalInfoDraft.summary });
       showPasteHint("⚠️ Gemini 분석 실패 · 임시 Mock 자동분류로 처리했습니다.");
     } finally {
       setIsAnalyzingGeneralInfo(false);
@@ -1256,18 +1842,14 @@ export function useTravelDiaryGeneralInfoState({
   }, [dataUrlToGeneralInfoFile]);
 
   const handleSaveTemporaryGeneralInfoDraft = useCallback(() => {
-    const html = getCurrentGeneralInfoRichTextHtml();
-    const draftToSave = {
-      draft: generalInfoDraft,
-      keywordText: generalInfoKeywordText,
-      richTextHtml: html,
-      editingId: generalInfoEditingId
-    };
-    localStorage.setItem("travel_diary_general_info_temp_draft", JSON.stringify(draftToSave));
-    showPasteHint("💾 현재 입력 중인 내용이 임시 저장되었습니다.");
-  }, [generalInfoDraft, generalInfoKeywordText, getCurrentGeneralInfoRichTextHtml, generalInfoEditingId, showPasteHint]);
+    persistGeneralInfoTempDraft(false);
+  }, [persistGeneralInfoTempDraft]);
 
-  const handleConfirmGeneralInfo = useCallback(async () => {
+  const handleConfirmGeneralInfo = useCallback(async (overrides?: {
+    title?: string;
+    primaryCategory?: string;
+    secondaryCategory?: string;
+  }) => {
     const liveHtml = sanitizeGeneralInfoHtml(
       String(generalInfoRichTextRef.current?.innerHTML || "").trim(),
     );
@@ -1286,6 +1868,9 @@ export function useTravelDiaryGeneralInfoState({
     );
     const analyzed = {
       ...generalInfoDraft,
+      title: String(overrides?.title ?? generalInfoDraft.title),
+      primaryCategory: String(overrides?.primaryCategory ?? generalInfoDraft.primaryCategory),
+      secondaryCategory: String(overrides?.secondaryCategory ?? generalInfoDraft.secondaryCategory),
       paragraphs,
       text: paragraphsToPlainText(paragraphs),
       formattedTextHtml: serializeParagraphsToHtml(paragraphs),
@@ -1298,7 +1883,7 @@ export function useTravelDiaryGeneralInfoState({
 
     const inputTypes: GeneralInfoItem["inputTypes"] = [];
     const firstSentence = extractFirstSentence(analyzed.text);
-    const draftMediaItems: GeneralInfoMediaItem[] = normalizeGeneralInfoMediaItems(analyzed).map((media) => ({
+    const draftMediaItems: GeneralInfoMediaItem[] = getGeneralInfoInfographicItems(analyzed).map((media) => ({
       ...media,
       memo: media.memo?.trim() || firstSentence || media.memo,
     }));
@@ -1314,8 +1899,6 @@ export function useTravelDiaryGeneralInfoState({
       showPasteHint("일반 정보 이미지 업로드 완료");
     }
 
-    const uploadedMainMedia = uploadedDraftMediaItems[0];
-
     // 본문 인라인 이미지(data:) 업로드 및 공개 URL 치환
     const rawFormattedHtml = serializeParagraphsToHtml(paragraphs);
     const { html: uploadedFormattedHtml, replacements } =
@@ -1330,12 +1913,22 @@ export function useTravelDiaryGeneralInfoState({
       return normalizeParagraph({ ...source, ...p, html });
     });
 
-    const bodySrcs = extractMediaSrcFromHtml(uploadedFormattedHtml);
     let coverPreview = String(analyzed.filePreview || "").trim();
     for (const { from, to } of replacements) {
       if (coverPreview === from) coverPreview = to;
     }
-    if (!coverPreview && bodySrcs[0]) coverPreview = bodySrcs[0];
+    coverPreview = pickGeneralInfoCoverSrc({
+      filePreview: coverPreview,
+      htmlParts: [uploadedFormattedHtml, ...uploadedParagraphs.map((paragraph) => paragraph.html)],
+    });
+
+    uploadedDraftMediaItems = getGeneralInfoInfographicItems({
+      mediaItems: uploadedDraftMediaItems,
+      formattedTextHtml: uploadedFormattedHtml,
+      paragraphs: uploadedParagraphs,
+      filePreview: coverPreview,
+    });
+    const uploadedMainMedia = uploadedDraftMediaItems[0];
 
     if (analyzed.text.trim()) inputTypes.push("text");
     if (coverPreview || analyzed.fileType === "image" || hasDraftImage) inputTypes.push("image");
@@ -1406,11 +1999,12 @@ export function useTravelDiaryGeneralInfoState({
           paragraphs: [createEmptyParagraph()],
         });
         resetGeneralInfoRichTextEditor("", "");
-        localStorage.removeItem("travel_diary_general_info_temp_draft");
-        setGeneralInfoExportItem(item);
+        setGeneralInfoUrlMeta(null);
+        localStorage.removeItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+      notifyGeneralInfoTempDraft();
         setGeneralInfoActiveTab("storage");
-        showPasteHint("저장 완료 · 이전 수정 대상을 찾지 못해 새 항목으로 저장했습니다.");
-        return;
+        showPasteHint("저장 완료");
+        return item;
       }
 
       const updatedItem: GeneralInfoItem = {
@@ -1452,11 +2046,12 @@ export function useTravelDiaryGeneralInfoState({
         paragraphs: [createEmptyParagraph()],
       });
       resetGeneralInfoRichTextEditor("", "");
-      localStorage.removeItem("travel_diary_general_info_temp_draft");
-      setGeneralInfoExportItem(updatedItem);
+      setGeneralInfoUrlMeta(null);
+      localStorage.removeItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+      notifyGeneralInfoTempDraft();
       setGeneralInfoActiveTab("storage");
-      showPasteHint("수정 저장 완료 · PDF/공유/앱파일 저장을 선택할 수 있습니다.");
-      return;
+      showPasteHint("수정 저장 완료");
+      return updatedItem;
     }
 
     locallyDeletedGeneralInfoIdsRef.current.delete(item.id);
@@ -1477,10 +2072,12 @@ export function useTravelDiaryGeneralInfoState({
       paragraphs: [createEmptyParagraph()],
     });
     resetGeneralInfoRichTextEditor("", "");
-    localStorage.removeItem("travel_diary_general_info_temp_draft");
-    setGeneralInfoExportItem(item);
+    setGeneralInfoUrlMeta(null);
+    localStorage.removeItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+    notifyGeneralInfoTempDraft();
     setGeneralInfoActiveTab("storage");
-    showPasteHint("저장 완료 · PDF/공유/앱파일 저장을 선택할 수 있습니다.");
+    showPasteHint("저장 완료");
+    return item;
   }, [
     generalInfoDraft,
     generalInfoEditingId,
@@ -1514,9 +2111,10 @@ export function useTravelDiaryGeneralInfoState({
     resetGeneralInfoRichTextEditor(active.text || "", active.html || "");
 
     const bodyCover =
-      String(item.filePreview || "").trim() ||
-      extractMediaSrcFromHtml(serializeParagraphsToHtml(paragraphs) || bodyHtml)[0] ||
-      "";
+      pickGeneralInfoCoverSrc({
+        filePreview: item.filePreview,
+        htmlParts: [serializeParagraphsToHtml(paragraphs) || bodyHtml, ...paragraphs.map((p) => p.html)],
+      }) || "";
 
     setGeneralInfoDraft({
       title: item.title || "",
@@ -1524,7 +2122,7 @@ export function useTravelDiaryGeneralInfoState({
       sourceUrl: item.sourceUrl || "",
       fileName: item.fileName || (bodyCover ? "본문 대표 이미지" : ""),
       filePreview: bodyCover,
-      mediaItems: normalizeGeneralInfoMediaItems(item),
+      mediaItems: getGeneralInfoInfographicItems(item),
       fileType: item.inputTypes.includes("video")
         ? "video"
         : item.inputTypes.includes("image") || bodyCover
@@ -1543,22 +2141,17 @@ export function useTravelDiaryGeneralInfoState({
 
     showPasteHint("저장된 일반 정보를 수정 모드로 불러왔습니다.");
 
-    // Scroll to the edit form and focus the title input for direct editing
     setTimeout(() => {
-      const editForm = document.querySelector(".generalInfoLayoutGrid .leftColumn");
+      const editForm = document.querySelector(".generalInfoLeftColumn");
       if (editForm) {
         editForm.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-      const titleInput = document.querySelector(
-        '.generalInfoLeftColumn input[placeholder*="제목"]',
-      );
-      if (titleInput instanceof HTMLInputElement) {
-        titleInput.focus();
-      }
+      generalInfoRichTextRef.current?.focus();
     }, 120);
   }, [resetGeneralInfoRichTextEditor, showPasteHint]);
 
   const handleCancelEditGeneralInfo = useCallback(() => {
+    const cancelledId = generalInfoEditingIdRef.current;
     setGeneralInfoImageLoadFailed(false);
     setGeneralInfoEditingId(null);
     setGeneralInfoKeywordText("");
@@ -1567,35 +2160,154 @@ export function useTravelDiaryGeneralInfoState({
       paragraphs: [createEmptyParagraph()],
     });
     resetGeneralInfoRichTextEditor("", "");
+    setGeneralInfoUrlMeta(null);
+
+    try {
+      const saved = localStorage.getItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const tempEditingId =
+          typeof parsed?.editingId === "number" ? parsed.editingId : null;
+        if (parsed?.draft && (tempEditingId == null || tempEditingId !== cancelledId)) {
+          applyGeneralInfoTempDraft(parsed);
+          showPasteHint("수정을 취소하고 이전 임시 저장을 불러왔습니다.");
+          return;
+        }
+        if (tempEditingId === cancelledId) {
+          localStorage.removeItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+      notifyGeneralInfoTempDraft();
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
     showPasteHint("수정 모드를 취소했습니다.");
-  }, [resetGeneralInfoRichTextEditor, showPasteHint]);
+  }, [applyGeneralInfoTempDraft, resetGeneralInfoRichTextEditor, showPasteHint]);
 
   const handleImportGeneralInfoAppFile = useCallback(async (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file) return;
+    const list = Array.from(files || []);
+    if (!list.length) return "앱파일을 선택하세요.";
     try {
-      const imported = await parseGeneralInfoAppFile(file);
-      const nextItem: GeneralInfoItem = {
-        ...imported,
-        id: Date.now(),
-        createdAt: imported.createdAt || nowText(),
-        confirmed: true,
-      };
-
-      setGeneralInfoItems((prev) => {
-        const nextItems = [nextItem, ...prev.filter((item) => item.id !== nextItem.id)];
-        persistGeneralInfoItemsToLocalStorage(nextItems);
-        return nextItems;
+      const importedGroups = await Promise.all(list.map((file) => readGeneralInfoAppFileItems(file)));
+      const imported = importedGroups.flat();
+      if (!imported.length) return "앱파일에서 일반정보수집 항목을 찾지 못했습니다.";
+      const baseId = Date.now();
+      const nextItems: GeneralInfoItem[] = imported.map((item, index) => {
+        forgetAppFileIndexArchive(item.id);
+        forgetAppFileIndexArchiveMatch(item.title, item.createdAt || "");
+        return {
+          ...item,
+          id: baseId + index,
+          createdAt: item.createdAt || nowText(),
+          confirmed: true,
+          appFileSaved: true,
+        };
       });
-      void syncGeneralInfoItemToSupabase(nextItem, "POST");
+      setGeneralInfoItems((prev) => {
+        const merged = [...nextItems, ...prev];
+        persistGeneralInfoItemsToLocalStorage(merged);
+        return merged;
+      });
+      nextItems.forEach((item) => {
+        void syncGeneralInfoItemToSupabase(item, "POST");
+      });
       setGeneralInfoActiveTab("storage");
-      setGeneralInfoDetailId(nextItem.id);
-      showPasteHint("앱파일을 불러와 정보 창고에 추가했습니다.");
+      setGeneralInfoDetailId(nextItems[0]?.id ?? null);
+      const message = `앱파일 ${nextItems.length}건을 불러와 정보 인덱스에 넣었습니다.`;
+      showPasteHint(message);
+      return message;
     } catch (error) {
       console.error(error);
-      showPasteHint(error instanceof Error ? error.message : "앱파일 불러오기에 실패했습니다.");
+      const message = error instanceof Error ? error.message : "앱파일 불러오기에 실패했습니다.";
+      showPasteHint(message);
+      return message;
     }
   }, [showPasteHint, syncGeneralInfoItemToSupabase]);
+
+  const handleExportGeneralInfoAppBundle = useCallback(() => {
+    const items = generalInfoItems;
+    if (!items.length) {
+      const message = "앱파일로 만들 일반정보수집 항목이 없습니다.";
+      showPasteHint(message);
+      return message;
+    }
+    const filename = downloadGeneralInfoAppBundle(items);
+    const ids = new Set(items.map((item) => item.id));
+    setGeneralInfoItems((prev) => {
+      let changed = false;
+      const nextItems = prev.map((item) => {
+        if (!ids.has(item.id) || item.appFileSaved) return item;
+        changed = true;
+        return { ...item, appFileSaved: true };
+      });
+      if (changed) persistGeneralInfoItemsToLocalStorage(nextItems);
+      return changed ? nextItems : prev;
+    });
+    const message = `일반정보수집 ${items.length}건 앱파일을 저장했습니다. · ${filename}`;
+    showPasteHint(message);
+    return message;
+  }, [generalInfoItems, showPasteHint]);
+
+  const handleExportSelectedGeneralInfoAppFiles = useCallback(
+    async (input: { savedIds: number[]; commitTempDraft: boolean }) => {
+      let committed: GeneralInfoItem | undefined;
+      if (input.commitTempDraft) {
+        const saved = await handleConfirmGeneralInfo();
+        if (saved) committed = saved;
+      }
+      const byId = new Map<number, GeneralInfoItem>();
+      for (const item of generalInfoItems) {
+        if (input.savedIds.includes(item.id)) byId.set(item.id, item);
+      }
+      if (committed) byId.set(committed.id, committed);
+      else if (input.commitTempDraft) {
+        const temp = readGeneralInfoTempDraftIndex();
+        if (temp?.editingId != null) byId.delete(temp.editingId);
+      }
+      const list = [...byId.values()];
+      if (!list.length) {
+        const message = input.commitTempDraft
+          ? "임시 저장을 저장하지 못해 앱파일을 만들지 못했습니다."
+          : "앱파일로 만들 제목을 선택하세요.";
+        showPasteHint(message);
+        return message;
+      }
+      const filename = downloadGeneralInfoAppBundle(list);
+      const ids = new Set(list.map((item) => item.id));
+      setGeneralInfoItems((prev) => {
+        let changed = false;
+        const nextItems = prev.map((item) => {
+          if (!ids.has(item.id) || item.appFileSaved) return item;
+          changed = true;
+          return { ...item, appFileSaved: true };
+        });
+        if (changed) persistGeneralInfoItemsToLocalStorage(nextItems);
+        return changed ? nextItems : prev;
+      });
+      const message = `선택한 ${list.length}건 앱파일을 저장했습니다. · ${filename}`;
+      showPasteHint(message);
+      return message;
+    },
+    [generalInfoItems, handleConfirmGeneralInfo, showPasteHint],
+  );
+
+  const handleOpenGeneralInfoTempDraft = useCallback(() => {
+    try {
+      const saved = localStorage.getItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+      if (!saved) {
+        showPasteHint("임시 저장된 내용이 없습니다.");
+        return;
+      }
+      const parsed = JSON.parse(saved);
+      applyGeneralInfoTempDraft(parsed);
+      setGeneralInfoDetailId(null);
+      setGeneralInfoActiveTab("collect");
+      showPasteHint("임시 저장된 내용을 불러왔습니다.");
+    } catch {
+      showPasteHint("임시 저장을 열지 못했습니다.");
+    }
+  }, [applyGeneralInfoTempDraft, showPasteHint]);
 
   const markGeneralInfoPdfSaved = useCallback((itemId: number) => {
     setGeneralInfoItems((prev) => {
@@ -1657,7 +2369,7 @@ export function useTravelDiaryGeneralInfoState({
 
   const handleDownloadGeneralInfoAppFile = useCallback((item: GeneralInfoItem) => {
     try {
-      const filename = downloadGeneralInfoAppFile(item);
+      const filename = downloadGeneralInfoAppFile({ ...item, appFileSaved: true });
       markGeneralInfoAppFileSaved(item.id);
       showPasteHint(`앱파일 저장 완료 · ${filename}`);
     } catch (error) {
@@ -1679,10 +2391,33 @@ export function useTravelDiaryGeneralInfoState({
     }
   }, [generalInfoItems, syncGeneralInfoItemToSupabase]);
 
-  const handleDeleteGeneralInfo = useCallback((itemId: number) => {
+  const handleDeleteGeneralInfo = useCallback(async (itemId: number) => {
     const targetItem = generalInfoItems.find((item) => item.id === itemId);
-    const ok = window.confirm("이 일반 정보 자료를 정말 삭제할까요?");
+    const ok = window.confirm(
+      targetItem?.appFileSaved
+        ? "이 일반 정보 자료를 삭제할까요? 앱파일로 저장한 항목은 정보 인덱스에 빨간 ★로 남습니다."
+        : "이 일반 정보 자료를 정말 삭제할까요?",
+    );
     if (!ok) return;
+
+    if (targetItem?.appFileSaved) {
+      const cover = pickGeneralInfoCoverSrc({
+        filePreview: targetItem.filePreview,
+        htmlParts: [
+          targetItem.formattedTextHtml,
+          ...(Array.isArray(targetItem.paragraphs) ? targetItem.paragraphs.map((paragraph) => paragraph.html) : []),
+        ],
+      });
+      archiveRemovedAppFileIndex({
+        id: targetItem.id,
+        title: targetItem.title || "제목 없음",
+        createdAt: targetItem.createdAt,
+        primaryCategory: targetItem.primaryCategory || "",
+        secondaryCategory: targetItem.secondaryCategory || "",
+        keywords: targetItem.keywords || [],
+        thumbUrl: /^https?:\/\//i.test(cover) ? cover : undefined,
+      });
+    }
 
     locallyDeletedGeneralInfoIdsRef.current.add(itemId);
 
@@ -1700,11 +2435,53 @@ export function useTravelDiaryGeneralInfoState({
       resetGeneralInfoRichTextEditor("", "");
     }
 
-    if (targetItem) {
-      void deleteGeneralInfoItemFromSupabase(itemId);
+    if (!targetItem) return;
+
+    const deleted = await deleteGeneralInfoItemFromSupabase(itemId);
+    if (!deleted) {
+      if (targetItem.appFileSaved) forgetAppFileIndexArchive(itemId);
+      locallyDeletedGeneralInfoIdsRef.current.delete(itemId);
+      setGeneralInfoItems((prev) => {
+        const nextItems = [targetItem, ...prev.filter((item) => item.id !== targetItem.id)];
+        persistGeneralInfoItemsToLocalStorage(nextItems);
+        return nextItems;
+      });
+      showPasteHint("삭제에 실패해 목록을 되돌렸습니다.");
+      return;
     }
-    showPasteHint("🗑️ 일반 정보를 삭제했습니다.");
+
+    removeGeneralInfoRemoteIds([itemId]);
+
+    setGeneralInfoDeleteUndo(targetItem);
+    if (deleteUndoTimerRef.current) {
+      window.clearTimeout(deleteUndoTimerRef.current);
+    }
+    deleteUndoTimerRef.current = window.setTimeout(() => {
+      setGeneralInfoDeleteUndo((current) => (current?.id === targetItem.id ? null : current));
+      deleteUndoTimerRef.current = null;
+    }, 12000);
+    showPasteHint("삭제했습니다. 잠시 동안 [되돌리기]로 복원할 수 있습니다.");
   }, [generalInfoItems, generalInfoEditingId, deleteGeneralInfoItemFromSupabase, resetGeneralInfoRichTextEditor, showPasteHint]);
+
+  const handleUndoDeleteGeneralInfo = useCallback(async () => {
+    const item = generalInfoDeleteUndo;
+    if (!item) return;
+
+    forgetAppFileIndexArchive(item.id);
+    locallyDeletedGeneralInfoIdsRef.current.delete(item.id);
+    setGeneralInfoItems((prev) => {
+      const nextItems = [item, ...prev.filter((prevItem) => prevItem.id !== item.id)];
+      persistGeneralInfoItemsToLocalStorage(nextItems);
+      return nextItems;
+    });
+    setGeneralInfoDeleteUndo(null);
+    if (deleteUndoTimerRef.current) {
+      window.clearTimeout(deleteUndoTimerRef.current);
+      deleteUndoTimerRef.current = null;
+    }
+    await syncGeneralInfoItemToSupabase(item, "POST");
+    showPasteHint("삭제를 되돌렸습니다.");
+  }, [generalInfoDeleteUndo, syncGeneralInfoItemToSupabase, showPasteHint]);
 
   // --- AI 보고서 및 Fact Check 작성 핸들러 ---
   const buildGeneralInfoFactCheckPayload = useCallback((item: GeneralInfoItem) => {
@@ -2106,52 +2883,71 @@ export function useTravelDiaryGeneralInfoState({
     persistGeneralInfoItemsToLocalStorage(generalInfoItems);
   }, [generalInfoItems]);
 
-  // Load temporary draft from localStorage on mount
+  useEffect(() => {
+    const draft = generalInfoDraftRef.current;
+    if (
+      !isInstagramScrapeGarbage(
+        [draft.text, draft.summary, draft.title, draft.formattedTextHtml].join("\n"),
+      )
+    ) {
+      return;
+    }
+    resetGeneralInfoCollectToBlank();
+  }, [resetGeneralInfoCollectToBlank]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (generalInfoActiveTab !== "collect") return;
+    if (tempRestorePromptedRef.current) return;
+    if (isGeneralInfoDraftDirty()) return;
 
-    const saved = localStorage.getItem("travel_diary_general_info_temp_draft");
+    const saved = localStorage.getItem(GENERAL_INFO_TEMP_DRAFT_KEY);
     if (!saved) return;
 
     try {
       const parsed = JSON.parse(saved);
-      if (!parsed || !parsed.draft) return;
-
-      setGeneralInfoDraft(parsed.draft);
-      if (parsed.keywordText !== undefined) setGeneralInfoKeywordText(parsed.keywordText);
-
-      const restoredEditingId =
-        typeof parsed.editingId === "number" ? parsed.editingId : null;
-      const localItems = readGeneralInfoItemsFromLocalStorage();
-      const editingStillExists =
-        restoredEditingId != null &&
-        localItems.some((item) => item.id === restoredEditingId);
-
-      if (editingStillExists) {
-        setGeneralInfoEditingId(restoredEditingId);
-      } else {
-        setGeneralInfoEditingId(null);
-        if (restoredEditingId != null) {
-          // stale 수정 모드가 남아 저장이 무시되지 않도록 임시저장도 정리
-          try {
-            localStorage.setItem(
-              "travel_diary_general_info_temp_draft",
-              JSON.stringify({ ...parsed, editingId: null }),
-            );
-          } catch {
-            /* ignore */
-          }
-        }
+      if (!parsed?.draft) return;
+      tempRestorePromptedRef.current = true;
+      if (window.confirm("임시 저장된 내용이 있습니다. 이어서 쓸까요?")) {
+        applyGeneralInfoTempDraft(parsed);
+        showPasteHint("임시 저장된 내용을 불러왔습니다.");
       }
-
-      if (parsed.richTextHtml !== undefined) {
-        resetGeneralInfoRichTextEditor(parsed.draft.text || "", parsed.richTextHtml);
-      }
-      showPasteHint("📂 이전에 임시 저장된 내용을 불러왔습니다.");
-    } catch (e) {
-      console.error("Failed to parse temp draft", e);
+    } catch (error) {
+      console.error("Failed to parse temp draft", error);
     }
-  }, [resetGeneralInfoRichTextEditor, showPasteHint]);
+  }, [
+    applyGeneralInfoTempDraft,
+    generalInfoActiveTab,
+    isGeneralInfoDraftDirty,
+    showPasteHint,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (generalInfoActiveTab !== "collect") return;
+
+    const intervalId = window.setInterval(() => {
+      if (!isGeneralInfoDraftDirty()) return;
+      persistGeneralInfoTempDraft(true);
+    }, 15000);
+
+    return () => window.clearInterval(intervalId);
+  }, [generalInfoActiveTab, isGeneralInfoDraftDirty, persistGeneralInfoTempDraft]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (generalInfoActiveTabRef.current !== "collect") return;
+      if (!isGeneralInfoDraftDirty()) return;
+      persistGeneralInfoTempDraft(true);
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isGeneralInfoDraftDirty, persistGeneralInfoTempDraft]);
 
   // Tab visibility change and periodic (30s) polling sync from Supabase
   useEffect(() => {
@@ -2203,7 +2999,6 @@ export function useTravelDiaryGeneralInfoState({
     generalInfoItemsLocalStorageReadyRef,
     generalInfoSearchTerm,
     setGeneralInfoSearchTerm,
-    isExtractingGeneralInfoUrl,
     setIsExtractingGeneralInfoUrl,
     generalInfoDetailId,
     setGeneralInfoDetailId,
@@ -2239,7 +3034,14 @@ export function useTravelDiaryGeneralInfoState({
     handleCancelEditGeneralInfo,
     handleUpdateGeneralInfoExtraNote,
     handleDeleteGeneralInfo,
+    handleUndoDeleteGeneralInfo,
+    generalInfoDeleteUndo,
+    confirmLeaveGeneralInfoCollect,
+    handleStartNewGeneralInfo,
     handleImportGeneralInfoAppFile,
+    handleExportGeneralInfoAppBundle,
+    handleExportSelectedGeneralInfoAppFiles,
+    handleOpenGeneralInfoTempDraft,
     handleDownloadGeneralInfoPdf,
     handleShareGeneralInfoPdf,
     handleDownloadGeneralInfoAppFile,
@@ -2251,9 +3053,13 @@ export function useTravelDiaryGeneralInfoState({
     handleSaveTemporaryGeneralInfoDraft,
     handleCollectGeneralInfoFromClipboard,
     handleExtractGeneralInfoUrl,
+    isExtractingGeneralInfoUrl,
+    generalInfoUrlMeta,
+    generalInfoUrlNotice,
     handleGeneralInfoFileUpload,
     handleGeneralInfoIphonePasteZonePaste,
     handleClearGeneralInfoCoverImage,
+    handleClearGeneralInfoInfographics,
     handleRemoveGeneralInfoMediaItem,
     handleAnalyzeGeneralInfoDraft,
     handleConfirmGeneralInfo,

@@ -7064,15 +7064,17 @@ body {
 
 .generalInfoDetailCoverWrap {
   position: relative;
-  display: inline-block;
+  display: block;
+  width: 100%;
   max-width: 100%;
   margin-top: 4px;
 }
 
 .generalInfoDetailCoverWrap img {
   display: block;
+  width: 100%;
   max-width: 100%;
-  max-height: 280px;
+  max-height: 420px;
   border-radius: 12px;
   object-fit: contain;
   background: rgba(2, 6, 23, 0.55);
@@ -7706,6 +7708,18 @@ body {
 .generalInfoEditableTextarea:focus {
   outline: 2px solid rgba(56, 189, 248, 0.35);
   border-color: rgba(56, 189, 248, 0.55);
+}
+
+.collectSummaryBox {
+  margin: 0 0 14px;
+}
+.collectSummaryEditor {
+  height: 120px !important;
+  min-height: 120px !important;
+  max-height: 120px !important;
+  resize: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 }
 
 .generalInfoFactEditGrid {
@@ -8392,8 +8406,25 @@ body {
 
 .pbIndexCardBtnEdit:hover,
 .pbIndexCardBtnDetail:hover,
-.pbIndexCardBtnPin:hover {
+.pbIndexCardBtnPin:hover,
+.pbIndexCardBtnDelete:hover {
   opacity: 0.82;
+}
+
+.pbIndexCardBtnDelete {
+  width: 100%;
+  padding: 5px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 5px;
+  cursor: pointer;
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+  text-align: center;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
 
 /* ── 상단 고정 버튼 ── */
@@ -9441,9 +9472,12 @@ body {
 
 .generalInfoRichTextEditor {
   width: 100% !important;
+  max-width: 100% !important;
   min-height: 220px !important;
   max-height: 520px !important;
+  overflow-x: hidden !important;
   overflow-y: auto !important;
+  overflow-wrap: anywhere !important;
   box-sizing: border-box !important;
   border-radius: 14px !important;
   border: 1px solid #1e293b !important;
@@ -9584,11 +9618,22 @@ body {
   white-space: pre-wrap !important;
   word-break: break-word !important;
 }
+.generalInfoFormattedTextView .rich-inline-img-wrap,
+.generalInfoFormattedTextView .generalInfoInlineImageBlock,
+.generalInfoFormattedTextView figure {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  float: none !important;
+}
 .generalInfoFormattedTextView img,
 .generalInfoFormattedTextView .rich-inline-img,
 .generalInfoFormattedTextView .generalInfoInlineImage {
+  display: block !important;
+  width: 100% !important;
   max-width: 100% !important;
   height: auto !important;
+  float: none !important;
   border-radius: 10px !important;
 }
 .gi-body-paragraph {
@@ -10690,7 +10735,8 @@ body {
   }
   .pbIndexCardBtnPin,
   .pbIndexCardBtnEdit,
-  .pbIndexCardBtnDetail {
+  .pbIndexCardBtnDetail,
+  .pbIndexCardBtnDelete {
     width: 100% !important;
     white-space: nowrap !important;
     font-size: 10px !important;
@@ -10820,6 +10866,46 @@ body {
 .pbPersonAlbumSpotlight {
   max-width: 360px;
   margin: 0 auto 12px;
+}
+.pbPersonAlbumFullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 14000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+.pbPersonAlbumFullscreen img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.pbPersonAlbumFullscreenBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+.pbPersonAlbumFullscreenBar button {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 14px;
+  cursor: pointer;
 }
 .pbPersonAlbumGrid {
   display: grid;
@@ -11327,11 +11413,54 @@ body {
 
 /* builder ���� ����: ���� ������ (���ڡ����� ������) */
 
-/* builder paper editor: light surface for text/highlight colors */
+/* builder paper editor: contained card like the pre-change body */
 .generalInfoRichTextEditor.collectPaperEditor {
   border: 1px solid #e2e8f0 !important;
   background: #ffffff !important;
   color: #1a2430 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 220px !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-wrap,
+.generalInfoRichTextEditor.collectPaperEditor .generalInfoInlineImageBlock,
+.generalInfoRichTextEditor.collectPaperEditor figure {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  float: none !important;
+}
+.generalInfoRichTextEditor.collectPaperEditor table,
+.generalInfoRichTextEditor.collectPaperEditor tbody,
+.generalInfoRichTextEditor.collectPaperEditor thead,
+.generalInfoRichTextEditor.collectPaperEditor tr,
+.generalInfoRichTextEditor.collectPaperEditor td,
+.generalInfoRichTextEditor.collectPaperEditor th {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.generalInfoRichTextEditor.collectPaperEditor img,
+.generalInfoRichTextEditor.collectPaperEditor video,
+.generalInfoRichTextEditor.collectPaperEditor iframe,
+.generalInfoRichTextEditor.collectPaperEditor pre,
+.generalInfoRichTextEditor.collectPaperEditor section,
+.generalInfoRichTextEditor.collectPaperEditor p,
+.generalInfoRichTextEditor.collectPaperEditor div,
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img {
+  display: block !important;
+  float: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  box-sizing: border-box !important;
 }
 .generalInfoRichTextEditor.collectPaperEditor:focus {
   border-color: #38bdf8 !important;
@@ -11357,6 +11486,711 @@ body {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.infoIndexToolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.infoIndexSearchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.infoIndexSearchInput {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(122, 184, 255, 0.35);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0;
+  font-size: 16px;
+}
+.infoIndexSearchInput::placeholder {
+  color: #94a3b8;
+}
+.collectImageSourceHint {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.collectImageSourceRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+.collectImageSourceBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  overflow: hidden;
+}
+.collectImageSourceBtn input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px;
+}
+.collectSlotImagePanel {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  z-index: 14000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: #0f172a;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+.collectSlotImagePanelHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.collectSlotImagePanelHead strong {
+  color: #7dd3fc;
+  font-size: 14px;
+}
+.collectSlotImagePanelHead span {
+  flex: 1;
+  min-width: 160px;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.infoIndexCategoryChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.infoIndexChip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(122, 184, 255, 0.35);
+  background: rgba(122, 184, 255, 0.1);
+  color: #dbeafe;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.infoIndexChip.active {
+  background: #facc15;
+  color: #1a1400;
+  border-color: #ca8a04;
+}
+.infoIndexGroupButton {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  text-align: left;
+}
+.infoIndexGroupButton.active {
+  color: #facc15;
+  text-decoration: underline;
+}
+.infoIndexAppLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+.infoIndexAppLinks a {
+  color: #7ab8ff;
+  text-decoration: none;
+}
+.infoIndexIflBox {
+  margin: 0 0 14px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+}
+.infoIndexIflActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.infoIndexTableWrap {
+  width: 100%;
+  overflow-x: auto;
+}
+.infoIndexTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.infoIndexTable th,
+.infoIndexTable td {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 8px 8px;
+  text-align: left;
+  vertical-align: middle;
+  color: #e2e8f0;
+}
+.infoIndexGroupCell {
+  white-space: nowrap;
+  width: 72px;
+  font-weight: 800;
+  color: #93c5fd;
+}
+.infoIndexTitleButton {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: none;
+}
+.infoIndexTitleLine {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+.infoIndexTitleButton strong {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.infoIndexAppFileStar {
+  flex: 0 0 auto;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.infoIndexAppFileStar.isSaved {
+  color: #fbbf24;
+}
+.infoIndexAppFileStar.isRemoved {
+  color: #ef4444;
+}
+.infoIndexAppFileLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+.infoIndexAppFileLegend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.infoIndexTable tr.appFileRemoved td {
+  background: rgba(239, 68, 68, 0.08);
+}
+.infoIndexDetailButton.isRemoved {
+  background: transparent;
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.55);
+}
+.infoIndexTable th {
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.infoIndexTable tr.pinned td {
+  background: rgba(234, 179, 8, 0.08);
+}
+.infoIndexTitleCell {
+  min-width: 0;
+}
+.infoIndexDetailCell,
+.infoIndexPinCell {
+  width: 1%;
+  white-space: nowrap;
+  text-align: center;
+}
+.infoIndexTabWithAdd {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.infoIndexTabWithAdd .ch3TabBtn {
+  flex: 1;
+}
+.infoIndexTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.infoIndexPlusBtn {
+  appearance: none;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  background: #facc15;
+  color: #1a1400;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+.infoIndexPlusBtn:hover {
+  background: #fde047;
+}
+.infoIndexComposeBox {
+  margin: 0 0 16px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  background: rgba(250, 204, 21, 0.08);
+}
+.infoIndexComposeGrid {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 150px 180px;
+  gap: 10px;
+  margin-top: 10px;
+}
+.infoIndexComposeGrid label {
+  display: block;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+.infoIndexComposeGrid select,
+.infoIndexComposeGrid input {
+  width: 100%;
+  margin-top: 4px;
+}
+.infoIndexComposePin {
+  grid-column: 1 / -1;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px !important;
+}
+.infoIndexComposePin input {
+  width: auto !important;
+  margin: 0 !important;
+}
+.infoIndexComposeActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.infoIndexSourceCell {
+  width: 1%;
+  white-space: nowrap;
+}
+.infoIndexSourceBadge,
+.infoIndexDetailButton {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.infoIndexSourceBadge.source-builder,
+.infoIndexDetailButton.source-builder {
+  background: #facc15;
+  color: #1a1400;
+  border: 1px solid #ca8a04;
+}
+.infoIndexSourceBadge.source-ifl,
+.infoIndexDetailButton.source-ifl {
+  background: #ef4444;
+  color: #ffffff;
+  border: 1px solid #b91c1c;
+}
+.infoIndexSourceBadge.source-local,
+.infoIndexDetailButton.source-local {
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+}
+.infoIndexDetailButton {
+  cursor: pointer;
+}
+.infoIndexSaveStatus {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.infoIndexSaveStatus.is-saved {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+.infoIndexSaveStatus.is-temp {
+  background: rgba(250, 204, 21, 0.16);
+  color: #fde68a;
+}
+.infoIndexSaveStatus.is-removed {
+  background: rgba(248, 113, 113, 0.16);
+  color: #fca5a5;
+}
+.infoIndexDetailButton.source-builder:hover {
+  background: #fde047;
+}
+.infoIndexDetailButton.source-ifl:hover {
+  background: #f87171;
+}
+.infoIndexDetailButton.source-local:hover {
+  background: #f8fafc;
+}
+@media (max-width: 760px) {
+  .infoIndexComposeGrid {
+    grid-template-columns: 1fr;
+  }
+}
+.infoIndexPinButton {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 10px;
+  position: relative;
+}
+.infoIndexPinButton.hasThumb {
+  width: 52px;
+  height: 52px;
+}
+.infoIndexThumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+  background: #1e293b;
+}
+.infoIndexThumbPin {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.infoIndexThumbPin svg {
+  width: 14px;
+  height: 14px;
+}
+.infoIndexPinButton:hover,
+.infoIndexPinButton.isPinned {
+  background: rgba(250, 204, 21, 0.16);
+}
+.infoIndexCollectMetaRow {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+.infoIndexCollectMetaRow label {
+  display: block;
+  min-width: 0;
+}
+.infoIndexCollectMetaRow select,
+.infoIndexCollectMetaRow input {
+  width: 100%;
+}
+@media (max-width: 760px) {
+  .infoIndexTable th:first-child,
+  .infoIndexTable td:first-child {
+    min-width: 64px;
+  }
+  .infoIndexCollectMetaRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.infoIndexHelp {
+  margin: 6px 0 16px;
+}
+.infoIndexDesktop {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.infoIndexViewTabs {
+  margin-bottom: 0;
+  flex: 1;
+}
+.infoIndexChipCount {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.72;
+}
+.infoIndexDesktopTools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.infoIndexStatusLine {
+  margin: 0 0 12px;
+  font-size: 12px;
+}
+.infoIndexDateCell {
+  white-space: nowrap;
+  width: 96px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+.infoIndexIflActions input {
+  min-width: 140px;
+  flex: 1;
+}
+.collectPcLayout,
+.collectPcBody,
+.collectPcSide {
+  min-width: 0;
+}
+
+@media (max-width: 1023px) {
+  .infoIndexDateCol,
+  .infoIndexSourceCol {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app.appInfoWide {
+    max-width: 1480px;
+    padding: 22px 28px 40px;
+  }
+
+  .appInfoWide .info-box {
+    min-height: calc(100vh - 80px);
+  }
+
+  .appInfoWide .info-head-one-line {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 16px !important;
+    margin-bottom: 14px !important;
+  }
+  .appInfoWide .info-title-one-line {
+    width: auto !important;
+    display: flex !important;
+    grid-template-columns: none !important;
+    align-items: center !important;
+    gap: 12px !important;
+    flex: 1;
+  }
+  .appInfoWide .info-title-one-line .info-title {
+    font-size: 22px !important;
+    letter-spacing: 0 !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+  }
+  .appInfoWide .info-action-one-line {
+    width: auto !important;
+    display: flex !important;
+    grid-template-columns: none !important;
+    border-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    gap: 8px !important;
+  }
+  .appInfoWide .info-subview-tabs {
+    margin-bottom: 16px !important;
+    justify-content: flex-start !important;
+  }
+  .appInfoWide .info-subview-tab {
+    flex: 0 0 auto !important;
+    min-width: 168px;
+    padding: 8px 16px !important;
+  }
+  .appInfoWide .ch3TabBar {
+    max-width: 560px;
+  }
+  .appInfoWide .generalInfoRightColumn > .scroll-to-top-btn,
+  .appInfoWide .generalInfoLeftColumn > .scroll-to-top-btn {
+    display: none;
+  }
+
+  .infoIndexMobileHead {
+    display: none;
+  }
+  .infoIndexDesktop {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+  }
+  .infoIndexDesktopNav {
+    position: sticky;
+    top: 16px;
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .infoIndexViewTabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .infoIndexViewTabs .ch3TabBtn {
+    flex: none;
+    padding: 8px 4px;
+    font-size: 13px;
+  }
+  .infoIndexCategoryChips {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin: 0;
+  }
+  .infoIndexChip {
+    justify-content: space-between;
+    border-radius: 10px;
+    min-height: 34px;
+    padding: 6px 10px;
+  }
+  .infoIndexDesktopMain {
+    min-width: 0;
+  }
+  .infoIndexIflNote {
+    display: none;
+  }
+  .infoIndexIflBox {
+    padding: 8px 10px;
+    margin-bottom: 10px;
+  }
+  .infoIndexIflActions input {
+    max-width: 240px;
+    flex: 0 1 240px;
+  }
+  .infoIndexTable {
+    table-layout: fixed;
+    font-size: 14px;
+  }
+  .infoIndexSaveStatusCell {
+    width: 92px;
+    white-space: nowrap;
+  }
+  .infoIndexSelectCol {
+    width: 52px;
+    text-align: center;
+  }
+  .infoIndexTable th,
+  .infoIndexTable td {
+    padding: 10px 12px;
+  }
+  .infoIndexTitleButton {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+  }
+  .infoIndexTitleLine {
+    flex: 1;
+    align-items: center;
+  }
+  .infoIndexTitleButton strong {
+    display: block;
+    -webkit-line-clamp: unset;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .infoIndexGroupCell {
+    width: 78px;
+  }
+  .infoIndexPinButton.hasThumb {
+    width: 44px;
+    height: 44px;
+  }
+  .infoIndexThumb {
+    width: 36px;
+    height: 36px;
+  }
+
+  .collectPcLayout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.9fr);
+    gap: 22px;
+    align-items: start;
+  }
+  .collectPcBody .generalInfoRichTextEditor.collectPaperEditor {
+    min-height: 420px !important;
+  }
+  .collectPcSide {
+    position: sticky;
+    top: 16px;
+  }
 }
 
 /* 일반 정보 PDF/인쇄 — 이미지 절단 방지 */

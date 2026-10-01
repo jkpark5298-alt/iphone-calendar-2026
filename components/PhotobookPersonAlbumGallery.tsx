@@ -158,6 +158,20 @@ export function PhotobookPersonAlbumGallery({
   }, []);
 
   useEffect(() => {
+    if (!autoPlay) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAutoPlay(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [autoPlay]);
+
+  useEffect(() => {
     if (activeIndex < cards.length) return;
     setActiveIndex(0);
   }, [activeIndex, cards.length]);
@@ -276,6 +290,20 @@ export function PhotobookPersonAlbumGallery({
           ) : null}
         </div>
       </div>
+
+      {autoPlay && currentCard ? (
+        <div className="pbPersonAlbumFullscreen" role="dialog" aria-modal="true" aria-label="人앨범 자동 재생">
+          <img key={currentCard.imagePath} src={currentCard.imagePath} alt={currentCard.memo || ""} />
+          <div className="pbPersonAlbumFullscreenBar">
+            <span>
+              {activeIndex + 1} / {cards.length}
+            </span>
+            <button type="button" onClick={toggleAutoPlay}>
+              자동 끄기
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {cards.length === 0 ? (
         <div className="pbPersonAlbumEmpty">

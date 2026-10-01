@@ -5,6 +5,11 @@ import {
   assertSafePublicHttpUrl,
   clientIpFromRequest,
 } from "../../../lib/apiSecurity";
+import {
+  cleanInstagramCaption,
+  isInstagramPostUrl,
+  normalizeInstagramUrl,
+} from "../../../lib/instagramMeta";
 
 type ExtractUrlRequest = {
   url?: string;
@@ -26,6 +31,46 @@ const transformNaverBlogUrl = (url: string): string => {
   return url;
 };
 
+const isInstagramHost = (hostname: string) =>
+  /(^|\.)instagram\.com$/i.test(hostname) || /(^|\.)instagr\.am$/i.test(hostname);
+
+const normalizeInstagramPostUrl = (rawUrl: string) => {
+  try {
+    const parsed = new URL(rawUrl);
+    const match = parsed.pathname.match(/\/(p|reel|reels|tv)\/([^/?#]+)/i);
+    if (!match) return rawUrl;
+    const kind = match[1].toLowerCase() === "reels" ? "reel" : match[1].toLowerCase();
+    return `https://www.instagram.com/${kind}/${match[2]}/`;
+  } catch {
+    return rawUrl;
+  }
+};
+
+const isInstagramPostImage = (src: string) =>
+  /scontent|cdninstagram\.com\/.+?\.(?:jpe?g|png|webp)/i.test(src) &&
+  !/rsrc\.php|static\.cdninstagram\.com\/rsrc/i.test(src);
+
+const isInstagramBlockedPage = (title: string, image: string, text: string) => {
+  const extracted = `${title}\n${text}`;
+  if (
+    /InstagramUserAgent|is_edge_chromium|is_edge_legacy|"is_chrome"\s*:|KHTML, like Gecko/i.test(
+      extracted,
+    )
+  ) {
+    return true;
+  }
+  if (/Post isn't available|페이지를 찾을 수 없습니다|Page Not Found/i.test(extracted)) {
+    return true;
+  }
+  if (isInstagramPostImage(image) || cleanInstagramCaption(text).length > 0) {
+    return false;
+  }
+  return !title || /^instagram$/i.test(title.trim());
+};
+
+const INSTAGRAM_META_UNAVAILABLE =
+  "공개 메타데이터를 읽지 못했습니다. Instagram은 자동 수집이 제한되는 경우가 많습니다. 캡션·이미지는 본문에 직접 넣거나, 아이폰에서 사진을 복사해 붙여넣으세요.";
+
 const decodeHtmlEntities = (value: string) =>
   String(value || "")
     .replace(/&amp;/g, "&")
@@ -35,11 +80,11 @@ const decodeHtmlEntities = (value: string) =>
     .replace(/&gt;/g, ">")
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
       const code = Number.parseInt(hex, 16);
-      return Number.isFinite(code) ? String.fromCharCode(code) : "";
+      return Number.isFinite(code) ? String.fromCodePoint(code) : "";
     })
     .replace(/&#(\d+);/g, (_, dec) => {
       const code = Number.parseInt(dec, 10);
-      return Number.isFinite(code) ? String.fromCharCode(code) : "";
+      return Number.isFinite(code) ? String.fromCodePoint(code) : "";
     })
     .trim();
 
@@ -231,6 +276,76 @@ const decodeHtmlResponse = async (response: Response) => {
   }
 };
 
+const tryExtractInstagramMeta = async (url: string) => {
+  const headerSets: Record<string, string>[] = [
+    {
+      "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+      Accept: "text/html",
+      "Accept-Language": "ko-KR,en;q=0.8",
+    },
+    {
+      "User-Agent": "Twitterbot/1.0",
+      Accept: "text/html",
+    },
+  ];
+
+  for (const headers of headerSets) {
+    try {
+      const response = await fetch(url, {
+        headers,
+        redirect: "follow",
+        cache: "no-store",
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) continue;
+
+      const html = await decodeHtmlResponse(response);
+      const clipped = html.length > 400_000 ? html.slice(0, 400_000) : html;
+      const headEnd = clipped.indexOf("</head>");
+      const headHtml =
+        headEnd !== -1 ? clipped.slice(0, headEnd + 7) : clipped.slice(0, 64 * 1024);
+
+      const title = decodeHtmlEntities(
+        getMetaContent(headHtml, [
+          /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+          /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["'][^>]*>/i,
+        ]),
+      );
+      const description = decodeHtmlEntities(
+        getMetaContent(headHtml, [
+          /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+          /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["'][^>]*>/i,
+        ]),
+      );
+      const image = toAbsoluteUrl(
+        url,
+        decodeHtmlEntities(
+          getMetaContent(headHtml, [
+            /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+            /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["'][^>]*>/i,
+          ]),
+        ),
+      );
+
+      if (isInstagramBlockedPage(title, image, description)) continue;
+      if (!isInstagramPostImage(image) && !description.trim()) continue;
+
+      return {
+        url,
+        title: title || "Instagram",
+        description,
+        image: isInstagramPostImage(image) ? image : "",
+        siteName: "Instagram",
+        text: description,
+      };
+    } catch {
+      /* try next UA */
+    }
+  }
+
+  return null;
+};
+
 export async function POST(request: NextRequest) {
   try {
     const authError = assertAppApiAccess(request);
@@ -261,6 +376,36 @@ export async function POST(request: NextRequest) {
     // 네이버 블로그 URL 전처리 변환
     url = transformNaverBlogUrl(url);
     url = await assertSafePublicHttpUrl(url);
+
+    if (isInstagramHost(new URL(url).hostname)) {
+      url = normalizeInstagramUrl(url) || normalizeInstagramPostUrl(url);
+      if (!isInstagramPostUrl(url)) {
+        return NextResponse.json(
+          { ok: false, error: "Instagram 게시물 주소(/p/… 또는 /reel/…)가 필요합니다." },
+          { status: 400 },
+        );
+      }
+      const instagram = await tryExtractInstagramMeta(url);
+      if (instagram) {
+        const caption = cleanInstagramCaption(instagram.description || instagram.text || "");
+        return NextResponse.json({
+          ok: true,
+          result: {
+            ...instagram,
+            title: caption
+              ? caption.split("\n").map((line) => line.trim()).find(Boolean)?.slice(0, 80) ||
+                instagram.title
+              : instagram.title,
+            description: caption,
+            text: caption,
+          },
+        });
+      }
+      return NextResponse.json(
+        { ok: false, error: INSTAGRAM_META_UNAVAILABLE },
+        { status: 422 },
+      );
+    }
 
     const response = await fetch(url, {
       headers: {

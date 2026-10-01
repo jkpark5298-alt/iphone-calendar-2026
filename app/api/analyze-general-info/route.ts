@@ -5,6 +5,7 @@ import {
   clientIpFromRequest,
   getServerGeminiApiKey,
 } from "../../../lib/apiSecurity";
+import { INFO_INDEX_CATEGORIES } from "../../../lib/infoIndex";
 
 /**
  * 일반정보 AI 자동분류 API.
@@ -25,22 +26,7 @@ type GeminiPart = {
   text?: string;
 };
 
-const PRIMARY_CATEGORIES = [
-  "정치",
-  "행정",
-  "경제",
-  "산업",
-  "사회",
-  "교육",
-  "문화",
-  "예술",
-  "과학",
-  "기술",
-  "국제",
-  "외교",
-  "국방",
-  "안보",
-];
+const PRIMARY_CATEGORIES: string[] = [...INFO_INDEX_CATEGORIES];
 
 const stripCodeFence = (value: string) =>
   value
@@ -85,8 +71,8 @@ const normalizeKeywords = (value: unknown) => {
 };
 
 const normalizePrimaryCategory = (value: unknown) => {
-  const category = normalizeString(value, "사회");
-  return PRIMARY_CATEGORIES.includes(category) ? category : "사회";
+  const category = normalizeString(value, "기타");
+  return PRIMARY_CATEGORIES.includes(category) ? category : "기타";
 };
 
 const buildPrompt = (input: GeneralInfoAnalyzeRequest) => {
@@ -103,26 +89,28 @@ const buildPrompt = (input: GeneralInfoAnalyzeRequest) => {
     "아래 자료를 분석해서 반드시 JSON 하나만 반환하세요.",
     "마크다운, 설명문, 코드블록 없이 JSON 객체만 반환하세요.",
     "",
-    "1차 분류는 반드시 다음 목록 중 하나만 선택하세요:",
+    "분류는 반드시 다음 목록 중 하나만 선택하세요:",
     PRIMARY_CATEGORIES.join(", "),
     "",
     "반환 JSON 형식:",
     "{",
     '  "title": "정리된 제목",',
     '  "summary": "2~3문장 요약",',
-    '  "primaryCategory": "1차 분류",',
-    '  "secondaryCategory": "2차 분류",',
-    '  "thirdCategory": "3차 분류",',
+    '  "primaryCategory": "분류",',
+    '  "secondaryCategory": "태그",',
+    '  "thirdCategory": "보조 태그",',
     '  "keywords": ["키워드1", "키워드2", "키워드3"],',
     '  "factCheckStatus": "확인 완료" 또는 "확인 필요" 또는 "오류 가능",',
     '  "factCheckSummary": "오류 가능성, 확인 필요 사항, 수정 권고를 구체적으로 정리"',
     "}",
     "",
     "분류 기준:",
-    "- 정치/행정/경제/산업/사회/교육/문화/예술/과학/기술/국제/외교/국방/안보 중 가장 가까운 1차 분류 선택",
-    "- 연예, 콘텐츠, 공연, 패션, 영화, 음악은 대체로 문화 또는 예술로 분류",
-    "- 기업, 시장, 공급망, 반도체, 증시, 물가, 산업동향은 경제 또는 산업으로 분류",
-    "- 국가 간 관계, 해외 이슈, 국제 행사, 외교 현안은 국제 또는 외교로 분류",
+    "- 애플/과학/경제/사회/기술/국제/건강/외교/기타 중 가장 가까운 분류 선택",
+    "- 아이폰, 아이패드, 맥, iOS는 애플",
+    "- 의료, 운동, 영양, 수면은 건강",
+    "- 연예, 교육, 문화, 정치, 행정은 사회",
+    "- 기업, 시장, 반도체, 증시, 물가는 경제",
+    "- 국가 간 관계, 해외 이슈는 국제 또는 외교",
     "- 사실 확인이 어려우면 factCheckStatus는 확인 필요로 설정",
     "- factCheckSummary에는 단순 요약이 아니라 오류 가능성, 확인해야 할 출처, 수정이 필요한 표현을 구체적으로 작성",
     "- 원문에 근거가 부족하면 무엇을 추가 확인해야 하는지 제안",

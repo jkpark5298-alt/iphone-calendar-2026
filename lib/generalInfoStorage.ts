@@ -4,6 +4,51 @@ import { normalizeGeneralInfoMediaItems } from "./generalInfoHelpers";
 /** 통합 저장 키 (v3) */
 export const GENERAL_INFO_STORAGE_KEY = "travel-diary-general-info-v3";
 export const CHAPTER3_COMPACT_STORAGE_KEY = "travel-diary-chapter3-compact-v3";
+/** IDs last confirmed present on Supabase — used to drop remotely-deleted rows */
+export const GENERAL_INFO_REMOTE_IDS_KEY = "travel-diary-general-info-remote-ids-v1";
+export const GENERAL_INFO_TEMP_DRAFT_KEY = "travel_diary_general_info_temp_draft";
+export const GENERAL_INFO_TEMP_DRAFT_EVENT = "travel-diary-general-info-temp-draft";
+
+export type GeneralInfoTempDraftIndex = {
+  title: string;
+  savedAt: string;
+  editingId: number | null;
+  category: string;
+};
+
+export function readGeneralInfoTempDraftIndex(): GeneralInfoTempDraftIndex | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      draft?: Record<string, unknown>;
+      richTextHtml?: string;
+      editingId?: number | null;
+      savedAt?: string;
+    };
+    const draft = parsed?.draft;
+    if (!draft || typeof draft !== "object") return null;
+    const title = String(draft.title || "").trim();
+    const text = String(draft.text || draft.summary || "").trim();
+    const html = String(parsed.richTextHtml || draft.formattedTextHtml || "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const hasMedia = Array.isArray(draft.mediaItems) && draft.mediaItems.length > 0;
+    const category = String(draft.primaryCategory || "").trim();
+    const hasBody = Boolean(title || text || html || hasMedia || category || String(draft.filePreview || "").trim());
+    if (!hasBody) return null;
+    return {
+      title: title || text.slice(0, 40) || html.slice(0, 40) || "임시 저장",
+      savedAt: String(parsed.savedAt || ""),
+      editingId: typeof parsed.editingId === "number" ? parsed.editingId : null,
+      category,
+    };
+  } catch {
+    return null;
+  }
+}
 
 const LEGACY_KEYS = [
   "travel-diary-ch3-general-info-items-v3",
@@ -257,4 +302,51 @@ export const persistGeneralInfoItemsToLocalStorage = (
       };
     }
   }
+};
+
+const normalizeIdSet = (ids: Iterable<number>) => {
+  const next = new Set<number>();
+  for (const value of ids) {
+    const id = Number(value);
+    if (Number.isFinite(id) && id > 0) next.add(id);
+  }
+  return next;
+};
+
+export const readGeneralInfoRemoteIds = (): Set<number> => {
+  if (typeof window === "undefined") return new Set();
+
+  try {
+    const raw = window.localStorage.getItem(GENERAL_INFO_REMOTE_IDS_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? normalizeIdSet(parsed.map(Number)) : new Set();
+  } catch (error) {
+    console.error("general info remote id set read failed", error);
+    return new Set();
+  }
+};
+
+export const persistGeneralInfoRemoteIds = (ids: Iterable<number>) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      GENERAL_INFO_REMOTE_IDS_KEY,
+      JSON.stringify(Array.from(normalizeIdSet(ids))),
+    );
+  } catch (error) {
+    console.error("general info remote id set save failed", error);
+  }
+};
+
+export const addGeneralInfoRemoteIds = (ids: Iterable<number>) => {
+  const next = readGeneralInfoRemoteIds();
+  normalizeIdSet(ids).forEach((id) => next.add(id));
+  persistGeneralInfoRemoteIds(next);
+};
+
+export const removeGeneralInfoRemoteIds = (ids: Iterable<number>) => {
+  const next = readGeneralInfoRemoteIds();
+  normalizeIdSet(ids).forEach((id) => next.delete(id));
+  persistGeneralInfoRemoteIds(next);
 };

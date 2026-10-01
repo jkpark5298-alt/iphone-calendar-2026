@@ -2,8 +2,9 @@
 
 import type { GeneralInfoItem } from "../types/generalInfo";
 import {
-  getGeneralInfoDisplayMediaItems,
+  getGeneralInfoInfographicItems,
   getGeneralInfoFormattedHtml,
+  pickGeneralInfoCoverSrc,
 } from "../lib/generalInfoHelpers";
 import { extractFirstSentence, formatCategoryKeywords } from "../lib/generalInfoText";
 import React from "react";
@@ -29,9 +30,15 @@ export default function GeneralInfoDetailModal({
 }: Props) {
   if (!item) return null;
 
-  const mediaItems = getGeneralInfoDisplayMediaItems(item);
+  const mediaItems = getGeneralInfoInfographicItems(item);
   const infographicTitle = extractFirstSentence(item.text) || item.title;
-  const coverSrc = String(item.filePreview || "").trim();
+  const coverSrc = pickGeneralInfoCoverSrc({
+    filePreview: item.filePreview,
+    htmlParts: [
+      item.formattedTextHtml,
+      ...(Array.isArray(item.paragraphs) ? item.paragraphs.map((paragraph) => paragraph.html) : []),
+    ],
+  });
   const keywordText =
     formatCategoryKeywords(item.primaryCategory || "", item.secondaryCategory || "") ||
     (item.keywords || [])
@@ -91,10 +98,15 @@ export default function GeneralInfoDetailModal({
         </div>
 
         <div className="generalInfoDetailBody">
-          {/* 수정 모드와 동일: 제목 → 본문 → 대표 이미지 → 요약 → 인포그래픽 → 분류/키워드 */}
+          {/* 제목 → 요약 → 본문 → 대표 이미지 → 인포그래픽 → 분류/키워드 */}
           <section className="generalInfoDetailSection">
             <strong>제목</strong>
             <p>{item.title || "제목 없음"}</p>
+          </section>
+
+          <section className="generalInfoDetailSection">
+            <strong>요약</strong>
+            <p style={{ whiteSpace: "pre-wrap" }}>{item.summary || ""}</p>
           </section>
 
           <section className="generalInfoDetailSection">
@@ -163,7 +175,7 @@ export default function GeneralInfoDetailModal({
           </section>
 
           <section className="generalInfoDetailSection">
-            <strong>정보 창고 대표 이미지</strong>
+            <strong>정보 인덱스 대표 이미지</strong>
             {coverSrc ? (
               <div className="generalInfoDetailCoverWrap">
                 <img src={coverSrc} alt="대표 이미지" />
@@ -175,68 +187,70 @@ export default function GeneralInfoDetailModal({
           </section>
 
           <section className="generalInfoDetailSection">
-            <strong>요약</strong>
-            <p style={{ whiteSpace: "pre-wrap" }}>{item.summary || "요약 없음"}</p>
+            <details>
+              <summary style={{ cursor: "pointer" }}>
+                <strong>인포그래픽 (선택)</strong>
+                {mediaItems.length > 0 ? ` · ${mediaItems.length}개` : " · 없음"}
+              </summary>
+              <p className="mutedText" style={{ margin: "8px 0" }}>
+                차트·도표만 여기에 둡니다. 일반 사진은 본문 단락에 있습니다.
+                <br />
+                제목: {infographicTitle}
+              </p>
+              {mediaItems.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "10px" }}>
+                  {mediaItems.map((media, index) => (
+                    <div
+                      className="generalInfoDetailMediaCard"
+                      key={media.id || index}
+                      style={{
+                        width: "100%",
+                        padding: "12px",
+                        border: "1px solid rgba(148, 163, 184, 0.22)",
+                        borderRadius: "14px",
+                        background: "rgba(15, 23, 42, 0.45)",
+                      }}
+                    >
+                      {media.type === "video" ? (
+                        <video
+                          src={media.preview}
+                          controls
+                          style={{
+                            width: "100%",
+                            maxHeight: "500px",
+                            objectFit: "contain",
+                            borderRadius: "10px",
+                            display: "block",
+                          }}
+                        />
+                      ) : (
+                        <img
+                          src={media.preview}
+                          alt={media.memo || media.name || `인포그래픽 ${index + 1}`}
+                          style={{
+                            width: "100%",
+                            maxHeight: "500px",
+                            objectFit: "contain",
+                            borderRadius: "10px",
+                            background: "rgba(2, 6, 23, 0.55)",
+                            display: "block",
+                          }}
+                        />
+                      )}
+                      <p className="mutedText" style={{ margin: "8px 0 4px", wordBreak: "break-all" }}>
+                        {media.memo || media.name || `인포그래픽 ${index + 1}`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>인포그래픽이 없습니다.</p>
+              )}
+            </details>
           </section>
 
           <section className="generalInfoDetailSection">
-            <strong>인포그래픽</strong>
-            <p className="mutedText" style={{ marginBottom: 8 }}>
-              제목: {infographicTitle}
-            </p>
-            {mediaItems.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "10px" }}>
-                {mediaItems.map((media, index) => (
-                  <div
-                    className="generalInfoDetailMediaCard"
-                    key={media.id || index}
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: "1px solid rgba(148, 163, 184, 0.22)",
-                      borderRadius: "14px",
-                      background: "rgba(15, 23, 42, 0.45)",
-                    }}
-                  >
-                    {media.type === "video" ? (
-                      <video
-                        src={media.preview}
-                        controls
-                        style={{
-                          width: "100%",
-                          maxHeight: "500px",
-                          objectFit: "contain",
-                          borderRadius: "10px",
-                          display: "block",
-                        }}
-                      />
-                    ) : (
-                      <img
-                        src={media.preview}
-                        alt={media.memo || media.name || `인포그래픽 ${index + 1}`}
-                        style={{
-                          width: "100%",
-                          maxHeight: "500px",
-                          objectFit: "contain",
-                          borderRadius: "10px",
-                          background: "rgba(2, 6, 23, 0.55)",
-                          display: "block",
-                        }}
-                      />
-                    )}
-                    <p className="mutedText" style={{ margin: "8px 0 4px", wordBreak: "break-all" }}>
-                      {media.memo || media.name || `인포그래픽 ${index + 1}`}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p>인포그래픽이 없습니다.</p>
-            )}
-          </section>
-
-          <section className="generalInfoDetailSection">
-            <strong>1차 · 2차 분류</strong>
+            <strong>분류 · 태그</strong>
             <p>
               {[item.primaryCategory, item.secondaryCategory]
                 .filter(Boolean)

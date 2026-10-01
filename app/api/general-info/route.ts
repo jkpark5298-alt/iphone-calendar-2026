@@ -363,15 +363,16 @@ export async function POST(request: NextRequest) {
     if (authError) return authError;
 
     const item = normalizePayload(await request.json());
-    if (!item || !item.id || !item.title) {
+    if (!item || !item.id) {
       return NextResponse.json(
         {
           ok: false,
-          error: "저장할 일반 정보 id와 제목이 필요합니다.",
+          error: "저장할 일반 정보 id가 필요합니다.",
         },
         { status: 400 },
       );
     }
+    if (!item.title) item.title = "(제목 없음)";
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await upsertGeneralInfoRow(supabase, item);

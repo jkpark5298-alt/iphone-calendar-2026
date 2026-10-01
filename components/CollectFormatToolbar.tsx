@@ -141,8 +141,9 @@ export function CollectFormatToolbar({
           </button>
         ))}
       </div>
-      <ToolBtn onClick={onImage} title="이미지 추가">
+      <ToolBtn onClick={onImage} title="사진보관함에서 이미지 추가">
         <ImagePlus className="collectFormatToolbarIcon" />
+        <span>사진보관함</span>
       </ToolBtn>
       <ToolBtn onClick={onPasteImage} title="클립보드에서 붙여넣기 (아이폰)">
         <ClipboardPaste className="collectFormatToolbarIcon" />

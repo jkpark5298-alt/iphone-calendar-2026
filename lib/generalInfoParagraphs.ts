@@ -74,6 +74,13 @@ export function serializeParagraphsToHtml(paragraphs: GeneralInfoParagraph[]): s
     .join("");
 }
 
+/** Editor must not receive serialized multi-paragraph HTML (`작성 …` wrappers). */
+export function htmlForActiveEditor(html: string) {
+  const raw = String(html || "");
+  if (!/data-gi-paragraph|gi-paragraph-date/i.test(raw)) return raw;
+  return parseParagraphsFromHtml(raw)[0]?.html || "";
+}
+
 export function parseParagraphsFromHtml(html: string): GeneralInfoParagraph[] {
   const raw = String(html || "").trim();
   if (!raw) return [createEmptyParagraph()];

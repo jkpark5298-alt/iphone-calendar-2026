@@ -10,6 +10,42 @@ type MediaSource = {
   filePreview?: string;
   fileType?: "none" | "image" | "video";
   mediaItems?: GeneralInfoMediaItem[];
+  formattedTextHtml?: string;
+  paragraphs?: Array<{ html?: string }>;
+};
+
+const normalizeGeneralInfoMediaKey = (src: string) => {
+  const raw = String(src || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("data:")) return raw.slice(0, 220);
+  try {
+    const url = new URL(raw);
+    return `${url.origin}${url.pathname}`.toLowerCase();
+  } catch {
+    return raw.split("?")[0].toLowerCase();
+  }
+};
+
+const collectGeneralInfoBodyMediaKeys = (
+  item: MediaSource | GeneralInfoItem | null | undefined,
+  extraBodyHtml = "",
+) => {
+  const keys = new Set<string>();
+  const add = (src: string) => {
+    const key = normalizeGeneralInfoMediaKey(src);
+    if (key) keys.add(key);
+  };
+
+  add(String(item?.filePreview || ""));
+  extractGeneralInfoBodyImageSrcs(
+    extraBodyHtml,
+    item && "formattedTextHtml" in item ? String(item.formattedTextHtml || "") : "",
+    ...((item && "paragraphs" in item && Array.isArray(item.paragraphs) ? item.paragraphs : []).map(
+      (paragraph) => String(paragraph?.html || ""),
+    )),
+  ).forEach(add);
+
+  return keys;
 };
 
 export const makeGeneralInfoMediaItem = (
@@ -238,13 +274,60 @@ export const replaceHtmlMediaSources = (
 export const extractMediaSrcFromHtml = (html: string): string[] => {
   const raw = String(html || "");
   const found: string[] = [];
-  const re = /<(?:img|video)[^>]+src=["']([^"']+)["']/gi;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(raw))) {
-    const src = String(match[1] || "").trim();
-    if (src && !found.includes(src)) found.push(src);
+  const add = (value: string) => {
+    const src = String(value || "").trim();
+    if (!src || found.includes(src)) return;
+    found.push(src);
+  };
+  const tagRe = /<(?:img|video)\b[^>]*>/gi;
+  let tag: RegExpExecArray | null;
+  while ((tag = tagRe.exec(raw))) {
+    const el = tag[0];
+    const src =
+      /\ssrc=["']([^"']+)["']/i.exec(el)?.[1] ||
+      /\ssrc=([^\s>]+)/i.exec(el)?.[1] ||
+      /\sdata-src=["']([^"']+)["']/i.exec(el)?.[1] ||
+      "";
+    if (src) add(src.replace(/^["']|["']$/g, ""));
+    const srcset = /\ssrcset=["']([^"']+)["']/i.exec(el)?.[1] || "";
+    const firstSrcset = srcset.split(",")[0]?.trim().split(/\s+/)[0] || "";
+    if (firstSrcset) add(firstSrcset);
   }
-  return found;
+  return found.map(decodeHtmlSrc);
+};
+
+const decodeHtmlSrc = (src: string) =>
+  String(src || "")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
+
+export const isUsableGeneralInfoCoverSrc = (src: string) => {
+  const s = decodeHtmlSrc(src);
+  if (!/^(https?:\/\/|data:|blob:)/i.test(s)) return false;
+  if (s.startsWith("data:") && s.length < 800) return false;
+  if (
+    /rsrc\.php|static\.cdninstagram\.com\/rsrc|favicon|apple-touch-icon|\/sprites?\/|1x1|pixel\.gif|tracking|\.svg(\?|#|$)|data:image\/svg/i.test(
+      s,
+    )
+  ) {
+    return false;
+  }
+  return true;
+};
+
+/** 본문에 실제 사진이 있으면 그걸 대표로 쓴다. */
+export const pickGeneralInfoCoverSrc = (options: {
+  filePreview?: string | null;
+  htmlParts?: Array<string | undefined | null>;
+}) => {
+  const body = extractGeneralInfoBodyImageSrcs(...(options.htmlParts || [])).filter(isUsableGeneralInfoCoverSrc);
+  const preview = decodeHtmlSrc(String(options.filePreview || ""));
+  if (preview && body.includes(preview)) return preview;
+  return body[0] || "";
 };
 
 /** 본문 TEXT / AI 보고서 등 HTML에 들어 있는 이미지 URL 목록 */
@@ -1032,13 +1115,57 @@ const makePublicUrlFromStoragePath = (storagePath: unknown) => {
   }
 };
 
+const resolveMediaPreviewUrl = (media: GeneralInfoMediaItem): GeneralInfoMediaItem => {
+  const preview = String(media.preview || "").trim();
+  const fileUrl = String(media.fileUrl || "").trim();
+  const storagePath = String(media.storagePath || "").trim();
+  const bestUrl = /^(https?:\/\/|data:|blob:)/i.test(preview)
+    ? preview
+    : /^(https?:\/\/|data:|blob:)/i.test(fileUrl)
+      ? fileUrl
+      : makePublicUrlFromStoragePath(storagePath) || "";
+
+  return {
+    ...media,
+    preview: bestUrl,
+    fileUrl: bestUrl,
+    storagePath,
+  };
+};
+
+/** 인포그래픽 칸에 넣은 이미지만. 본문/대표 이미지는 넣지 않는다. */
+export const getGeneralInfoInfographicItems = (
+  item: MediaSource | GeneralInfoItem | null | undefined,
+  extraBodyHtml = "",
+): GeneralInfoMediaItem[] => {
+  if (!item || !Array.isArray(item.mediaItems)) return [];
+
+  const bodyKeys = collectGeneralInfoBodyMediaKeys(item, extraBodyHtml);
+
+  return item.mediaItems
+    .filter((media) => media && (media.preview || media.fileUrl || media.storagePath))
+    .map(resolveMediaPreviewUrl)
+    .filter((media) => {
+      const preview = String(media.preview || media.fileUrl || "").trim();
+      if (!/^(https?:\/\/|data:|blob:)/i.test(preview)) return false;
+      const key = normalizeGeneralInfoMediaKey(preview);
+      return Boolean(key) && !bodyKeys.has(key);
+    });
+};
+
 export const getGeneralInfoDisplayMediaItems = (
   item: GeneralInfoItem | null | undefined,
 ): GeneralInfoMediaItem[] => {
   if (!item) return [];
 
   const filePreview = String(item.filePreview || "").trim();
-  const fallbackPreview = /^(https?:\/\/|data:|blob:)/i.test(filePreview) ? filePreview : "";
+  const fallbackPreview = pickGeneralInfoCoverSrc({
+    filePreview,
+    htmlParts: [
+      item.formattedTextHtml,
+      ...(Array.isArray(item.paragraphs) ? item.paragraphs.map((paragraph) => paragraph.html) : []),
+    ],
+  });
 
   // 정보 창고 대표: 본문에서 고른 filePreview 우선
   if (fallbackPreview) {
@@ -1054,25 +1181,7 @@ export const getGeneralInfoDisplayMediaItems = (
     ];
   }
 
-  const mediaItems = normalizeGeneralInfoMediaItems(item)
-    .map((media) => {
-      const preview = String(media.preview || "").trim();
-      const fileUrl = String(media.fileUrl || "").trim();
-      const storagePath = String(media.storagePath || "").trim();
-      const bestUrl = /^(https?:\/\/|data:|blob:)/i.test(preview)
-        ? preview
-        : /^(https?:\/\/|data:|blob:)/i.test(fileUrl)
-          ? fileUrl
-          : makePublicUrlFromStoragePath(storagePath) || "";
-
-      return {
-        ...media,
-        preview: bestUrl,
-        fileUrl: bestUrl,
-        storagePath,
-      };
-    })
-    .filter((media) => /^(https?:\/\/|data:|blob:)/i.test(String(media.preview || "").trim()));
+  const mediaItems = getGeneralInfoInfographicItems(item);
 
   if (mediaItems.length > 0) return mediaItems;
 

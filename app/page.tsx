@@ -6,7 +6,7 @@ import { GeneralInfoExportActionsModal } from "../components/GeneralInfoExportAc
 import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralInfoState";
 
 
-import { ChangeEvent, ClipboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, ClipboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateApi";
 import {
@@ -33,6 +33,7 @@ import {
   type InformationCalendarItem,
 } from "../lib/informationEntries";
 import { importWorkScheduleFromFile, type ImportedWorkMarkType } from "../lib/workScheduleImport";
+import { readAppFileIndexArchive } from "../lib/infoIndex";
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
@@ -82,12 +83,15 @@ const isCalendarMarkType = (value: unknown): value is CalendarMarkType =>
   typeof value === "string" && (CALENDAR_MARK_TYPES as string[]).includes(value);
 
 type SearchResult = {
-  type: "diary" | "info";
+  type: "diary" | "info" | "index";
   entryDate: string;
   year: number;
   month: number;
   day: number;
   text: string;
+  itemId?: string;
+  localNumericId?: number;
+  detailUrl?: string;
 };
 type GoogleScheduleItem = {
   title: string;
@@ -589,6 +593,18 @@ export default function HomePage() {
   const diaryRichTextRef = useRef<HTMLDivElement | null>(null);
   const infoTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const diaryEditStartRef = useRef<{ key: string; diaryText: string; voiceText: string } | null>(null);
+  const diaryBoundDateRef = useRef("");
+  const diaryContentReadyRef = useRef(false);
+  const diaryEditorSyncTokenRef = useRef(0);
+  const diaryAppliedTokenRef = useRef(0);
+  const [diaryEditorSync, setDiaryEditorSync] = useState<{ date: string; html: string; token: number } | null>(null);
+
+  function publishDiaryEditorContent(date: string, html: string, ready: boolean) {
+    diaryBoundDateRef.current = date;
+    diaryContentReadyRef.current = ready;
+    const token = ++diaryEditorSyncTokenRef.current;
+    setDiaryEditorSync({ date, html, token });
+  }
   const infoEditStartRef = useRef<{ key: string; infoText: string } | null>(null);
 
   function handleDiaryRichCommand(command: string, value?: string) {
@@ -1415,109 +1431,224 @@ export default function HomePage() {
       return;
     }
 
-    if (!isSupabaseConfigured || !supabase) {
-      setSearchResults([]);
-      setSearchStatus("Supabase 연결 후 검색할 수 있습니다.");
-      return;
-    }
-
     setSearchStatus("검색 중...");
+    const q = keyword.toLowerCase();
     const pattern = `%${keyword}%`;
-
-    const [diaryRes, infoCardsRes, infoMemoRes] = await Promise.all([
-      supabase
-        .from("diary_entries")
-        .select("entry_date, diary_text, voice_text")
-        .or(`diary_text.ilike.${pattern},voice_text.ilike.${pattern}`)
-        .order("entry_date", { ascending: true }),
-      supabase
-        .from("info_text_cards")
-        .select("entry_date, content")
-        .ilike("content", pattern)
-        .order("entry_date", { ascending: true }),
-      supabase
-        .from("info_photos")
-        .select("entry_date, caption")
-        .ilike("caption", pattern)
-        .order("entry_date", { ascending: true }),
-    ]);
-
-    const errors = [diaryRes.error, infoCardsRes.error, infoMemoRes.error].filter(Boolean);
-    if (errors.length) {
-      console.warn("Supabase search error:", errors.map(error => error?.message).join(" / "));
-      setSearchResults([]);
-      setSearchStatus("검색 중 오류가 발생했습니다.");
-      return;
-    }
-
     const nextResults: SearchResult[] = [];
 
-    (diaryRes.data || []).forEach((row: any) => {
-      const date = monthDayFromEntryDate(row.entry_date);
-      if (!date) return;
-      const text = [row.diary_text, row.voice_text].filter(Boolean).join(" / ");
+    const dateFromIndexValue = (value: string) => {
+      const match = String(value || "").match(/(\d{4})[-.](\d{1,2})[-.](\d{1,2})/);
+      if (!match) {
+        return { year: currentYear, month: currentMonth, day: currentDay, entryDate: entryDate(currentMonth, currentDay, currentYear) };
+      }
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      return { year, month, day, entryDate: entryDate(month, day, year) };
+    };
+
+    const pushIndex = (item: {
+      id?: string;
+      title?: string;
+      category?: string;
+      tags?: string[];
+      createdAt?: string;
+      dateKey?: string;
+      createdAtLabel?: string;
+      source?: string;
+      sourceLabel?: string;
+      detailUrl?: string;
+      localNumericId?: number;
+      text?: string;
+      summary?: string;
+      keywords?: string[];
+      primaryCategory?: string;
+      secondaryCategory?: string;
+    }) => {
+      const blob = [
+        item.title,
+        item.category,
+        item.primaryCategory,
+        item.secondaryCategory,
+        item.source,
+        item.sourceLabel,
+        item.summary,
+        item.text,
+        item.createdAtLabel,
+        ...(item.tags || []),
+        ...(item.keywords || []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!blob.includes(q)) return;
+      const date = dateFromIndexValue(item.dateKey || item.createdAt || item.createdAtLabel || "");
+      const sourceLabel = item.sourceLabel || item.source || "정보인덱스";
       nextResults.push({
-        type: "diary",
-        entryDate: row.entry_date,
+        type: "index",
+        entryDate: date.entryDate,
         year: date.year,
         month: date.month,
         day: date.day,
-        text: text || "일기장 검색 결과",
+        text: `정보인덱스 · ${item.title || "제목 없음"}${item.category || item.primaryCategory ? ` / ${item.category || item.primaryCategory}` : ""} · ${sourceLabel}`,
+        itemId: item.id ? String(item.id) : undefined,
+        localNumericId: item.localNumericId,
+        detailUrl: item.detailUrl,
+      });
+    };
+
+    infoState.generalInfoItems.forEach((item) => {
+      pushIndex({
+        id: `local:${item.id}`,
+        title: item.title,
+        primaryCategory: item.primaryCategory,
+        secondaryCategory: item.secondaryCategory,
+        keywords: item.keywords,
+        text: item.text,
+        summary: item.summary,
+        createdAt: item.createdAt,
+        source: "local",
+        sourceLabel: "일반정보수집",
+        localNumericId: item.id,
       });
     });
 
-    (infoCardsRes.data || []).forEach((row: any) => {
-      const date = monthDayFromEntryDate(row.entry_date);
-      if (!date) return;
-      
-      let cardText = row.content || "";
-      if (cardText.startsWith("{")) {
-        try {
-          const parsed = JSON.parse(cardText);
-          cardText = `[인스타 정보 - ${parsed.category}] #${parsed.keyword} / ${parsed.originalText}`;
-        } catch (e) {}
-      }
-      
-      nextResults.push({
-        type: "info",
-        entryDate: row.entry_date,
-        year: date.year,
-        month: date.month,
-        day: date.day,
-        text: cardText || "인스타 주요 정보 검색 결과",
+    readAppFileIndexArchive().forEach((entry) => {
+      if (infoState.generalInfoItems.some((item) => item.id === entry.id)) return;
+      pushIndex({
+        id: `local-removed:${entry.id}`,
+        title: entry.title,
+        primaryCategory: entry.primaryCategory,
+        secondaryCategory: entry.secondaryCategory,
+        keywords: entry.keywords,
+        createdAt: entry.createdAt,
+        source: "local",
+        sourceLabel: "일반정보수집 · 앱에서 삭제됨",
       });
     });
 
-    (infoMemoRes.data || []).forEach((row: any) => {
-      const date = monthDayFromEntryDate(row.entry_date);
-      if (!date) return;
-      
-      let captionText = row.caption || "";
-      if (captionText.startsWith("{")) {
-        try {
-          const parsed = JSON.parse(captionText);
-          captionText = `[포토북] #${parsed.keyword} / ${parsed.memo}`;
-        } catch (e) {}
+    try {
+      const rawManual = localStorage.getItem("travel-diary-info-index-manual-v1");
+      const parsedManual = rawManual ? JSON.parse(rawManual) : [];
+      if (Array.isArray(parsedManual)) parsedManual.forEach((item) => pushIndex(item));
+    } catch {
+      /* ignore */
+    }
+    try {
+      const rawIfl = localStorage.getItem("travel-diary-ifl-index-v1");
+      const parsedIfl = rawIfl ? JSON.parse(rawIfl) : [];
+      if (Array.isArray(parsedIfl)) parsedIfl.forEach((item) => pushIndex(item));
+    } catch {
+      /* ignore */
+    }
+
+    const iflToken = typeof window !== "undefined" ? localStorage.getItem("travel-diary-ifl-api-token") || "" : "";
+    const indexFetch = fetch("/api/info-index", {
+      cache: "no-store",
+      headers: iflToken ? { "x-ifl-token": iflToken } : undefined,
+    })
+      .then((response) => response.json())
+      .catch(() => ({ items: [] }));
+
+    if (isSupabaseConfigured && supabase) {
+      const [diaryRes, infoCardsRes, infoMemoRes, indexPayload] = await Promise.all([
+        supabase
+          .from("diary_entries")
+          .select("entry_date, diary_text, voice_text")
+          .or(`diary_text.ilike.${pattern},voice_text.ilike.${pattern}`)
+          .order("entry_date", { ascending: true }),
+        supabase
+          .from("info_text_cards")
+          .select("entry_date, content")
+          .ilike("content", pattern)
+          .order("entry_date", { ascending: true }),
+        supabase
+          .from("info_photos")
+          .select("entry_date, caption")
+          .ilike("caption", pattern)
+          .order("entry_date", { ascending: true }),
+        indexFetch,
+      ]);
+
+      const errors = [diaryRes.error, infoCardsRes.error, infoMemoRes.error].filter(Boolean);
+      if (errors.length) {
+        console.warn("Supabase search error:", errors.map((error) => error?.message).join(" / "));
       }
-      
-      nextResults.push({
-        type: "info",
-        entryDate: row.entry_date,
-        year: date.year,
-        month: date.month,
-        day: date.day,
-        text: captionText || "포토북 사진 메모 검색 결과",
+
+      (diaryRes.data || []).forEach((row: any) => {
+        const date = monthDayFromEntryDate(row.entry_date);
+        if (!date) return;
+        const text = [row.diary_text, row.voice_text].filter(Boolean).join(" / ");
+        nextResults.push({
+          type: "diary",
+          entryDate: row.entry_date,
+          year: date.year,
+          month: date.month,
+          day: date.day,
+          text: text || "일기장 검색 결과",
+        });
       });
-    });
+
+      (infoCardsRes.data || []).forEach((row: any) => {
+        const date = monthDayFromEntryDate(row.entry_date);
+        if (!date) return;
+        let cardText = row.content || "";
+        if (cardText.startsWith("{")) {
+          try {
+            const parsed = JSON.parse(cardText);
+            cardText = `[인스타 정보 - ${parsed.category}] #${parsed.keyword} / ${parsed.originalText}`;
+          } catch {
+            /* keep */
+          }
+        }
+        nextResults.push({
+          type: "info",
+          entryDate: row.entry_date,
+          year: date.year,
+          month: date.month,
+          day: date.day,
+          text: cardText || "인스타 주요 정보 검색 결과",
+        });
+      });
+
+      (infoMemoRes.data || []).forEach((row: any) => {
+        const date = monthDayFromEntryDate(row.entry_date);
+        if (!date) return;
+        let captionText = row.caption || "";
+        if (captionText.startsWith("{")) {
+          try {
+            const parsed = JSON.parse(captionText);
+            captionText = `[포토북] #${parsed.keyword} / ${parsed.memo}`;
+          } catch {
+            /* keep */
+          }
+        }
+        nextResults.push({
+          type: "info",
+          entryDate: row.entry_date,
+          year: date.year,
+          month: date.month,
+          day: date.day,
+          text: captionText || "포토북 사진 메모 검색 결과",
+        });
+      });
+
+      const remoteItems = Array.isArray(indexPayload?.items) ? indexPayload.items : [];
+      remoteItems.forEach((item: any) => pushIndex(item));
+    } else {
+      const indexPayload = await indexFetch;
+      const remoteItems = Array.isArray(indexPayload?.items) ? indexPayload.items : [];
+      remoteItems.forEach((item: any) => pushIndex(item));
+    }
 
     Object.entries(schedules).forEach(([scheduleKey, items]) => {
       const { year, month, day } = parseScheduleKey(scheduleKey);
       if (!month || !day) return;
 
-      items.forEach(item => {
+      items.forEach((item) => {
         const scheduleText = `${item.startTime ? `${item.startTime} ` : ""}${item.title}`;
         const searchText = [scheduleText, item.repeat, item.endDate].filter(Boolean).join(" / ");
-        if (!searchText.toLowerCase().includes(keyword.toLowerCase())) return;
+        if (!searchText.toLowerCase().includes(q)) return;
 
         nextResults.push({
           type: "diary",
@@ -1530,9 +1661,9 @@ export default function HomePage() {
       });
     });
 
-    googleSchedules.forEach(item => {
+    googleSchedules.forEach((item) => {
       const googleText = [item.title, item.start, item.end, item.allDay ? "종일" : ""].filter(Boolean).join(" / ");
-      if (!googleText.toLowerCase().includes(keyword.toLowerCase())) return;
+      if (!googleText.toLowerCase().includes(q)) return;
 
       nextResults.push({
         type: "diary",
@@ -1545,12 +1676,12 @@ export default function HomePage() {
     });
 
     const unique = new Map<string, SearchResult>();
-    nextResults.forEach(result => {
-      const uniqueKey = `${result.type}-${result.entryDate}-${result.text.slice(0, 40)}`;
+    nextResults.forEach((result) => {
+      const uniqueKey = `${result.type}-${result.itemId || result.localNumericId || result.entryDate}-${result.text.slice(0, 40)}`;
       if (!unique.has(uniqueKey)) unique.set(uniqueKey, result);
     });
 
-    const results = Array.from(unique.values()).slice(0, 30);
+    const results = Array.from(unique.values()).slice(0, 40);
     setSearchResults(results);
     setSearchStatus(results.length ? `${results.length}개 검색 결과` : "검색 결과가 없습니다.");
   }
@@ -1691,6 +1822,11 @@ export default function HomePage() {
 
     let isActive = true;
     const photoKey = key(currentMonth, currentDay, currentYear);
+    const dateToken = entryDate(currentMonth, currentDay, currentYear);
+
+    // 날짜가 바뀌면 이전 날짜 본문을 에디터에 남기지 않습니다.
+    // 이 날짜 로드가 끝나기 전에는 saveDiary가 오늘 날짜로 저장하지 않습니다.
+    publishDiaryEditorContent(dateToken, "", false);
 
     // Supabase가 설정된 상태에서는 서버 데이터를 우선합니다.
     // 예전 localStorage 데이터가 기기마다 달라서 아이폰/PC가 다르게 보이는 문제를 방지합니다.
@@ -1704,6 +1840,7 @@ export default function HomePage() {
         const data = raw ? JSON.parse(raw) : {};
         setDiaryText(data.diaryText || "");
         setVoiceText(data.voiceText || "");
+        publishDiaryEditorContent(dateToken, data.diaryText || "", true);
 
         const rawPhotos = localStorage.getItem(storageKey("photos", currentMonth, currentDay, currentYear));
         const items = rawPhotos ? JSON.parse(rawPhotos) : [];
@@ -1728,16 +1865,19 @@ export default function HomePage() {
       } catch {
         setDiaryText("");
         setVoiceText("");
+        publishDiaryEditorContent(dateToken, "", true);
       }
     }
 
     loadDiaryEntryFromSupabase(currentMonth, currentDay, currentYear).then(remoteData => {
       if (!isActive) return;
+      if (!isSupabaseConfigured || !supabase) return;
 
       const remoteDiaryText = remoteData?.diary_text || "";
       const remoteVoiceText = remoteData?.voice_text || "";
       setDiaryText(remoteDiaryText);
       setVoiceText(remoteVoiceText);
+      publishDiaryEditorContent(dateToken, remoteDiaryText, true);
       localStorage.setItem(
         storageKey("diary", currentMonth, currentDay, currentYear),
         JSON.stringify({ diaryText: remoteDiaryText, voiceText: remoteVoiceText })
@@ -1880,6 +2020,35 @@ export default function HomePage() {
     };
   }, []);
 
+  const diaryVisibleDateRef = useRef("");
+
+  useLayoutEffect(() => {
+    if (view !== "diary") return;
+    const dateToken = entryDate(currentMonth, currentDay, currentYear);
+    if (diaryVisibleDateRef.current === dateToken) return;
+    diaryVisibleDateRef.current = dateToken;
+    setDiaryText("");
+    setVoiceText("");
+  }, [view, currentYear, currentMonth, currentDay]);
+
+  useLayoutEffect(() => {
+    if (view !== "diary") return;
+    const editor = diaryRichTextRef.current;
+    if (!editor) return;
+
+    const dateToken = entryDate(currentMonth, currentDay, currentYear);
+    if (!diaryEditorSync || diaryEditorSync.date !== dateToken) {
+      if (editor.innerHTML) editor.innerHTML = "";
+      return;
+    }
+    if (diaryAppliedTokenRef.current === diaryEditorSync.token) return;
+
+    diaryAppliedTokenRef.current = diaryEditorSync.token;
+    const nextHtml = diaryEditorSync.html || "";
+    if (editor.innerHTML !== nextHtml) editor.innerHTML = nextHtml;
+    enhanceRichInlineImages(editor);
+  }, [view, currentYear, currentMonth, currentDay, diaryEditorSync]);
+
   useEffect(() => {
     if (view !== "diary") return;
     requestAnimationFrame(() => resizeTextareaToContent(diaryTextareaRef.current));
@@ -1967,6 +2136,36 @@ export default function HomePage() {
     setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);
+    setView("info");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openInfoIndex(month: number, day: number, year: number = currentYear) {
+    setCurrentYear(year);
+    setCurrentMonth(month);
+    setCurrentDay(day);
+    setInfoSubView("generalInfo");
+    infoState.setGeneralInfoActiveTab("storage");
+    setView("info");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openGeneralInfoCollect(month: number, day: number, year: number = currentYear) {
+    setCurrentYear(year);
+    setCurrentMonth(month);
+    setCurrentDay(day);
+    setInfoSubView("generalInfo");
+    infoState.setGeneralInfoActiveTab("collect");
+    setView("info");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openPhotoBook(month: number, day: number, year: number = currentYear) {
+    setCurrentYear(year);
+    setCurrentMonth(month);
+    setCurrentDay(day);
+    setInfoSubView("photobook");
+    setPhotoBookTab("index");
     setView("info");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -2329,6 +2528,9 @@ export default function HomePage() {
   }
 
   function saveDiary(nextDiaryText: string, nextVoiceText: string, year: number = currentYear) {
+    const dateToken = entryDate(currentMonth, currentDay, year);
+    if (diaryBoundDateRef.current !== dateToken || !diaryContentReadyRef.current) return;
+
     const currentKey = key(currentMonth, currentDay, year);
     const editStart = diaryEditStartRef.current;
 
@@ -3876,7 +4078,9 @@ export default function HomePage() {
           <div className="head-actions calendar-top-actions calendar-top-actions-redesign">
             <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("diary")}>일기장</button>
             <a className="pill-btn compact-pill calendar-info-app-link" href={getInformationAppDayUrl(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`)} target="_blank" rel="noopener noreferrer" title="정보함 앱에서 이 날짜 보기">🔗 정보함 앱</a>
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfo(currentMonth, currentDay)}>정보보관소</button>
+            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openGeneralInfoCollect(currentMonth, currentDay)}>일반정보수집</button>
+            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfoIndex(currentMonth, currentDay)}>정보인덱스</button>
+            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openPhotoBook(currentMonth, currentDay)}>포토북</button>
             <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
@@ -3905,7 +4109,7 @@ export default function HomePage() {
               value={searchKeyword}
               onChange={e => setSearchKeyword(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") void searchDiaryAndInfo(); }}
-              placeholder="일기장/정보보관소 검색어 입력"
+              placeholder="일기장/일반정보수집/정보인덱스 검색어 입력"
             />
             <button type="button" className="soft-btn" onClick={() => void searchDiaryAndInfo()}>검색</button>
           </div>
@@ -3918,11 +4122,33 @@ export default function HomePage() {
               {searchResults.map((result, index) => (
                 <button
                   type="button"
-                  key={`${result.type}-${result.entryDate}-${index}`}
+                  key={`${result.type}-${result.itemId || result.localNumericId || result.entryDate}-${index}`}
                   className="calendar-search-result"
-                  onClick={() => result.type === "diary" ? openDiary(result.month, result.day) : openInfo(result.month, result.day)}
+                  onClick={() => {
+                    if (result.type === "diary") {
+                      openDiary(result.month, result.day, result.year);
+                      return;
+                    }
+                    if (result.type === "index") {
+                      openInfoIndex(result.month, result.day, result.year);
+                      if (result.localNumericId) {
+                        infoState.setGeneralInfoDetailId(result.localNumericId);
+                      } else if (result.detailUrl) {
+                        window.open(result.detailUrl, "_blank", "noopener,noreferrer");
+                      }
+                      return;
+                    }
+                    openInfo(result.month, result.day, result.year);
+                  }}
                 >
-                  <strong>{result.type === "diary" ? "일기장" : "정보보관소"} · {pad(result.month)}/{pad(result.day)}</strong>
+                  <strong>
+                    {result.type === "diary"
+                      ? "일기장"
+                      : result.type === "index"
+                        ? "정보인덱스"
+                        : "정보보관소"}{" "}
+                    · {pad(result.month)}/{pad(result.day)}
+                  </strong>
                   <span>{result.text.length > 70 ? `${result.text.slice(0, 70)}...` : result.text}</span>
                 </button>
               ))}
@@ -4054,10 +4280,7 @@ export default function HomePage() {
           />
           <div
             key={`diary-rich-${currentYear}-${currentMonth}-${currentDay}`}
-            ref={(el) => {
-              diaryRichTextRef.current = el;
-              if (el && el.innerHTML === "") el.innerHTML = diaryText || "";
-            }}
+            ref={diaryRichTextRef}
             className="generalInfoRichTextEditor collectPaperEditor"
             contentEditable
             suppressContentEditableWarning
@@ -6021,11 +6244,17 @@ ${photo.memoText}
           <div className="info-head info-head-one-line" style={{ marginBottom: "20px" }}>
             <div className="info-title-one-line">
               <h2 className="info-title">📂 정보보관소 지식 Wiki</h2>
-              <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 월간 캘린더</button>
+              <button type="button" className="pill-btn" onClick={() => {
+                if (!infoState.confirmLeaveGeneralInfoCollect()) return;
+                openCalendar(currentMonth);
+              }}>📅 월간 캘린더</button>
             </div>
 
             <div className="info-action-one-line">
-              <button type="button" className="pill-btn" onClick={() => openDiary(currentMonth, currentDay)}>✍️ 일기</button>
+              <button type="button" className="pill-btn" onClick={() => {
+                if (!infoState.confirmLeaveGeneralInfoCollect()) return;
+                openDiary(currentMonth, currentDay);
+              }}>✍️ 일기</button>
               <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
             </div>
           </div>
@@ -6041,12 +6270,13 @@ ${photo.memoText}
               }}
               style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", background: infoSubView === "generalInfo" ? "rgba(122,184,255,0.15)" : "transparent", color: infoSubView === "generalInfo" ? "#7ab8ff" : "#ccc", cursor: "pointer" }}
             >
-              📂 일반 정보 저장함
+              📂 정보 인덱스
             </button>
             <button
               type="button"
               className={`info-subview-tab ${infoSubView === "photobook" ? "active" : ""}`}
               onClick={() => {
+                if (!infoState.confirmLeaveGeneralInfoCollect()) return;
                 setInfoSubView("photobook");
                 setActiveItem(null);
                 setEditingPhotoBookItemId(null);
@@ -6076,16 +6306,30 @@ ${photo.memoText}
               handleGeneralInfoInsertImageSlot={infoState.handleGeneralInfoInsertImageSlot}
               getGeneralInfoToolbarButtonStyle={infoState.getGeneralInfoToolbarButtonStyle}
               handleResetGeneralInfoDraft={infoState.handleResetGeneralInfoDraft}
+              handleUndoGeneralInfoDraft={infoState.handleUndoGeneralInfoDraft}
+              generalInfoDraftBackup={infoState.generalInfoDraftBackup}
               handleAddGeneralInfoParagraph={infoState.handleAddGeneralInfoParagraph}
               handleRemoveGeneralInfoParagraph={infoState.handleRemoveGeneralInfoParagraph}
               handleGeneralInfoFileUpload={infoState.handleGeneralInfoFileUpload}
               handleClearGeneralInfoCoverImage={infoState.handleClearGeneralInfoCoverImage}
+              handleClearGeneralInfoInfographics={infoState.handleClearGeneralInfoInfographics}
               handleRemoveGeneralInfoMediaItem={infoState.handleRemoveGeneralInfoMediaItem}
               handleConfirmGeneralInfo={infoState.handleConfirmGeneralInfo}
+              handleExtractGeneralInfoUrl={infoState.handleExtractGeneralInfoUrl}
+              isExtractingGeneralInfoUrl={infoState.isExtractingGeneralInfoUrl}
+              generalInfoUrlMeta={infoState.generalInfoUrlMeta}
+              generalInfoUrlNotice={infoState.generalInfoUrlNotice}
               handleCancelEditGeneralInfo={infoState.handleCancelEditGeneralInfo}
+              handleStartNewGeneralInfo={infoState.handleStartNewGeneralInfo}
+              confirmLeaveGeneralInfoCollect={infoState.confirmLeaveGeneralInfoCollect}
+              generalInfoDeleteUndo={infoState.generalInfoDeleteUndo}
+              handleUndoDeleteGeneralInfo={infoState.handleUndoDeleteGeneralInfo}
               handleStartEditGeneralInfo={infoState.handleStartEditGeneralInfo}
               handleDeleteGeneralInfo={infoState.handleDeleteGeneralInfo}
               handleImportGeneralInfoAppFile={infoState.handleImportGeneralInfoAppFile}
+              handleExportGeneralInfoAppBundle={infoState.handleExportGeneralInfoAppBundle}
+              handleExportSelectedGeneralInfoAppFiles={infoState.handleExportSelectedGeneralInfoAppFiles}
+              handleOpenGeneralInfoTempDraft={infoState.handleOpenGeneralInfoTempDraft}
               generalInfoItems={infoState.generalInfoItems}
               filteredGeneralInfoItems={infoState.filteredGeneralInfoItems}
               generalInfoSearchTerm={infoState.generalInfoSearchTerm}
@@ -7021,6 +7265,13 @@ ${photo.memoText}
                               className="pbIndexCardBtnDetail"
                               onClick={(e) => { e.stopPropagation(); setActiveItem({ type: "photobook", id: photo.id || "" }); setPhotoBookTab("register"); }}
                             >상세보기</button>
+                            <button
+                              className="pbIndexCardBtnDelete"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (photo.id) void deletePhotoBookItem(photo.id);
+                              }}
+                            >삭제</button>
                           </div>
                         </div>
                       );
@@ -7039,7 +7290,7 @@ ${photo.memoText}
 
 
   return (
-    <main className="app">
+    <main className={view === "info" ? "app appInfoWide" : "app"}>
       {view === "calendar" && CalendarView()}
       {view === "diary" && DiaryView()}
       {view === "info" && InfoView()}

@@ -1,23 +1,8 @@
 import type { GeneralInfoDraft } from "../types/generalInfo";
+import { INFO_INDEX_CATEGORIES } from "./infoIndex";
 import { createEmptyParagraph } from "./generalInfoParagraphs";
 
-export const generalInfoCategories = [
-  "정치",
-  "행정",
-  "경제",
-  "산업",
-  "사회",
-  "교육",
-  "문화",
-  "예술",
-  "과학",
-  "기술",
-  "국제",
-  "외교",
-  "국방",
-  "안보",
-  "애플/건강",
-];
+export const generalInfoCategories = [...INFO_INDEX_CATEGORIES];
 
 export const initialGeneralInfoDraft: GeneralInfoDraft = {
   title: "",
@@ -65,47 +50,28 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
     .toLowerCase();
 
   const pickPrimaryCategory = () => {
-    if (/카리나|아이돌|가수|배우|연예|현장포토|셀럽|스타|미모|걸그룹|보이그룹|드라마|영화|예능/.test(source)) {
-      return "문화";
-    }
-    if (/전시|공연|미술|음악|작품|갤러리|아트|무대/.test(source)) return "예술";
-    if (/대통령|국회|정당|선거|정치|공약|정부/.test(source)) return "정치";
-    if (/행정|지자체|구청|시청|정책|민원|공공/.test(source)) return "행정";
-    if (/금리|물가|환율|증시|경제|소비|부동산/.test(source)) return "경제";
-    if (/기업|산업|반도체|자동차|조선|배터리|수출/.test(source)) return "산업";
-    if (/학교|교육|입시|학생|대학|교사|교육청/.test(source)) return "교육";
-    if (/과학|연구|우주|바이오|기후/.test(source)) return "과학";
+    if (/애플|apple|아이폰|iphone|아이패드|ipad|워치|ios|macbook/.test(source)) return "애플";
+    if (/건강|헬스|운동|의료|병원|다이어트|영양|수면/.test(source)) return "건강";
+    if (/과학|연구|우주|바이오|기후|nasa/.test(source)) return "과학";
+    if (/금리|물가|환율|증시|경제|소비|부동산|산업|기업|반도체|수출/.test(source)) return "경제";
     if (/기술|ai|인공지능|로봇|소프트웨어|데이터/.test(source)) return "기술";
     if (/외교|정상회담|협정|대사|동맹/.test(source)) return "외교";
-    if (/국방|군|방산|무기|훈련/.test(source)) return "국방";
-    if (/안보|북한|핵|테러|사이버안보/.test(source)) return "안보";
-    if (/애플|apple|아이폰|iphone|아이패드|ipad|워치|건강|헬스|운동|의료|병원|다이어트/.test(source)) {
-      return "애플/건강";
-    }
-    if (/국제|미국|중국|일본|유럽|해외|global/.test(source)) return "국제";
-    if (/사회|사건|사고|복지|노동|인구|지역/.test(source)) return "사회";
-    return "사회";
+    if (/국제|미국|중국|일본|유럽|해외|global|국방|안보|북한/.test(source)) return "국제";
+    if (/사회|사건|사고|복지|노동|인구|지역|교육|문화|예술|정치|행정/.test(source)) return "사회";
+    return "기타";
   };
 
   const primaryCategory = draft.primaryCategory || pickPrimaryCategory();
 
   const pickSecondaryCategory = () => {
-    if (primaryCategory === "문화" && /카리나|아이돌|가수|배우|연예|현장포토|셀럽|스타/.test(source)) {
-      return "연예/콘텐츠";
-    }
-    if (primaryCategory === "문화") return "문화콘텐츠";
-    if (primaryCategory === "예술") return "전시/공연";
+    if (primaryCategory === "애플") return "애플/기기";
+    if (primaryCategory === "건강") return "건강/웰니스";
+    if (primaryCategory === "과학") return "과학/연구";
+    if (primaryCategory === "경제") return "경제동향";
+    if (primaryCategory === "기술") return "AI/디지털";
     if (primaryCategory === "국제") return "해외동향";
     if (primaryCategory === "외교") return "외교/정상회담";
-    if (primaryCategory === "경제") return "경제동향";
-    if (primaryCategory === "산업") return "산업동향";
-    if (primaryCategory === "기술") return "AI/디지털";
-    if (primaryCategory === "교육") return "교육정책/학교";
-    if (primaryCategory === "국방") return "안보/방산";
-    if (primaryCategory === "애플/건강") {
-      if (/애플|apple|아이폰|iphone|아이패드|ipad|워치/.test(source)) return "애플/기기";
-      return "건강/웰니스";
-    }
+    if (primaryCategory === "사회") return "사회이슈";
     return "일반";
   };
 
@@ -136,12 +102,6 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
     new Set(keywordCandidates.map((word) => (word.startsWith("#") ? word : "#" + word))),
   ).slice(0, 8);
 
-  const summaryBase = draft.text || extractedTitle || draft.sourceUrl || draft.fileName;
-  const summary =
-    summaryBase.length > 90
-      ? summaryBase.slice(0, 90) + "..."
-      : summaryBase || "입력 자료 요약이 필요합니다.";
-
   const factCheckNeedsReview =
     /수치|통계|발표|최신|단독|논란|의혹|속보|가격|비율|증가|감소/.test(source);
 
@@ -157,7 +117,7 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
         .map((keyword) => keyword.replace("#", ""))
         .join(" / "),
     keywords,
-    summary,
+    summary: draft.summary || "",
     factCheckStatus: factCheckNeedsReview ? "확인 필요" : "확인 완료",
     // 짧은 자동 메모는 AI 검증 보고서 칸에 넣지 않음
     factCheckSummary: draft.factCheckSummary || "",

@@ -43,7 +43,7 @@ export function filterUploadImageFiles(files: File[]): File[] {
   return files.filter((file) => {
     if (!file || file.size === 0) return false;
     if (!file.type || file.type.startsWith("image/")) return true;
-    return /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name);
+    return /\.(jpe?g|png|gif|webp|heic|heif|bmp|tiff?)$/i.test(file.name);
   });
 }
 

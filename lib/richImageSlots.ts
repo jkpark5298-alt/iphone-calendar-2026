@@ -176,35 +176,35 @@ export function insertImagesAtSlotOrCaret(
       `.${IMG_SLOT_CLASS}[data-img-slot="${escaped}"]`,
     );
     if (slot) {
-      const wrap = createInlineImage(urls[0].src, urls[0].alt || awaitId, awaitId);
-      slot.replaceWith(wrap);
-      let last: HTMLElement = wrap;
-      for (let i = 1; i < urls.length; i += 1) {
-        const extra = createInlineImage(
-          urls[i].src,
-          urls[i].alt || `S${awaitId.replace(/\D/g, "") || "1"}-${i + 1}`,
+      const fragment = document.createDocumentFragment();
+      urls.forEach((item, index) => {
+        fragment.appendChild(
+          createInlineImage(
+            item.src,
+            item.alt || (index === 0 ? awaitId : `${awaitId}-${index + 1}`),
+            index === 0 ? awaitId : undefined,
+          ),
         );
-        last.after(extra);
-        last = extra;
-      }
+      });
+      slot.replaceWith(fragment);
       return true;
     }
   }
 
+  const fragment = document.createDocumentFragment();
+  urls.forEach((item) => {
+    fragment.appendChild(createInlineImage(item.src, item.alt || "이미지"));
+  });
   const sel = window.getSelection();
-  for (const item of urls) {
-    const wrap = createInlineImage(item.src, item.alt || "이미지");
-    if (sel && sel.rangeCount > 0 && editor.contains(sel.getRangeAt(0).commonAncestorContainer)) {
-      const range = sel.getRangeAt(0);
-      range.deleteContents();
-      range.insertNode(wrap);
-      range.setStartAfter(wrap);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else {
-      editor.appendChild(wrap);
-    }
+  if (sel && sel.rangeCount > 0 && editor.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(fragment);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } else {
+    editor.appendChild(fragment);
   }
   return true;
 }
