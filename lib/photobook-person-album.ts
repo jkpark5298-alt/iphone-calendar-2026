@@ -6,7 +6,7 @@ export const PERSON_ALBUM_USER_PAUSE_MS = 8000;
 
 /**
  * Photobook image albums keyed by 2차 분류.
- * 人: 인물/She. 旅 (U+F981): 여행·풍경.
+ * 人: 인물/She. 旅行 (U+F981 + 行): 여행·풍경.
  */
 export const SCENE_ALBUMS = {
   person: {
@@ -21,7 +21,7 @@ export const SCENE_ALBUMS = {
   trip: {
     id: "trip",
     tab: "trip-album",
-    title: "\uF981 앨범",
+    title: "\uF981行 앨범",
     categories: ["여행", "풍경"],
     storageKey: "iphone-calendar-photobook-trip-album-v1",
     countLabel: "여행·풍경 사진",
