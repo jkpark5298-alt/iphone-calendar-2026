@@ -5854,7 +5854,11 @@ body {
 .category-tag[data-cat="문화"] { background: #e05bbf; color: #fff; }
 .category-tag[data-cat="예술"] { background: #f0ad4e; color: #fff; }
 .category-tag[data-cat="과학"] { background: #777777; color: #fff; }
-.category-tag[data-cat="외교"] { background: #4b0082; color: #fff; }
+.category-tag[data-cat="책"] { background: #8b5e3c; color: #fff; }
+.category-tag[data-cat="뇌"] { background: #7c3aed; color: #fff; }
+.category-tag[data-cat="마케팅"] { background: #0ea5e9; color: #fff; }
+.category-tag[data-cat="화장품"] { background: #f472b6; color: #fff; }
+.category-tag[data-cat="영화"] { background: #111827; color: #fff; }
 .category-tag[data-cat="국방"] { background: #556b2f; color: #fff; }
 .category-tag[data-cat="안보"] { background: #2f4f4f; color: #fff; }
 .category-tag[data-cat="기타"] { background: #9fa6b2; color: #fff; }
@@ -11754,6 +11758,18 @@ body {
   white-space: nowrap;
   text-align: center;
 }
+.infoIndexDetailActions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.infoIndexDetailActions .infoIndexDetailButton {
+  flex: 0 0 auto;
+  width: auto;
+}
 .infoIndexTabWithAdd {
   flex: 1;
   display: flex;
@@ -12140,6 +12156,10 @@ body {
   }
   .infoIndexSaveStatusCell {
     width: 92px;
+    white-space: nowrap;
+  }
+  .infoIndexDetailCell {
+    width: 148px;
     white-space: nowrap;
   }
   .infoIndexSelectCol {

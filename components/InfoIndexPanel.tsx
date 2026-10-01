@@ -13,7 +13,6 @@ import {
   buildIndexItem,
   groupIndexItems,
   dedupeIndexItems,
-  infoIndexDetailLabel,
   infoIndexSourceClass,
   infoIndexSourceHomeUrl,
   parseIflLibraryPayload,
@@ -37,6 +36,7 @@ const MANUAL_STORAGE_KEY = "travel-diary-info-index-manual-v1";
 type Props = {
   localItems: GeneralInfoItem[];
   onOpenLocalDetail: (id: number) => void;
+  onEditLocal?: (id: number) => void;
   onToggleLocalPin: (id: number) => void;
   localStatus?: string;
   onExportLocalAppFiles?: () => string | void | Promise<string | void>;
@@ -160,6 +160,7 @@ function AppFileStar({ mark }: { mark: "saved" | "removed" }) {
 export function InfoIndexPanel({
   localItems,
   onOpenLocalDetail,
+  onEditLocal,
   onToggleLocalPin,
   localStatus,
   onExportLocalAppFiles,
@@ -445,6 +446,14 @@ export function InfoIndexPanel({
     if (item.localNumericId) onOpenLocalDetail(item.localNumericId);
   };
 
+  const editLocal = (item: InfoIndexItem) => {
+    if (item.id === "local-temp:draft" || item.saveStatus === "임시 저장") {
+      onOpenTempDraft?.();
+      return;
+    }
+    if (item.localNumericId) onEditLocal?.(item.localNumericId);
+  };
+
   const togglePin = (item: InfoIndexItem) => {
     if (item.source === "local" && item.localNumericId) {
       onToggleLocalPin(item.localNumericId);
@@ -570,43 +579,49 @@ export function InfoIndexPanel({
 
   const renderDetail = (item: InfoIndexItem) => {
     const className = `infoIndexDetailButton ${infoIndexSourceClass(item.source)}`;
-    const label = infoIndexDetailLabel(item.source);
-    if (item.saveStatus === "임시 저장" && item.id === "local-temp:draft") {
-      return (
-        <button type="button" className={className} onClick={() => onOpenTempDraft?.()}>
-          이어서 쓰기
-        </button>
-      );
-    }
     if (item.appFileMark === "removed") {
+      const tellRemoved = () =>
+        setStatus("앱에서 삭제한 항목입니다. 빨간 ★로 인덱스에 남아 있으며, 앱파일 불러오기로 다시 넣을 수 있습니다.");
       return (
-        <button
-          type="button"
-          className={`${className} isRemoved`}
-          onClick={() =>
-            setStatus("앱에서 삭제한 항목입니다. 빨간 ★로 인덱스에 남아 있으며, 앱파일 불러오기로 다시 넣을 수 있습니다.")
-          }
-        >
-          삭제됨
-        </button>
+        <div className="infoIndexDetailActions">
+          <button type="button" className={`${className} isRemoved`} onClick={tellRemoved}>
+            수정
+          </button>
+          <button type="button" className={`${className} isRemoved`} onClick={tellRemoved}>
+            보기
+          </button>
+        </div>
       );
     }
-    if (item.source === "local") {
+    if (item.source === "local" || item.id === "local-temp:draft") {
       return (
-        <button type="button" className={className} onClick={() => openLocalDetail(item)}>
-          {label}
-        </button>
+        <div className="infoIndexDetailActions">
+          <button type="button" className={className} onClick={() => editLocal(item)}>
+            수정
+          </button>
+          <button
+            type="button"
+            className={className}
+            onClick={() => {
+              if (item.id === "local-temp:draft") onOpenTempDraft?.();
+              else openLocalDetail(item);
+            }}
+          >
+            보기
+          </button>
+        </div>
       );
     }
+    const href = item.detailUrl || infoIndexSourceHomeUrl(item.source);
     return (
-      <a
-        className={className}
-        href={item.detailUrl || infoIndexSourceHomeUrl(item.source)}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        {label}
-      </a>
+      <div className="infoIndexDetailActions">
+        <a className={className} href={href} target="_blank" rel="noopener noreferrer">
+          수정
+        </a>
+        <a className={className} href={href} target="_blank" rel="noopener noreferrer">
+          보기
+        </a>
+      </div>
     );
   };
 

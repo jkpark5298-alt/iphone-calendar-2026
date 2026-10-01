@@ -55,9 +55,14 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
     if (/과학|연구|우주|바이오|기후|nasa/.test(source)) return "과학";
     if (/금리|물가|환율|증시|경제|소비|부동산|산업|기업|반도체|수출/.test(source)) return "경제";
     if (/기술|ai|인공지능|로봇|소프트웨어|데이터/.test(source)) return "기술";
-    if (/외교|정상회담|협정|대사|동맹/.test(source)) return "외교";
-    if (/국제|미국|중국|일본|유럽|해외|global|국방|안보|북한/.test(source)) return "국제";
-    if (/사회|사건|사고|복지|노동|인구|지역|교육|문화|예술|정치|행정/.test(source)) return "사회";
+    if (/화장품|코스메틱|스킨케어/.test(source)) return "화장품";
+    if (/영화|시네마|개봉/.test(source)) return "영화";
+    if (/책|도서|서적|독서/.test(source)) return "책";
+    if (/마케팅|광고|브랜드/.test(source)) return "마케팅";
+    if (/뇌|두뇌|신경/.test(source)) return "뇌";
+    if (/문화|예술|전시|공연/.test(source)) return "문화";
+    if (/국제|미국|중국|일본|유럽|해외|global|국방|안보|북한|외교|정상회담/.test(source)) return "국제";
+    if (/사회|사건|사고|복지|노동|인구|지역|교육|정치|행정/.test(source)) return "사회";
     return "기타";
   };
 
@@ -70,7 +75,12 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
     if (primaryCategory === "경제") return "경제동향";
     if (primaryCategory === "기술") return "AI/디지털";
     if (primaryCategory === "국제") return "해외동향";
-    if (primaryCategory === "외교") return "외교/정상회담";
+    if (primaryCategory === "책") return "책";
+    if (primaryCategory === "문화") return "문화";
+    if (primaryCategory === "뇌") return "뇌";
+    if (primaryCategory === "마케팅") return "마케팅";
+    if (primaryCategory === "화장품") return "화장품";
+    if (primaryCategory === "영화") return "영화";
     if (primaryCategory === "사회") return "사회이슈";
     return "일반";
   };

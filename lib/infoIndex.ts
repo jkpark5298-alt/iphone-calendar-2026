@@ -6,7 +6,12 @@ export const INFO_INDEX_CATEGORIES = [
   "기술",
   "국제",
   "건강",
-  "외교",
+  "책",
+  "문화",
+  "뇌",
+  "마케팅",
+  "화장품",
+  "영화",
   "기타",
 ] as const;
 
@@ -168,16 +173,22 @@ function parseIndexDate(raw: string): Date | null {
 }
 
 export function mapToIndexCategory(raw: string, extra: string[] = []): InfoIndexCategory {
+  const named = String(raw || "").trim();
+  if (INFO_INDEX_CATEGORIES.includes(named as InfoIndexCategory)) return named as InfoIndexCategory;
   const blob = [raw, ...extra].join(" ").toLowerCase();
   if (/애플|iphone|ios|ipad|macbook|apple|아이폰|아이패드/.test(blob)) return "애플";
+  if (/화장품|코스메틱|스킨케어|파운데이션|립스틱/.test(blob)) return "화장품";
+  if (/영화|시네마|개봉|넷플릭스|cinema/.test(blob)) return "영화";
+  if (/책|도서|서적|독서|출판/.test(blob)) return "책";
+  if (/마케팅|광고|브랜드|캠페인/.test(blob)) return "마케팅";
+  if (/뇌|두뇌|신경|뉴런/.test(blob)) return "뇌";
+  if (/문화|예술|전시|공연|박물관/.test(blob)) return "문화";
   if (/건강|의료|병원|영양|수면|치매|알츠하이머|피부|혈관|wine|와인/.test(blob)) return "건강";
   if (/과학|우주|연구|유전|물리|화학|nasa|성경|고대/.test(blob)) return "과학";
   if (/경제|증시|금리|환율|부동산|투자|경매/.test(blob)) return "경제";
   if (/기술|ai|인공지능|소프트웨어|로봇|반도체|리모델/.test(blob)) return "기술";
-  if (/외교|정상회담|대사|동맹/.test(blob)) return "외교";
-  if (/국제|해외|미국|중국|일본|bbc/.test(blob)) return "국제";
+  if (/국제|해외|미국|중국|일본|bbc|외교|정상회담/.test(blob)) return "국제";
   if (/사회|교육|학교|패션|역사/.test(blob)) return "사회";
-  if (INFO_INDEX_CATEGORIES.includes(raw as InfoIndexCategory)) return raw as InfoIndexCategory;
   return "기타";
 }
 

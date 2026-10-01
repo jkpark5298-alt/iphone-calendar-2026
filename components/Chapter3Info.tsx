@@ -147,7 +147,7 @@ export function Chapter3Info({
   confirmLeaveGeneralInfoCollect,
   generalInfoDeleteUndo,
   handleUndoDeleteGeneralInfo,
-  handleStartEditGeneralInfo: _handleStartEditGeneralInfo,
+  handleStartEditGeneralInfo,
   handleDeleteGeneralInfo: _handleDeleteGeneralInfo,
   handleImportGeneralInfoAppFile,
   handleExportGeneralInfoAppBundle,
@@ -1152,6 +1152,10 @@ export function Chapter3Info({
             localItems={generalInfoItems}
             localStatus={generalInfoSupabaseStatus}
             onOpenLocalDetail={setGeneralInfoDetailId}
+            onEditLocal={(id) => {
+              const item = generalInfoItems.find((entry) => entry.id === id);
+              if (item) handleStartEditGeneralInfo(item);
+            }}
             onToggleLocalPin={handleTogglePinGeneralInfo}
             onExportLocalAppFiles={handleExportGeneralInfoAppBundle}
             onExportSelectedAppFiles={handleExportSelectedGeneralInfoAppFiles}
