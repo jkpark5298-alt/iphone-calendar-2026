@@ -8,8 +8,10 @@ import {
   removePersonAlbumCards,
   PERSON_ALBUM_SLIDE_MS,
   PERSON_ALBUM_USER_PAUSE_MS,
+  SCENE_ALBUMS,
   type PersonAlbumCard,
   type PhotobookPersonSource,
+  type SceneAlbumId,
 } from "../lib/photobook-person-album";
 import {
   readPersonAlbumState,
@@ -36,6 +38,9 @@ function AlbumCardFace({
       <button type="button" onClick={onToggle} className="pbPersonCardFace">
         <div className="pbPersonCardImgWrap">
           <img key={card.imagePath} src={card.imagePath} alt="" draggable={false} />
+          {card.keyword ? (
+            <span className="pbPersonCardKeyword">{card.keyword}</span>
+          ) : null}
         </div>
         <span className={`pbPersonCardCheck ${selected ? "on" : ""}`}>
           {selected ? "✓" : ""}
@@ -69,20 +74,38 @@ function isIPadDevice() {
 
 type GalleryProps = {
   items: PhotobookPersonSource[];
-  /** When true, show all images (selected album); otherwise filter 인물/She + keeps. */
+  /** Curated 2차분류 album (keeps + hide). Selection shows the passed items only. */
   mode?: "person" | "selection";
+  /** Which 2차분류 album to show when mode is not selection. */
+  albumId?: SceneAlbumId;
   onOpenItem?: (id: string) => void;
   embedded?: boolean;
   onPrint?: () => void;
 };
 
+function CategoryNames({ categories }: { categories: readonly string[] }) {
+  return (
+    <>
+      {categories.map((name, index) => (
+        <span key={name}>
+          {index > 0 ? "/" : null}
+          <b>{name}</b>
+        </span>
+      ))}
+    </>
+  );
+}
+
 export function PhotobookPersonAlbumGallery({
   items,
   mode = "person",
+  albumId = "person",
   onOpenItem,
   embedded = false,
   onPrint,
 }: GalleryProps) {
+  const album = SCENE_ALBUMS[albumId];
+  const curated = mode !== "selection";
   const scrollerRef = useRef<HTMLDivElement>(null);
   const pauseUntilRef = useRef(0);
   const selectedCountRef = useRef(0);
@@ -97,17 +120,17 @@ export function PhotobookPersonAlbumGallery({
 
   const albumState = useMemo(() => {
     void albumTick;
-    return readPersonAlbumState();
-  }, [albumTick]);
+    return readPersonAlbumState(album.storageKey);
+  }, [album.storageKey, albumTick]);
 
   const keeps = albumState.keeps;
   const hidden = albumState.hidden;
 
   const liveIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
   const cards = useMemo(() => {
-    if (mode === "selection") return buildAlbumCardsFromSources(items);
-    return buildPersonAlbumCards(items, keeps, hidden);
-  }, [items, keeps, hidden, mode]);
+    if (!curated) return buildAlbumCardsFromSources(items);
+    return buildPersonAlbumCards(items, keeps, hidden, album.categories);
+  }, [album.categories, curated, items, keeps, hidden]);
 
   const currentCard = cards[activeIndex] ?? cards[0];
   selectedCountRef.current = selectedKeys.size;
@@ -134,18 +157,18 @@ export function PhotobookPersonAlbumGallery({
   };
 
   const handleDeleteSelected = () => {
-    if (mode !== "person") return;
+    if (!curated) return;
     const selected = cards.filter((card) => selectedKeys.has(card.key));
     if (selected.length === 0) return;
     const ok = window.confirm(
-      `선택한 ${selected.length}장을 人 앨범에서 삭제할까요?\n목록에 글이 남아 있어도 이 앨범에서는 더 이상 보이지 않습니다.`,
+      `선택한 ${selected.length}장을 ${album.title}에서 삭제할까요?\n목록에 글이 남아 있어도 이 앨범에서는 더 이상 보이지 않습니다.`,
     );
     if (!ok) return;
     setBusyDelete(true);
     try {
-      const current = readPersonAlbumState();
+      const current = readPersonAlbumState(album.storageKey);
       const next = removePersonAlbumCards(current, selected);
-      writePersonAlbumState(next);
+      writePersonAlbumState(next, album.storageKey);
       setAlbumTick((n) => n + 1);
       setSelectedKeys(new Set());
     } finally {
@@ -245,9 +268,9 @@ export function PhotobookPersonAlbumGallery({
       <div className="pbPersonAlbumHeader">
         {!embedded ? (
           <p className="pbPersonAlbumHint">
-            {mode === "person" ? (
+            {curated ? (
               <>
-                분류가 <b>인물</b>/<b>She</b>인 포토북 사진은 자동으로 이 앨범에 모입니다.
+                분류가 <CategoryNames categories={album.categories} />인 포토북 사진은 자동으로 이 앨범에 모입니다.
                 목록에서 카드를 지워도 사진은 여기에 남습니다. 사진을 고른 뒤 삭제할 수 있습니다.
               </>
             ) : (
@@ -257,13 +280,13 @@ export function PhotobookPersonAlbumGallery({
           </p>
         ) : (
           <p className="pbPersonAlbumHint">
-            {mode === "person" ? "인물 사진" : "선택 사진"} {cards.length}장
-            {mode === "person" ? " · 삭제해도 앨범에 남음 · 선택 후 삭제" : ""}
+            {curated ? album.countLabel : "선택 사진"} {cards.length}장
+            {curated ? " · 삭제해도 앨범에 남음 · 선택 후 삭제" : ""}
             {autoPlay ? " · 3초마다 무작위 재생" : ""}
           </p>
         )}
         <div className="pbPersonAlbumActions">
-          {mode === "person" && selectedKeys.size > 0 ? (
+          {curated && selectedKeys.size > 0 ? (
             <button
               type="button"
               disabled={busyDelete}
@@ -292,8 +315,11 @@ export function PhotobookPersonAlbumGallery({
       </div>
 
       {autoPlay && currentCard ? (
-        <div className="pbPersonAlbumFullscreen" role="dialog" aria-modal="true" aria-label="人앨범 자동 재생">
+        <div className="pbPersonAlbumFullscreen" role="dialog" aria-modal="true" aria-label={`${album.title} 자동 재생`}>
           <img key={currentCard.imagePath} src={currentCard.imagePath} alt={currentCard.memo || ""} />
+          {currentCard.keyword ? (
+            <span className="pbPersonAlbumFullscreenKeyword">{currentCard.keyword}</span>
+          ) : null}
           <div className="pbPersonAlbumFullscreenBar">
             <span>
               {activeIndex + 1} / {cards.length}
@@ -307,7 +333,7 @@ export function PhotobookPersonAlbumGallery({
 
       {cards.length === 0 ? (
         <div className="pbPersonAlbumEmpty">
-          {mode === "person" ? "인물/She로 분류된 사진이 없습니다." : "표시할 사진이 없습니다."}
+          {curated ? album.emptyMessage : "표시할 사진이 없습니다."}
         </div>
       ) : (
         <>
@@ -352,23 +378,38 @@ export function PhotobookPersonAlbumGallery({
 }
 
 type ScreenProps = {
+  albumId?: SceneAlbumId;
   items: PhotobookPersonSource[];
   onOpenItem?: (id: string) => void;
 };
 
-export function PhotobookPersonAlbumScreen({ items, onOpenItem }: ScreenProps) {
+export function PhotobookSceneAlbumScreen({
+  albumId = "person",
+  items,
+  onOpenItem,
+}: ScreenProps) {
+  const album = SCENE_ALBUMS[albumId];
   const cards = useMemo(() => {
-    const state = readPersonAlbumState();
-    return buildPersonAlbumCards(items, state.keeps, state.hidden);
-  }, [items]);
+    const state = readPersonAlbumState(album.storageKey);
+    return buildPersonAlbumCards(items, state.keeps, state.hidden, album.categories);
+  }, [album.categories, album.storageKey, items]);
 
   return (
     <section className="pbPersonAlbumScreen">
       <div className="pbPersonAlbumScreenTitle">
-        <h2>人 앨범</h2>
+        <h2>{album.title}</h2>
         <span>{cards.length}장</span>
       </div>
-      <PhotobookPersonAlbumGallery items={items} mode="person" onOpenItem={onOpenItem} />
+      <PhotobookPersonAlbumGallery
+        albumId={albumId}
+        items={items}
+        mode="person"
+        onOpenItem={onOpenItem}
+      />
     </section>
   );
+}
+
+export function PhotobookPersonAlbumScreen(props: Omit<ScreenProps, "albumId">) {
+  return <PhotobookSceneAlbumScreen albumId="person" {...props} />;
 }

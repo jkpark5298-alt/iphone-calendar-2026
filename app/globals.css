@@ -8036,6 +8036,17 @@ body {
   color: #7ab8ff;
 }
 
+.pbPhotoBookTabs {
+  flex-wrap: wrap;
+}
+
+.pbPhotoBookTabs .ch3TabBtn {
+  flex: 1 1 132px;
+  min-width: 0;
+  padding: 10px 8px;
+  font-size: 13px;
+}
+
 /* ==========================================
    정보저장함 카드 — 가로형 (이미지 2/5 · 제목 2/5 · 버튼 1/5)
    ========================================== */
@@ -10901,6 +10912,24 @@ body {
   font-size: 14px;
   font-weight: 600;
 }
+.pbPersonAlbumFullscreenKeyword {
+  position: absolute;
+  top: 56px;
+  left: 16px;
+  z-index: 2;
+  max-width: min(70vw, 420px);
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .pbPersonAlbumFullscreenBar button {
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.35);
@@ -10943,6 +10972,7 @@ body {
   cursor: pointer;
 }
 .pbPersonCardImgWrap {
+  position: relative;
   display: flex;
   aspect-ratio: 3 / 4;
   width: 100%;
@@ -10950,6 +10980,25 @@ body {
   justify-content: center;
   overflow: hidden;
   background: #111827;
+}
+.pbPersonCardKeyword {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  max-width: calc(100% - 44px);
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 .pbPersonCardImgWrap img {
   max-width: 100%;
@@ -10959,7 +11008,8 @@ body {
 .pbPersonCardCheck {
   position: absolute;
   top: 6px;
-  left: 6px;
+  right: 6px;
+  left: auto;
   display: flex;
   width: 24px;
   height: 24px;
@@ -12090,6 +12140,9 @@ body {
   }
   .appInfoWide .ch3TabBar {
     max-width: 560px;
+  }
+  .appInfoWide .ch3TabBar.pbPhotoBookTabs {
+    max-width: none;
   }
   .appInfoWide .generalInfoRightColumn > .scroll-to-top-btn,
   .appInfoWide .generalInfoLeftColumn > .scroll-to-top-btn {

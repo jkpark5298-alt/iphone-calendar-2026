@@ -22,9 +22,16 @@ import { readClipboardImageFiles, runCollectRichCommand } from "../lib/collectRi
 import { CollectFormatToolbar } from "../components/CollectFormatToolbar";
 import { HandwritingModal } from "../components/HandwritingModal";
 import { TextToImageModal } from "../components/TextToImageModal";
-import { PhotobookPersonAlbumGallery, PhotobookPersonAlbumScreen } from "../components/PhotobookPersonAlbumGallery";
+import { PhotobookPersonAlbumGallery, PhotobookSceneAlbumScreen } from "../components/PhotobookPersonAlbumGallery";
 import { keepPersonPhotosFromDeletedItems } from "../lib/client-photobook-person-album";
-import { isPersonAlbumCategory, type PhotobookPersonSource } from "../lib/photobook-person-album";
+import {
+  SCENE_ALBUMS,
+  sceneAlbumByTab,
+  sceneAlbumForCategory,
+  type PhotobookPersonSource,
+  type SceneAlbumId,
+  type SceneAlbumTab,
+} from "../lib/photobook-person-album";
 import {
   loadInformationEntriesForMonth,
   getInformationAppDayUrl,
@@ -569,7 +576,7 @@ export default function HomePage() {
   const [photoBookInputImage, setPhotoBookInputImage] = useState<File | null>(null);
   const [photoBookInputImageMemos, setPhotoBookInputImageMemos] = useState<string[]>([]);
   const [pbMemoEditIdx, setPbMemoEditIdx] = useState<number | null>(null);
-  const [photoBookTab, setPhotoBookTab] = useState<"index" | "register" | "person-album">("index");
+  const [photoBookTab, setPhotoBookTab] = useState<"index" | "register" | SceneAlbumTab>("index");
 
   // Restructured Info Repository states for global notes catalog
   const [allInstaCards, setAllInstaCards] = useState<InstaInfoCard[]>([]);
@@ -5737,12 +5744,14 @@ function MarkDateView() {
     if (!window.confirm("이 포토북 카드를 삭제할까요?")) return;
 
     const personSource = toPhotobookPersonSource(targetItem);
-    const keepInPersonAlbum = Boolean(
-      personSource && isPersonAlbumCategory(personSource.category2),
-    );
-    if (keepInPersonAlbum && personSource) {
-      // 人앨범에 사진을 남기므로 스토리지 파일은 삭제하지 않음
-      keepPersonPhotosFromDeletedItems([personSource]);
+    const matchedAlbum = personSource ? sceneAlbumForCategory(personSource.category2) : null;
+    const keepInSceneAlbum = Boolean(matchedAlbum && personSource);
+    if (keepInSceneAlbum && personSource && matchedAlbum) {
+      // 분류 앨범에 사진을 남기므로 스토리지 파일은 삭제하지 않음
+      keepPersonPhotosFromDeletedItems([personSource], {
+        storageKey: matchedAlbum.storageKey,
+        categories: matchedAlbum.categories,
+      });
     }
 
     const dateStr = targetItem.tag;
@@ -5758,7 +5767,7 @@ function MarkDateView() {
       previousData: JSON.stringify(previousItems),
     });
 
-    if (!keepInPersonAlbum) {
+    if (!keepInSceneAlbum) {
       if (targetItem.storagePath) {
         await deleteSupabasePhoto("info-photos", "info_photos", targetItem.storagePath);
       }
@@ -5776,11 +5785,11 @@ function MarkDateView() {
         }
       }
     } else if (isSupabaseConfigured && supabase && targetItem.id) {
-      // DB 행만 제거 (스토리지 URL은 人앨범 keep용으로 유지)
+      // DB 행만 제거 (스토리지 URL은 분류 앨범 keep용으로 유지)
       try {
         await supabase.from("info_photos").delete().eq("id", targetItem.id);
       } catch (error) {
-        console.warn("info_photos row delete for person-album keep failed", error);
+        console.warn("info_photos row delete for scene-album keep failed", error);
       }
     }
 
@@ -6182,6 +6191,7 @@ ${photo.memoText}
     const photoCategories2 = [
       "여행", "일상", "음식", "기억", "풍경", "인물", "취미", "She", "기타"
     ];
+    const openSceneAlbum = sceneAlbumByTab(photoBookTab);
 
     // Filter Photo Book list
     const filteredPhotoBookItems = allPhotoBookItems.map(photo => {
@@ -6350,7 +6360,7 @@ ${photo.memoText}
             /* Photo Book Tab-based Layout */
             <div style={{ width: "100%" }}>
               {/* Tab buttons */}
-              <div className="ch3TabBar">
+              <div className="ch3TabBar pbPhotoBookTabs">
                 <button
                   className={`ch3TabBtn ${photoBookTab === "index" ? "active" : ""}`}
                   onClick={() => setPhotoBookTab("index")}
@@ -6371,10 +6381,16 @@ ${photo.memoText}
                     setPhotoBookTab("register");
                   }}
                 >📖 포토북 등록</button>
-                <button
-                  className={`ch3TabBtn ${photoBookTab === "person-album" ? "active" : ""}`}
-                  onClick={() => setPhotoBookTab("person-album")}
-                >人 앨범</button>
+                {(Object.keys(SCENE_ALBUMS) as SceneAlbumId[]).map((albumId) => {
+                  const album = SCENE_ALBUMS[albumId];
+                  return (
+                    <button
+                      key={album.tab}
+                      className={`ch3TabBtn ${photoBookTab === album.tab ? "active" : ""}`}
+                      onClick={() => setPhotoBookTab(album.tab)}
+                    >{album.title}</button>
+                  );
+                })}
               </div>
 
               {/* Register Tab: edit / create / detail forms */}
@@ -7124,9 +7140,11 @@ ${photo.memoText}
               </div>
               )}
 
-              {photoBookTab === "person-album" && (
+              {openSceneAlbum && (
               <div style={{ position: "relative" }}>
-                <PhotobookPersonAlbumScreen
+                <PhotobookSceneAlbumScreen
+                  key={openSceneAlbum.id}
+                  albumId={openSceneAlbum.id}
                   items={allPhotoBookItems
                     .map((photo) => toPhotobookPersonSource(photo))
                     .filter((item): item is PhotobookPersonSource => Boolean(item))}
