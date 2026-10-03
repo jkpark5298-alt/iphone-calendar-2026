@@ -65,12 +65,36 @@ export function nextSlotId(html: string) {
   return `S${n}`;
 }
 
+const SLOT_DEL_CLASS = "rich-img-slot-del";
+
+/** Empty image cell: a block that splits the editor, not an inline "S1 이미지" chip. */
+export function paintEmptyImageSlot(slot: HTMLElement, id?: string) {
+  const slotId = id || slot.getAttribute("data-img-slot") || "S1";
+  slot.setAttribute("data-img-slot", slotId);
+  slot.setAttribute("contenteditable", "false");
+  slot.classList.add(IMG_SLOT_CLASS);
+  slot.replaceChildren();
+
+  const label = document.createElement("span");
+  label.className = "rich-img-slot-label";
+  label.textContent = slotId;
+
+  const hint = document.createElement("span");
+  hint.className = "rich-img-slot-hint";
+  hint.textContent = "눌러서 이 칸에 사진 넣기";
+
+  const del = document.createElement("span");
+  del.className = SLOT_DEL_CLASS;
+  del.setAttribute("role", "button");
+  del.setAttribute("aria-label", `${slotId} 칸 지우기`);
+  del.textContent = "×";
+
+  slot.append(label, hint, del);
+}
+
 export function createImageSlotElement(id: string) {
   const slot = document.createElement("span");
-  slot.setAttribute("data-img-slot", id);
-  slot.setAttribute("contenteditable", "false");
-  slot.className = IMG_SLOT_CLASS;
-  slot.textContent = `${id} 이미지`;
+  paintEmptyImageSlot(slot, id);
   return slot;
 }
 
@@ -230,8 +254,10 @@ export function handleRichImageSlotPointer(
     return true;
   }
 
-  const slot = target.closest(`.${IMG_SLOT_CLASS}`) as HTMLElement | null;
-  if (slot && editor.contains(slot) && !slot.classList.contains(INLINE_IMG_WRAP_CLASS)) {
+  const slotDel = target.closest(`.${SLOT_DEL_CLASS}`) as HTMLElement | null;
+  if (slotDel && editor.contains(slotDel)) {
+    const slot = slotDel.closest(`.${IMG_SLOT_CLASS}`) as HTMLElement | null;
+    if (!slot) return false;
     const id = slot.getAttribute("data-img-slot") || "이미지 칸";
     if (options?.confirmSlot !== false) {
       if (!window.confirm(`${id} 칸을 지울까요?`)) return true;
@@ -254,7 +280,13 @@ export function enhanceRichInlineImages(editor: HTMLElement | null) {
     img.setAttribute("contenteditable", "false");
     ensureInlineImageWrap(img);
   });
-  editor.querySelectorAll(`.${IMG_SLOT_CLASS}[data-img-slot]`).forEach((slot) => {
-    (slot as HTMLElement).setAttribute("contenteditable", "false");
+  editor.querySelectorAll(`.${IMG_SLOT_CLASS}[data-img-slot]`).forEach((node) => {
+    const slot = node as HTMLElement;
+    slot.setAttribute("contenteditable", "false");
+    if (slot.classList.contains(INLINE_IMG_WRAP_CLASS)) return;
+    if (slot.querySelector("img")) return;
+    if (!slot.querySelector(".rich-img-slot-label")) {
+      paintEmptyImageSlot(slot);
+    }
   });
 }

@@ -685,15 +685,28 @@ export default function HomePage() {
     }
   }
 
+  const diaryPendingSlotRef = useRef<string | null>(null);
+
   function handleDiaryRichEditorClick(event: React.MouseEvent<HTMLDivElement>) {
     const editor = diaryRichTextRef.current;
     if (!editor) return;
-    const handled = handleRichImageSlotPointer(editor, event.target as Node);
+    const target = event.target as HTMLElement;
+    const handled = handleRichImageSlotPointer(editor, target);
     if (handled) {
       event.preventDefault();
       event.stopPropagation();
       saveDiary(editor.innerHTML || "", voiceText);
+      return;
     }
+    const slot = target.closest?.(".rich-img-slot") as HTMLElement | null;
+    if (!slot || !editor.contains(slot) || slot.classList.contains("rich-inline-img-wrap") || slot.querySelector("img")) {
+      return;
+    }
+    const slotId = slot.getAttribute("data-img-slot");
+    if (!slotId || !diaryImageFileRef.current) return;
+    event.preventDefault();
+    diaryPendingSlotRef.current = slotId;
+    diaryImageFileRef.current.click();
   }
 
   const diaryImageFileRef = useRef<HTMLInputElement | null>(null);
@@ -703,8 +716,10 @@ export default function HomePage() {
 
   function handleDiaryRichImagePick(files: FileList | null) {
     const list = Array.from(files || []);
+    const slotId = diaryPendingSlotRef.current;
+    diaryPendingSlotRef.current = null;
     if (!list.length) return;
-    void insertDiaryInlineImages(list);
+    void insertDiaryInlineImages(list, slotId);
   }
 
   function insertDiaryDataUrl(dataUrl: string) {
@@ -3994,7 +4009,7 @@ export default function HomePage() {
                     key={`${mark.type}-${mark.plus}`}
                     className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(mark.type)}`}
                   >
-                    {calendarMarkLabels[mark.type]}{mark.plus ? "+" : ""}
+                    {calendarMarkLabels[mark.type]}{mark.plus ? <span className="calendar-mark-like" aria-label="리더">👍</span> : null}
                   </span>
                 ))}
               </div>
@@ -4091,12 +4106,12 @@ export default function HomePage() {
             <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
-            <label className="mark-btn work-ics-import-btn" title="근무표 ICS/JSON 가져오기" style={{ cursor: "pointer" }}>
+            <label className="mark-btn work-ics-import-btn" title="근무표 ICS/JSON 가져오기">
               가져오기
               <input
+                className="work-ics-import-input"
                 type="file"
                 accept=".ics,.json,text/calendar,application/json"
-                hidden
                 onChange={(event) => {
                   const file = event.target.files?.[0] || null;
                   void importWorkScheduleMarksFromFile(file);
@@ -4279,7 +4294,7 @@ export default function HomePage() {
             type="file"
             accept="image/*,.heic,.heif,.jpeg,.jpg,.png,.webp"
             multiple
-            style={{ display: "none" }}
+            className="offscreen-file-input"
             onChange={(e) => {
               handleDiaryRichImagePick(e.target.files);
               e.target.value = "";
@@ -4608,7 +4623,7 @@ function MarkDateView() {
               onChange={event => setMarkPlus(event.target.checked)}
               disabled={markType === "노조"}
             />
-            <span>+ 표시 추가 {markType === "노조" ? "(노조는 + 제외)" : `→ ${markType}+`}</span>
+            <span>👍 표시 추가 {markType === "노조" ? "(노조는 👍 제외)" : `→ ${markType}👍`}</span>
           </label>
 
           <p className="muted">날짜를 쉼표로 여러 개 입력하세요. 예: 1, 3, 15</p>
@@ -4622,7 +4637,7 @@ function MarkDateView() {
           />
 
           <button type="button" className="save-schedule-btn" onClick={addCalendarMarks}>
-            {markType}{markType !== "노조" && markPlus ? "+" : ""} 표시 저장
+            {markType}{markType !== "노조" && markPlus ? "👍" : ""} 표시 저장
           </button>
 
           <div className="saved-marks">
@@ -4632,7 +4647,7 @@ function MarkDateView() {
               <div className="saved-mark-row" key={`${day}-${item.type}-${item.plus}`}>
                 <span>{currentMonth}/{day}</span>
                 <span className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(item.type)}`}>
-                  {calendarMarkLabels[item.type]}{item.plus ? "+" : ""}
+                  {calendarMarkLabels[item.type]}{item.plus ? <span className="calendar-mark-like" aria-label="리더">👍</span> : null}
                 </span>
                 <button type="button" className="soft-btn delete-btn" onClick={() => deleteCalendarMark(currentMonth, day, item)}>삭제</button>
               </div>

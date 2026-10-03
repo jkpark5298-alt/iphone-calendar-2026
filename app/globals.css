@@ -2921,6 +2921,13 @@ textarea {
   white-space: nowrap;
 }
 
+.calendar-mark-like {
+  margin-left: 1px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1;
+}
+
 .calendar-mark-c { background: #914141; color: #fff; }
 .calendar-mark-a { background: #2f80ed; color: #fff; }
 .calendar-mark-dang { background: #e67e22; color: #fff; }
@@ -9564,16 +9571,85 @@ body {
 }
 
 .generalInfoRichTextEditor .rich-img-slot {
-  display: inline-block !important;
-  margin: 2px 4px 2px 0 !important;
-  padding: 2px 10px !important;
-  border-radius: 999px !important;
-  border: 1px dashed rgba(56, 189, 248, 0.6) !important;
-  background: rgba(14, 165, 233, 0.1) !important;
-  color: #7dd3fc !important;
-  font-size: 13px !important;
-  font-weight: 800 !important;
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  min-height: 132px !important;
+  margin: 10px 0 !important;
+  padding: 18px 12px !important;
+  border-radius: 14px !important;
+  border: 1.5px dashed rgba(14, 165, 233, 0.75) !important;
+  background: rgba(14, 165, 233, 0.08) !important;
+  color: #0369a1 !important;
   cursor: pointer !important;
+  vertical-align: top !important;
+}
+
+.generalInfoRichTextEditor .rich-img-slot-label {
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.04em !important;
+  color: #0284c7 !important;
+}
+
+.generalInfoRichTextEditor .rich-img-slot-hint {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+}
+
+.generalInfoRichTextEditor .rich-img-slot-del {
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  width: 22px !important;
+  height: 22px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 999px !important;
+  background: #dc2626 !important;
+  color: #fff !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+}
+
+.calendar-top-actions-redesign .work-ics-import-btn {
+  position: relative !important;
+  width: auto !important;
+  min-width: 78px !important;
+  padding: 0 10px !important;
+  overflow: hidden !important;
+  cursor: pointer !important;
+}
+
+.work-ics-import-input {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  opacity: 0 !important;
+  cursor: pointer !important;
+  font-size: 16px !important;
+}
+
+.offscreen-file-input {
+  position: fixed !important;
+  left: -120px !important;
+  top: 0 !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
 }
 
 .generalInfoRichTextEditor .generalInfoInlineImageBlock {

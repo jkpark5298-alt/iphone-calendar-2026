@@ -349,7 +349,9 @@ export function Chapter3Info({
   const handleCollectEditorClick = React.useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       handleGeneralInfoRichEditorClick(event);
-      const slot = (event.target as HTMLElement).closest?.(".rich-img-slot");
+      const target = event.target as HTMLElement;
+      if (target.closest?.(".rich-img-slot-del")) return;
+      const slot = target.closest?.(".rich-img-slot");
       const id = slot?.getAttribute("data-img-slot");
       if (id) setImageSlotPrompt(id);
     },

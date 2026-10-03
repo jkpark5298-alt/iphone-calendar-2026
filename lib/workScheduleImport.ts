@@ -53,10 +53,16 @@ function parseIcsDate(value: string): { year: number; month: number; day: number
   };
 }
 
-/** SUMMARY 예: "박종규 C근무", "박종규 당근무", "박종규 休(휴무)", "박종규 B7(11:00~20:00) 리더" */
+/** SUMMARY의 👍 또는 "리더"는 근무 코드가 아니라 리더(+) 표시 */
+export function summaryHasLeaderMark(summary: string): boolean {
+  const s = String(summary || "");
+  return s.includes("👍") || /(?:^|\s)리더(?:\s|$)/u.test(s);
+}
+
+/** SUMMARY 예: "박종규 C근무", "👍 박종규 당근무", "박종규 休(휴무)", "박종규 B7(11:00~20:00) 리더" */
 export function extractShiftFromSummary(summary: string): string {
   let s = String(summary || "").trim();
-  s = s.replace(/\s*리더\s*$/u, "").replace(/^👍\s*/u, "").trim();
+  s = s.replace(/👍/gu, " ").replace(/(?:^|\s)리더(?=\s|$)/gu, " ").replace(/\s+/g, " ").trim();
 
   // "이름 + 근무코드..." 형태면 이름 제거
   const named = s.match(/^[가-힣A-Za-z0-9]+?\s+(.+)$/u);
@@ -84,7 +90,8 @@ export function mapShiftToMarkType(rawShift: string): ImportedWorkMarkType | nul
   if (shift === "A" || /^A$/i.test(shift)) return "A";
   if (shift === "당" || shift === "당직") return "당";
   if (shift === "심야" || shift === "N") return "심야";
-  if (shift === "노조") return "노조";
+  // excel-schedule-calendar 는 노조 근무를 "노교"로 내보냄
+  if (shift === "노조" || shift === "노교") return "노조";
 
   // 승무 코드 등은 현재 근무 표시에 없음 → 스킵(안전)
   return null;
@@ -123,6 +130,17 @@ function parseIcsEvents(text: string) {
   return events;
 }
 
+/** 같은 날·같은 근무가 두 번 있으면 리더(+) 표시를 남긴다. */
+function dedupeImportedMarks(marks: ImportedWorkDayMark[]): ImportedWorkDayMark[] {
+  const map = new Map<string, ImportedWorkDayMark>();
+  for (const mark of marks) {
+    const id = `${mark.year}-${mark.month}-${mark.day}-${mark.type}`;
+    const prev = map.get(id);
+    if (!prev || (mark.plus && !prev.plus)) map.set(id, mark);
+  }
+  return Array.from(map.values());
+}
+
 /** ICS DESCRIPTION의 검정(relatedCoworkers) 줄은 무시하고 SUMMARY만 사용 */
 export function importWorkScheduleFromIcs(icsText: string): WorkScheduleImportResult {
   const events = parseIcsEvents(icsText);
@@ -142,11 +160,12 @@ export function importWorkScheduleFromIcs(icsText: string): WorkScheduleImportRe
       continue;
     }
 
-    // SUMMARY: "박종규 C근무" → 이름 추출
-    const nameMatch = String(event.summary || "").trim().match(/^([가-힣A-Za-z0-9]+)\s+/u);
+    const summary = String(event.summary || "").trim();
+    // SUMMARY: "👍 박종규 C근무" → 이름 추출
+    const nameMatch = summary.replace(/^👍\s*/u, "").match(/^([가-힣A-Za-z0-9]+)\s+/u);
     if (nameMatch?.[1] && !targetName) targetName = nameMatch[1];
 
-    const rawShift = extractShiftFromSummary(event.summary);
+    const rawShift = extractShiftFromSummary(summary);
     const type = mapShiftToMarkType(rawShift);
     if (!type) {
       skipped += 1;
@@ -158,11 +177,17 @@ export function importWorkScheduleFromIcs(icsText: string): WorkScheduleImportRe
       month: date.month,
       day: date.day,
       type,
-      plus: false,
+      plus: type !== "노조" && summaryHasLeaderMark(summary),
       sourceTitle: event.summary,
     });
+  }
 
-    const mk = `${date.year}-${date.month}`;
+  const uniqueMarks = dedupeImportedMarks(marks);
+  marks.length = 0;
+  marks.push(...uniqueMarks);
+
+  for (const mark of marks) {
+    const mk = `${mark.year}-${mark.month}`;
     monthCounter.set(mk, (monthCounter.get(mk) || 0) + 1);
   }
 
@@ -256,7 +281,8 @@ export function importWorkScheduleFromJson(raw: unknown): WorkScheduleImportResu
       continue;
     }
     // relatedCoworkers는 의도적으로 무시 (검정색 타인/익일)
-    const type = mapShiftToMarkType(String(day.myShift || ""));
+    const rawShift = String(day.myShift || "");
+    const type = mapShiftToMarkType(extractShiftFromSummary(rawShift));
     if (!type) {
       skipped += 1;
       continue;
@@ -266,10 +292,14 @@ export function importWorkScheduleFromJson(raw: unknown): WorkScheduleImportResu
       month,
       day: d,
       type,
-      plus: false,
-      sourceTitle: `${schedule.targetName || ""} ${day.myShift}`.trim(),
+      plus: type !== "노조" && (Boolean(day.isLeader) || summaryHasLeaderMark(rawShift)),
+      sourceTitle: `${schedule.targetName || ""} ${rawShift}${day.isLeader ? " 리더" : ""}`.trim(),
     });
   }
+
+  const uniqueJsonMarks = dedupeImportedMarks(marks);
+  marks.length = 0;
+  marks.push(...uniqueJsonMarks);
 
   if (!marks.length) {
     return {
