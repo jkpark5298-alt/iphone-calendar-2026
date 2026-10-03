@@ -67,17 +67,14 @@ export function nextSlotId(html: string) {
 
 const SLOT_DEL_CLASS = "rich-img-slot-del";
 
-/** Empty image cell: a block that splits the editor, not an inline "S1 이미지" chip. */
+/** Empty image cell. The internal id stays on the element; the card does not show "S1". */
 export function paintEmptyImageSlot(slot: HTMLElement, id?: string) {
   const slotId = id || slot.getAttribute("data-img-slot") || "S1";
   slot.setAttribute("data-img-slot", slotId);
   slot.setAttribute("contenteditable", "false");
+  slot.setAttribute("aria-label", "사진 칸");
   slot.classList.add(IMG_SLOT_CLASS);
   slot.replaceChildren();
-
-  const label = document.createElement("span");
-  label.className = "rich-img-slot-label";
-  label.textContent = slotId;
 
   const hint = document.createElement("span");
   hint.className = "rich-img-slot-hint";
@@ -86,10 +83,10 @@ export function paintEmptyImageSlot(slot: HTMLElement, id?: string) {
   const del = document.createElement("span");
   del.className = SLOT_DEL_CLASS;
   del.setAttribute("role", "button");
-  del.setAttribute("aria-label", `${slotId} 칸 지우기`);
+  del.setAttribute("aria-label", "사진 칸 지우기");
   del.textContent = "×";
 
-  slot.append(label, hint, del);
+  slot.append(hint, del);
 }
 
 export function createImageSlotElement(id: string) {
@@ -258,9 +255,8 @@ export function handleRichImageSlotPointer(
   if (slotDel && editor.contains(slotDel)) {
     const slot = slotDel.closest(`.${IMG_SLOT_CLASS}`) as HTMLElement | null;
     if (!slot) return false;
-    const id = slot.getAttribute("data-img-slot") || "이미지 칸";
     if (options?.confirmSlot !== false) {
-      if (!window.confirm(`${id} 칸을 지울까요?`)) return true;
+      if (!window.confirm("이 사진 칸을 지울까요?")) return true;
     }
     slot.remove();
     return true;
@@ -285,8 +281,6 @@ export function enhanceRichInlineImages(editor: HTMLElement | null) {
     slot.setAttribute("contenteditable", "false");
     if (slot.classList.contains(INLINE_IMG_WRAP_CLASS)) return;
     if (slot.querySelector("img")) return;
-    if (!slot.querySelector(".rich-img-slot-label")) {
-      paintEmptyImageSlot(slot);
-    }
+    paintEmptyImageSlot(slot);
   });
 }

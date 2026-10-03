@@ -44,7 +44,6 @@ import { sanitizeGeneralInfoHtml } from "../lib/sanitizeHtml";
 import {
   enhanceRichInlineImages,
   insertImagesAtSlotOrCaret,
-  insertEmptyImageSlot,
   tryConsumeImageTriggerToSlot,
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
@@ -1070,15 +1069,6 @@ export function useTravelDiaryGeneralInfoState({
     }
     return urls;
   }, []);
-
-  /** insta-fact-library 의 insertEmptySlot(): 커서 위치에 빈 이미지 칸(S1…) 생성 */
-  const handleGeneralInfoInsertImageSlot = useCallback(() => {
-    const editor = generalInfoRichTextRef.current;
-    if (!editor) return;
-    editor.focus();
-    insertEmptyImageSlot(editor);
-    syncGeneralInfoRichTextToDraft();
-  }, [syncGeneralInfoRichTextToDraft]);
 
   /** 파일(사진첩/파일) 또는 클립보드 이미지를 에디터에 인라인 삽입 */
   const insertGeneralInfoRichImages = useCallback(async (
@@ -3075,7 +3065,6 @@ export function useTravelDiaryGeneralInfoState({
     handleGeneralInfoRichInput,
     handleGeneralInfoRichEditorClick,
     handleGeneralInfoRichImagePick,
-    handleGeneralInfoInsertImageSlot,
     getGeneralInfoToolbarButtonStyle,
     makeGeneralInfoHtmlFromText,
     selectedGeneralInfoItem,

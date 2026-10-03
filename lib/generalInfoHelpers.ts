@@ -712,8 +712,7 @@ export const bindInlineImageRemoveHandler = (editor: HTMLElement | null) => {
     if (slot && editor.contains(slot) && !slot.classList.contains("rich-inline-img-wrap")) {
       event.preventDefault();
       event.stopPropagation();
-      const id = slot.getAttribute("data-img-slot") || "이미지 칸";
-      if (!window.confirm(`${id} 칸을 지울까요?`)) return;
+      if (!window.confirm("이 사진 칸을 지울까요?")) return;
       slot.remove();
       return;
     }

@@ -23,6 +23,7 @@ import {
   isInstagramHomeOrAccountUrl,
   isInstagramHostText,
 } from "../lib/instagramMeta";
+import { insertClassCell, removeClassCellFromEvent } from "../lib/collectClassCell";
 import { htmlForActiveEditor, isParagraphEmpty } from "../lib/generalInfoParagraphs";
 import { Card } from "./SharedComponents";
 import { CollectFormatToolbar } from "./CollectFormatToolbar";
@@ -49,7 +50,6 @@ export interface Chapter3InfoProps {
   handleGeneralInfoRichInput: () => void;
   handleGeneralInfoRichEditorClick: (event: React.MouseEvent<HTMLDivElement>) => void;
   handleGeneralInfoRichImagePick: (files: FileList | null) => void;
-  handleGeneralInfoInsertImageSlot: () => void;
   getGeneralInfoToolbarButtonStyle: () => React.CSSProperties;
 
   handleResetGeneralInfoDraft: () => void;
@@ -125,7 +125,6 @@ export function Chapter3Info({
   handleGeneralInfoRichInput,
   handleGeneralInfoRichEditorClick,
   handleGeneralInfoRichImagePick,
-  handleGeneralInfoInsertImageSlot,
   getGeneralInfoToolbarButtonStyle,
   handleResetGeneralInfoDraft,
   handleUndoGeneralInfoDraft,
@@ -334,11 +333,6 @@ export function Chapter3Info({
     };
   }, [imageSlotPrompt]);
 
-  const noteNewImageSlot = React.useCallback(() => {
-    const id = findAwaitingSlotId(generalInfoRichTextRef.current);
-    if (id) setImageSlotPrompt(id);
-  }, [generalInfoRichTextRef]);
-
   const handleCollectEditorInput = React.useCallback(() => {
     const before = findAwaitingSlotId(generalInfoRichTextRef.current);
     handleGeneralInfoRichInput();
@@ -350,12 +344,18 @@ export function Chapter3Info({
     (event: React.MouseEvent<HTMLDivElement>) => {
       handleGeneralInfoRichEditorClick(event);
       const target = event.target as HTMLElement;
+      if (removeClassCellFromEvent(generalInfoRichTextRef.current, target)) {
+        event.preventDefault();
+        event.stopPropagation();
+        syncGeneralInfoRichTextToDraft();
+        return;
+      }
       if (target.closest?.(".rich-img-slot-del")) return;
       const slot = target.closest?.(".rich-img-slot");
       const id = slot?.getAttribute("data-img-slot");
       if (id) setImageSlotPrompt(id);
     },
-    [handleGeneralInfoRichEditorClick],
+    [generalInfoRichTextRef, handleGeneralInfoRichEditorClick, syncGeneralInfoRichTextToDraft],
   );
 
   const fillSlotFromFiles = React.useCallback(
@@ -703,10 +703,12 @@ export function Chapter3Info({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
-                    handleGeneralInfoInsertImageSlot();
-                    noteNewImageSlot();
+                    const editor = generalInfoRichTextRef.current;
+                    if (!editor) return;
+                    insertClassCell(editor);
+                    syncGeneralInfoRichTextToDraft();
                   }}
-                  title="이미지 칸 추가"
+                  title="분류 칸 추가"
                 >
                   ＋ 칸
                 </button>
@@ -773,7 +775,7 @@ export function Chapter3Info({
                   style={{ bottom: keyboardInset + 8 }}
                 >
                   <div className="collectSlotImagePanelHead">
-                    <strong>{imageSlotPrompt}</strong>
+                    <strong>사진</strong>
                     <span>여러 장을 고르면 이 칸부터 모두 들어갑니다. 복사한 사진은 본문에 붙여넣어도 됩니다.</span>
                     <button type="button" className="secondaryButton" onClick={() => setImageSlotPrompt(null)}>
                       닫기

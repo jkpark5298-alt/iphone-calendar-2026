@@ -12,11 +12,11 @@ import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateA
 import {
   enhanceRichInlineImages,
   insertImagesAtSlotOrCaret,
-  insertEmptyImageSlot,
   tryConsumeImageTriggerToSlot,
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
+import { insertClassCell, removeClassCellFromEvent } from "../lib/collectClassCell";
 import { stepCollectFontSize } from "../lib/collectFormatPalette";
 import { readClipboardImageFiles, runCollectRichCommand } from "../lib/collectRichFormat";
 import { CollectFormatToolbar } from "../components/CollectFormatToolbar";
@@ -668,11 +668,13 @@ export default function HomePage() {
     }
   }
 
-  function handleDiaryInsertImageSlot() {
+  const diaryPendingSlotRef = useRef<string | null>(null);
+  const diaryImageFileRef = useRef<HTMLInputElement | null>(null);
+
+  function handleDiaryInsertClassCell() {
     const editor = diaryRichTextRef.current;
     if (!editor) return;
-    editor.focus();
-    insertEmptyImageSlot(editor);
+    insertClassCell(editor);
     saveDiary(editor.innerHTML || "", voiceText);
   }
 
@@ -685,12 +687,16 @@ export default function HomePage() {
     }
   }
 
-  const diaryPendingSlotRef = useRef<string | null>(null);
-
   function handleDiaryRichEditorClick(event: React.MouseEvent<HTMLDivElement>) {
     const editor = diaryRichTextRef.current;
     if (!editor) return;
     const target = event.target as HTMLElement;
+    if (removeClassCellFromEvent(editor, target)) {
+      event.preventDefault();
+      event.stopPropagation();
+      saveDiary(editor.innerHTML || "", voiceText);
+      return;
+    }
     const handled = handleRichImageSlotPointer(editor, target);
     if (handled) {
       event.preventDefault();
@@ -709,7 +715,6 @@ export default function HomePage() {
     diaryImageFileRef.current.click();
   }
 
-  const diaryImageFileRef = useRef<HTMLInputElement | null>(null);
   const [showDiaryHandwritingModal, setShowDiaryHandwritingModal] = useState(false);
   const [showDiaryTextToImageModal, setShowDiaryTextToImageModal] = useState(false);
   const [diaryCollectFontSizePx, setDiaryCollectFontSizePx] = useState(15);
@@ -4282,7 +4287,7 @@ export default function HomePage() {
             onHandwriting={() => setShowDiaryHandwritingModal(true)}
           />
           <div className="collectFormatSlotRow">
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertImageSlot} title="이미지 칸 추가">
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertClassCell} title="분류 칸 추가">
               ＋ 칸
             </button>
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("removeFormat")}>
@@ -6328,7 +6333,6 @@ ${photo.memoText}
               handleGeneralInfoRichInput={infoState.handleGeneralInfoRichInput}
               handleGeneralInfoRichEditorClick={infoState.handleGeneralInfoRichEditorClick}
               handleGeneralInfoRichImagePick={infoState.handleGeneralInfoRichImagePick}
-              handleGeneralInfoInsertImageSlot={infoState.handleGeneralInfoInsertImageSlot}
               getGeneralInfoToolbarButtonStyle={infoState.getGeneralInfoToolbarButtonStyle}
               handleResetGeneralInfoDraft={infoState.handleResetGeneralInfoDraft}
               handleUndoGeneralInfoDraft={infoState.handleUndoGeneralInfoDraft}
