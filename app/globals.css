@@ -2922,7 +2922,7 @@ textarea {
 }
 
 .calendar-mark-like {
-  margin-left: 1px;
+  margin-right: 1px;
   font-size: 11px;
   font-weight: 400;
   line-height: 1;
@@ -12163,6 +12163,84 @@ body {
   .infoIndexDateCol,
   .infoIndexSourceCol {
     display: none;
+  }
+
+  .infoIndexTable {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .infoIndexTable th,
+  .infoIndexTable td {
+    padding: 6px 3px;
+  }
+
+  .infoIndexTable th {
+    font-size: 10px;
+  }
+
+  .infoIndexGroupCol,
+  .infoIndexGroupCell {
+    width: 76px;
+    max-width: 76px;
+    font-size: 11px;
+    letter-spacing: -0.04em;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+
+  .infoIndexTitleCol,
+  .infoIndexTitleCell {
+    width: auto;
+  }
+
+  .infoIndexSaveStatusCell {
+    width: 48px;
+    font-size: 10px;
+  }
+
+  .infoIndexSaveStatus {
+    min-height: 18px;
+    padding: 0 3px;
+    font-size: 10px;
+  }
+
+  .infoIndexDetailCol,
+  .infoIndexDetailCell {
+    width: 58px;
+  }
+
+  .infoIndexDetailActions {
+    gap: 2px;
+  }
+
+  .infoIndexDetailActions .infoIndexDetailButton {
+    min-height: 20px;
+    padding: 1px 4px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .infoIndexPinCol,
+  .infoIndexPinCell {
+    width: 28px;
+  }
+
+  .infoIndexPinButton {
+    width: 22px;
+    height: 22px;
+  }
+
+  .infoIndexPinButton svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .infoIndexPinButton.hasThumb,
+  .infoIndexThumb {
+    width: 22px;
+    height: 22px;
   }
 }
 

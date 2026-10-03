@@ -4009,7 +4009,7 @@ export default function HomePage() {
                     key={`${mark.type}-${mark.plus}`}
                     className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(mark.type)}`}
                   >
-                    {calendarMarkLabels[mark.type]}{mark.plus ? <span className="calendar-mark-like" aria-label="리더">👍</span> : null}
+                    {mark.plus ? <span className="calendar-mark-like" aria-label="리더">👍</span> : null}{calendarMarkLabels[mark.type]}
                   </span>
                 ))}
               </div>
@@ -4623,7 +4623,7 @@ function MarkDateView() {
               onChange={event => setMarkPlus(event.target.checked)}
               disabled={markType === "노조"}
             />
-            <span>👍 표시 추가 {markType === "노조" ? "(노조는 👍 제외)" : `→ ${markType}👍`}</span>
+            <span>👍 표시 추가 {markType === "노조" ? "(노조는 👍 제외)" : `→ 👍${markType}`}</span>
           </label>
 
           <p className="muted">날짜를 쉼표로 여러 개 입력하세요. 예: 1, 3, 15</p>
@@ -4637,7 +4637,7 @@ function MarkDateView() {
           />
 
           <button type="button" className="save-schedule-btn" onClick={addCalendarMarks}>
-            {markType}{markType !== "노조" && markPlus ? "👍" : ""} 표시 저장
+            {markType !== "노조" && markPlus ? "👍" : ""}{markType} 표시 저장
           </button>
 
           <div className="saved-marks">
@@ -4647,7 +4647,7 @@ function MarkDateView() {
               <div className="saved-mark-row" key={`${day}-${item.type}-${item.plus}`}>
                 <span>{currentMonth}/{day}</span>
                 <span className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(item.type)}`}>
-                  {calendarMarkLabels[item.type]}{item.plus ? <span className="calendar-mark-like" aria-label="리더">👍</span> : null}
+                  {item.plus ? <span className="calendar-mark-like" aria-label="리더">👍</span> : null}{calendarMarkLabels[item.type]}
                 </span>
                 <button type="button" className="soft-btn delete-btn" onClick={() => deleteCalendarMark(currentMonth, day, item)}>삭제</button>
               </div>

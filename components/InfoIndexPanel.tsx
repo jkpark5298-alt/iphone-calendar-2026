@@ -11,6 +11,7 @@ import {
   INFO_INDEX_SOURCE_SHORT,
   APP_FILE_INDEX_ARCHIVE_EVENT,
   buildIndexItem,
+  formatIndexDateLabel,
   groupIndexItems,
   dedupeIndexItems,
   infoIndexSourceClass,
@@ -470,7 +471,7 @@ export function InfoIndexPanel({
 
   const groupLabel = (key: string) => {
     if (view === "tag") return key.startsWith("#") ? key : `#${key}`;
-    if (view === "date") return key.replace(/-/g, ".");
+    if (view === "date") return formatIndexDateLabel(key);
     return key;
   };
 
@@ -915,13 +916,13 @@ export function InfoIndexPanel({
                 <thead>
                   <tr>
                     {selectMode ? <th className="infoIndexSelectCol">선택</th> : null}
-                    <th>{view === "category" ? "분류" : view === "date" ? "일자" : "태그"}</th>
-                    <th>제목</th>
+                    <th className="infoIndexGroupCol">{view === "category" ? "분류" : view === "date" ? "일자" : "태그"}</th>
+                    <th className="infoIndexTitleCol">제목</th>
                     {view !== "date" ? <th className="infoIndexDateCol">일자</th> : null}
                     <th className="infoIndexSourceCol">발생처</th>
                     <th className="infoIndexSaveStatusCell">상태</th>
-                    <th>상세보기</th>
-                    <th>우선</th>
+                    <th className="infoIndexDetailCol">상세보기</th>
+                    <th className="infoIndexPinCol">우선</th>
                   </tr>
                 </thead>
                 <tbody>
