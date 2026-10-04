@@ -23,10 +23,11 @@ import {
   isInstagramHomeOrAccountUrl,
   isInstagramHostText,
 } from "../lib/instagramMeta";
-import { insertClassCell, removeClassCellFromEvent } from "../lib/collectClassCell";
+import { makeWhiteCellId, removeClassCellFromEvent, splitWhiteCells } from "../lib/collectClassCell";
 import { htmlForActiveEditor, isParagraphEmpty } from "../lib/generalInfoParagraphs";
 import { Card } from "./SharedComponents";
 import { CollectFormatToolbar } from "./CollectFormatToolbar";
+import { CollectWhiteCell } from "./CollectWhiteCell";
 import { HandwritingModal } from "./HandwritingModal";
 import { TextToImageModal } from "./TextToImageModal";
 import { InfoIndexPanel } from "./InfoIndexPanel";
@@ -176,6 +177,8 @@ export function Chapter3Info({
   const [indexComposeOpen, setIndexComposeOpen] = React.useState(false);
   const [copyBodyState, setCopyBodyState] = React.useState("");
   const [imageSlotPrompt, setImageSlotPrompt] = React.useState<string | null>(null);
+  const [whiteCellIds, setWhiteCellIds] = React.useState<string[]>([]);
+  const whiteCellHtmlRef = React.useRef<Record<string, string>>({});
   const [keyboardInset, setKeyboardInset] = React.useState(0);
 
   const bodyPlain = String(generalInfoDraft.text || "").trim();
@@ -381,10 +384,16 @@ export function Chapter3Info({
   React.useLayoutEffect(() => {
     const el = generalInfoRichTextRef.current;
     if (!el) return;
-    const next = htmlForActiveEditor(generalInfoRichTextInitialHtml || "");
-    if (el.innerHTML !== next) {
-      el.innerHTML = next;
+    const parsed = splitWhiteCells(htmlForActiveEditor(generalInfoRichTextInitialHtml || ""));
+    if (el.innerHTML !== parsed.main) {
+      el.innerHTML = parsed.main;
     }
+    const ids = parsed.extras.map((html) => {
+      const id = makeWhiteCellId();
+      whiteCellHtmlRef.current[id] = html;
+      return id;
+    });
+    setWhiteCellIds(ids);
     enhanceRichInlineImages(el);
   }, [generalInfoRichTextEditorKey, generalInfoRichTextInitialHtml, generalInfoRichTextRef]);
 
@@ -703,12 +712,12 @@ export function Chapter3Info({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
-                    const editor = generalInfoRichTextRef.current;
-                    if (!editor) return;
-                    insertClassCell(editor);
-                    syncGeneralInfoRichTextToDraft();
+                    const id = makeWhiteCellId();
+                    whiteCellHtmlRef.current[id] = "";
+                    setWhiteCellIds((prev) => [...prev, id]);
+                    window.setTimeout(syncGeneralInfoRichTextToDraft, 0);
                   }}
-                  title="분류 칸 추가"
+                  title="아래에 하얀 칸 추가"
                 >
                   ＋ 칸
                 </button>
@@ -766,6 +775,23 @@ export function Chapter3Info({
                   wordBreak: "break-word",
                 }}
               />
+              {whiteCellIds.map((id) => (
+                <CollectWhiteCell
+                  key={id}
+                  cellId={id}
+                  initialHtml={whiteCellHtmlRef.current[id] || ""}
+                  placeholder="새 항목을 입력하거나 붙여넣으세요."
+                  onInput={syncGeneralInfoRichTextToDraft}
+                  onRemove={() => {
+                    const cell = document.querySelector(`[data-white-id="${id}"] .collect-white-cell`);
+                    const text = cell?.textContent?.replace(/\u00a0/g, " ").trim() || "";
+                    if (text && !window.confirm("이 칸을 지울까요?")) return;
+                    delete whiteCellHtmlRef.current[id];
+                    setWhiteCellIds((prev) => prev.filter((item) => item !== id));
+                    window.setTimeout(syncGeneralInfoRichTextToDraft, 0);
+                  }}
+                />
+              ))}
 
               {imageSlotPrompt ? (
                 <div

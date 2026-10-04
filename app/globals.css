@@ -11599,6 +11599,48 @@ body {
 .generalInfoRichTextEditor.collectPaperEditor:empty::before {
   color: #94a3b8 !important;
 }
+.collect-white-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.collect-white-cell-wrap {
+  position: relative;
+}
+.collect-white-cell-wrap .collect-white-cell {
+  min-height: 220px !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 14px !important;
+}
+.collect-white-cell-del {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+.generalInfoFormattedTextView [data-white-cell],
+.giParagraphCard [data-white-cell] {
+  display: block;
+  margin-top: 10px;
+  padding: 14px 15px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
 .generalInfoRichTextEditor .collect-class-cell {
   position: relative !important;
   display: block !important;

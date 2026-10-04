@@ -40,6 +40,7 @@ import { supabase } from "../lib/supabaseClient";
 
 
 import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralInfoDisplayMediaItems, getGeneralInfoInfographicItems, normalizeGeneralInfoMediaItems, makeGeneralInfoMediaItem, makeGeneralInfoHtmlFromText, getGeneralInfoFormattedHtml, getGeneralInfoInputCountText, getGeneralInfoFactLabel, extractMarkdownReport, extractMediaSrcFromHtml, pickGeneralInfoCoverSrc, replaceHtmlMediaSources, escapeGeneralInfoHtml } from "../lib/generalInfoHelpers";
+import { readStackedHtml, readStackedText, splitWhiteCells } from "../lib/collectClassCell";
 import { sanitizeGeneralInfoHtml } from "../lib/sanitizeHtml";
 import {
   enhanceRichInlineImages,
@@ -478,7 +479,7 @@ export function useTravelDiaryGeneralInfoState({
     setGeneralInfoRichTextInitialHtml(nextHtml);
     setGeneralInfoRichTextEditorKey((prev) => prev + 1);
     if (generalInfoRichTextRef.current) {
-      generalInfoRichTextRef.current.innerHTML = nextHtml;
+      generalInfoRichTextRef.current.innerHTML = splitWhiteCells(nextHtml).main;
     }
   }, []);
 
@@ -758,13 +759,11 @@ export function useTravelDiaryGeneralInfoState({
   }, []);
 
   const getCurrentGeneralInfoRichTextHtml = useCallback(() => {
-    const live = String(generalInfoRichTextRef.current?.innerHTML || "").trim();
+    const live = readStackedHtml(generalInfoRichTextRef.current).trim();
     const paragraphs = getDraftParagraphs(generalInfoDraft).map((p, index) => {
       if (index !== 0) return p;
       const html = live || p.html || generalInfoRichTextInitialHtml;
-      const text = String(generalInfoRichTextRef.current?.innerText || p.text || "")
-        .replace(/\u00a0/g, " ")
-        .replace(/\n{4,}/g, "\n\n\n");
+      const text = readStackedText(generalInfoRichTextRef.current) || p.text || "";
       return normalizeParagraph({ ...p, html, text });
     });
     return serializeParagraphsToHtml(paragraphs) || live || generalInfoRichTextInitialHtml;
@@ -926,11 +925,9 @@ export function useTravelDiaryGeneralInfoState({
   ]);
 
   const syncGeneralInfoRichTextToDraft = useCallback(() => {
-    const plainText = String(generalInfoRichTextRef.current?.innerText || "")
-      .replace(/\u00a0/g, " ")
-      .replace(/\n{4,}/g, "\n\n\n");
+    const plainText = readStackedText(generalInfoRichTextRef.current);
     const html = sanitizeGeneralInfoHtml(
-      String(generalInfoRichTextRef.current?.innerHTML || "").trim(),
+      readStackedHtml(generalInfoRichTextRef.current).trim(),
     );
 
     setGeneralInfoDraft((prev) => {
@@ -945,11 +942,9 @@ export function useTravelDiaryGeneralInfoState({
 
   const handleAddGeneralInfoParagraph = useCallback(() => {
     const liveHtml = sanitizeGeneralInfoHtml(
-      String(generalInfoRichTextRef.current?.innerHTML || "").trim(),
+      readStackedHtml(generalInfoRichTextRef.current).trim(),
     );
-    const liveText = String(generalInfoRichTextRef.current?.innerText || "")
-      .replace(/\u00a0/g, " ")
-      .replace(/\n{4,}/g, "\n\n\n");
+    const liveText = readStackedText(generalInfoRichTextRef.current);
 
     setGeneralInfoDraft((prev) => {
       const currentList = getDraftParagraphs(prev);
@@ -1841,11 +1836,9 @@ export function useTravelDiaryGeneralInfoState({
     secondaryCategory?: string;
   }) => {
     const liveHtml = sanitizeGeneralInfoHtml(
-      String(generalInfoRichTextRef.current?.innerHTML || "").trim(),
+      readStackedHtml(generalInfoRichTextRef.current).trim(),
     );
-    const liveText = String(generalInfoRichTextRef.current?.innerText || "")
-      .replace(/\u00a0/g, " ")
-      .replace(/\n{4,}/g, "\n\n\n");
+    const liveText = readStackedText(generalInfoRichTextRef.current);
 
     const paragraphs = getDraftParagraphs(generalInfoDraft).map((p, index) =>
       index === 0

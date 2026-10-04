@@ -16,10 +16,11 @@ import {
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
-import { insertClassCell, removeClassCellFromEvent } from "../lib/collectClassCell";
+import { makeWhiteCellId, readStackedHtml, removeClassCellFromEvent, splitWhiteCells } from "../lib/collectClassCell";
 import { stepCollectFontSize } from "../lib/collectFormatPalette";
 import { readClipboardImageFiles, runCollectRichCommand } from "../lib/collectRichFormat";
 import { CollectFormatToolbar } from "../components/CollectFormatToolbar";
+import { CollectWhiteCell } from "../components/CollectWhiteCell";
 import { HandwritingModal } from "../components/HandwritingModal";
 import { TextToImageModal } from "../components/TextToImageModal";
 import { PhotobookPersonAlbumGallery, PhotobookSceneAlbumScreen } from "../components/PhotobookPersonAlbumGallery";
@@ -605,6 +606,8 @@ export default function HomePage() {
   const diaryEditorSyncTokenRef = useRef(0);
   const diaryAppliedTokenRef = useRef(0);
   const [diaryEditorSync, setDiaryEditorSync] = useState<{ date: string; html: string; token: number } | null>(null);
+  const [diaryWhiteCellIds, setDiaryWhiteCellIds] = useState<string[]>([]);
+  const diaryWhiteHtmlRef = useRef<Record<string, string>>({});
 
   function publishDiaryEditorContent(date: string, html: string, ready: boolean) {
     diaryBoundDateRef.current = date;
@@ -663,8 +666,7 @@ export default function HomePage() {
     );
     if (inserted) {
       enhanceRichInlineImages(editor);
-      const html = editor.innerHTML || "";
-      saveDiary(html, voiceText);
+      saveDiary(readStackedHtml(editor), voiceText);
     }
   }
 
@@ -672,10 +674,12 @@ export default function HomePage() {
   const diaryImageFileRef = useRef<HTMLInputElement | null>(null);
 
   function handleDiaryInsertClassCell() {
-    const editor = diaryRichTextRef.current;
-    if (!editor) return;
-    insertClassCell(editor);
-    saveDiary(editor.innerHTML || "", voiceText);
+    const id = makeWhiteCellId();
+    diaryWhiteHtmlRef.current[id] = "";
+    setDiaryWhiteCellIds((prev) => [...prev, id]);
+    window.setTimeout(() => {
+      saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
+    }, 0);
   }
 
   function handleDiaryRichInput() {
@@ -694,14 +698,14 @@ export default function HomePage() {
     if (removeClassCellFromEvent(editor, target)) {
       event.preventDefault();
       event.stopPropagation();
-      saveDiary(editor.innerHTML || "", voiceText);
+      saveDiary(readStackedHtml(editor), voiceText);
       return;
     }
     const handled = handleRichImageSlotPointer(editor, target);
     if (handled) {
       event.preventDefault();
       event.stopPropagation();
-      saveDiary(editor.innerHTML || "", voiceText);
+      saveDiary(readStackedHtml(editor), voiceText);
       return;
     }
     const slot = target.closest?.(".rich-img-slot") as HTMLElement | null;
@@ -735,7 +739,7 @@ export default function HomePage() {
     const inserted = insertImagesAtSlotOrCaret(editor, [{ src: dataUrl }]);
     if (inserted) {
       enhanceRichInlineImages(editor);
-      saveDiary(editor.innerHTML || "", voiceText);
+      saveDiary(readStackedHtml(editor), voiceText);
     }
   }
 
@@ -2066,13 +2070,20 @@ export default function HomePage() {
     const dateToken = entryDate(currentMonth, currentDay, currentYear);
     if (!diaryEditorSync || diaryEditorSync.date !== dateToken) {
       if (editor.innerHTML) editor.innerHTML = "";
+      setDiaryWhiteCellIds((prev) => (prev.length ? [] : prev));
       return;
     }
     if (diaryAppliedTokenRef.current === diaryEditorSync.token) return;
 
     diaryAppliedTokenRef.current = diaryEditorSync.token;
-    const nextHtml = diaryEditorSync.html || "";
-    if (editor.innerHTML !== nextHtml) editor.innerHTML = nextHtml;
+    const parsed = splitWhiteCells(diaryEditorSync.html || "");
+    if (editor.innerHTML !== parsed.main) editor.innerHTML = parsed.main;
+    const ids = parsed.extras.map((html) => {
+      const id = makeWhiteCellId();
+      diaryWhiteHtmlRef.current[id] = html;
+      return id;
+    });
+    setDiaryWhiteCellIds(ids);
     enhanceRichInlineImages(editor);
   }, [view, currentYear, currentMonth, currentDay, diaryEditorSync]);
 
@@ -4287,7 +4298,7 @@ export default function HomePage() {
             onHandwriting={() => setShowDiaryHandwritingModal(true)}
           />
           <div className="collectFormatSlotRow">
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertClassCell} title="분류 칸 추가">
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertClassCell} title="아래에 하얀 칸 추가">
               ＋ 칸
             </button>
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("removeFormat")}>
@@ -4316,12 +4327,10 @@ export default function HomePage() {
             data-placeholder="오늘의 기록을 남겨보세요...."
             onInput={() => {
               handleDiaryRichInput();
-              const html = diaryRichTextRef.current?.innerHTML || "";
-              saveDiary(html, voiceText);
+              saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
             }}
             onBlur={() => {
-              const html = diaryRichTextRef.current?.innerHTML || "";
-              saveDiary(html, voiceText);
+              saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
             }}
             onClick={handleDiaryRichEditorClick}
             onPaste={(e) => {
@@ -4353,6 +4362,27 @@ export default function HomePage() {
               wordBreak: "break-word",
             }}
           />
+          {diaryWhiteCellIds.map((id) => (
+            <CollectWhiteCell
+              key={id}
+              cellId={id}
+              initialHtml={diaryWhiteHtmlRef.current[id] || ""}
+              placeholder="오늘의 기록을 남겨보세요...."
+              onInput={() => {
+                saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
+              }}
+              onRemove={() => {
+                const cell = document.querySelector(`[data-white-id="${id}"] .collect-white-cell`);
+                const text = cell?.textContent?.replace(/\u00a0/g, " ").trim() || "";
+                if (text && !window.confirm("이 칸을 지울까요?")) return;
+                delete diaryWhiteHtmlRef.current[id];
+                setDiaryWhiteCellIds((prev) => prev.filter((item) => item !== id));
+                window.setTimeout(() => {
+                  saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
+                }, 0);
+              }}
+            />
+          ))}
         </div>
         {showDiaryHandwritingModal && (
           <HandwritingModal
