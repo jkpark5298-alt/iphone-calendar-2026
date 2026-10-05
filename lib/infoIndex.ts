@@ -4,6 +4,7 @@ export const INFO_INDEX_CATEGORIES = [
   "경제",
   "사회",
   "기술",
+  "AI",
   "국제",
   "건강",
   "책",
@@ -184,9 +185,10 @@ export function mapToIndexCategory(raw: string, extra: string[] = []): InfoIndex
   if (/뇌|두뇌|신경|뉴런/.test(blob)) return "뇌";
   if (/문화|예술|전시|공연|박물관/.test(blob)) return "문화";
   if (/건강|의료|병원|영양|수면|치매|알츠하이머|피부|혈관|wine|와인/.test(blob)) return "건강";
+  if (/(^|[^a-z0-9])ai([^a-z0-9]|$)|인공지능|챗\s*gpt|chatgpt|생성형|제미나이|gemini|claude|llm/.test(blob)) return "AI";
   if (/과학|우주|연구|유전|물리|화학|nasa|성경|고대/.test(blob)) return "과학";
   if (/경제|증시|금리|환율|부동산|투자|경매/.test(blob)) return "경제";
-  if (/기술|ai|인공지능|소프트웨어|로봇|반도체|리모델/.test(blob)) return "기술";
+  if (/기술|소프트웨어|로봇|반도체|리모델/.test(blob)) return "기술";
   if (/국제|해외|미국|중국|일본|bbc|외교|정상회담/.test(blob)) return "국제";
   if (/사회|교육|학교|패션|역사/.test(blob)) return "사회";
   return "기타";

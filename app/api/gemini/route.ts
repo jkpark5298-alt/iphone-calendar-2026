@@ -90,7 +90,8 @@ export async function POST(request: NextRequest) {
       }
       const prompt = `
 You are an AI text classifier and summarizer. Analyze the following text and:
-1. Classify it into exactly one of these categories: 애플, 과학, 경제, 사회, 기술, 국제, 건강, 책, 문화, 뇌, 마케팅, 화장품, 영화, 기타.
+1. Classify it into exactly one of these categories: 애플, 과학, 경제, 사회, 기술, AI, 국제, 건강, 책, 문화, 뇌, 마케팅, 화장품, 영화, 기타.
+   의료·운동·영양·수면은 건강, 인공지능·ChatGPT·Gemini·생성형 모델은 AI로 분류하세요.
 2. Extract a single representative keyword (1-3 words) for the content.
 3. Generate a concise and clear title (제목) (in Korean, 10 words or less) representing the core content.
 

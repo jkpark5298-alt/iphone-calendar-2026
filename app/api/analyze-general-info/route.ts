@@ -108,6 +108,7 @@ const buildPrompt = (input: GeneralInfoAnalyzeRequest) => {
     "- " + PRIMARY_CATEGORIES.join("/") + " 중 가장 가까운 분류 선택",
     "- 아이폰, 아이패드, 맥, iOS는 애플",
     "- 의료, 운동, 영양, 수면은 건강",
+    "- 인공지능, ChatGPT, Gemini, 생성형 모델은 AI",
     "- 도서, 독서, 출판은 책",
     "- 전시, 공연, 예술은 문화",
     "- 두뇌, 신경은 뇌",

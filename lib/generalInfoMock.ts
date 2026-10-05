@@ -52,9 +52,10 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
   const pickPrimaryCategory = () => {
     if (/애플|apple|아이폰|iphone|아이패드|ipad|워치|ios|macbook/.test(source)) return "애플";
     if (/건강|헬스|운동|의료|병원|다이어트|영양|수면/.test(source)) return "건강";
+    if (/(^|[^a-z0-9])ai([^a-z0-9]|$)|인공지능|챗\s*gpt|chatgpt|생성형|제미나이|gemini|claude|llm/.test(source)) return "AI";
     if (/과학|연구|우주|바이오|기후|nasa/.test(source)) return "과학";
     if (/금리|물가|환율|증시|경제|소비|부동산|산업|기업|반도체|수출/.test(source)) return "경제";
-    if (/기술|ai|인공지능|로봇|소프트웨어|데이터/.test(source)) return "기술";
+    if (/기술|로봇|소프트웨어|데이터/.test(source)) return "기술";
     if (/화장품|코스메틱|스킨케어/.test(source)) return "화장품";
     if (/영화|시네마|개봉/.test(source)) return "영화";
     if (/책|도서|서적|독서/.test(source)) return "책";
@@ -71,9 +72,10 @@ export const mockAnalyzeGeneralInfo = (draft: GeneralInfoDraft): GeneralInfoDraf
   const pickSecondaryCategory = () => {
     if (primaryCategory === "애플") return "애플/기기";
     if (primaryCategory === "건강") return "건강/웰니스";
+    if (primaryCategory === "AI") return "인공지능";
     if (primaryCategory === "과학") return "과학/연구";
     if (primaryCategory === "경제") return "경제동향";
-    if (primaryCategory === "기술") return "AI/디지털";
+    if (primaryCategory === "기술") return "디지털";
     if (primaryCategory === "국제") return "해외동향";
     if (primaryCategory === "책") return "책";
     if (primaryCategory === "문화") return "문화";
