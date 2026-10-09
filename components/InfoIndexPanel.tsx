@@ -257,9 +257,10 @@ export function InfoIndexPanel({
       setRemoteItems(items);
       const builderCount = Number(data.sources?.builder?.count || 0);
       const iflCount = Number(data.sources?.ifl?.count || 0);
+      const newsCount = Number(data.sources?.news?.count || 0);
       const iflError = String(data.sources?.ifl?.error || "");
       setSourceNote(
-        `builder-zeta-eight ${builderCount}건 · insta-fact-library 클라우드 ${iflCount}건`,
+        `builder-zeta-eight ${builderCount}건 · insta-fact-library 클라우드 ${iflCount}건 · NEWS ${newsCount}건`,
       );
       if (iflCount > 0) {
         setStatus("인덱스를 불러왔습니다.");
@@ -355,7 +356,11 @@ export function InfoIndexPanel({
     });
   }, [merged, searchQuery]);
 
-  const groups = React.useMemo(() => groupIndexItems(filtered, view), [filtered, view]);
+  const listed = React.useMemo(
+    () => (view === "all" ? filtered : filtered.filter((item) => item.appFileMark !== "removed")),
+    [filtered, view],
+  );
+  const groups = React.useMemo(() => groupIndexItems(listed, view), [listed, view]);
   const visibleGroups = React.useMemo(() => {
     if (!selectedKey) return groups;
     return groups.filter((group) => group.key === selectedKey);
@@ -504,7 +509,7 @@ export function InfoIndexPanel({
     Promise.resolve(onExportSelectedAppFiles({ savedIds, commitTempDraft }))
       .then((message) => {
         if (message) setStatus(message);
-        if (typeof message === "string" && message.includes("앱파일을 저장했습니다")) {
+        if (typeof message === "string" && message.includes("앱파일을 저장")) {
           setSelectedIds(new Set());
           setSelectMode(false);
         }
@@ -642,8 +647,8 @@ export function InfoIndexPanel({
           </button>
         </div>
         <p className="infoIndexHelp">
-          제목이나 상세보기를 누르면 작성된 앱으로 가서 내용을 확인합니다. 우선 표시는 분류·일자·태그에서 맨 위에 올립니다.
-          노란 ★는 앱파일로 저장한 항목이고, 그 항목을 앱에서 지워도 인덱스에 남습니다. 그때는 빨간 ★로 바뀝니다.
+          제목이나 상세보기를 누르면 작성된 앱으로 가서 내용을 확인합니다. NEWS는 뉴스 저장 앱에서 본문을 봅니다. 그 글을 지우면 여기에는 삭제됨으로 남습니다. 우선 표시는 분류·일자·태그에서 맨 위에 올립니다.
+          노란 ★는 앱파일로 저장한 항목입니다. 그 항목을 앱에서 지우면 빨간 ★로 남고, 분류·일자·태그 옆의 전체에서만 보입니다.
         </p>
       </div>
 
@@ -734,6 +739,13 @@ export function InfoIndexPanel({
         <aside className="infoIndexDesktopNav">
           <div className="infoIndexToolbar">
             <div className="ch3TabBar infoIndexViewTabs">
+              <button
+                type="button"
+                className={`ch3TabBtn ${view === "all" ? "active" : ""}`}
+                onClick={() => changeView("all")}
+              >
+                전체
+              </button>
               <button
                 type="button"
                 className={`ch3TabBtn ${view === "category" ? "active" : ""}`}
@@ -916,9 +928,9 @@ export function InfoIndexPanel({
                 <thead>
                   <tr>
                     {selectMode ? <th className="infoIndexSelectCol">선택</th> : null}
-                    <th className="infoIndexGroupCol">{view === "category" ? "분류" : view === "date" ? "일자" : "태그"}</th>
+                    <th className="infoIndexGroupCol">{view === "category" ? "분류" : view === "tag" ? "태그" : "일자"}</th>
                     <th className="infoIndexTitleCol">제목</th>
-                    {view !== "date" ? <th className="infoIndexDateCol">일자</th> : null}
+                    {view === "category" || view === "tag" ? <th className="infoIndexDateCol">일자</th> : null}
                     <th className="infoIndexSourceCol">발생처</th>
                     <th className="infoIndexSaveStatusCell">상태</th>
                     <th className="infoIndexDetailCol">상세보기</th>
@@ -930,7 +942,10 @@ export function InfoIndexPanel({
                     group.items.map((item) => (
                       <tr
                         key={`${group.key}-${item.id}`}
-                        className={[item.pinned ? "pinned" : "", item.appFileMark === "removed" ? "appFileRemoved" : ""]
+                        className={[
+                          item.pinned ? "pinned" : "",
+                          item.appFileMark === "removed" || item.saveStatus === "삭제됨" ? "appFileRemoved" : "",
+                        ]
                           .filter(Boolean)
                           .join(" ")}
                       >
@@ -956,7 +971,7 @@ export function InfoIndexPanel({
                           </button>
                         </td>
                         <td className="infoIndexTitleCell">{renderTitle(item)}</td>
-                        {view !== "date" ? (
+                        {view === "category" || view === "tag" ? (
                           <td className="infoIndexDateCell infoIndexDateCol">{item.createdAtLabel}</td>
                         ) : null}
                         <td className="infoIndexSourceCell infoIndexSourceCol">
@@ -965,7 +980,7 @@ export function InfoIndexPanel({
                           </span>
                         </td>
                         <td className="infoIndexSaveStatusCell">
-                          {item.source === "local" && item.saveStatus ? (
+                          {item.saveStatus ? (
                             <span className={`infoIndexSaveStatus is-${item.saveStatus === "임시 저장" ? "temp" : item.saveStatus === "삭제됨" ? "removed" : "saved"}`}>
                               {item.saveStatus}
                             </span>

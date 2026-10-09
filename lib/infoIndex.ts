@@ -18,9 +18,9 @@ export const INFO_INDEX_CATEGORIES = [
 
 export type InfoIndexCategory = (typeof INFO_INDEX_CATEGORIES)[number];
 
-export type InfoIndexSource = "insta-fact-library" | "builder-zeta-eight" | "local";
+export type InfoIndexSource = "insta-fact-library" | "builder-zeta-eight" | "newsflash" | "local";
 
-export type InfoIndexView = "category" | "date" | "tag";
+export type InfoIndexView = "category" | "date" | "tag" | "all";
 
 export type InfoIndexItem = {
   id: string;
@@ -59,12 +59,14 @@ export type AppFileIndexArchiveEntry = {
 export const INFO_INDEX_SOURCE_LABEL: Record<InfoIndexSource, string> = {
   "insta-fact-library": "insta-fact-library",
   "builder-zeta-eight": "builder-zeta-eight",
+  newsflash: "NEWS",
   local: "일반정보수집",
 };
 
 export const INFO_INDEX_SOURCE_SHORT: Record<InfoIndexSource, string> = {
   "insta-fact-library": "insta",
   "builder-zeta-eight": "builder",
+  newsflash: "NEWS",
   local: "일반정보수집",
 };
 
@@ -79,6 +81,9 @@ export const BUILDER_APP_URL =
 
 export const IFL_APP_URL =
   process.env.NEXT_PUBLIC_IFL_APP_URL || "https://insta-fact-library.vercel.app";
+
+export const NEWSFLASH_APP_URL =
+  process.env.NEXT_PUBLIC_NEWSFLASH_APP_URL || "https://newsflash-web-seven.vercel.app";
 
 export function cleanIndexTitle(raw: string, maxLen = 40) {
   let text = String(raw || "").trim();
@@ -128,18 +133,21 @@ export function unescapeJsonString(value: string) {
 export function infoIndexSourceClass(source: InfoIndexSource) {
   if (source === "builder-zeta-eight") return "source-builder";
   if (source === "insta-fact-library") return "source-ifl";
+  if (source === "newsflash") return "source-news";
   return "source-local";
 }
 
 export function infoIndexSourceHomeUrl(source: InfoIndexSource) {
   if (source === "builder-zeta-eight") return BUILDER_APP_URL;
   if (source === "insta-fact-library") return IFL_APP_URL;
+  if (source === "newsflash") return NEWSFLASH_APP_URL;
   return "";
 }
 
 export function infoIndexDetailLabel(source: InfoIndexSource) {
   if (source === "builder-zeta-eight") return "builder";
   if (source === "insta-fact-library") return "insta";
+  if (source === "newsflash") return "NEWS";
   return "상세보기";
 }
 
@@ -320,7 +328,7 @@ export function groupIndexItems(
   for (const item of items) {
     if (view === "category") {
       push(item.category, item);
-    } else if (view === "date") {
+    } else if (view === "date" || view === "all") {
       push(item.dateKey || item.createdAtLabel, item);
     } else {
       const tags = item.tags.length ? item.tags : ["기타"];
