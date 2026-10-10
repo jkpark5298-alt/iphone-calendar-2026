@@ -1,6 +1,6 @@
 /**
  * Inline image slot helpers — ported from insta-fact-library RichTextEditor.
- * Typing S / s / ㄴ at sentence end creates an S1… slot; paste or file fills it.
+ * Typing S / s at sentence end creates an S1… slot; paste or file fills it.
  */
 
 export const INLINE_IMG_CLASS = "rich-inline-img";
@@ -96,7 +96,7 @@ export function createImageSlotElement(id: string) {
 }
 
 /**
- * If caret just typed S/s/ㄴ at a sentence end, replace it with an image slot.
+ * If caret just typed S/s at a sentence end, replace it with an image slot.
  * Returns the new slot id, or null if no trigger.
  */
 export function tryConsumeImageTriggerToSlot(editor: HTMLElement | null): string | null {
@@ -113,7 +113,7 @@ export function tryConsumeImageTriggerToSlot(editor: HTMLElement | null): string
   const offset = range.startOffset;
   if (offset < 1) return null;
   const ch = text[offset - 1];
-  if (ch !== "S" && ch !== "s" && ch !== "ㄴ") return null;
+  if (ch !== "S" && ch !== "s") return null;
 
   const before = text.slice(0, offset - 1);
   const after = text.slice(offset);

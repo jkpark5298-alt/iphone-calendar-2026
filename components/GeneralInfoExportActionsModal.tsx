@@ -12,7 +12,7 @@ type Props = {
   item: GeneralInfoItem;
   onClose: () => void;
   onPdfExported?: (item: GeneralInfoItem) => void;
-  onAppFileExported?: (item: GeneralInfoItem) => void;
+  onAppFileExported?: (item: GeneralInfoItem) => void | Promise<unknown>;
   busyLabel?: string;
 };
 
@@ -35,7 +35,7 @@ export function GeneralInfoExportActionsModal({
           onPdfExported?.(item);
         }
         if (label === "app") {
-          onAppFileExported?.(item);
+          await onAppFileExported?.(item);
         }
         if (label === "pdf") setMessage("PDF를 저장했습니다. 이미지는 잘리지 않도록 페이지에 맞춰 축소됩니다.");
         if (label === "share") {
@@ -46,7 +46,7 @@ export function GeneralInfoExportActionsModal({
               : "이 기기는 파일 공유를 지원하지 않아 PDF를 다운로드했습니다. GoodNotes에서 해당 PDF를 가져오세요.",
           );
         }
-        if (label === "app") setMessage("앱파일을 저장했습니다. 나중에 [앱파일 불러오기]로 복원할 수 있습니다.");
+        if (label === "app") setMessage("앱파일에 글과 이미지를 저장하고 목록에서 삭제했습니다. 인덱스 전체에서 다시 볼 수 있고, 앱파일 불러오기로 복원할 수 있습니다.");
       } catch (error) {
         console.error(error);
         setMessage(error instanceof Error ? error.message : "작업에 실패했습니다.");

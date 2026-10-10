@@ -22,12 +22,15 @@ function AlbumCardFace({
   card,
   selected,
   playing = false,
+  sideMemo = "",
   onToggle,
   onOpen,
 }: {
   card: PersonAlbumCard;
   selected: boolean;
   playing?: boolean;
+  /** Trip album: image memo occupies the keyword's top-left spot. */
+  sideMemo?: string;
   onToggle: () => void;
   onOpen?: () => void;
 }) {
@@ -38,7 +41,9 @@ function AlbumCardFace({
       <button type="button" onClick={onToggle} className="pbPersonCardFace">
         <div className="pbPersonCardImgWrap">
           <img key={card.imagePath} src={card.imagePath} alt="" draggable={false} />
-          {card.keyword ? (
+          {sideMemo ? (
+            <span className="pbPersonCardKeyword pbPersonCardSideMemo">{sideMemo}</span>
+          ) : card.keyword ? (
             <span className="pbPersonCardKeyword">{card.keyword}</span>
           ) : null}
         </div>
@@ -247,6 +252,7 @@ export function PhotobookPersonAlbumGallery({
       card={card}
       selected={selectedKeys.has(card.key)}
       playing={autoPlay && index === activeIndex}
+      sideMemo={albumId === "trip" ? card.caption : ""}
       onToggle={() => {
         if (autoPlay) {
           pauseAutoplay();
@@ -317,7 +323,9 @@ export function PhotobookPersonAlbumGallery({
       {autoPlay && currentCard ? (
         <div className="pbPersonAlbumFullscreen" role="dialog" aria-modal="true" aria-label={`${album.title} 자동 재생`}>
           <img key={currentCard.imagePath} src={currentCard.imagePath} alt={currentCard.memo || ""} />
-          {currentCard.keyword ? (
+          {albumId === "trip" && currentCard.caption ? (
+            <span className="pbPersonAlbumFullscreenKeyword pbAlbumSideMemo">{currentCard.caption}</span>
+          ) : currentCard.keyword ? (
             <span className="pbPersonAlbumFullscreenKeyword">{currentCard.keyword}</span>
           ) : null}
           <div className="pbPersonAlbumFullscreenBar">

@@ -88,7 +88,7 @@ export interface Chapter3InfoProps {
   handleDeleteGeneralInfo: (itemId: number) => void;
 
   handleImportGeneralInfoAppFile: (files: FileList | null) => Promise<string | void> | string | void;
-  handleExportGeneralInfoAppBundle: () => string | void;
+  handleExportGeneralInfoAppBundle: () => string | void | Promise<string | void>;
   handleExportSelectedGeneralInfoAppFiles: (input: {
     savedIds: number[];
     commitTempDraft: boolean;
@@ -148,7 +148,7 @@ export function Chapter3Info({
   generalInfoDeleteUndo,
   handleUndoDeleteGeneralInfo,
   handleStartEditGeneralInfo,
-  handleDeleteGeneralInfo: _handleDeleteGeneralInfo,
+  handleDeleteGeneralInfo,
   handleImportGeneralInfoAppFile,
   handleExportGeneralInfoAppBundle,
   handleExportSelectedGeneralInfoAppFiles,
@@ -723,6 +723,26 @@ export function Chapter3Info({
                 </button>
                 <button
                   type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    const id = whiteCellIds[whiteCellIds.length - 1];
+                    if (!id) {
+                      alert("삭제할 칸이 없습니다.");
+                      return;
+                    }
+                    const cell = document.querySelector(`[data-white-id="${id}"] .collect-white-cell`);
+                    const text = cell?.textContent?.replace(/\u00a0/g, " ").trim() || "";
+                    if (text && !window.confirm("이 칸을 지울까요?")) return;
+                    delete whiteCellHtmlRef.current[id];
+                    setWhiteCellIds((prev) => prev.filter((item) => item !== id));
+                    window.setTimeout(syncGeneralInfoRichTextToDraft, 0);
+                  }}
+                  title="마지막 칸 삭제"
+                >
+                  － 칸
+                </button>
+                <button
+                  type="button"
                   style={getGeneralInfoToolbarButtonStyle()}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleGeneralInfoRichCommand("removeFormat")}
@@ -1186,6 +1206,7 @@ export function Chapter3Info({
               const item = generalInfoItems.find((entry) => entry.id === id);
               if (item) handleStartEditGeneralInfo(item);
             }}
+            onDeleteLocal={handleDeleteGeneralInfo}
             onToggleLocalPin={handleTogglePinGeneralInfo}
             onExportLocalAppFiles={handleExportGeneralInfoAppBundle}
             onExportSelectedAppFiles={handleExportSelectedGeneralInfoAppFiles}

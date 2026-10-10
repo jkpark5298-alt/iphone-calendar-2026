@@ -6,7 +6,7 @@ export const PERSON_ALBUM_USER_PAUSE_MS = 8000;
 
 /**
  * Photobook image albums keyed by 2차 분류.
- * 人: 인물/She. 旅行 (U+F981 + 行): 여행·풍경.
+ * 人: 인물/She. 旅行: 여행·풍경.
  */
 export const SCENE_ALBUMS = {
   person: {
@@ -21,7 +21,7 @@ export const SCENE_ALBUMS = {
   trip: {
     id: "trip",
     tab: "trip-album",
-    title: "\uF981行 앨범",
+    title: "旅行 앨범",
     categories: ["여행", "풍경"],
     storageKey: "iphone-calendar-photobook-trip-album-v1",
     countLabel: "여행·풍경 사진",
@@ -60,6 +60,8 @@ export type PhotobookPersonSource = {
   keyword: string;
   category2: string;
   memo: string;
+  /** Per-image memo. Index matches imageUrls. */
+  imageMemos?: string[];
   /** Entry date YYYY-MM-DD */
   tag: string;
   imageUrls: string[];
@@ -84,6 +86,8 @@ export type PersonAlbumCard = {
   memo: string;
   /** Same label as the photobook index `#keyword`. */
   keyword: string;
+  /** Image memo, or the entry memo, pinned on the photo. */
+  caption: string;
   dateLabel: string;
   sortAt: number;
   /** Set when the card comes from the keep store (item may be gone). */
@@ -134,6 +138,11 @@ export function albumKeywordLabel(keyword: string) {
   const title = (keyword || "").trim();
   if (!title) return "";
   return title.startsWith("#") ? title : `#${title}`;
+}
+
+/** Per-image memo only. Keyword stays on photos that have no memo. */
+export function albumImageCaption(item: PhotobookPersonSource, index: number) {
+  return (item.imageMemos || [])[index]?.trim() || "";
 }
 
 /** Keyword, or first line of memo. */
@@ -264,6 +273,7 @@ export function buildPersonAlbumCards(
         imagePath,
         memo,
         keyword,
+        caption: albumImageCaption(item, index),
         dateLabel,
         sortAt,
       });
@@ -278,6 +288,7 @@ export function buildPersonAlbumCards(
       imagePath: keep.imagePath,
       memo: keep.memo || "(제목 없음)",
       keyword: keep.keyword || (keep.memo?.trim().startsWith("#") ? keep.memo.trim() : ""),
+      caption: "",
       dateLabel: formatAlbumDate(keep.createdAt),
       sortAt: tagSortAt(keep.createdAt),
       keepId: keep.id,
@@ -307,6 +318,7 @@ export function buildAlbumCardsFromSources(
         imagePath,
         memo,
         keyword,
+        caption: albumImageCaption(item, index),
         dateLabel,
         sortAt,
       });

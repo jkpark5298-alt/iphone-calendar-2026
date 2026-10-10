@@ -660,6 +660,43 @@ textarea {
   font-weight: 700;
   color: #3f7dbb;
 }
+.storageUsageBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f7faf8;
+  color: #243028;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.storageUsageBar b {
+  color: #1f6b45;
+  font-weight: 800;
+}
+.storageUsageLabel {
+  color: #53675e;
+}
+.storageUsageBar button {
+  margin-left: auto;
+  border: 1px solid #b7c7be;
+  background: white;
+  color: #243028;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.storageUsageBar button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 .calendar-info-app-link {
   text-decoration: none;
 }
@@ -4636,6 +4673,14 @@ textarea {
   gap: 8px !important;
 }
 
+.diary-date-center {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
 .diary-date-nav-final h1 {
   margin: 0 !important;
   min-width: 0 !important;
@@ -4646,6 +4691,13 @@ textarea {
   font-size: clamp(17px, 4.8vw, 28px) !important;
   line-height: 1.08 !important;
   letter-spacing: -0.065em !important;
+}
+
+.diary-date-nav-final .diary-today-btn {
+  min-width: 0 !important;
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
 }
 
 .diary-date-nav-final .date-nav-btn {
@@ -4765,6 +4817,12 @@ textarea {
     padding: 7px 7px !important;
   }
 
+  .diary-date-nav-final .diary-today-btn {
+    min-width: 0 !important;
+    padding: 6px 8px !important;
+    font-size: 11px !important;
+  }
+
   .diary-action-nav-final {
     gap: 6px !important;
   }
@@ -4805,6 +4863,12 @@ textarea {
     min-width: 68px !important;
     font-size: 10.5px !important;
     padding: 6px 5px !important;
+  }
+
+  .diary-date-nav-final .diary-today-btn {
+    min-width: 0 !important;
+    padding: 5px 6px !important;
+    font-size: 10.5px !important;
   }
 
   .diary-action-nav-final .pill-btn,
@@ -8429,7 +8493,8 @@ body {
 .pbIndexCardBtnEdit:hover,
 .pbIndexCardBtnDetail:hover,
 .pbIndexCardBtnPin:hover,
-.pbIndexCardBtnDelete:hover {
+.pbIndexCardBtnDelete:hover,
+.pbIndexCardBtnAuto:hover {
   opacity: 0.82;
 }
 
@@ -8450,6 +8515,23 @@ body {
 }
 
 /* ── 상단 고정 버튼 ── */
+.pbIndexCardBtnAuto {
+  width: 100%;
+  padding: 5px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid rgba(98, 177, 155, 0.5);
+  border-radius: 6px;
+  background: rgba(98, 177, 155, 0.18);
+  color: #86efac;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.pbIndexCardBtnAuto:hover {
+  opacity: 0.82;
+}
 .pbIndexCardBtnPin {
   width: 100%;
   padding: 5px 4px;
@@ -8483,7 +8565,7 @@ body {
   top: 4px;
   left: 4px;
   font-size: 14px;
-  z-index: 2;
+  z-index: 5;
   background: rgba(0,0,0,0.55);
   border-radius: 4px;
   padding: 1px 3px;
@@ -10827,7 +10909,8 @@ body {
   .pbIndexCardBtnPin,
   .pbIndexCardBtnEdit,
   .pbIndexCardBtnDetail,
-  .pbIndexCardBtnDelete {
+  .pbIndexCardBtnDelete,
+  .pbIndexCardBtnAuto {
     width: 100% !important;
     white-space: nowrap !important;
     font-size: 10px !important;
@@ -10973,11 +11056,123 @@ body {
   object-fit: contain;
   background: #000;
 }
+.pbImageMemoFields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 12px;
+}
+.pbImageMemoField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.pbImageMemoField span {
+  color: #86efac;
+  font-size: 13px;
+  font-weight: 700;
+}
+.pbImageMemoField textarea {
+  width: 100%;
+  min-height: 88px;
+  box-sizing: border-box;
+  resize: none;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(98, 177, 155, 0.45);
+  background: rgba(2, 6, 23, 0.72);
+  color: #f8fafc;
+  padding: 10px 12px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.pbMemoField {
+  overflow: hidden !important;
+  resize: none !important;
+  max-height: none !important;
+}
+.pbImageMemoPin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(8, 12, 20, 0.82);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: none;
+  max-height: 46%;
+  overflow: hidden;
+}
+.pbImageMemoPinLabel {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #d1fae5;
+}
+.pbImageMemoPin.is-open {
+  position: relative;
+  top: auto;
+  max-height: none;
+  overflow: visible;
+}
+.pbImageMemoPin.has-more {
+  padding-bottom: 28px;
+}
+.pbImageMemoPinMore {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  z-index: 4;
+  pointer-events: auto;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.pbImageMemoPinFullscreen {
+  top: 52px;
+  z-index: 4;
+  max-height: 34vh;
+  padding: 12px 16px 28px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.pbPersonCardSideMemo,
+.pbAlbumSideMemo {
+  white-space: pre-wrap;
+  text-overflow: unset;
+  overflow: hidden;
+  line-height: 1.35;
+  font-weight: 600;
+  max-height: 62%;
+}
+.pbAlbumSideMemo {
+  top: 56px;
+  max-width: min(46vw, 360px);
+  max-height: 40vh;
+}
 .pbPersonAlbumFullscreenBar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
+  z-index: 6;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -11075,6 +11270,19 @@ body {
   white-space: nowrap;
   pointer-events: none;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.pbPersonCardKeyword.pbPersonCardSideMemo,
+.pbPersonAlbumFullscreenKeyword.pbAlbumSideMemo {
+  white-space: pre-wrap;
+  text-overflow: unset;
+  line-height: 1.35;
+  font-weight: 600;
+  max-height: 62%;
+}
+.pbPersonAlbumFullscreenKeyword.pbAlbumSideMemo {
+  top: 56px;
+  max-width: min(46vw, 360px);
+  max-height: 40vh;
 }
 .pbPersonCardImgWrap img {
   max-width: 100%;
@@ -11606,20 +11814,22 @@ body {
 }
 .collect-white-cell-wrap {
   position: relative;
+  margin-top: 10px;
 }
 .collect-white-cell-wrap .collect-white-cell {
   min-height: 220px !important;
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
   border-radius: 14px !important;
+  padding-right: 42px !important;
 }
 .collect-white-cell-del {
   position: absolute;
   top: 8px;
   right: 8px;
   z-index: 2;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -11627,19 +11837,37 @@ body {
   border-radius: 999px;
   background: #dc2626;
   color: #fff;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 900;
   line-height: 1;
   cursor: pointer;
+  opacity: 1;
+  pointer-events: auto;
+}
+.collect-white-cell-wrap.is-image-delete .collect-white-cell-del {
   opacity: 0;
   pointer-events: none;
 }
-.collect-white-cell-del[hidden] {
-  display: none !important;
-}
-.collect-white-cell-wrap.is-photo-selected .collect-white-cell-del {
+.collect-white-cell-wrap.is-image-delete.is-photo-selected .collect-white-cell-del {
   opacity: 1;
   pointer-events: auto;
+}
+.collect-white-cell-wrap.is-image-delete .rich-inline-img-del,
+.collect-white-cell-wrap.is-image-delete .generalInfoInlineImageRemove {
+  display: none !important;
+}
+.diaryPaperEditor .rich-inline-img-wrap:hover .rich-inline-img-del,
+.diaryPaperEditor .rich-inline-img-wrap:focus-within .rich-inline-img-del,
+.diaryPaperEditor .generalInfoInlineImageBlock:hover .generalInfoInlineImageRemove,
+.diaryPaperEditor .generalInfoInlineImageBlock:focus-within .generalInfoInlineImageRemove {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.diaryPaperEditor .rich-inline-img-wrap.is-image-selected .rich-inline-img-del,
+.diaryPaperEditor .generalInfoInlineImageBlock.is-image-selected .generalInfoInlineImageRemove,
+.diaryPaperEditor img.is-image-selected + .rich-inline-img-del {
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 .collect-white-cell img.is-photo-selected,
 .collect-white-cell video.is-photo-selected {
@@ -12126,8 +12354,41 @@ body {
   color: #111827;
   border: 1px solid #e5e7eb;
 }
+.infoIndexSourceBadge.source-news,
+.infoIndexDetailButton.source-news {
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid #1d4ed8;
+}
 .infoIndexDetailButton {
   cursor: pointer;
+}
+.infoIndexDeleteButton,
+.infoIndexExcludeButton {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  background: transparent;
+  white-space: nowrap;
+}
+.infoIndexDeleteButton {
+  color: #fecaca;
+  border: 1px solid rgba(248, 113, 113, 0.85);
+}
+.infoIndexExcludeButton {
+  color: #fde68a;
+  border: 1px solid rgba(250, 204, 21, 0.75);
+}
+.infoIndexDeleteButton:hover,
+.infoIndexExcludeButton:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 .infoIndexSaveStatus {
   display: inline-flex;
@@ -12159,6 +12420,9 @@ body {
 }
 .infoIndexDetailButton.source-local:hover {
   background: #f8fafc;
+}
+.infoIndexDetailButton.source-news:hover {
+  background: #1d4ed8;
 }
 @media (max-width: 760px) {
   .infoIndexComposeGrid {
@@ -12327,14 +12591,16 @@ body {
 
   .infoIndexDetailCol,
   .infoIndexDetailCell {
-    width: 58px;
+    width: 96px;
   }
 
   .infoIndexDetailActions {
     gap: 2px;
   }
 
-  .infoIndexDetailActions .infoIndexDetailButton {
+  .infoIndexDetailActions .infoIndexDetailButton,
+  .infoIndexDeleteButton,
+  .infoIndexExcludeButton {
     min-height: 20px;
     padding: 1px 4px;
     border-radius: 8px;

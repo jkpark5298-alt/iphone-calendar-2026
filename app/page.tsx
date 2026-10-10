@@ -1,6 +1,7 @@
 "use client";
 
 import { Chapter3Info } from "../components/Chapter3Info";
+import { StorageUsageBar } from "../components/StorageUsageBar";
 import GeneralInfoDetailModal from "../components/GeneralInfoDetailModal";
 import { GeneralInfoExportActionsModal } from "../components/GeneralInfoExportActionsModal";
 import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralInfoState";
@@ -594,6 +595,14 @@ export default function HomePage() {
   const [isInfoBookModalOpen, setIsInfoBookModalOpen] = useState(false);
   const [infoBookSearchQuery, setInfoBookSearchQuery] = useState("");
   const [isPhotoMemoExpanded, setIsPhotoMemoExpanded] = useState(false);
+  const [photoListAuto, setPhotoListAuto] = useState<{
+    id: string;
+    urls: string[];
+    memos: string[];
+    index: number;
+  } | null>(null);
+  const photoBookMemoEditRef = useRef<HTMLTextAreaElement | null>(null);
+  const photoBookMemoCreateRef = useRef<HTMLTextAreaElement | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -682,6 +691,22 @@ export default function HomePage() {
     }, 0);
   }
 
+  function handleDiaryRemoveLastWhiteCell() {
+    const id = diaryWhiteCellIds[diaryWhiteCellIds.length - 1];
+    if (!id) {
+      alert("삭제할 칸이 없습니다.");
+      return;
+    }
+    const cell = document.querySelector(`[data-white-id="${id}"] .collect-white-cell`);
+    const text = cell?.textContent?.replace(/\u00a0/g, " ").trim() || "";
+    if (text && !window.confirm("이 칸을 지울까요?")) return;
+    delete diaryWhiteHtmlRef.current[id];
+    setDiaryWhiteCellIds((prev) => prev.filter((item) => item !== id));
+    window.setTimeout(() => {
+      saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
+    }, 0);
+  }
+
   function handleDiaryRichInput() {
     const editor = diaryRichTextRef.current;
     if (!editor) return;
@@ -707,6 +732,15 @@ export default function HomePage() {
       event.stopPropagation();
       saveDiary(readStackedHtml(editor), voiceText);
       return;
+    }
+    if (!target.closest(".rich-inline-img-del, .generalInfoInlineImageRemove, .rich-img-slot-del")) {
+      editor.querySelectorAll(".is-image-selected").forEach((node) => node.classList.remove("is-image-selected"));
+      const media = target.closest("img, video");
+      if (media && editor.contains(media)) {
+        if (media.tagName === "IMG") enhanceRichInlineImages(editor);
+        const wrap = media.closest(".rich-inline-img-wrap, .generalInfoInlineImageBlock");
+        (wrap || media).classList.add("is-image-selected");
+      }
     }
     const slot = target.closest?.(".rich-img-slot") as HTMLElement | null;
     if (!slot || !editor.contains(slot) || slot.classList.contains("rich-inline-img-wrap") || slot.querySelector("img")) {
@@ -766,6 +800,12 @@ export default function HomePage() {
     if (!element) return;
     element.style.height = "auto";
     element.style.height = `${Math.max(element.scrollHeight, 180)}px`;
+  }
+
+  function resizePhotoBookMemoField(element: HTMLTextAreaElement | null) {
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${Math.max(element.scrollHeight, 200)}px`;
   }
 
   function updateVisualViewportHeight() {
@@ -2100,6 +2140,36 @@ export default function HomePage() {
   useEffect(() => {
     setIsPhotoMemoExpanded(false);
   }, [activeItem]);
+
+  useEffect(() => {
+    if (!photoListAuto || photoListAuto.urls.length < 2) return;
+    const timer = window.setInterval(() => {
+      setPhotoListAuto((prev) => {
+        if (!prev || prev.urls.length < 2) return prev;
+        return { ...prev, index: (prev.index + 1) % prev.urls.length };
+      });
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [photoListAuto?.id, photoListAuto?.urls.length]);
+
+  useEffect(() => {
+    resizePhotoBookMemoField(photoBookMemoEditRef.current);
+    resizePhotoBookMemoField(photoBookMemoCreateRef.current);
+  }, [photoBookInputMemo, editingPhotoBookItemId, photoBookTab, activeItem]);
+
+  useEffect(() => {
+    if (!photoListAuto) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPhotoListAuto(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [photoListAuto?.id]);
 
   async function fetchWeatherFromKma() {
     if (!isSelectedDiaryDateToday(currentMonth, currentDay, currentYear)) {
@@ -4140,6 +4210,8 @@ export default function HomePage() {
           </div>
         </div>
 
+        <StorageUsageBar />
+
         <div className="calendar-search-box">
           <div className="calendar-search-row">
             <input
@@ -4212,7 +4284,10 @@ export default function HomePage() {
         <div className="diary-head diary-head-redesign diary-head-final">
           <div className="diary-date-nav-row diary-date-nav-final">
             <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(-1)}>← 이전일</button>
-            <h1>{currentYear}. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay, currentYear)})</h1>
+            <div className="diary-date-center">
+              <h1>{currentYear}. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay, currentYear)})</h1>
+              <button type="button" className="pill-btn date-nav-btn diary-today-btn" onClick={openTodayDiary}>Today</button>
+            </div>
             <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(1)}>다음일 →</button>
           </div>
 
@@ -4301,6 +4376,9 @@ export default function HomePage() {
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertClassCell} title="아래에 하얀 칸 추가">
               ＋ 칸
             </button>
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryRemoveLastWhiteCell} title="마지막 칸 삭제">
+              － 칸
+            </button>
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("removeFormat")}>
               서식 지우기
             </button>
@@ -4319,7 +4397,7 @@ export default function HomePage() {
           <div
             key={`diary-rich-${currentYear}-${currentMonth}-${currentDay}`}
             ref={diaryRichTextRef}
-            className="generalInfoRichTextEditor collectPaperEditor"
+            className="generalInfoRichTextEditor collectPaperEditor diaryPaperEditor"
             contentEditable
             suppressContentEditableWarning
             role="textbox"
@@ -4368,6 +4446,7 @@ export default function HomePage() {
               cellId={id}
               initialHtml={diaryWhiteHtmlRef.current[id] || ""}
               placeholder="오늘의 기록을 남겨보세요...."
+              imageDeleteOnly
               onInput={() => {
                 saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
               }}
@@ -5547,12 +5626,13 @@ function MarkDateView() {
     const parsedOriginal = originalItem ? parsePhotoBookMemo(originalItem.memo || "") : null;
     const isPinned = parsedOriginal ? (parsedOriginal.isPinned || false) : false;
 
+    const imageMemos = photoBookInputImageUrls.map((_, index) => photoBookInputImageMemos[index] || "");
     const serializedCaption = JSON.stringify({
       type: "photobook",
       keyword: photoBookInputKeyword.trim() || "일반",
       category2: photoBookInputCategory2.trim() || "기타",
       memo: photoBookInputMemo,
-      imageMemos: photoBookInputImageMemos,
+      imageMemos,
       additionalImages,
       isPinned
     });
@@ -5607,20 +5687,18 @@ function MarkDateView() {
       }
 
       if (isSupabaseConfigured && supabase) {
-        if (editingPhotoBookItemId.startsWith("temp-")) {
-          await supabase.from("info_photos").update({ 
-            caption: serializedCaption, 
-            entry_date: dateStr,
-            public_url: primaryUrl,
-            storage_path: primaryStoragePath
-          }).eq("storage_path", originalStoragePath);
-        } else {
-          await supabase.from("info_photos").update({ 
-            caption: serializedCaption, 
-            entry_date: dateStr,
-            public_url: primaryUrl,
-            storage_path: primaryStoragePath
-          }).eq("id", editingPhotoBookItemId);
+        const updatePayload = {
+          caption: serializedCaption,
+          entry_date: dateStr,
+          public_url: primaryUrl,
+          storage_path: primaryStoragePath
+        };
+        const { error } = editingPhotoBookItemId.startsWith("temp-")
+          ? await supabase.from("info_photos").update(updatePayload).eq("storage_path", originalStoragePath)
+          : await supabase.from("info_photos").update(updatePayload).eq("id", editingPhotoBookItemId);
+        if (error) {
+          alert("이미지 메모 저장에 실패했습니다. 다시 저장해 주세요.\n" + error.message);
+          return;
         }
       }
       setEditingPhotoBookItemId(null);
@@ -5649,6 +5727,10 @@ function MarkDateView() {
           sort_order: sortOrder,
         }).select("id").maybeSingle();
 
+        if (error) {
+          alert("이미지 메모 저장에 실패했습니다. 다시 저장해 주세요.\n" + error.message);
+          return;
+        }
         if (data?.id) {
           uploadedItem.id = data.id;
         }
@@ -5782,6 +5864,7 @@ function MarkDateView() {
       keyword: parsed.keyword || "일반",
       category2: parsed.category2 || "기타",
       memo: parsed.memo || "",
+      imageMemos: parsed.imageMemos || [],
       tag: photo.tag || "",
       imageUrls,
     };
@@ -5883,6 +5966,7 @@ function MarkDateView() {
         // Set primary fallback images if not already set
         setPhotoBookInputImageUrl(prev => prev || uploadedItems[0].url);
         setPhotoBookInputImageStoragePath(prev => prev || uploadedItems[0].storagePath || "");
+        setPhotoBookInputImageMemos(prev => [...prev, ...uploadedItems.map(() => "")]);
 
         // Auto classify photo book using AI!
         await runPhotoBookAIClassification(fileList[0]);
@@ -5895,6 +5979,33 @@ function MarkDateView() {
     } finally {
       setInstaLoading(false);
     }
+  }
+
+  function updatePhotoBookImageMemo(index: number, value: string) {
+    setPhotoBookInputImageMemos((prev) => {
+      const length = Math.max(prev.length, photoBookInputImageUrls.length, index + 1);
+      const next = Array.from({ length }, (_, itemIndex) => prev[itemIndex] || "");
+      next[index] = value;
+      return next;
+    });
+  }
+
+  function renderPhotoBookImageMemoFields() {
+    if (photoBookInputImageUrls.length === 0) return null;
+    return (
+      <div className="pbImageMemoFields">
+        {photoBookInputImageUrls.map((url, idx) => (
+          <label key={`${idx}-${url.slice(0, 24)}`} className="pbImageMemoField">
+            <span>이미지 {idx + 1} 메모 입력</span>
+            <textarea
+              value={photoBookInputImageMemos[idx] || ""}
+              onChange={(event) => updatePhotoBookImageMemo(idx, event.target.value)}
+              placeholder="이미지 메모 입력..."
+            />
+          </label>
+        ))}
+      </div>
+    );
   }
 
   // Drag & Drop handlers for Photo book
@@ -6251,6 +6362,7 @@ ${photo.memoText}
         keyword: parsed.keyword,
         category2: parsed.category2,
         memoText: parsed.memo,
+        imageMemos: parsed.imageMemos || [],
         additionalImages: parsed.additionalImages || [],
         isPinned: parsed.isPinned || photo.isPinned || false
       };
@@ -6318,6 +6430,8 @@ ${photo.memoText}
               <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
             </div>
           </div>
+
+          <StorageUsageBar />
 
           {/* Tab Selector */}
           <div className="info-subview-tabs" style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
@@ -6610,6 +6724,7 @@ ${photo.memoText}
                           )}
                         </div>
 
+                        {renderPhotoBookImageMemoFields()}
                         <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
                           <label className="file-select-btn" style={{ margin: 0 }}>
                             📸 사진 가져오기
@@ -6709,17 +6824,22 @@ ${photo.memoText}
                         <div className="input-group" style={{ marginTop: "15px" }}>
                           <label className="field-label">메모 내용:</label>
                           <textarea
-                            className="info-text-textarea generalInfoFormattedTextView"
+                            ref={photoBookMemoEditRef}
+                            className="info-text-textarea generalInfoFormattedTextView pbMemoField"
                             style={{
                               width: "100%",
                               minHeight: "200px",
-                              maxHeight: "480px",
+                              height: "auto",
                               boxSizing: "border-box",
-                              resize: "vertical"
+                              resize: "none",
+                              overflow: "hidden"
                             }}
                             placeholder="사진에 관련된 메모나 일기 내용을 입력하세요."
                             value={photoBookInputMemo}
-                            onChange={e => setPhotoBookInputMemo(e.target.value)}
+                            onChange={(e) => {
+                              setPhotoBookInputMemo(e.target.value);
+                              resizePhotoBookMemoField(e.target);
+                            }}
                           />
                         </div>
 
@@ -6747,7 +6867,9 @@ ${photo.memoText}
                           const curIdx = allImgUrls.indexOf(curUrl) === -1 ? 0 : allImgUrls.indexOf(curUrl);
                           const hasPrev = curIdx > 0;
                           const hasNext = curIdx < allImgUrls.length - 1;
-                          const imgMemo = (activePhoto.imageMemos || [])[curIdx];
+                          const imageMemo = String((activePhoto.imageMemos || [])[curIdx] || "").trim();
+                          const entryMemo = String(activePhoto.memoText || "").trim();
+                          const overlayMemo = imageMemo;
                           const arrowBtnStyle: React.CSSProperties = {
                             position: "absolute",
                             top: "50%",
@@ -6783,6 +6905,23 @@ ${photo.memoText}
                                     ‹
                                   </button>
                                 )}
+                                {overlayMemo ? (
+                                  <div className={`pbImageMemoPin ${isPhotoMemoExpanded ? "is-open" : ""} ${overlayMemo.length > 80 ? "has-more" : ""}`}>
+                                    {overlayMemo}
+                                    {overlayMemo.length > 80 ? (
+                                      <button
+                                        type="button"
+                                        className="pbImageMemoPinMore"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          setIsPhotoMemoExpanded((open) => !open);
+                                        }}
+                                      >
+                                        {isPhotoMemoExpanded ? "접기" : "전체"}
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
                                 <img
                                   src={curUrl}
                                   alt="포토북 상세 사진"
@@ -6827,13 +6966,12 @@ ${photo.memoText}
                                 </>
                               )}
 
-                              {/* 현재 이미지 메모 */}
-                              {imgMemo && (
+                              {imageMemo && entryMemo && imageMemo !== entryMemo ? (
                                 <div className="generalInfoDetailMediaMemo" style={{ marginTop: "12px", padding: "12px 16px", borderRadius: "10px", background: "rgba(98,177,155,0.12)", border: "1px solid rgba(98,177,155,0.3)" }}>
                                   <span className="generalInfoDetailMediaMemoIcon" style={{ fontSize: "22px", marginRight: "8px" }}>📝</span>
-                                  <span className="generalInfoDetailMediaMemoText" style={{ fontSize: "18px", lineHeight: "1.7", fontWeight: "500" }}>{imgMemo}</span>
+                                  <span className="generalInfoDetailMediaMemoText" style={{ fontSize: "18px", lineHeight: "1.7", fontWeight: "500" }}>{entryMemo}</span>
                                 </div>
-                              )}
+                              ) : null}
                             </div>
                           );
                         })()}
@@ -6847,7 +6985,7 @@ ${photo.memoText}
                           </div>
                         </div>
 
-                        <div className="detail-content-box" style={{ margin: "20px 0" }}>
+                        {!activePhoto.url ? <div className="detail-content-box" style={{ margin: "20px 0" }}>
                           <h4 style={{ margin: "0 0 8px 0", color: "#aaa", fontSize: "17px" }}>📝 메모 내용</h4>
                           <div style={{
                             background: "rgba(0,0,0,0.15)",
@@ -6899,7 +7037,7 @@ ${photo.memoText}
                               {isPhotoMemoExpanded ? "🔼 접기" : "🔽 메모 전체 보기 (펼치기)"}
                             </button>
                           )}
-                        </div>
+                        </div> : null}
 
                         <div className="info-detail-actions no-print">
                           <button type="button" className="action-btn" onClick={() => { setActiveItem(null); setPhotoBookTab("index"); }} style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>🏠 목록으로</button>
@@ -7062,6 +7200,7 @@ ${photo.memoText}
                         )}
                       </div>
 
+                      {renderPhotoBookImageMemoFields()}
                       <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
                         <label className="file-select-btn" style={{ margin: 0 }}>
                           📸 사진 가져오기
@@ -7161,17 +7300,22 @@ ${photo.memoText}
                       <div className="input-group" style={{ marginTop: "15px" }}>
                         <label className="field-label">메모 내용:</label>
                         <textarea
-                          className="info-text-textarea generalInfoFormattedTextView"
+                          ref={photoBookMemoCreateRef}
+                          className="info-text-textarea generalInfoFormattedTextView pbMemoField"
                           style={{
                             width: "100%",
                             minHeight: "200px",
-                            maxHeight: "480px",
+                            height: "auto",
                             boxSizing: "border-box",
-                            resize: "vertical"
+                            resize: "none",
+                            overflow: "hidden"
                           }}
                           placeholder="사진에 관련된 메모나 일기 내용을 입력하세요."
                           value={photoBookInputMemo}
-                          onChange={e => setPhotoBookInputMemo(e.target.value)}
+                          onChange={(e) => {
+                            setPhotoBookInputMemo(e.target.value);
+                            resizePhotoBookMemoField(e.target);
+                          }}
                         />
                       </div>
 
@@ -7320,6 +7464,25 @@ ${photo.memoText}
                               />
                             </div>
                             <button
+                              type="button"
+                              className="pbIndexCardBtnAuto"
+                              title="이 목록 이미지를 3초마다 전체 화면으로 재생"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const urls = [photo.url, ...(photo.additionalImages || []).map((img: { url: string }) => img.url)].filter(Boolean);
+                                if (!urls.length) {
+                                  alert("자동 재생할 이미지가 없습니다.");
+                                  return;
+                                }
+                                setPhotoListAuto({
+                                  id: photo.id || urls[0],
+                                  urls,
+                                  memos: urls.map((_, index) => String((photo.imageMemos || [])[index] || "").trim()),
+                                  index: 0,
+                                });
+                              }}
+                            >자동</button>
+                            <button
                               className={`pbIndexCardBtnPin ${isPinned ? "active" : ""}`}
                               title={isPinned ? "상단 고정 해제" : "상단 고정"}
                               onClick={(e) => { e.stopPropagation(); togglePhotoBookPin(photo); }}
@@ -7399,6 +7562,25 @@ ${photo.memoText}
           </div>
         </div>
       )}
+      {photoListAuto && photoListAuto.urls[photoListAuto.index] ? (
+        <div className="pbPersonAlbumFullscreen" role="dialog" aria-modal="true" aria-label="포토북 자동 재생">
+          <img src={photoListAuto.urls[photoListAuto.index]} alt="" />
+          {photoListAuto.memos[photoListAuto.index] ? (
+            <div className="pbImageMemoPin pbImageMemoPinFullscreen">
+              {photoListAuto.memos[photoListAuto.index]}
+            </div>
+          ) : null}
+          <div className="pbPersonAlbumFullscreenBar">
+            <span>
+              {photoListAuto.index + 1} / {photoListAuto.urls.length}
+              {photoListAuto.urls.length > 1 ? " · 3초" : ""}
+            </span>
+            <button type="button" onClick={() => setPhotoListAuto(null)}>
+              자동 끄기
+            </button>
+          </div>
+        </div>
+      ) : null}
       {datePickerMode && (
         <div className="date-picker-modal" role="dialog" aria-modal="true" onClick={() => setDatePickerMode(null)}>
           <div className="date-picker-panel" onClick={event => event.stopPropagation()}>
@@ -7541,7 +7723,7 @@ ${photo.memoText}
           item={infoState.generalInfoExportItem}
           onClose={() => infoState.setGeneralInfoExportItem(null)}
           onPdfExported={(item) => infoState.markGeneralInfoPdfSaved(item.id)}
-          onAppFileExported={(item) => infoState.markGeneralInfoAppFileSaved(item.id)}
+          onAppFileExported={(item) => infoState.removeGeneralInfoAfterAppFileSave([item])}
         />
       )}
   

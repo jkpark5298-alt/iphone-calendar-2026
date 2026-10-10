@@ -6,6 +6,7 @@ import { pickGeneralInfoCoverSrc } from "../lib/generalInfoHelpers";
 import {
   BUILDER_APP_URL,
   IFL_APP_URL,
+  NEWSFLASH_APP_URL,
   INFO_INDEX_CATEGORIES,
   INFO_INDEX_SOURCE_OPTIONS,
   INFO_INDEX_SOURCE_SHORT,
@@ -14,6 +15,7 @@ import {
   formatIndexDateLabel,
   groupIndexItems,
   dedupeIndexItems,
+  forgetAppFileIndexArchive,
   infoIndexSourceClass,
   infoIndexSourceHomeUrl,
   parseIflLibraryPayload,
@@ -26,6 +28,7 @@ import {
 } from "../lib/infoIndex";
 import {
   GENERAL_INFO_TEMP_DRAFT_EVENT,
+  GENERAL_INFO_TEMP_DRAFT_KEY,
   readGeneralInfoTempDraftIndex,
 } from "../lib/generalInfoStorage";
 
@@ -33,11 +36,13 @@ const PIN_STORAGE_KEY = "travel-diary-info-index-pins-v1";
 const IFL_IMPORT_KEY = "travel-diary-ifl-index-v1";
 const IFL_TOKEN_KEY = "travel-diary-ifl-api-token";
 const MANUAL_STORAGE_KEY = "travel-diary-info-index-manual-v1";
+const HIDDEN_STORAGE_KEY = "travel-diary-info-index-hidden-v1";
 
 type Props = {
   localItems: GeneralInfoItem[];
   onOpenLocalDetail: (id: number) => void;
   onEditLocal?: (id: number) => void;
+  onDeleteLocal?: (id: number) => void;
   onToggleLocalPin: (id: number) => void;
   localStatus?: string;
   onExportLocalAppFiles?: () => string | void | Promise<string | void>;
@@ -71,6 +76,34 @@ function readPinnedIds(): Set<string> {
 
 function writePinnedIds(ids: Set<string>) {
   localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify(Array.from(ids)));
+}
+
+function readHiddenIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(HIDDEN_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeHiddenIds(ids: Set<string>) {
+  localStorage.setItem(HIDDEN_STORAGE_KEY, JSON.stringify(Array.from(ids).slice(-800)));
+}
+
+/** 이 앱의 글은 삭제, 다른 앱에서 온 목록은 인덱스에서만 제외 */
+function indexRemovalKind(item: InfoIndexItem): "delete" | "exclude" {
+  if (item.id === "local-temp:draft" || item.id.startsWith("manual:")) return "delete";
+  if (
+    item.source === "local" &&
+    typeof item.localNumericId === "number" &&
+    item.appFileMark !== "removed" &&
+    item.saveStatus !== "삭제됨"
+  ) {
+    return "delete";
+  }
+  return "exclude";
 }
 
 function readManualItems(): InfoIndexItem[] {
@@ -162,6 +195,7 @@ export function InfoIndexPanel({
   localItems,
   onOpenLocalDetail,
   onEditLocal,
+  onDeleteLocal,
   onToggleLocalPin,
   localStatus,
   onExportLocalAppFiles,
@@ -178,8 +212,8 @@ export function InfoIndexPanel({
   const [manualItems, setManualItems] = React.useState<InfoIndexItem[]>([]);
   const [removedArchive, setRemovedArchive] = React.useState<AppFileIndexArchiveEntry[]>([]);
   const [status, setStatus] = React.useState("앱에서 인덱스를 불러오는 중…");
-  const [sourceNote, setSourceNote] = React.useState("");
   const [pinnedIds, setPinnedIds] = React.useState<Set<string>>(new Set());
+  const [hiddenIds, setHiddenIds] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(false);
   const [iflToken, setIflToken] = React.useState("");
   const [internalComposeOpen, setInternalComposeOpen] = React.useState(false);
@@ -223,6 +257,7 @@ export function InfoIndexPanel({
 
   React.useEffect(() => {
     setPinnedIds(readPinnedIds());
+    setHiddenIds(readHiddenIds());
     setManualItems(readManualItems());
     try {
       const saved = localStorage.getItem(IFL_IMPORT_KEY);
@@ -255,13 +290,8 @@ export function InfoIndexPanel({
       const data = await response.json();
       const items = Array.isArray(data.items) ? (data.items as InfoIndexItem[]) : [];
       setRemoteItems(items);
-      const builderCount = Number(data.sources?.builder?.count || 0);
       const iflCount = Number(data.sources?.ifl?.count || 0);
-      const newsCount = Number(data.sources?.news?.count || 0);
       const iflError = String(data.sources?.ifl?.error || "");
-      setSourceNote(
-        `builder-zeta-eight ${builderCount}건 · insta-fact-library 클라우드 ${iflCount}건 · NEWS ${newsCount}건`,
-      );
       if (iflCount > 0) {
         setStatus("인덱스를 불러왔습니다.");
       } else if (iflError === "no-token") {
@@ -320,6 +350,7 @@ export function InfoIndexPanel({
         : [];
     const byId = new Map<string, InfoIndexItem>();
     for (const item of [...remoteItems, ...importedIflItems, ...local, ...tempOnly, ...removed, ...manualItems]) {
+      if (hiddenIds.has(item.id)) continue;
       byId.set(item.id, {
         ...item,
         pinned:
@@ -333,7 +364,7 @@ export function InfoIndexPanel({
       if (!a.pinned && b.pinned) return 1;
       return (b.dateKey || "").localeCompare(a.dateKey || "");
     });
-  }, [localItems, remoteItems, importedIflItems, manualItems, pinnedIds, removedArchive, tempTick]);
+  }, [localItems, remoteItems, importedIflItems, manualItems, pinnedIds, hiddenIds, removedArchive, tempTick]);
 
   const filtered = React.useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -393,6 +424,16 @@ export function InfoIndexPanel({
           return;
         }
         saveImportedIfl(dedupeIndexItems([...importedIflItems, ...items]));
+        setHiddenIds((prev) => {
+          let changed = false;
+          const next = new Set(prev);
+          for (const row of items) {
+            if (next.delete(row.id)) changed = true;
+          }
+          if (!changed) return prev;
+          writeHiddenIds(next);
+          return next;
+        });
         setStatus(`insta-fact-library 앱파일 ${items.length}건을 인덱스에 넣었습니다.`);
       } catch {
         setStatus("IFL 앱파일을 읽지 못했습니다. .ifl.json 인지 확인하세요.");
@@ -446,6 +487,81 @@ export function InfoIndexPanel({
     }
     setComposeOpen(false);
     setStatus("인덱스를 추가했습니다. 우선 표시 항목은 분류·일자·태그 맨 위에 나옵니다.");
+  };
+
+  const rememberHidden = (id: string) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      writeHiddenIds(next);
+      return next;
+    });
+    setSelectedIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  const dropPin = (id: string) => {
+    setPinnedIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      writePinnedIds(next);
+      return next;
+    });
+  };
+
+  const removeIndexItem = (item: InfoIndexItem) => {
+    const kind = indexRemovalKind(item);
+    if (kind === "delete" && item.source === "local" && typeof item.localNumericId === "number") {
+      onDeleteLocal?.(item.localNumericId);
+      return;
+    }
+    if (kind === "delete" && item.id === "local-temp:draft") {
+      if (!window.confirm(`“${item.title}” 임시 저장을 삭제할까요?`)) return;
+      try {
+        localStorage.removeItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+        window.dispatchEvent(new Event(GENERAL_INFO_TEMP_DRAFT_EVENT));
+      } catch {
+        /* ignore */
+      }
+      setStatus("임시 저장을 삭제했습니다.");
+      return;
+    }
+    if (kind === "delete" && item.id.startsWith("manual:")) {
+      if (!window.confirm(`“${item.title}” 인덱스 항목을 삭제할까요?`)) return;
+      saveManualItems(manualItems.filter((row) => row.id !== item.id));
+      dropPin(item.id);
+      setStatus("인덱스 항목을 삭제했습니다.");
+      return;
+    }
+
+    const otherApp = item.source !== "local";
+    const sourceName = INFO_INDEX_SOURCE_SHORT[item.source];
+    const ok = window.confirm(
+      otherApp
+        ? `“${item.title}” 항목을 정보 인덱스에서 제외할까요?\n이 목록에서만 빠지고, ${sourceName} 앱의 글은 삭제되지 않습니다.`
+        : `“${item.title}” 항목을 정보 인덱스에서 제외할까요?\n이 목록에서만 빠집니다.`,
+    );
+    if (!ok) return;
+
+    if (importedIflItems.some((row) => row.id === item.id)) {
+      saveImportedIfl(importedIflItems.filter((row) => row.id !== item.id));
+    }
+    const archiveId = item.id.startsWith("local-removed:")
+      ? Number(item.id.slice("local-removed:".length))
+      : NaN;
+    if (Number.isFinite(archiveId)) forgetAppFileIndexArchive(archiveId);
+    dropPin(item.id);
+    rememberHidden(item.id);
+    setStatus(
+      otherApp
+        ? "정보 인덱스에서 제외했습니다. 다른 앱의 글은 그대로입니다."
+        : "정보 인덱스에서 제외했습니다.",
+    );
   };
 
   const openLocalDetail = (item: InfoIndexItem) => {
@@ -583,6 +699,19 @@ export function InfoIndexPanel({
     return <div className="infoIndexTitleButton">{title}</div>;
   };
 
+  const renderRemoval = (item: InfoIndexItem) => {
+    const exclude = indexRemovalKind(item) === "exclude";
+    return (
+      <button
+        type="button"
+        className={exclude ? "infoIndexExcludeButton" : "infoIndexDeleteButton"}
+        onClick={() => removeIndexItem(item)}
+      >
+        {exclude ? "제외" : "삭제"}
+      </button>
+    );
+  };
+
   const renderDetail = (item: InfoIndexItem) => {
     const className = `infoIndexDetailButton ${infoIndexSourceClass(item.source)}`;
     if (item.appFileMark === "removed") {
@@ -596,6 +725,7 @@ export function InfoIndexPanel({
           <button type="button" className={`${className} isRemoved`} onClick={tellRemoved}>
             보기
           </button>
+          {renderRemoval(item)}
         </div>
       );
     }
@@ -615,6 +745,7 @@ export function InfoIndexPanel({
           >
             보기
           </button>
+          {renderRemoval(item)}
         </div>
       );
     }
@@ -627,6 +758,7 @@ export function InfoIndexPanel({
         <a className={className} href={href} target="_blank" rel="noopener noreferrer">
           보기
         </a>
+        {renderRemoval(item)}
       </div>
     );
   };
@@ -647,7 +779,7 @@ export function InfoIndexPanel({
           </button>
         </div>
         <p className="infoIndexHelp">
-          제목이나 상세보기를 누르면 작성된 앱으로 가서 내용을 확인합니다. NEWS는 뉴스 저장 앱에서 본문을 봅니다. 그 글을 지우면 여기에는 삭제됨으로 남습니다. 우선 표시는 분류·일자·태그에서 맨 위에 올립니다.
+          제목이나 상세보기를 누르면 작성된 앱으로 가서 내용을 확인합니다. NEWS는 뉴스 저장 앱에서 본문을 봅니다. 그 글을 지우면 여기에는 삭제됨으로 남습니다. NEWS·builder·insta 항목의 제외는 이 인덱스에서만 빠지고, 그 앱의 글은 삭제되지 않습니다. 일반정보수집과 여기서 입력한 항목은 삭제하면 이 앱에서 지워집니다. 우선 표시는 분류·일자·태그에서 맨 위에 올립니다.
           노란 ★는 앱파일로 저장한 항목입니다. 그 항목을 앱에서 지우면 빨간 ★로 남고, 분류·일자·태그 옆의 전체에서만 보입니다.
         </p>
       </div>
@@ -804,6 +936,9 @@ export function InfoIndexPanel({
               <a href={BUILDER_APP_URL} target="_blank" rel="noopener noreferrer">
                 builder 열기
               </a>
+              <a href={NEWSFLASH_APP_URL} target="_blank" rel="noopener noreferrer">
+                NEWS 열기
+              </a>
             </div>
             <button
               type="button"
@@ -911,7 +1046,7 @@ export function InfoIndexPanel({
           </p>
 
           <p className="mutedText infoIndexStatusLine">
-            {sourceNote || "외부 앱 목록"} · 이 앱 {localItems.length}건
+            {`builder ${merged.filter((item) => item.source === "builder-zeta-eight").length}건 · insta ${merged.filter((item) => item.source === "insta-fact-library").length}건 · NEWS ${merged.filter((item) => item.source === "newsflash").length}건`} · 이 앱 {localItems.length}건
             {searchQuery.trim() ? ` · 검색 ${filtered.length}건` : ""}
             {localStatus ? ` · ${localStatus}` : ""} · {status}
           </p>

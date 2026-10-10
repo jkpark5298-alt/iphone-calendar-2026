@@ -212,6 +212,20 @@ export function normalizeIndexTags(values: unknown): string[] {
   return Array.from(new Set(tags)).slice(0, 8);
 }
 
+function cleanNewsHeadline(raw: string) {
+  const text = String(raw || "")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+  return text || "제목 없음";
+}
+
 export function buildIndexItem(input: {
   id: string;
   title: string;
@@ -225,7 +239,7 @@ export function buildIndexItem(input: {
   appFileMark?: "saved" | "removed";
   saveStatus?: "저장" | "임시 저장" | "삭제됨";
 }): InfoIndexItem {
-  const title = cleanIndexTitle(input.title);
+  const title = input.source === "newsflash" ? cleanNewsHeadline(input.title) : cleanIndexTitle(input.title);
   const tags = normalizeIndexTags(input.tags);
   const category = mapToIndexCategory(
     input.categoryRaw || tags[0] || title,
@@ -364,7 +378,10 @@ export function groupIndexItems(
 export function dedupeIndexItems(items: InfoIndexItem[]) {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const key = `${item.source}|${item.appFileMark || ""}|${item.title.replace(/…$/, "").slice(0, 24)}|${item.dateKey}`;
+    const key =
+      item.source === "newsflash"
+        ? `newsflash|${item.id}`
+        : `${item.source}|${item.appFileMark || ""}|${item.title.replace(/…$/, "").slice(0, 24)}|${item.dateKey}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
