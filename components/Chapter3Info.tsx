@@ -18,6 +18,7 @@ import {
 import { readClipboardImageFiles } from "../lib/collectRichFormat";
 import { extractFirstSentence, categoryKeywordsList, formatCategoryKeywords } from "../lib/generalInfoText";
 import { extractGeneralInfoBodyImageSrcs, isUsableGeneralInfoCoverSrc, getGeneralInfoInfographicItems } from "../lib/generalInfoHelpers";
+import { EntryLookup, plainSnippet } from "./EntryLookup";
 import {
   extractInstagramUrls,
   INSTAGRAM_POST_URL_HINT,
@@ -158,9 +159,9 @@ export function Chapter3Info({
   handleExportSelectedGeneralInfoAppFiles,
   handleOpenGeneralInfoTempDraft,
   generalInfoItems,
-  filteredGeneralInfoItems: _filteredGeneralInfoItems,
-  generalInfoSearchTerm: _generalInfoSearchTerm,
-  setGeneralInfoSearchTerm: _setGeneralInfoSearchTerm,
+  filteredGeneralInfoItems,
+  generalInfoSearchTerm,
+  setGeneralInfoSearchTerm,
   generalInfoDetailId: _generalInfoDetailId,
   setGeneralInfoDetailId,
   handleTogglePinGeneralInfo,
@@ -172,6 +173,20 @@ export function Chapter3Info({
 }: Chapter3InfoProps) {
   const activeTab = generalInfoActiveTab;
   const setActiveTab = setGeneralInfoActiveTab;
+  const [infoLookupDraft, setInfoLookupDraft] = React.useState("");
+  const [infoLookupNote, setInfoLookupNote] = React.useState("");
+  const infoLookupHits = generalInfoSearchTerm.trim()
+    ? filteredGeneralInfoItems.slice(0, 20).map((item) => ({
+        id: String(item.id),
+        title: item.title || "제목 없음",
+        snippet: plainSnippet([item.summary, item.text].filter(Boolean).join(" ")),
+      }))
+    : [];
+  const infoLookupStatus = generalInfoSearchTerm.trim()
+    ? infoLookupHits.length
+      ? `${filteredGeneralInfoItems.length}건`
+      : "맞는 일반정보가 없습니다."
+    : "";
   const generalInfoImageFileRef = React.useRef<HTMLInputElement | null>(null);
   const infographicFileRef = React.useRef<HTMLInputElement | null>(null);
   const [showHandwritingModal, setShowHandwritingModal] = React.useState(false);
@@ -498,6 +513,22 @@ export function Chapter3Info({
             </div>
 
             <div className="generalInfoTextBox generalInfoRichTextBox" style={{ marginTop: 14 }}>
+              <EntryLookup
+                placeholder="일반정보 내용 조회"
+                query={infoLookupDraft}
+                onQuery={setInfoLookupDraft}
+                onSearch={() => {
+                  const keyword = infoLookupDraft.trim();
+                  setGeneralInfoSearchTerm(keyword);
+                  setInfoLookupNote(keyword ? "" : "조회할 내용을 입력하세요.");
+                }}
+                hits={infoLookupHits}
+                status={infoLookupNote || infoLookupStatus}
+                onOpen={(id) => {
+                  const item = generalInfoItems.find((entry) => entry.id === Number(id));
+                  if (item) handleStartEditGeneralInfo(item);
+                }}
+              />
               <div className="generalInfoRichTextHeader">
                 <strong>본문 단락</strong>
                 <span>새 단락은 위에 작성 · 이전 단락은 아래로 이동 · 사진은 본문에 붙여넣거나 이미지 버튼으로 넣기</span>

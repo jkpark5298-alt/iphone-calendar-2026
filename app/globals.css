@@ -2781,6 +2781,66 @@ textarea {
   line-height: 1.35;
   color: #5d6660;
 }
+.entryLookup {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.entryLookupRow {
+  display: flex;
+  gap: 8px;
+}
+.entryLookupRow input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0;
+  padding: 0 10px;
+  font-size: 14px;
+}
+.entryLookupRow button {
+  border: 0;
+  border-radius: 10px;
+  padding: 0 14px;
+  background: #24312c;
+  color: #3ddc84;
+  font-weight: 800;
+  cursor: pointer;
+}
+.entryLookupStatus {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+.entryLookupHits {
+  display: grid;
+  gap: 6px;
+}
+.entryLookupHits button {
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+.entryLookupHits strong {
+  display: block;
+  color: #86efac;
+  font-size: 13px;
+}
+.entryLookupHits span {
+  display: block;
+  margin-top: 2px;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.35;
+}
 .weather-time-inline {
   color: #808781;
   font-weight: 700;
@@ -4710,18 +4770,23 @@ textarea {
 .diary-action-nav-final {
   width: 100% !important;
   display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   align-items: center !important;
-  gap: 7px !important;
+  gap: 6px !important;
 }
 
 .diary-action-nav-final .pill-btn,
-.diary-action-nav-final .weather-refresh-btn {
+.diary-action-nav-final .weather-refresh-btn,
+.diary-action-nav-final .undo-btn {
   width: 100% !important;
   min-width: 0 !important;
   justify-content: center !important;
   text-align: center !important;
   white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-size: 12px !important;
+  padding: 7px 4px !important;
 }
 
 .diary-weather-action-btn {
@@ -4910,7 +4975,7 @@ textarea {
 }
 
 .diary-action-nav-final {
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
 }
 
 .diary-action-nav-final .undo-btn,
@@ -4932,7 +4997,14 @@ textarea {
   }
 
   .diary-action-nav-final {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+
+  .diary-action-nav-final .pill-btn,
+  .diary-action-nav-final .weather-refresh-btn,
+  .diary-action-nav-final .undo-btn {
+    font-size: 10px !important;
+    padding: 7px 2px !important;
   }
 
   .info-action-one-line {
@@ -12915,11 +12987,11 @@ body {
   .calendar-headline .calendar-utility-actions {
     display: contents;
   }
-  .calendar-nav-diary { order: 1; }
-  .calendar-nav-theme { order: 2; }
-  .calendar-nav-collect { order: 3; }
-  .calendar-nav-index { order: 4; }
-  .calendar-nav-photo { order: 5; }
+  .calendar-headline .calendar-nav-diary { order: 1; }
+  .calendar-headline .calendar-nav-theme { order: 2; }
+  .calendar-headline .calendar-nav-collect { order: 3; }
+  .calendar-headline .calendar-nav-index { order: 4; }
+  .calendar-headline .calendar-nav-photo { order: 5; }
   .calendar-headline .calendar-date-shortcut { order: 6; }
   .calendar-headline .red-plus-btn { order: 7; }
   .calendar-headline .mark-btn { order: 8; }

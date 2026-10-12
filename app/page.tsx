@@ -26,6 +26,7 @@ import { CollectFormatToolbar } from "../components/CollectFormatToolbar";
 import { CollectWhiteCell } from "../components/CollectWhiteCell";
 import { SlotImagePanel } from "../components/SlotImagePanel";
 import { ClassTagSelect } from "../components/ClassTagSelect";
+import { EntryLookup, plainSnippet, type LookupHit } from "../components/EntryLookup";
 import { ThemeBoard } from "../components/ThemeBoard";
 import { appendHashtagToEditor } from "../lib/contentClass";
 import { HandwritingModal } from "../components/HandwritingModal";
@@ -767,6 +768,51 @@ export default function HomePage() {
   const [showDiaryHandwritingModal, setShowDiaryHandwritingModal] = useState(false);
   const [showDiaryTextToImageModal, setShowDiaryTextToImageModal] = useState(false);
   const [diaryCollectFontSizePx, setDiaryCollectFontSizePx] = useState(15);
+  const [diaryLookup, setDiaryLookup] = useState("");
+  const [diaryLookupHits, setDiaryLookupHits] = useState<LookupHit[]>([]);
+  const [diaryLookupStatus, setDiaryLookupStatus] = useState("");
+
+  async function lookupDiaryEntries() {
+    const keyword = diaryLookup.trim();
+    if (!keyword) {
+      setDiaryLookupHits([]);
+      setDiaryLookupStatus("조회할 내용을 입력하세요.");
+      return;
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      setDiaryLookupHits([]);
+      setDiaryLookupStatus("저장된 일기를 불러올 수 없습니다.");
+      return;
+    }
+    setDiaryLookupStatus("조회 중...");
+    const safe = keyword.replace(/[%_,]/g, " ").trim();
+    const pattern = `%${safe}%`;
+    const { data, error } = await supabase
+      .from("diary_entries")
+      .select("entry_date, diary_text, voice_text")
+      .or(`diary_text.ilike.${pattern},voice_text.ilike.${pattern}`)
+      .order("entry_date", { ascending: false })
+      .limit(20);
+    if (error) {
+      setDiaryLookupHits([]);
+      setDiaryLookupStatus("조회하지 못했습니다.");
+      return;
+    }
+    const hits = (data || [])
+      .map((row) => {
+        const date = monthDayFromEntryDate(String(row.entry_date || ""));
+        if (!date) return null;
+        const text = plainSnippet([row.diary_text, row.voice_text].filter(Boolean).join(" "));
+        return {
+          id: String(row.entry_date),
+          title: `${date.year}.${pad(date.month)}.${pad(date.day)}`,
+          snippet: text,
+        };
+      })
+      .filter((hit): hit is LookupHit => Boolean(hit));
+    setDiaryLookupHits(hits);
+    setDiaryLookupStatus(hits.length ? `${hits.length}건` : "맞는 일기가 없습니다.");
+  }
 
   function handleDiaryRichImagePick(files: FileList | null) {
     const list = Array.from(files || []);
@@ -4325,6 +4371,7 @@ export default function HomePage() {
 
           <div className="diary-title-nav-row diary-action-nav-final">
             <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
+            <button type="button" className="pill-btn calendar-nav-theme" onClick={openTheme}>테마</button>
             <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
             <button type="button" className="weather-refresh-btn diary-weather-action-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
             <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
@@ -4380,6 +4427,19 @@ export default function HomePage() {
         </div>
         {/* Text 입력 / 편집 (Builder FormatToolbar 이식) */}
         <div className="generalInfoTextBox generalInfoRichTextBox" style={{ margin: "10px 0" }}>
+          <EntryLookup
+            placeholder="일기장 내용 조회"
+            query={diaryLookup}
+            onQuery={setDiaryLookup}
+            onSearch={() => void lookupDiaryEntries()}
+            hits={diaryLookupHits}
+            status={diaryLookupStatus}
+            onOpen={(id) => {
+              const date = monthDayFromEntryDate(id);
+              if (!date) return;
+              openDiary(date.month, date.day, date.year);
+            }}
+          />
           <div className="generalInfoRichTextHeader">
             <strong>Text 입력 / 편집</strong>
             <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능 (Builder 서식)</span>

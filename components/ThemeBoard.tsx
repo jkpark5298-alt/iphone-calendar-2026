@@ -5,6 +5,7 @@ import { CollectFormatToolbar } from "./CollectFormatToolbar";
 import { CollectWhiteCell } from "./CollectWhiteCell";
 import { SlotImagePanel } from "./SlotImagePanel";
 import { ClassTagSelect } from "./ClassTagSelect";
+import { EntryLookup, plainSnippet, type LookupHit } from "./EntryLookup";
 import { HandwritingModal } from "./HandwritingModal";
 import { TextToImageModal } from "./TextToImageModal";
 import { appendHashtagToEditor } from "../lib/contentClass";
@@ -82,6 +83,9 @@ export function ThemeBoard({ onBack }: { onBack: () => void }) {
   const [imageSlotId, setImageSlotId] = useState<string | null>(null);
   const [showTextImage, setShowTextImage] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [themeLookup, setThemeLookup] = useState("");
+  const [themeLookupHits, setThemeLookupHits] = useState<LookupHit[]>([]);
+  const [themeLookupStatus, setThemeLookupStatus] = useState("");
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const imageFileRef = useRef<HTMLInputElement | null>(null);
@@ -219,6 +223,25 @@ export function ThemeBoard({ onBack }: { onBack: () => void }) {
     commitActive();
   }
 
+  function lookupThemes() {
+    const keyword = themeLookup.trim().toLowerCase();
+    if (!keyword) {
+      setThemeLookupHits([]);
+      setThemeLookupStatus("조회할 내용을 입력하세요.");
+      return;
+    }
+    const hits = notes
+      .filter((note) => `${note.title} ${plainSnippet(note.html, 4000)}`.toLowerCase().includes(keyword))
+      .slice(0, 20)
+      .map((note) => ({
+        id: note.id,
+        title: note.title || "새 테마",
+        snippet: plainSnippet(note.html),
+      }));
+    setThemeLookupHits(hits);
+    setThemeLookupStatus(hits.length ? `${hits.length}건` : "맞는 테마가 없습니다.");
+  }
+
   function applyClass(label: string) {
     const editor = editorRef.current;
     if (!editor) return;
@@ -236,6 +259,15 @@ export function ThemeBoard({ onBack }: { onBack: () => void }) {
         <button type="button" className="pill-btn themeAddBtn" onClick={addTheme}>+ 테마</button>
       </div>
       <p className="themeBoardHint">일자별이 아니라 테마별로 작성합니다. 서식, 칸 추가, 이미지 추가는 일기장과 같습니다.</p>
+      <EntryLookup
+        placeholder="테마 내용 조회"
+        query={themeLookup}
+        onQuery={setThemeLookup}
+        onSearch={lookupThemes}
+        hits={themeLookupHits}
+        status={themeLookupStatus}
+        onOpen={switchTheme}
+      />
       <div className="themeChipRow" role="tablist" aria-label="테마 목록">
         {notes.map((note) => (
           <div key={note.id} className={`themeChip ${note.id === activeId ? "active" : ""}`}>
