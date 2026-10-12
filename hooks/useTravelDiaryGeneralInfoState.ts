@@ -43,7 +43,9 @@ import { filterGeneralInfoItemsBySearch, getGeneralInfoCategoryPath, getGeneralI
 import { readStackedHtml, readStackedText, splitWhiteCells } from "../lib/collectClassCell";
 import { sanitizeGeneralInfoHtml } from "../lib/sanitizeHtml";
 import {
+  IMAGE_SLOT_GUIDE,
   enhanceRichInlineImages,
+  findAwaitingSlotId,
   insertImagesAtSlotOrCaret,
   tryConsumeImageTriggerToSlot,
   handleRichImageSlotPointer,
@@ -1106,10 +1108,12 @@ export function useTravelDiaryGeneralInfoState({
     if (!urls.length) return;
     editor.focus();
     enhanceRichInlineImages(editor);
+    const slotId = opts?.slotId || findAwaitingSlotId(editor);
+    if (!slotId) return;
     const inserted = insertImagesAtSlotOrCaret(
       editor,
       urls.map((src) => ({ src })),
-      opts?.slotId,
+      slotId,
     );
     if (inserted) {
       enhanceRichInlineImages(editor);
@@ -1201,6 +1205,10 @@ export function useTravelDiaryGeneralInfoState({
 
     if (pastedFiles.length > 0) {
       event.preventDefault();
+      if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
+        showPasteHint(IMAGE_SLOT_GUIDE);
+        return;
+      }
       void insertGeneralInfoRichImages(pastedFiles);
       return;
     }
@@ -3202,6 +3210,7 @@ export function useTravelDiaryGeneralInfoState({
     handleGeneralInfoRichInput,
     handleGeneralInfoRichEditorClick,
     handleGeneralInfoRichImagePick,
+    handleGeneralInfoUploadRichImages,
     getGeneralInfoToolbarButtonStyle,
     makeGeneralInfoHtmlFromText,
     selectedGeneralInfoItem,

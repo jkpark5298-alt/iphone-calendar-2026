@@ -11,7 +11,9 @@ import { ChangeEvent, ClipboardEvent, useCallback, useEffect, useLayoutEffect, u
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateApi";
 import {
+  IMAGE_SLOT_GUIDE,
   enhanceRichInlineImages,
+  findAwaitingSlotId,
   insertImagesAtSlotOrCaret,
   tryConsumeImageTriggerToSlot,
   handleRichImageSlotPointer,
@@ -22,6 +24,10 @@ import { stepCollectFontSize } from "../lib/collectFormatPalette";
 import { readClipboardImageFiles, runCollectRichCommand } from "../lib/collectRichFormat";
 import { CollectFormatToolbar } from "../components/CollectFormatToolbar";
 import { CollectWhiteCell } from "../components/CollectWhiteCell";
+import { SlotImagePanel } from "../components/SlotImagePanel";
+import { ClassTagSelect } from "../components/ClassTagSelect";
+import { ThemeBoard } from "../components/ThemeBoard";
+import { appendHashtagToEditor } from "../lib/contentClass";
 import { HandwritingModal } from "../components/HandwritingModal";
 import { TextToImageModal } from "../components/TextToImageModal";
 import { PhotobookPersonAlbumGallery, PhotobookSceneAlbumScreen } from "../components/PhotobookPersonAlbumGallery";
@@ -44,7 +50,7 @@ import {
 import { importWorkScheduleFromFile, type ImportedWorkMarkType } from "../lib/workScheduleImport";
 import { readAppFileIndexArchive } from "../lib/infoIndex";
 
-type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
+type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate" | "theme";
 type PhotoItem = {
   url: string;
   name: string;
@@ -713,6 +719,9 @@ export default function HomePage() {
     const slotId = tryConsumeImageTriggerToSlot(editor);
     if (slotId) {
       enhanceRichInlineImages(editor);
+      setDiaryImageSlotId(slotId);
+    } else if (!findAwaitingSlotId(editor)) {
+      setDiaryImageSlotId(null);
     }
   }
 
@@ -730,6 +739,7 @@ export default function HomePage() {
     if (handled) {
       event.preventDefault();
       event.stopPropagation();
+      if (!findAwaitingSlotId(editor)) setDiaryImageSlotId(null);
       saveDiary(readStackedHtml(editor), voiceText);
       return;
     }
@@ -753,6 +763,7 @@ export default function HomePage() {
     diaryImageFileRef.current.click();
   }
 
+  const [diaryImageSlotId, setDiaryImageSlotId] = useState<string | null>(null);
   const [showDiaryHandwritingModal, setShowDiaryHandwritingModal] = useState(false);
   const [showDiaryTextToImageModal, setShowDiaryTextToImageModal] = useState(false);
   const [diaryCollectFontSizePx, setDiaryCollectFontSizePx] = useState(15);
@@ -777,16 +788,28 @@ export default function HomePage() {
     }
   }
 
+  function diarySlotOrGuide() {
+    const slotId = findAwaitingSlotId(diaryRichTextRef.current);
+    if (!slotId) {
+      setDiaryImageSlotId(null);
+      alert(IMAGE_SLOT_GUIDE);
+    }
+    return slotId;
+  }
+
   async function handleDiaryCollectPasteImage() {
+    const slotId = diarySlotOrGuide();
+    if (!slotId) return;
     try {
       const files = await readClipboardImageFiles();
       if (!files.length) {
-        alert("클립보드에서 이미지를 찾지 못했습니다. 이미지를 복사한 뒤 다시 눌러 주세요.");
+        alert("클립보드에서 이미지를 찾지 못했습니다. 이미지를 복사한 뒤 사진 칸에 붙여넣으세요.");
         return;
       }
-      void insertDiaryInlineImages(files);
+      void insertDiaryInlineImages(files, slotId);
+      setDiaryImageSlotId(null);
     } catch {
-      alert("클립보드 이미지 읽기를 지원하지 않습니다. 본문에 직접 붙여넣기 하세요.");
+      alert("클립보드 읽기가 막혀 있습니다. 사진 칸의 붙여넣기 칸에 직접 붙여넣으세요.");
     }
   }
 
@@ -2265,6 +2288,11 @@ export default function HomePage() {
     setInfoSubView("generalInfo");
     infoState.setGeneralInfoActiveTab("collect");
     setView("info");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openTheme() {
+    setView("theme");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -4183,12 +4211,7 @@ export default function HomePage() {
             </span>
             <button type="button" className="month-badge month-diary-link" onClick={() => openDiary(currentMonth, currentDay, currentYear)} aria-label="선택 날짜 일기장으로 이동">{currentMonth}월</button>
           </h1>
-          <div className="head-actions calendar-top-actions calendar-top-actions-redesign">
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("diary")}>일기장</button>
-            <a className="pill-btn compact-pill calendar-info-app-link" href={getInformationAppDayUrl(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`)} target="_blank" rel="noopener noreferrer" title="정보함 앱에서 이 날짜 보기">🔗 정보함 앱</a>
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openGeneralInfoCollect(currentMonth, currentDay)}>일반정보수집</button>
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfoIndex(currentMonth, currentDay)}>정보인덱스</button>
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openPhotoBook(currentMonth, currentDay)}>포토북</button>
+          <div className="head-actions calendar-utility-actions">
             <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
@@ -4206,7 +4229,16 @@ export default function HomePage() {
               />
             </label>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
+            <span className="calendar-mobile-break" aria-hidden="true" />
             <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
+          </div>
+          <div className="calendar-app-nav">
+            <a className="pill-btn compact-pill calendar-nav-infoapp" href={getInformationAppDayUrl(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`)} target="_blank" rel="noopener noreferrer" title="정보함 앱에서 이 날짜 보기">🔗 정보함 앱</a>
+            <button type="button" className="pill-btn compact-pill calendar-nav-diary" onClick={() => openDatePicker("diary")}>일기장</button>
+            <button type="button" className="pill-btn compact-pill calendar-nav-theme" onClick={openTheme}>테마</button>
+            <button type="button" className="pill-btn compact-pill calendar-nav-collect" onClick={() => openGeneralInfoCollect(currentMonth, currentDay)}>일반정보수집</button>
+            <button type="button" className="pill-btn compact-pill calendar-nav-index" onClick={() => openInfoIndex(currentMonth, currentDay)}>정보인덱스</button>
+            <button type="button" className="pill-btn compact-pill calendar-nav-photo" onClick={() => openPhotoBook(currentMonth, currentDay)}>포토북</button>
           </div>
         </div>
 
@@ -4365,13 +4397,29 @@ export default function HomePage() {
             onColor={(c) => handleDiaryRichCommand("foreColor", c)}
             onHighlight={(c) => handleDiaryRichCommand("highlight", c)}
             onInsertChar={(ch) => handleDiaryRichCommand("insertText", ch)}
-            onImage={() => diaryImageFileRef.current?.click()}
+            onImage={() => {
+              const slotId = diarySlotOrGuide();
+              if (!slotId) return;
+              diaryPendingSlotRef.current = slotId;
+              diaryImageFileRef.current?.click();
+            }}
             onPasteImage={() => {
               void handleDiaryCollectPasteImage();
             }}
             onTextImage={() => setShowDiaryTextToImageModal(true)}
             onHandwriting={() => setShowDiaryHandwritingModal(true)}
           />
+          <div className="classTagRow">
+            <ClassTagSelect
+              onSelect={(label) => {
+                const editor = diaryRichTextRef.current;
+                if (!editor) return;
+                appendHashtagToEditor(editor, label);
+                saveDiary(readStackedHtml(editor), voiceText);
+              }}
+            />
+            <span>분류를 고르면 이 칸 본문에 #태그가 붙습니다. 본문에 직접 입력할 수도 있습니다.</span>
+          </div>
           <div className="collectFormatSlotRow">
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertClassCell} title="아래에 하얀 칸 추가">
               ＋ 칸
@@ -4400,6 +4448,7 @@ export default function HomePage() {
             className="generalInfoRichTextEditor collectPaperEditor diaryPaperEditor"
             contentEditable
             suppressContentEditableWarning
+            spellCheck={false}
             role="textbox"
             tabIndex={0}
             data-placeholder="오늘의 기록을 남겨보세요...."
@@ -4407,6 +4456,7 @@ export default function HomePage() {
               handleDiaryRichInput();
               saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
             }}
+            onKeyUp={() => handleDiaryRichInput()}
             onBlur={() => {
               saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
             }}
@@ -4415,7 +4465,14 @@ export default function HomePage() {
               const pastedFiles = imageFilesFromClipboard(e.clipboardData);
               if (pastedFiles.length > 0) {
                 e.preventDefault();
-                void insertDiaryInlineImages(pastedFiles);
+                const slotId = findAwaitingSlotId(diaryRichTextRef.current);
+                if (!slotId) {
+                  setDiaryImageSlotId(null);
+                  alert(IMAGE_SLOT_GUIDE);
+                  return;
+                }
+                void insertDiaryInlineImages(pastedFiles, slotId);
+                setDiaryImageSlotId(null);
                 return;
               }
               e.preventDefault();
@@ -4447,6 +4504,8 @@ export default function HomePage() {
               initialHtml={diaryWhiteHtmlRef.current[id] || ""}
               placeholder="오늘의 기록을 남겨보세요...."
               imageDeleteOnly
+              showClassTag
+              onUploadImages={uploadDiaryInlineImages}
               onInput={() => {
                 saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
               }}
@@ -4462,6 +4521,15 @@ export default function HomePage() {
               }}
             />
           ))}
+          {diaryImageSlotId ? (
+            <SlotImagePanel
+              onFiles={(files) => {
+                void insertDiaryInlineImages(files, diaryImageSlotId);
+                setDiaryImageSlotId(null);
+              }}
+              onClose={() => setDiaryImageSlotId(null)}
+            />
+          ) : null}
         </div>
         {showDiaryHandwritingModal && (
           <HandwritingModal
@@ -6477,6 +6545,7 @@ ${photo.memoText}
               handleGeneralInfoRichInput={infoState.handleGeneralInfoRichInput}
               handleGeneralInfoRichEditorClick={infoState.handleGeneralInfoRichEditorClick}
               handleGeneralInfoRichImagePick={infoState.handleGeneralInfoRichImagePick}
+              uploadRichImages={infoState.handleGeneralInfoUploadRichImages}
               getGeneralInfoToolbarButtonStyle={infoState.getGeneralInfoToolbarButtonStyle}
               handleResetGeneralInfoDraft={infoState.handleResetGeneralInfoDraft}
               handleUndoGeneralInfoDraft={infoState.handleUndoGeneralInfoDraft}
@@ -7523,6 +7592,7 @@ ${photo.memoText}
     <main className={view === "info" ? "app appInfoWide" : "app"}>
       {view === "calendar" && CalendarView()}
       {view === "diary" && DiaryView()}
+      {view === "theme" && <ThemeBoard onBack={() => openCalendar(currentMonth)} />}
       {view === "info" && InfoView()}
       {view === "schedule" && ScheduleView()}
       {view === "redDate" && RedDateView()}

@@ -1,6 +1,7 @@
 /**
- * Inline image slot helpers — ported from insta-fact-library RichTextEditor.
- * Typing S / s at sentence end creates an S1… slot; paste or file fills it.
+ * Inline image slot helpers.
+ * Typing S. or s. creates one photo slot.
+ * Photos enter that slot from the camera, the album, or a paste.
  */
 
 export const INLINE_IMG_CLASS = "rich-inline-img";
@@ -78,7 +79,7 @@ export function paintEmptyImageSlot(slot: HTMLElement, id?: string) {
 
   const hint = document.createElement("span");
   hint.className = "rich-img-slot-hint";
-  hint.textContent = "눌러서 이 칸에 사진 넣기";
+  hint.textContent = "이 칸에 사진 넣기";
 
   const del = document.createElement("span");
   del.className = SLOT_DEL_CLASS;
@@ -95,54 +96,103 @@ export function createImageSlotElement(id: string) {
   return slot;
 }
 
+/** S. 또는 s. 한 묶음이 사진 칸 하나 */
+const IMAGE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z])([Ss]\.)$/;
+
+export const IMAGE_SLOT_GUIDE = "본문에 S. 또는 s. 를 입력하면 사진 칸이 생깁니다. 그 칸에서 사진찍기, 사진첩 또는 붙여넣기로 넣으세요.";
+
+function caretText(editor: HTMLElement): { node: Text; offset: number } | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return null;
+  const range = sel.getRangeAt(0);
+  if (!editor.contains(range.startContainer)) return null;
+
+  if (range.startContainer.nodeType === Node.TEXT_NODE) {
+    return { node: range.startContainer as Text, offset: range.startOffset };
+  }
+
+  if (range.startContainer.nodeType !== Node.ELEMENT_NODE) return null;
+  const el = range.startContainer as HTMLElement;
+  const previous = el.childNodes[range.startOffset - 1] || null;
+  if (previous?.nodeType === Node.TEXT_NODE) {
+    const text = previous as Text;
+    return { node: text, offset: (text.textContent || "").length };
+  }
+  const next = el.childNodes[range.startOffset] || null;
+  if (next?.nodeType === Node.TEXT_NODE) {
+    return { node: next as Text, offset: 0 };
+  }
+  return null;
+}
+
 /**
- * If caret just typed S/s at a sentence end, replace it with an image slot.
- * Returns the new slot id, or null if no trigger.
+ * Caret 앞이 S. 또는 s. 이면 그 글자를 사진 칸 하나로 바꿉니다.
+ * 한 번에 S.s. 를 붙이면 칸이 두 개 생깁니다.
  */
 export function tryConsumeImageTriggerToSlot(editor: HTMLElement | null): string | null {
   if (!editor) return null;
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
-  const range = sel.getRangeAt(0);
-  if (!range.collapsed) return null;
-  const node = range.startContainer;
-  if (node.nodeType !== Node.TEXT_NODE) return null;
-  if (!editor.contains(node)) return null;
+  const located = caretText(editor);
+  if (!sel || !located) return null;
 
-  const text = node.textContent || "";
-  const offset = range.startOffset;
-  if (offset < 1) return null;
-  const ch = text[offset - 1];
-  if (ch !== "S" && ch !== "s") return null;
+  let text = located.node.textContent || "";
+  let offset = Math.min(located.offset, text.length);
+  const ids: string[] = [];
+  const used = new Set<string>();
+  editor.querySelectorAll("[data-img-slot]").forEach((node) => {
+    const id = node.getAttribute("data-img-slot");
+    if (id) used.add(id);
+  });
+  const allocSlotId = () => {
+    let n = 1;
+    while (used.has(`S${n}`)) n += 1;
+    const id = `S${n}`;
+    used.add(id);
+    return id;
+  };
 
-  const before = text.slice(0, offset - 1);
-  const after = text.slice(offset);
-  const prev = before.slice(-1);
-  const atSentenceEnd =
-    before.length === 0 ||
-    /[\s.。！？!?…」』”"）\]]/.test(prev) ||
-    /[가-힣a-zA-Z0-9]$/.test(before);
+  for (let guard = 0; guard < 8; guard += 1) {
+    const before = text.slice(0, offset);
+    const match = before.match(IMAGE_TRIGGER_AT_CARET);
+    if (!match) break;
+    const consumed = match[1];
+    const start = before.length - consumed.length;
+    text = `${text.slice(0, start)}${text.slice(offset)}`;
+    offset = start;
+    ids.push(allocSlotId());
+  }
 
-  if (!atSentenceEnd) return null;
-  if (/[a-zA-Z]/.test(prev) && (ch === "S" || ch === "s")) return null;
+  if (!ids.length) return null;
+  ids.reverse();
+  located.node.textContent = text;
 
-  node.textContent = before + after;
-  const id = nextSlotId(editor.innerHTML);
-  const slot = createImageSlotElement(id);
+  let anchor: Node = located.node;
+  let anchorOffset = Math.min(offset, (located.node.textContent || "").length);
+  ids.forEach((id) => {
+    const slot = createImageSlotElement(id);
+    const insertRange = document.createRange();
+    insertRange.setStart(anchor, anchorOffset);
+    insertRange.collapse(true);
+    insertRange.insertNode(slot);
+    const spacer = document.createTextNode(" ");
+    slot.after(spacer);
+    anchor = spacer;
+    anchorOffset = spacer.length;
+  });
 
-  const insertRange = document.createRange();
-  insertRange.setStart(node, before.length);
-  insertRange.collapse(true);
-  insertRange.insertNode(slot);
-  const spacer = document.createTextNode(after ? "" : " ");
-  slot.after(spacer);
   const caret = document.createRange();
-  caret.setStartAfter(spacer);
+  caret.setStart(anchor, anchorOffset);
   caret.collapse(true);
   sel.removeAllRanges();
   sel.addRange(caret);
 
-  return id;
+  const lastId = ids[ids.length - 1];
+  const escaped =
+    typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(lastId)
+      : lastId.replace(/"/g, '\\"');
+  editor.querySelector(`[data-img-slot="${escaped}"]`)?.scrollIntoView({ block: "nearest" });
+  return lastId;
 }
 
 /** Insert empty slot at caret (toolbar image button). */
@@ -210,6 +260,7 @@ export function insertImagesAtSlotOrCaret(
       slot.replaceWith(fragment);
       return true;
     }
+    if (slotId) return false;
   }
 
   const fragment = document.createDocumentFragment();

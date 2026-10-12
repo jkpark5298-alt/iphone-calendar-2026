@@ -12052,6 +12052,13 @@ body {
   color: #7dd3fc;
   font-size: 14px;
 }
+.slotImagePasteZone {
+  min-height: 44px;
+  cursor: text;
+}
+.slotImagePasteZone:focus {
+  outline: 2px solid #7dd3fc;
+}
 .collectSlotImagePanelHead span {
   flex: 1;
   min-width: 160px;
@@ -12826,5 +12833,237 @@ body {
     max-height: 240mm;
     object-fit: contain;
   }
+}
+
+/* 캘린더 상단: PC는 제목 아래 앱 이동, 아이폰은 테마를 일기장 옆·정보함 앱을 되돌리기 옆 */
+.calendar-headline {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title utils"
+    "nav nav";
+  align-items: center !important;
+  column-gap: 12px;
+  row-gap: 10px;
+}
+.calendar-headline .calendar-title-line {
+  grid-area: title;
+}
+.calendar-headline .calendar-utility-actions {
+  grid-area: utils;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+.calendar-headline .work-ics-import-btn {
+  position: relative !important;
+  width: auto !important;
+  min-width: 78px !important;
+  height: auto !important;
+  padding: 8px 10px !important;
+  overflow: hidden !important;
+  border-radius: 999px !important;
+}
+.calendar-headline .calendar-app-nav {
+  grid-area: nav;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.calendar-nav-infoapp {
+  text-decoration: none;
+}
+.calendar-mobile-break {
+  display: none;
+}
+.calendar-nav-diary,
+.calendar-nav-collect,
+.calendar-nav-index,
+.calendar-nav-theme {
+  border: 1.5px solid #fff !important;
+  background: #24312c !important;
+}
+.calendar-nav-diary { color: #f5c518 !important; }
+.calendar-nav-collect { color: #c084fc !important; }
+.calendar-nav-index { color: #5aa7ff !important; }
+.calendar-nav-theme { color: #3ddc84 !important; }
+
+@media (max-width: 820px) {
+  .calendar-headline {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 6px !important;
+  }
+  .calendar-headline .undo-btn,
+  .calendar-nav-infoapp,
+  .calendar-headline .work-ics-import-btn {
+    padding: 7px 8px !important;
+    font-size: 11px !important;
+    min-width: 0 !important;
+  }
+  .calendar-headline .calendar-title-line {
+    flex: 1 0 100%;
+    order: 0;
+  }
+  .calendar-headline .calendar-app-nav,
+  .calendar-headline .calendar-utility-actions {
+    display: contents;
+  }
+  .calendar-nav-diary { order: 1; }
+  .calendar-nav-theme { order: 2; }
+  .calendar-nav-collect { order: 3; }
+  .calendar-nav-index { order: 4; }
+  .calendar-nav-photo { order: 5; }
+  .calendar-headline .calendar-date-shortcut { order: 6; }
+  .calendar-headline .red-plus-btn { order: 7; }
+  .calendar-headline .mark-btn { order: 8; }
+  .calendar-headline .work-ics-import-btn { order: 9; }
+  .calendar-headline .plus-btn { order: 10; }
+  .calendar-headline .calendar-mobile-break {
+    display: block;
+    flex-basis: 100%;
+    width: 100%;
+    height: 0;
+    order: 11;
+  }
+  .calendar-headline .undo-btn { order: 12; }
+  .calendar-nav-infoapp { order: 13; }
+}
+
+.classTagRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  color: #53675e;
+  font-size: 13px;
+  font-weight: 700;
+}
+.classTagSelect {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  color: #24312c;
+}
+.classTagSelect select {
+  border: 1px solid #24312c;
+  border-radius: 999px;
+  background: #fff;
+  color: #24312c;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+.collect-white-cell-wrap:has(.classTagSelect) .collect-white-cell-del {
+  top: 46px;
+}
+
+.themeBoardHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 10px;
+}
+.themeBoardHead h1 {
+  margin: 0;
+  flex: 1;
+  font-size: 28px;
+  color: #24312c;
+}
+.themeAddBtn {
+  background: #1f7a45 !important;
+}
+.themeBoardHint {
+  margin: 0 0 10px;
+  color: #53675e;
+  font-weight: 700;
+}
+.themeChipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.themeChip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d9d4ca;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #f4f7f5;
+}
+.themeChip.active {
+  border-color: #1f7a45;
+  background: #e7f6ec;
+}
+.themeChip button {
+  border: 0;
+  background: transparent;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 8px 10px;
+}
+.themeChip button:last-child {
+  color: #9f3d3d;
+  padding-left: 0;
+}
+.themeTitleField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-weight: 800;
+  color: #24312c;
+}
+.themeTitleField input {
+  border: 1px solid #d6d6d2;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 16px;
+}
+@media (prefers-color-scheme: dark) {
+  .themeBoardHead h1,
+  .themeBoardHint,
+  .themeTitleField,
+  .classTagRow,
+  .classTagSelect {
+    color: #e6e8ea;
+  }
+  .themeChip {
+    background: #232826;
+    border-color: #3d4a44;
+  }
+  .themeChip button { color: #e6e8ea; }
+  .themeTitleField input,
+  .classTagSelect select {
+    background: #111;
+    color: #eee;
+    border-color: #555;
+  }
+}
+
+.themeEditorBox .generalInfoRichTextEditor {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  max-height: 520px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #1a2430;
+  padding: 14px 15px;
+  font-size: 15px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 

@@ -10,6 +10,7 @@ import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
 import { stepCollectFontSize } from "../lib/collectFormatPalette";
 import {
+  IMAGE_SLOT_GUIDE,
   enhanceRichInlineImages,
   findAwaitingSlotId,
   insertImagesAtSlotOrCaret,
@@ -28,6 +29,7 @@ import { htmlForActiveEditor, isParagraphEmpty } from "../lib/generalInfoParagra
 import { Card } from "./SharedComponents";
 import { CollectFormatToolbar } from "./CollectFormatToolbar";
 import { CollectWhiteCell } from "./CollectWhiteCell";
+import { SlotImagePanel } from "./SlotImagePanel";
 import { HandwritingModal } from "./HandwritingModal";
 import { TextToImageModal } from "./TextToImageModal";
 import { InfoIndexPanel } from "./InfoIndexPanel";
@@ -51,6 +53,7 @@ export interface Chapter3InfoProps {
   handleGeneralInfoRichInput: () => void;
   handleGeneralInfoRichEditorClick: (event: React.MouseEvent<HTMLDivElement>) => void;
   handleGeneralInfoRichImagePick: (files: FileList | null) => void;
+  uploadRichImages: (files: File[]) => Promise<string[]>;
   getGeneralInfoToolbarButtonStyle: () => React.CSSProperties;
 
   handleResetGeneralInfoDraft: () => void;
@@ -126,6 +129,7 @@ export function Chapter3Info({
   handleGeneralInfoRichInput,
   handleGeneralInfoRichEditorClick,
   handleGeneralInfoRichImagePick,
+  uploadRichImages,
   getGeneralInfoToolbarButtonStyle,
   handleResetGeneralInfoDraft,
   handleUndoGeneralInfoDraft,
@@ -298,8 +302,9 @@ export function Chapter3Info({
       const list = new DataTransfer();
       files.forEach((f) => list.items.add(f));
       handleGeneralInfoRichImagePick(list.files);
+      setImageSlotPrompt(null);
     } catch {
-      alert("클립보드 이미지 읽기를 지원하지 않습니다. 본문에 직접 붙여넣기 하세요.");
+      alert("클립보드 읽기가 막혀 있습니다. 사진 칸의 붙여넣기 칸에 직접 붙여넣으세요.");
     }
   }, [handleGeneralInfoRichImagePick]);
 
@@ -341,11 +346,13 @@ export function Chapter3Info({
     handleGeneralInfoRichInput();
     const after = findAwaitingSlotId(generalInfoRichTextRef.current);
     if (after && after !== before) setImageSlotPrompt(after);
+    else if (!after) setImageSlotPrompt(null);
   }, [generalInfoRichTextRef, handleGeneralInfoRichInput]);
 
   const handleCollectEditorClick = React.useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       handleGeneralInfoRichEditorClick(event);
+      if (!findAwaitingSlotId(generalInfoRichTextRef.current)) setImageSlotPrompt(null);
       const target = event.target as HTMLElement;
       if (removeClassCellFromEvent(generalInfoRichTextRef.current, target)) {
         event.preventDefault();
@@ -659,16 +666,34 @@ export function Chapter3Info({
                 onColor={(c) => handleGeneralInfoRichCommand("foreColor", c)}
                 onHighlight={(c) => handleGeneralInfoRichCommand("highlight", c)}
                 onInsertChar={(ch) => handleGeneralInfoRichCommand("insertText", ch)}
-                onImage={() => generalInfoImageFileRef.current?.click()}
+                onImage={() => {
+                  if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
+                    alert(IMAGE_SLOT_GUIDE);
+                    return;
+                  }
+                  generalInfoImageFileRef.current?.click();
+                }}
                 onPasteImage={() => {
+                  if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
+                    alert(IMAGE_SLOT_GUIDE);
+                    return;
+                  }
                   void handleCollectPasteImage();
                 }}
                 onTextImage={() => setShowTextToImageModal(true)}
                 onHandwriting={() => setShowHandwritingModal(true)}
               />
-              <p className="mutedText collectImageSourceHint">사진보관함과 파일 선택에서 사진을 여러 장 고르면 모두 본문에 들어갑니다.</p>
+              <p className="mutedText collectImageSourceHint">본문에 S. 또는 s. 를 입력하면 사진 칸이 생깁니다. 그 칸에서 사진찍기, 사진첩 또는 붙여넣기로 넣습니다.</p>
               <div className="collectImageSourceRow">
-                <label className="collectImageSourceBtn">
+                <label
+                  className="collectImageSourceBtn"
+                  onClick={(event) => {
+                    if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
+                      event.preventDefault();
+                      alert(IMAGE_SLOT_GUIDE);
+                    }
+                  }}
+                >
                   사진보관함
                   <input
                     ref={generalInfoImageFileRef}
@@ -682,7 +707,15 @@ export function Chapter3Info({
                     }}
                   />
                 </label>
-                <label className="collectImageSourceBtn">
+                <label
+                  className="collectImageSourceBtn"
+                  onClick={(event) => {
+                    if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
+                      event.preventDefault();
+                      alert(IMAGE_SLOT_GUIDE);
+                    }
+                  }}
+                >
                   파일 선택
                   <input
                     type="file"
@@ -756,6 +789,7 @@ export function Chapter3Info({
                 className="generalInfoRichTextEditor collectPaperEditor"
                 contentEditable
                 suppressContentEditableWarning
+                spellCheck={false}
                 role="textbox"
                 tabIndex={0}
                 data-paragraph-id={activeParagraph?.id || ""}
@@ -772,6 +806,7 @@ export function Chapter3Info({
                   if (hasImage) setImageSlotPrompt(null);
                 }}
                 onInput={handleCollectEditorInput}
+                onKeyUp={handleCollectEditorInput}
                 onClick={handleCollectEditorClick}
                 data-placeholder="새 항목을 입력하거나 붙여넣으세요."
                 style={{
@@ -801,6 +836,7 @@ export function Chapter3Info({
                   cellId={id}
                   initialHtml={whiteCellHtmlRef.current[id] || ""}
                   placeholder="새 항목을 입력하거나 붙여넣으세요."
+                  onUploadImages={uploadRichImages}
                   onInput={syncGeneralInfoRichTextToDraft}
                   onRemove={() => {
                     const cell = document.querySelector(`[data-white-id="${id}"] .collect-white-cell`);
@@ -814,48 +850,15 @@ export function Chapter3Info({
               ))}
 
               {imageSlotPrompt ? (
-                <div
-                  className="collectSlotImagePanel"
-                  role="dialog"
-                  aria-label={`${imageSlotPrompt} 이미지 넣기`}
+                <SlotImagePanel
                   style={{ bottom: keyboardInset + 8 }}
-                >
-                  <div className="collectSlotImagePanelHead">
-                    <strong>사진</strong>
-                    <span>여러 장을 고르면 이 칸부터 모두 들어갑니다. 복사한 사진은 본문에 붙여넣어도 됩니다.</span>
-                    <button type="button" className="secondaryButton" onClick={() => setImageSlotPrompt(null)}>
-                      닫기
-                    </button>
-                  </div>
-                  <div className="collectImageSourceRow">
-                    <label className="collectImageSourceBtn">
-                      사진보관함
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        title="사진보관함에서 여러 장을 선택할 수 있습니다"
-                        onChange={(event) => {
-                          fillSlotFromFiles(event.target.files);
-                          event.target.value = "";
-                        }}
-                      />
-                    </label>
-                    <label className="collectImageSourceBtn">
-                      파일 선택
-                      <input
-                        type="file"
-                        accept="image/*,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.bmp,.tif,.tiff"
-                        multiple
-                        title="파일에서 여러 장을 선택할 수 있습니다"
-                        onChange={(event) => {
-                          fillSlotFromFiles(event.target.files);
-                          event.target.value = "";
-                        }}
-                      />
-                    </label>
-                  </div>
-                </div>
+                  onClose={() => setImageSlotPrompt(null)}
+                  onFiles={(files) => {
+                    const transfer = new DataTransfer();
+                    files.forEach((file) => transfer.items.add(file));
+                    fillSlotFromFiles(transfer.files);
+                  }}
+                />
               ) : null}
 
               {olderParagraphs.length > 0 && (
