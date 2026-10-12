@@ -13134,6 +13134,24 @@ body {
   color: #9f3d3d;
   padding-left: 0;
 }
+.themeChip.confirming {
+  gap: 2px;
+  padding-left: 10px;
+  background: #fff4f4;
+  border-color: #c45c5c;
+}
+.themeChip.confirming span {
+  font-weight: 800;
+  font-size: 13px;
+  padding: 8px 4px 8px 0;
+}
+.themeChip .themeChipConfirm {
+  color: #9f1d1d;
+}
+.themeChip.confirming button:last-child {
+  color: #5c403c;
+  padding-left: 8px;
+}
 .themeTitleField {
   display: flex;
   flex-direction: column;
@@ -13161,6 +13179,19 @@ body {
     border-color: #3d4a44;
   }
   .themeChip button { color: #e6e8ea; }
+  .themeChip.active {
+    background: #1a3d2c;
+    border-color: #3dbe78;
+  }
+  .themeChip.active button { color: #e8fff2; }
+  .themeChip.active button:last-child { color: #ffb4b4; }
+  .themeChip.confirming {
+    background: #3a2424;
+    border-color: #a85a5a;
+  }
+  .themeChip.confirming span { color: #f3d6d6; }
+  .themeChip .themeChipConfirm { color: #ffb4b4; }
+  .themeChip.confirming button:last-child { color: #f3d6d6; }
   .themeTitleField input,
   .classTagSelect select {
     background: #111;

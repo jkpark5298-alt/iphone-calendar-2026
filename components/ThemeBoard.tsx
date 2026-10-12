@@ -86,6 +86,7 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
   const [themeLookup, setThemeLookup] = useState("");
   const [themeLookupHits, setThemeLookupHits] = useState<LookupHit[]>([]);
   const [themeLookupStatus, setThemeLookupStatus] = useState("");
+  const [pendingDeleteId, setPendingDeleteId] = useState("");
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const imageFileRef = useRef<HTMLInputElement | null>(null);
@@ -183,9 +184,10 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
   }
 
   function removeTheme(id: string) {
+    if (pendingDeleteId !== id) return;
     const note = notesRef.current.find((item) => item.id === id);
     if (!note) return;
-    if (!window.confirm(`"${note.title}" 테마를 삭제할까요?`)) return;
+    setPendingDeleteId("");
     const next = notesRef.current.filter((item) => item.id !== id);
     const fallback = next.length ? next : [createThemeNote("새 테마")];
     notesRef.current = fallback;
@@ -270,12 +272,26 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
         onOpen={switchTheme}
       />
       <div className="themeChipRow" role="tablist" aria-label="테마 목록">
-        {notes.map((note) => (
-          <div key={note.id} className={`themeChip ${note.id === activeId ? "active" : ""}`}>
-            <button type="button" onClick={() => switchTheme(note.id)}>{note.title || "새 테마"}</button>
-            <button type="button" aria-label={`${note.title} 삭제`} onClick={() => removeTheme(note.id)}>×</button>
-          </div>
-        ))}
+        {notes.map((note) => {
+          const title = note.title || "새 테마";
+          const confirming = note.id === pendingDeleteId;
+          return (
+            <div key={note.id} className={`themeChip ${note.id === activeId ? "active" : ""} ${confirming ? "confirming" : ""}`}>
+              {confirming ? (
+                <>
+                  <span>{title} 삭제할까요?</span>
+                  <button type="button" className="themeChipConfirm" onClick={() => removeTheme(note.id)}>삭제</button>
+                  <button type="button" onClick={() => setPendingDeleteId("")}>취소</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={() => { setPendingDeleteId(""); switchTheme(note.id); }}>{title}</button>
+                  <button type="button" aria-label={`${title} 삭제`} onClick={() => setPendingDeleteId(note.id)}>×</button>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {active && (
