@@ -8,6 +8,8 @@ import {
   IFL_APP_URL,
   NEWSFLASH_APP_URL,
   INFO_INDEX_CATEGORIES,
+  INFO_INDEX_SOURCE_BADGE,
+  INFO_INDEX_SOURCE_FILTERS,
   INFO_INDEX_SOURCE_OPTIONS,
   INFO_INDEX_SOURCE_SHORT,
   APP_FILE_INDEX_ARCHIVE_EVENT,
@@ -20,6 +22,7 @@ import {
   infoIndexSourceHomeUrl,
   parseIflLibraryPayload,
   readAppFileIndexArchive,
+  themeNoteToIndexItem,
   type AppFileIndexArchiveEntry,
   type InfoIndexCategory,
   type InfoIndexItem,
@@ -31,6 +34,7 @@ import {
   GENERAL_INFO_TEMP_DRAFT_KEY,
   readGeneralInfoTempDraftIndex,
 } from "../lib/generalInfoStorage";
+import { loadThemeNotes } from "../lib/themeNotes";
 
 const PIN_STORAGE_KEY = "travel-diary-info-index-pins-v1";
 const IFL_IMPORT_KEY = "travel-diary-ifl-index-v1";
@@ -52,6 +56,7 @@ type Props = {
   }) => string | void | Promise<string | void>;
   onImportLocalAppFiles?: (files: FileList | null) => string | void | Promise<string | void>;
   onOpenTempDraft?: () => void;
+  onOpenTheme?: (themeId: string) => void;
   composeOpen?: boolean;
   onComposeOpenChange?: (open: boolean) => void;
 };
@@ -202,12 +207,15 @@ export function InfoIndexPanel({
   onExportSelectedAppFiles,
   onImportLocalAppFiles,
   onOpenTempDraft,
+  onOpenTheme,
   composeOpen,
   onComposeOpenChange,
 }: Props) {
   const [view, setView] = React.useState<InfoIndexView>("date");
+  const [sourceFilter, setSourceFilter] = React.useState<InfoIndexSource | "all">("all");
   const [selectedKey, setSelectedKey] = React.useState<string>("");
   const [remoteItems, setRemoteItems] = React.useState<InfoIndexItem[]>([]);
+  const [themeItems, setThemeItems] = React.useState<InfoIndexItem[]>([]);
   const [importedIflItems, setImportedIflItems] = React.useState<InfoIndexItem[]>([]);
   const [manualItems, setManualItems] = React.useState<InfoIndexItem[]>([]);
   const [removedArchive, setRemovedArchive] = React.useState<AppFileIndexArchiveEntry[]>([]);
@@ -316,6 +324,17 @@ export function InfoIndexPanel({
     void loadRemote();
   }, [loadRemote]);
 
+  React.useEffect(() => {
+    let alive = true;
+    void loadThemeNotes().then((notes) => {
+      if (!alive) return;
+      setThemeItems(notes.map(themeNoteToIndexItem));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const merged = React.useMemo(() => {
     void tempTick;
     const tempDraft = readGeneralInfoTempDraftIndex();
@@ -349,7 +368,7 @@ export function InfoIndexPanel({
           ]
         : [];
     const byId = new Map<string, InfoIndexItem>();
-    for (const item of [...remoteItems, ...importedIflItems, ...local, ...tempOnly, ...removed, ...manualItems]) {
+    for (const item of [...remoteItems, ...importedIflItems, ...themeItems, ...local, ...tempOnly, ...removed, ...manualItems]) {
       if (hiddenIds.has(item.id)) continue;
       byId.set(item.id, {
         ...item,
@@ -364,9 +383,9 @@ export function InfoIndexPanel({
       if (!a.pinned && b.pinned) return 1;
       return (b.dateKey || "").localeCompare(a.dateKey || "");
     });
-  }, [localItems, remoteItems, importedIflItems, manualItems, pinnedIds, hiddenIds, removedArchive, tempTick]);
+  }, [localItems, remoteItems, importedIflItems, themeItems, manualItems, pinnedIds, hiddenIds, removedArchive, tempTick]);
 
-  const filtered = React.useMemo(() => {
+  const searched = React.useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return merged;
     return merged.filter((item) => {
@@ -386,6 +405,11 @@ export function InfoIndexPanel({
       return blob.includes(query);
     });
   }, [merged, searchQuery]);
+
+  const filtered = React.useMemo(
+    () => (sourceFilter === "all" ? searched : searched.filter((item) => item.source === sourceFilter)),
+    [searched, sourceFilter],
+  );
 
   const listed = React.useMemo(
     () => (view === "all" ? filtered : filtered.filter((item) => item.appFileMark !== "removed")),
@@ -539,12 +563,15 @@ export function InfoIndexPanel({
       return;
     }
 
+    const themeItem = item.source === "theme";
     const otherApp = item.source !== "local";
     const sourceName = INFO_INDEX_SOURCE_SHORT[item.source];
     const ok = window.confirm(
-      otherApp
-        ? `“${item.title}” 항목을 정보 인덱스에서 제외할까요?\n이 목록에서만 빠지고, ${sourceName} 앱의 글은 삭제되지 않습니다.`
-        : `“${item.title}” 항목을 정보 인덱스에서 제외할까요?\n이 목록에서만 빠집니다.`,
+      themeItem
+        ? `“${item.title}” 항목을 정보 인덱스에서 제외할까요?\n이 목록에서만 빠지고, 테마 글은 삭제되지 않습니다.`
+        : otherApp
+          ? `“${item.title}” 항목을 정보 인덱스에서 제외할까요?\n이 목록에서만 빠지고, ${sourceName} 앱의 글은 삭제되지 않습니다.`
+          : `“${item.title}” 항목을 정보 인덱스에서 제외할까요?\n이 목록에서만 빠집니다.`,
     );
     if (!ok) return;
 
@@ -558,9 +585,11 @@ export function InfoIndexPanel({
     dropPin(item.id);
     rememberHidden(item.id);
     setStatus(
-      otherApp
-        ? "정보 인덱스에서 제외했습니다. 다른 앱의 글은 그대로입니다."
-        : "정보 인덱스에서 제외했습니다.",
+      themeItem
+        ? "정보 인덱스에서 제외했습니다. 테마 글은 그대로입니다."
+        : otherApp
+          ? "정보 인덱스에서 제외했습니다. 다른 앱의 글은 그대로입니다."
+          : "정보 인덱스에서 제외했습니다.",
     );
   };
 
@@ -652,10 +681,15 @@ export function InfoIndexPanel({
 
   const renderTitle = (item: InfoIndexItem) => {
     const title = (
-      <span className="infoIndexTitleLine">
-        {item.appFileMark ? <AppFileStar mark={item.appFileMark} /> : null}
-        <strong>{item.title}</strong>
-      </span>
+      <>
+        <span className="infoIndexTitleLine">
+          {item.appFileMark ? <AppFileStar mark={item.appFileMark} /> : null}
+          <strong>{item.title}</strong>
+        </span>
+        <span className={`infoIndexSourceBadge infoIndexSourceUnderTitle ${infoIndexSourceClass(item.source)}`}>
+          {INFO_INDEX_SOURCE_BADGE[item.source]}
+        </span>
+      </>
     );
     if (item.saveStatus === "임시 저장") {
       return (
@@ -673,6 +707,14 @@ export function InfoIndexPanel({
             setStatus("앱에서 삭제한 항목입니다. 빨간 ★로 인덱스에 남아 있으며, 앱파일 불러오기로 다시 넣을 수 있습니다.")
           }
         >
+          {title}
+        </button>
+      );
+    }
+    if (item.source === "theme") {
+      const themeId = item.id.startsWith("theme:") ? item.id.slice("theme:".length) : "";
+      return (
+        <button type="button" className="infoIndexTitleButton" onClick={() => onOpenTheme?.(themeId)}>
           {title}
         </button>
       );
@@ -714,6 +756,21 @@ export function InfoIndexPanel({
 
   const renderDetail = (item: InfoIndexItem) => {
     const className = `infoIndexDetailButton ${infoIndexSourceClass(item.source)}`;
+    if (item.source === "theme") {
+      const themeId = item.id.startsWith("theme:") ? item.id.slice("theme:".length) : "";
+      const openTheme = () => onOpenTheme?.(themeId);
+      return (
+        <div className="infoIndexDetailActions">
+          <button type="button" className={className} onClick={openTheme}>
+            수정
+          </button>
+          <button type="button" className={className} onClick={openTheme}>
+            보기
+          </button>
+          {renderRemoval(item)}
+        </div>
+      );
+    }
     if (item.appFileMark === "removed") {
       const tellRemoved = () =>
         setStatus("앱에서 삭제한 항목입니다. 빨간 ★로 인덱스에 남아 있으며, 앱파일 불러오기로 다시 넣을 수 있습니다.");
@@ -779,7 +836,7 @@ export function InfoIndexPanel({
           </button>
         </div>
         <p className="infoIndexHelp">
-          제목이나 상세보기를 누르면 작성된 앱으로 가서 내용을 확인합니다. NEWS는 뉴스 저장 앱에서 본문을 봅니다. 그 글을 지우면 여기에는 삭제됨으로 남습니다. NEWS·builder·insta 항목의 제외는 이 인덱스에서만 빠지고, 그 앱의 글은 삭제되지 않습니다. 일반정보수집과 여기서 입력한 항목은 삭제하면 이 앱에서 지워집니다. 우선 표시는 분류·일자·태그에서 맨 위에 올립니다.
+          제목이나 상세보기를 누르면 작성된 앱으로 가서 내용을 확인합니다. NEWS는 뉴스 저장 앱에서 본문을 봅니다. 그 글을 지우면 여기에는 삭제됨으로 남습니다. NEWS·builder·insta 항목의 제외는 이 인덱스에서만 빠지고, 그 앱의 글은 삭제되지 않습니다. 테마로 만든 글도 이 목록에 나오며, 제목이나 상세보기를 누르면 그 테마로 갑니다. 인덱스에서 빼도 테마 글은 삭제되지 않습니다. 일반정보수집과 여기서 입력한 항목은 삭제하면 이 앱에서 지워집니다. 우선 표시는 분류·일자·태그에서 맨 위에 올립니다.
           노란 ★는 앱파일로 저장한 항목입니다. 그 항목을 앱에서 지우면 빨간 ★로 남고, 분류·일자·태그 옆의 전체에서만 보입니다.
         </p>
       </div>
@@ -899,6 +956,23 @@ export function InfoIndexPanel({
               >
                 태그
               </button>
+            </div>
+            <div className="infoIndexSourceFilters" role="group" aria-label="발생처">
+              <span className="infoIndexSourceFilterLabel">발생처</span>
+              {INFO_INDEX_SOURCE_FILTERS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`infoIndexSourceFilter ${sourceFilter === option.value ? "active" : ""}`}
+                  aria-pressed={sourceFilter === option.value}
+                  onClick={() => {
+                    setSourceFilter(option.value);
+                    setSelectedKey("");
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
           </div>
           <div className="infoIndexCategoryChips">
@@ -1046,15 +1120,17 @@ export function InfoIndexPanel({
           </p>
 
           <p className="mutedText infoIndexStatusLine">
-            {`builder ${merged.filter((item) => item.source === "builder-zeta-eight").length}건 · insta ${merged.filter((item) => item.source === "insta-fact-library").length}건 · NEWS ${merged.filter((item) => item.source === "newsflash").length}건`} · 이 앱 {localItems.length}건
-            {searchQuery.trim() ? ` · 검색 ${filtered.length}건` : ""}
+            {`builder ${merged.filter((item) => item.source === "builder-zeta-eight").length}건 · insta ${merged.filter((item) => item.source === "insta-fact-library").length}건 · NEWS ${merged.filter((item) => item.source === "newsflash").length}건 · 테마 ${merged.filter((item) => item.source === "theme").length}건`} · 이 앱 {localItems.length}건
+            {searchQuery.trim() || sourceFilter !== "all" ? ` · 표시 ${filtered.length}건` : ""}
             {localStatus ? ` · ${localStatus}` : ""} · {status}
           </p>
 
           {merged.length === 0 ? (
             <p className="mutedText">아직 인덱스에 넣을 항목이 없습니다.</p>
-          ) : filtered.length === 0 ? (
+          ) : searched.length === 0 ? (
             <p className="mutedText">“{searchQuery.trim()}”에 맞는 항목이 없습니다.</p>
+          ) : filtered.length === 0 ? (
+            <p className="mutedText">이 발생처에 맞는 항목이 없습니다.</p>
           ) : visibleGroups.length === 0 ? (
             <p className="mutedText">선택한 분류에 항목이 없습니다. 전체를 누르면 목록이 다시 나옵니다.</p>
           ) : (

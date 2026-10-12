@@ -12439,6 +12439,15 @@ body {
   color: #ffffff;
   border: 1px solid #1d4ed8;
 }
+.infoIndexSourceBadge.source-theme,
+.infoIndexDetailButton.source-theme {
+  background: #6ee7b7;
+  color: #064e3b;
+  border: 1px solid #34d399;
+}
+.infoIndexSourceBadge.infoIndexSourceUnderTitle {
+  display: none;
+}
 .infoIndexDetailButton {
   cursor: pointer;
 }
@@ -12502,6 +12511,37 @@ body {
 }
 .infoIndexDetailButton.source-news:hover {
   background: #1d4ed8;
+}
+.infoIndexDetailButton.source-theme:hover {
+  background: #34d399;
+}
+.infoIndexSourceFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.infoIndexSourceFilterLabel {
+  font-size: 12px;
+  font-weight: 800;
+  color: #94a3b8;
+}
+.infoIndexSourceFilter {
+  appearance: none;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #475569;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.infoIndexSourceFilter.active {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #f8fafc;
 }
 @media (max-width: 760px) {
   .infoIndexComposeGrid {
@@ -12626,6 +12666,14 @@ body {
   .infoIndexDateCol,
   .infoIndexSourceCol {
     display: none;
+  }
+
+  .infoIndexSourceBadge.infoIndexSourceUnderTitle {
+    display: inline-flex;
+    min-height: 20px;
+    margin-top: 2px;
+    padding: 0 8px;
+    font-size: 11px;
   }
 
   .infoIndexTable {

@@ -112,6 +112,7 @@ export interface Chapter3InfoProps {
   generalInfoCategories: string[];
   normalizeGeneralInfoMediaItems: (draft: GeneralInfoDraft) => GeneralInfoMediaItem[];
   getGeneralInfoDisplayMediaItems: (item: GeneralInfoItem) => GeneralInfoMediaItem[];
+  onOpenTheme?: (themeId: string) => void;
 }
 
 export function Chapter3Info({
@@ -170,6 +171,7 @@ export function Chapter3Info({
   generalInfoCategories,
   normalizeGeneralInfoMediaItems: _normalizeGeneralInfoMediaItems,
   getGeneralInfoDisplayMediaItems: _getGeneralInfoDisplayMediaItems,
+  onOpenTheme,
 }: Chapter3InfoProps) {
   const activeTab = generalInfoActiveTab;
   const setActiveTab = setGeneralInfoActiveTab;
@@ -1248,6 +1250,7 @@ export function Chapter3Info({
             onOpenTempDraft={handleOpenGeneralInfoTempDraft}
             composeOpen={indexComposeOpen}
             onComposeOpenChange={setIndexComposeOpen}
+            onOpenTheme={onOpenTheme}
           />
         </aside>
       )}

@@ -73,7 +73,7 @@ async function uploadThemeImages(files: File[], themeId: string) {
   return urls;
 }
 
-export function ThemeBoard({ onBack }: { onBack: () => void }) {
+export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void; initialThemeId?: string }) {
   const [notes, setNotes] = useState<ThemeNote[]>([]);
   const [activeId, setActiveId] = useState("");
   const [draftTitle, setDraftTitle] = useState("");
@@ -110,15 +110,16 @@ export function ThemeBoard({ onBack }: { onBack: () => void }) {
       if (!alive) return;
       const next = items.length ? items : [createThemeNote("새 테마")];
       if (!items.length) void persistThemes(next, next[0].id);
+      const focus = next.find((note) => note.id === initialThemeId) || next[0];
       setNotes(next);
-      setActiveId(next[0].id);
-      setDraftTitle(next[0].title);
+      setActiveId(focus.id);
+      setDraftTitle(focus.title);
       setLoaded(true);
     });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [initialThemeId]);
 
   function commitActive(nextTitle?: string) {
     if (!readyRef.current) return;

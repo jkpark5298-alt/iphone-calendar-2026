@@ -483,6 +483,7 @@ type UndoState = {
 export default function HomePage() {
   const todayDefault = useMemo(() => getSafeToday(), []);
   const [view, setView] = useState<View>("calendar");
+  const [themeFocusId, setThemeFocusId] = useState("");
   const [currentYear, setCurrentYear] = useState(todayDefault.year ?? 2026);
   const [currentMonth, setCurrentMonth] = useState(todayDefault.month);
   const [currentDay, setCurrentDay] = useState(todayDefault.day);
@@ -2337,7 +2338,8 @@ export default function HomePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function openTheme() {
+  function openTheme(themeId = "") {
+    setThemeFocusId(themeId);
     setView("theme");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -4281,7 +4283,7 @@ export default function HomePage() {
           <div className="calendar-app-nav">
             <a className="pill-btn compact-pill calendar-nav-infoapp" href={getInformationAppDayUrl(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`)} target="_blank" rel="noopener noreferrer" title="정보함 앱에서 이 날짜 보기">🔗 정보함 앱</a>
             <button type="button" className="pill-btn compact-pill calendar-nav-diary" onClick={() => openDatePicker("diary")}>일기장</button>
-            <button type="button" className="pill-btn compact-pill calendar-nav-theme" onClick={openTheme}>테마</button>
+            <button type="button" className="pill-btn compact-pill calendar-nav-theme" onClick={() => openTheme()}>테마</button>
             <button type="button" className="pill-btn compact-pill calendar-nav-collect" onClick={() => openGeneralInfoCollect(currentMonth, currentDay)}>일반정보수집</button>
             <button type="button" className="pill-btn compact-pill calendar-nav-index" onClick={() => openInfoIndex(currentMonth, currentDay)}>정보인덱스</button>
             <button type="button" className="pill-btn compact-pill calendar-nav-photo" onClick={() => openPhotoBook(currentMonth, currentDay)}>포토북</button>
@@ -4371,7 +4373,7 @@ export default function HomePage() {
 
           <div className="diary-title-nav-row diary-action-nav-final">
             <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
-            <button type="button" className="pill-btn calendar-nav-theme" onClick={openTheme}>테마</button>
+            <button type="button" className="pill-btn calendar-nav-theme" onClick={() => openTheme()}>테마</button>
             <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
             <button type="button" className="weather-refresh-btn diary-weather-action-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
             <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
@@ -6647,6 +6649,10 @@ ${photo.memoText}
               normalizeGeneralInfoMediaItems={infoState.normalizeGeneralInfoMediaItems}
               getGeneralInfoDisplayMediaItems={infoState.getGeneralInfoDisplayMediaItems}
               handleSaveTemporaryGeneralInfoDraft={infoState.handleSaveTemporaryGeneralInfoDraft}
+              onOpenTheme={(themeId) => {
+                if (!infoState.confirmLeaveGeneralInfoCollect()) return;
+                openTheme(themeId);
+              }}
             />
           ) : (
             /* Photo Book Tab-based Layout */
@@ -7652,7 +7658,9 @@ ${photo.memoText}
     <main className={view === "info" ? "app appInfoWide" : "app"}>
       {view === "calendar" && CalendarView()}
       {view === "diary" && DiaryView()}
-      {view === "theme" && <ThemeBoard onBack={() => openCalendar(currentMonth)} />}
+      {view === "theme" && (
+        <ThemeBoard initialThemeId={themeFocusId} onBack={() => openCalendar(currentMonth)} />
+      )}
       {view === "info" && InfoView()}
       {view === "schedule" && ScheduleView()}
       {view === "redDate" && RedDateView()}
