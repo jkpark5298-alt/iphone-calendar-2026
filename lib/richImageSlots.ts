@@ -225,8 +225,8 @@ export function createImageSlotElement(id: string) {
 /** S. 또는 s. 한 묶음이 사진 칸 하나 */
 const IMAGE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z])([Ss]\.)$/;
 
-/** data. 한 묶음이 그 순간의 년월일시분 */
-const DATE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z])(data\.)$/i;
+/** date. 한 묶음이 그 순간의 년월일시분 */
+const DATE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z])(date\.)$/i;
 const DATE_STAMP_CLASS = "body-datetime";
 const DATE_STAMP_COLOR = "#eab308";
 
@@ -236,7 +236,7 @@ export function formatSystemDateTime(date = new Date()) {
 }
 
 /**
- * 커서 앞이 data. 이면 그 글자를 지우고, 그 순간의 년.월.일 시:분을 노란 글씨로 넣습니다.
+ * 커서 앞이 date. 이면 그 글자를 지우고, 그 순간의 년.월.일 시:분을 노란 글씨로 넣습니다.
  */
 export function tryConsumeDateTimeTrigger(editor: HTMLElement | null): boolean {
   if (!editor) return false;
