@@ -206,6 +206,55 @@ export function createImageSlotElement(id: string) {
 /** S. 또는 s. 한 묶음이 사진 칸 하나 */
 const IMAGE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z])([Ss]\.)$/;
 
+/** data. 한 묶음이 그 순간의 년월일시분 */
+const DATE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z])(data\.)$/i;
+const DATE_STAMP_CLASS = "body-datetime";
+const DATE_STAMP_COLOR = "#eab308";
+
+export function formatSystemDateTime(date = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * 커서 앞이 data. 이면 그 글자를 지우고, 그 순간의 년.월.일 시:분을 노란 글씨로 넣습니다.
+ */
+export function tryConsumeDateTimeTrigger(editor: HTMLElement | null): boolean {
+  if (!editor) return false;
+  const sel = window.getSelection();
+  const located = caretText(editor);
+  if (!sel || !located) return false;
+
+  const text = located.node.textContent || "";
+  const offset = Math.min(located.offset, text.length);
+  const before = text.slice(0, offset);
+  const match = before.match(DATE_TRIGGER_AT_CARET);
+  if (!match) return false;
+
+  const consumed = match[1];
+  const start = before.length - consumed.length;
+  located.node.textContent = `${text.slice(0, start)}${text.slice(offset)}`;
+
+  const stamp = document.createElement("span");
+  stamp.className = DATE_STAMP_CLASS;
+  stamp.style.color = DATE_STAMP_COLOR;
+  stamp.textContent = formatSystemDateTime();
+
+  const range = document.createRange();
+  range.setStart(located.node, Math.min(start, (located.node.textContent || "").length));
+  range.collapse(true);
+  range.insertNode(stamp);
+  const spacer = document.createTextNode(" ");
+  stamp.after(spacer);
+
+  const caret = document.createRange();
+  caret.setStart(spacer, spacer.length);
+  caret.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(caret);
+  return true;
+}
+
 export const IMAGE_SLOT_GUIDE = "본문에 S. 또는 s. 를 입력하면 사진 칸이 생깁니다. 그 칸에서 사진찍기, 사진첩 또는 붙여넣기로 넣으세요.";
 
 function caretText(editor: HTMLElement): { node: Text; offset: number } | null {

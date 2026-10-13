@@ -19,6 +19,7 @@ import {
   handleRichImageSlotPointer,
   insertImagesAtSlotOrCaret,
   tryConsumeImageTriggerToSlot,
+  tryConsumeDateTimeTrigger,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
@@ -424,6 +425,7 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
             onInput={() => {
               const editor = editorRef.current;
               if (!editor) return;
+              tryConsumeDateTimeTrigger(editor);
               const slotId = tryConsumeImageTriggerToSlot(editor);
               if (slotId) {
                 enhanceRichInlineImages(editor);
@@ -436,10 +438,13 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
             onKeyUp={() => {
               const editor = editorRef.current;
               if (!editor) return;
+              const stamped = tryConsumeDateTimeTrigger(editor);
               const slotId = tryConsumeImageTriggerToSlot(editor);
               if (slotId) {
                 enhanceRichInlineImages(editor);
                 setImageSlotId(slotId);
+                commitActive();
+              } else if (stamped) {
                 commitActive();
               }
             }}

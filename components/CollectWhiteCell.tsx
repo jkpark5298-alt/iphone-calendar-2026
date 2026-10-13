@@ -5,7 +5,7 @@ import { ClassTagSelect } from "./ClassTagSelect";
 import { SlotImagePanel } from "./SlotImagePanel";
 import { appendHashtagToEditor } from "../lib/contentClass";
 import { imageFilesFromClipboard } from "../lib/compressImageFile";
-import { IMAGE_SLOT_GUIDE, enhanceRichInlineImages, findAwaitingSlotId, handleRichImageSlotPointer, insertImagesAtSlotOrCaret, tryConsumeImageTriggerToSlot } from "../lib/richImageSlots";
+import { IMAGE_SLOT_GUIDE, enhanceRichInlineImages, findAwaitingSlotId, handleRichImageSlotPointer, insertImagesAtSlotOrCaret, tryConsumeDateTimeTrigger, tryConsumeImageTriggerToSlot } from "../lib/richImageSlots";
 
 /** A white writing box placed under the main editor. */
 export function CollectWhiteCell({
@@ -37,10 +37,11 @@ export function CollectWhiteCell({
   const [imageSlotId, setImageSlotId] = React.useState<string | null>(null);
 
   const consumeImageTrigger = (notify: boolean) => {
+    const stamped = tryConsumeDateTimeTrigger(ref.current);
     const slotId = tryConsumeImageTriggerToSlot(ref.current);
     if (slotId) setImageSlotId(slotId);
     else if (!findAwaitingSlotId(ref.current)) setImageSlotId(null);
-    if (notify || slotId) onInput();
+    if (notify || slotId || stamped) onInput();
   };
 
   const insertPickedImages = async (files: File[]) => {

@@ -16,6 +16,7 @@ import {
   findAwaitingSlotId,
   insertImagesAtSlotOrCaret,
   tryConsumeImageTriggerToSlot,
+  tryConsumeDateTimeTrigger,
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
@@ -718,6 +719,7 @@ export default function HomePage() {
   function handleDiaryRichInput() {
     const editor = diaryRichTextRef.current;
     if (!editor) return;
+    tryConsumeDateTimeTrigger(editor);
     const slotId = tryConsumeImageTriggerToSlot(editor);
     if (slotId) {
       enhanceRichInlineImages(editor);

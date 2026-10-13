@@ -9750,6 +9750,12 @@ body {
   content: "↘" !important;
 }
 
+.generalInfoRichTextEditor .body-datetime,
+.generalInfoFormattedTextView .body-datetime,
+.giParagraphCard .body-datetime {
+  color: #eab308 !important;
+}
+
 .generalInfoRichTextEditor .rich-img-slot {
   position: relative !important;
   display: flex !important;

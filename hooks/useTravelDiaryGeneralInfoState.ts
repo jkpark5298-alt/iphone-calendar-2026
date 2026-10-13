@@ -48,6 +48,7 @@ import {
   findAwaitingSlotId,
   insertImagesAtSlotOrCaret,
   tryConsumeImageTriggerToSlot,
+  tryConsumeDateTimeTrigger,
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
@@ -1283,6 +1284,7 @@ export function useTravelDiaryGeneralInfoState({
   const handleGeneralInfoRichInput = useCallback(() => {
     const editor = generalInfoRichTextRef.current;
     if (!editor) return;
+    tryConsumeDateTimeTrigger(editor);
     const slotId = tryConsumeImageTriggerToSlot(editor);
     if (slotId) {
       enhanceRichInlineImages(editor);
