@@ -9923,6 +9923,21 @@ body {
   width: var(--inline-img-width) !important;
   max-width: 100% !important;
 }
+.generalInfoFormattedTextView .rich-inline-img-wrap[data-height="1"],
+.generalInfoFormattedTextView .generalInfoInlineImageBlock[data-height="1"],
+.giParagraphCard .rich-inline-img-wrap[data-height="1"],
+.giParagraphCard .generalInfoInlineImageBlock[data-height="1"] {
+  height: var(--inline-img-height) !important;
+}
+.generalInfoFormattedTextView .rich-inline-img-wrap[data-height="1"] > img,
+.generalInfoFormattedTextView .generalInfoInlineImageBlock[data-height="1"] > img,
+.giParagraphCard .rich-inline-img-wrap[data-height="1"] > img,
+.giParagraphCard .generalInfoInlineImageBlock[data-height="1"] > img {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  object-fit: fill !important;
+}
 .gi-body-paragraph {
   margin: 0 0 14px;
 }
@@ -11919,6 +11934,17 @@ body {
   display: inline-block !important;
   width: var(--inline-img-width) !important;
   max-width: 100% !important;
+}
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-wrap[data-height="1"],
+.generalInfoRichTextEditor.collectPaperEditor .generalInfoInlineImageBlock[data-height="1"] {
+  height: var(--inline-img-height) !important;
+}
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-wrap[data-height="1"] > img,
+.generalInfoRichTextEditor.collectPaperEditor .generalInfoInlineImageBlock[data-height="1"] > img {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  object-fit: fill !important;
 }
 .generalInfoRichTextEditor.collectPaperEditor:focus {
   border-color: #38bdf8 !important;

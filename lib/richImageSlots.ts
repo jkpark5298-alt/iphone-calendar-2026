@@ -10,7 +10,10 @@ export const INLINE_IMG_DEL_CLASS = "rich-inline-img-del";
 export const INLINE_IMG_RESIZE_CLASS = "rich-inline-img-resize";
 export const IMG_SLOT_CLASS = "rich-img-slot";
 export const INLINE_IMG_WIDTH_VAR = "--inline-img-width";
+export const INLINE_IMG_HEIGHT_VAR = "--inline-img-height";
 export const MIN_INLINE_IMG_WIDTH = 80;
+export const MIN_INLINE_IMG_HEIGHT = 80;
+const MAX_INLINE_IMG_HEIGHT = 2400;
 
 const INLINE_IMG_FRAME_SELECTOR = `.${INLINE_IMG_WRAP_CLASS}, .generalInfoInlineImageBlock`;
 
@@ -19,16 +22,22 @@ export function clampInlineImageWidth(width: number, maxWidth: number) {
   return Math.min(max, Math.max(MIN_INLINE_IMG_WIDTH, Math.round(width)));
 }
 
+export function clampInlineImageHeight(height: number) {
+  return Math.min(MAX_INLINE_IMG_HEIGHT, Math.max(MIN_INLINE_IMG_HEIGHT, Math.round(height)));
+}
+
 function editorContentWidth(editor: HTMLElement) {
   const style = getComputedStyle(editor);
   const pad = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
   return Math.max(MIN_INLINE_IMG_WIDTH, editor.clientWidth - pad);
 }
 
-/** Remember the on-screen width. The image file itself is not recompressed. */
-export function applyInlineImageDisplayWidth(frame: HTMLElement, widthPx: number) {
+/** Remember the on-screen size. The image file itself is not recompressed. */
+export function applyInlineImageDisplaySize(frame: HTMLElement, widthPx: number, heightPx: number) {
   frame.dataset.resized = "1";
+  frame.dataset.height = "1";
   frame.style.setProperty(INLINE_IMG_WIDTH_VAR, `${Math.round(widthPx)}px`);
+  frame.style.setProperty(INLINE_IMG_HEIGHT_VAR, `${Math.round(heightPx)}px`);
 }
 
 function ensureResizeControl(frame: HTMLElement) {
@@ -41,7 +50,7 @@ function ensureResizeControl(frame: HTMLElement) {
   handle.setAttribute("contenteditable", "false");
   handle.setAttribute("role", "button");
   handle.setAttribute("aria-label", "이미지 크기 조절");
-  handle.title = "모서리를 끌어 크기를 조절합니다";
+  handle.title = "모서리를 좌우·상하로 끌어 크기를 조절합니다";
 }
 
 function bindInlineImageResize(editor: HTMLElement) {
@@ -53,15 +62,22 @@ function bindInlineImageResize(editor: HTMLElement) {
     pointerId: number;
     frame: HTMLElement;
     startX: number;
+    startY: number;
     startWidth: number;
+    startHeight: number;
     maxWidth: number;
   } | null = null;
 
   const onPointerMove = (event: PointerEvent) => {
     if (!drag || event.pointerId !== drag.pointerId) return;
     event.preventDefault();
-    const next = drag.startWidth + (event.clientX - drag.startX);
-    applyInlineImageDisplayWidth(drag.frame, clampInlineImageWidth(next, drag.maxWidth));
+    const nextWidth = drag.startWidth + (event.clientX - drag.startX);
+    const nextHeight = drag.startHeight + (event.clientY - drag.startY);
+    applyInlineImageDisplaySize(
+      drag.frame,
+      clampInlineImageWidth(nextWidth, drag.maxWidth),
+      clampInlineImageHeight(nextHeight),
+    );
   };
 
   const finish = (event: PointerEvent) => {
@@ -86,11 +102,14 @@ function bindInlineImageResize(editor: HTMLElement) {
       event.preventDefault();
       event.stopPropagation();
       frame.classList.add("is-image-selected", "is-resizing");
+      const rect = frame.getBoundingClientRect();
       drag = {
         pointerId: event.pointerId,
         frame,
         startX: event.clientX,
-        startWidth: frame.getBoundingClientRect().width,
+        startY: event.clientY,
+        startWidth: rect.width,
+        startHeight: rect.height,
         maxWidth: editorContentWidth(editor),
       };
       window.addEventListener("pointermove", onPointerMove);
