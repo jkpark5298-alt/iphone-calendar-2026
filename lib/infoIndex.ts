@@ -190,6 +190,8 @@ const THEME_TAG_LABELS = [
   "기타",
   "코딩",
   "책",
+  "AV",
+  "맛집",
 ];
 
 export function extractThemeTags(html: string): string[] {

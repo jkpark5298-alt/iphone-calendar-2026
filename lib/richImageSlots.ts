@@ -7,7 +7,110 @@
 export const INLINE_IMG_CLASS = "rich-inline-img";
 export const INLINE_IMG_WRAP_CLASS = "rich-inline-img-wrap";
 export const INLINE_IMG_DEL_CLASS = "rich-inline-img-del";
+export const INLINE_IMG_RESIZE_CLASS = "rich-inline-img-resize";
 export const IMG_SLOT_CLASS = "rich-img-slot";
+export const INLINE_IMG_WIDTH_VAR = "--inline-img-width";
+export const MIN_INLINE_IMG_WIDTH = 80;
+
+const INLINE_IMG_FRAME_SELECTOR = `.${INLINE_IMG_WRAP_CLASS}, .generalInfoInlineImageBlock`;
+
+export function clampInlineImageWidth(width: number, maxWidth: number) {
+  const max = Math.max(MIN_INLINE_IMG_WIDTH, Math.floor(maxWidth));
+  return Math.min(max, Math.max(MIN_INLINE_IMG_WIDTH, Math.round(width)));
+}
+
+function editorContentWidth(editor: HTMLElement) {
+  const style = getComputedStyle(editor);
+  const pad = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+  return Math.max(MIN_INLINE_IMG_WIDTH, editor.clientWidth - pad);
+}
+
+/** Remember the on-screen width. The image file itself is not recompressed. */
+export function applyInlineImageDisplayWidth(frame: HTMLElement, widthPx: number) {
+  frame.dataset.resized = "1";
+  frame.style.setProperty(INLINE_IMG_WIDTH_VAR, `${Math.round(widthPx)}px`);
+}
+
+function ensureResizeControl(frame: HTMLElement) {
+  let handle = frame.querySelector(`:scope > .${INLINE_IMG_RESIZE_CLASS}`) as HTMLElement | null;
+  if (!handle) {
+    handle = document.createElement("span");
+    handle.className = INLINE_IMG_RESIZE_CLASS;
+    frame.appendChild(handle);
+  }
+  handle.setAttribute("contenteditable", "false");
+  handle.setAttribute("role", "button");
+  handle.setAttribute("aria-label", "이미지 크기 조절");
+  handle.title = "모서리를 끌어 크기를 조절합니다";
+}
+
+function bindInlineImageResize(editor: HTMLElement) {
+  const flagged = editor as HTMLElement & { __inlineImageResizeBound?: boolean };
+  if (flagged.__inlineImageResizeBound) return;
+  flagged.__inlineImageResizeBound = true;
+
+  let drag: {
+    pointerId: number;
+    frame: HTMLElement;
+    startX: number;
+    startWidth: number;
+    maxWidth: number;
+  } | null = null;
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    event.preventDefault();
+    const next = drag.startWidth + (event.clientX - drag.startX);
+    applyInlineImageDisplayWidth(drag.frame, clampInlineImageWidth(next, drag.maxWidth));
+  };
+
+  const finish = (event: PointerEvent) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag.frame.classList.remove("is-resizing");
+    drag = null;
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", finish);
+    editor.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  editor.addEventListener(
+    "pointerdown",
+    (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const handle = target?.closest(`.${INLINE_IMG_RESIZE_CLASS}`) as HTMLElement | null;
+      if (!handle || !editor.contains(handle) || drag) return;
+      const frame = handle.closest(INLINE_IMG_FRAME_SELECTOR) as HTMLElement | null;
+      const img = frame?.querySelector("img");
+      if (!frame || !img) return;
+      event.preventDefault();
+      event.stopPropagation();
+      frame.classList.add("is-image-selected", "is-resizing");
+      drag = {
+        pointerId: event.pointerId,
+        frame,
+        startX: event.clientX,
+        startWidth: frame.getBoundingClientRect().width,
+        maxWidth: editorContentWidth(editor),
+      };
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", finish);
+      window.addEventListener("pointercancel", finish);
+    },
+    true,
+  );
+
+  editor.addEventListener(
+    "click",
+    (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest(`.${INLINE_IMG_RESIZE_CLASS}`) || !editor.contains(target)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    true,
+  );
+}
 
 function ensureDeleteControl(wrap: HTMLElement, img: HTMLImageElement) {
   let del = wrap.querySelector(`:scope > .${INLINE_IMG_DEL_CLASS}`) as HTMLElement | null;
@@ -30,9 +133,12 @@ export function ensureInlineImageWrap(img: HTMLImageElement) {
     parent.setAttribute("contenteditable", "false");
     parent.classList.remove(IMG_SLOT_CLASS);
     ensureDeleteControl(parent, img);
+    ensureResizeControl(parent);
     return parent;
   }
   if (parent?.classList.contains("generalInfoInlineImageBlock")) {
+    parent.setAttribute("contenteditable", "false");
+    ensureResizeControl(parent);
     return parent;
   }
   const wrap = document.createElement("span");
@@ -41,6 +147,7 @@ export function ensureInlineImageWrap(img: HTMLImageElement) {
   img.replaceWith(wrap);
   wrap.appendChild(img);
   ensureDeleteControl(wrap, img);
+  ensureResizeControl(wrap);
   return wrap;
 }
 
@@ -334,4 +441,11 @@ export function enhanceRichInlineImages(editor: HTMLElement | null) {
     if (slot.querySelector("img")) return;
     paintEmptyImageSlot(slot);
   });
+  editor.querySelectorAll(".generalInfoInlineImageBlock").forEach((node) => {
+    const frame = node as HTMLElement;
+    if (!frame.querySelector("img")) return;
+    frame.setAttribute("contenteditable", "false");
+    ensureResizeControl(frame);
+  });
+  bindInlineImageResize(editor);
 }

@@ -17,6 +17,8 @@ export const CONTENT_CLASSES = [
   "기타",
   "1인 기업",
   "코딩",
+  "AV",
+  "맛집",
 ] as const;
 
 export type ContentClassLabel = (typeof CONTENT_CLASSES)[number];

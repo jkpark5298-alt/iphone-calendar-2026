@@ -9724,6 +9724,32 @@ body {
   pointer-events: auto !important;
 }
 
+.generalInfoRichTextEditor .rich-inline-img-resize {
+  position: absolute !important;
+  right: 2px !important;
+  bottom: 2px !important;
+  z-index: 6 !important;
+  width: 36px !important;
+  height: 36px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 10px 0 8px 0 !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  color: #334155 !important;
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  cursor: nwse-resize !important;
+  touch-action: none !important;
+  user-select: none !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18) !important;
+}
+
+.generalInfoRichTextEditor .rich-inline-img-resize::before {
+  content: "↘" !important;
+}
+
 .generalInfoRichTextEditor .rich-img-slot {
   position: relative !important;
   display: flex !important;
@@ -9845,8 +9871,10 @@ body {
 
 .generalInfoFormattedTextView .rich-inline-img-del,
 .generalInfoFormattedTextView .generalInfoInlineImageRemove,
+.generalInfoFormattedTextView .rich-inline-img-resize,
 .giParagraphCard .rich-inline-img-del,
-.giParagraphCard .generalInfoInlineImageRemove {
+.giParagraphCard .generalInfoInlineImageRemove,
+.giParagraphCard .rich-inline-img-resize {
   display: none !important;
 }
 
@@ -9880,6 +9908,14 @@ body {
   height: auto !important;
   float: none !important;
   border-radius: 10px !important;
+}
+.generalInfoFormattedTextView .rich-inline-img-wrap[data-resized="1"],
+.generalInfoFormattedTextView .generalInfoInlineImageBlock[data-resized="1"],
+.giParagraphCard .rich-inline-img-wrap[data-resized="1"],
+.giParagraphCard .generalInfoInlineImageBlock[data-resized="1"] {
+  display: inline-block !important;
+  width: var(--inline-img-width) !important;
+  max-width: 100% !important;
 }
 .gi-body-paragraph {
   margin: 0 0 14px;
@@ -11871,6 +11907,12 @@ body {
   max-width: 100% !important;
   height: auto !important;
   box-sizing: border-box !important;
+}
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-wrap[data-resized="1"],
+.generalInfoRichTextEditor.collectPaperEditor .generalInfoInlineImageBlock[data-resized="1"] {
+  display: inline-block !important;
+  width: var(--inline-img-width) !important;
+  max-width: 100% !important;
 }
 .generalInfoRichTextEditor.collectPaperEditor:focus {
   border-color: #38bdf8 !important;

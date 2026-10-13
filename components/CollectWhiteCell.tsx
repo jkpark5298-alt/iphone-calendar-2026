@@ -83,6 +83,7 @@ export function CollectWhiteCell({
     const el = ref.current;
     if (!el) return;
     el.innerHTML = initialHtml || "";
+    enhanceRichInlineImages(el);
   }, [initialHtml]);
 
   React.useEffect(() => {
