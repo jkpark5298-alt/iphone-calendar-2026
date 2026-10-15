@@ -9724,30 +9724,70 @@ body {
   pointer-events: auto !important;
 }
 
+.generalInfoRichTextEditor .rich-inline-img-wrap img,
+.generalInfoRichTextEditor .generalInfoInlineImageBlock img {
+  -webkit-user-drag: none !important;
+  user-select: none !important;
+}
+
 .generalInfoRichTextEditor .rich-inline-img-resize {
   position: absolute !important;
-  right: 2px !important;
-  bottom: 2px !important;
-  z-index: 6 !important;
-  width: 36px !important;
-  height: 36px !important;
+  z-index: 8 !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  border-radius: 10px 0 8px 0 !important;
-  background: rgba(255, 255, 255, 0.94) !important;
-  color: #334155 !important;
-  font-size: 18px !important;
+  box-sizing: border-box !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: #0f172a !important;
+  font-size: 16px !important;
   font-weight: 900 !important;
   line-height: 1 !important;
-  cursor: nwse-resize !important;
   touch-action: none !important;
   user-select: none !important;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18) !important;
+  -webkit-user-select: none !important;
+  pointer-events: auto !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.22) !important;
 }
 
-.generalInfoRichTextEditor .rich-inline-img-resize::before {
+.generalInfoRichTextEditor .rich-inline-img-resize[data-axis="both"] {
+  right: 2px !important;
+  bottom: 2px !important;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 10px 0 8px 0 !important;
+  cursor: nwse-resize !important;
+}
+
+.generalInfoRichTextEditor .rich-inline-img-resize[data-axis="both"]::before {
   content: "↘" !important;
+}
+
+.generalInfoRichTextEditor .rich-inline-img-resize[data-axis="x"] {
+  right: 2px !important;
+  top: 50% !important;
+  width: 32px !important;
+  height: 56px !important;
+  margin-top: -28px !important;
+  border-radius: 8px !important;
+  cursor: ew-resize !important;
+}
+
+.generalInfoRichTextEditor .rich-inline-img-resize[data-axis="x"]::before {
+  content: "↔" !important;
+}
+
+.generalInfoRichTextEditor .rich-inline-img-resize[data-axis="y"] {
+  left: 50% !important;
+  bottom: 2px !important;
+  width: 56px !important;
+  height: 32px !important;
+  margin-left: -28px !important;
+  border-radius: 8px !important;
+  cursor: ns-resize !important;
+}
+
+.generalInfoRichTextEditor .rich-inline-img-resize[data-axis="y"]::before {
+  content: "↕" !important;
 }
 
 .generalInfoRichTextEditor .body-datetime,

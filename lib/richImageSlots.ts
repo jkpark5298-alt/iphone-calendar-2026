@@ -32,35 +32,110 @@ function editorContentWidth(editor: HTMLElement) {
   return Math.max(MIN_INLINE_IMG_WIDTH, editor.clientWidth - pad);
 }
 
+type ResizeAxis = "x" | "y" | "both";
+
 /** Remember the on-screen size. The image file itself is not recompressed. */
 export function applyInlineImageDisplaySize(frame: HTMLElement, widthPx: number, heightPx: number) {
+  const width = Math.round(widthPx);
+  const height = Math.round(heightPx);
   frame.dataset.resized = "1";
   frame.dataset.height = "1";
-  frame.style.setProperty(INLINE_IMG_WIDTH_VAR, `${Math.round(widthPx)}px`);
-  frame.style.setProperty(INLINE_IMG_HEIGHT_VAR, `${Math.round(heightPx)}px`);
+  frame.style.setProperty(INLINE_IMG_WIDTH_VAR, `${width}px`);
+  frame.style.setProperty(INLINE_IMG_HEIGHT_VAR, `${height}px`);
+  frame.style.setProperty("display", "inline-block", "important");
+  frame.style.setProperty("width", `${width}px`, "important");
+  frame.style.setProperty("height", `${height}px`, "important");
+  frame.style.setProperty("max-width", "100%", "important");
+  frame.style.setProperty("box-sizing", "border-box", "important");
+  const img = frame.querySelector("img");
+  if (img instanceof HTMLElement) {
+    img.style.setProperty("width", "100%", "important");
+    img.style.setProperty("height", "100%", "important");
+    img.style.setProperty("max-width", "100%", "important");
+    img.style.setProperty("max-height", "none", "important");
+    img.style.setProperty("object-fit", "fill", "important");
+    img.setAttribute("draggable", "false");
+  }
 }
 
-function ensureResizeControl(frame: HTMLElement) {
-  let handle = frame.querySelector(`:scope > .${INLINE_IMG_RESIZE_CLASS}`) as HTMLElement | null;
+/** Re-apply saved CSS vars after HTML reload (width:100% editor rules otherwise win). */
+function restoreInlineImageDisplaySize(frame: HTMLElement) {
+  if (frame.dataset.resized !== "1") return;
+  const width = parseFloat(frame.style.getPropertyValue(INLINE_IMG_WIDTH_VAR));
+  const height = parseFloat(frame.style.getPropertyValue(INLINE_IMG_HEIGHT_VAR));
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+  applyInlineImageDisplaySize(frame, width, height);
+}
+
+const RESIZE_HANDLE_COPY: Record<ResizeAxis, { label: string; title: string }> = {
+  x: { label: "가로 크기 조절", title: "↔ 를 좌우로 끌어 가로를 조절합니다" },
+  y: { label: "세로 크기 조절", title: "↕ 를 상하로 끌어 세로를 조절합니다" },
+  both: { label: "이미지 크기 조절", title: "↘ 를 끌어 가로와 세로를 함께 조절합니다" },
+};
+
+function paintResizeHandle(frame: HTMLElement, axis: ResizeAxis) {
+  let handle = frame.querySelector(`:scope > .${INLINE_IMG_RESIZE_CLASS}[data-axis="${axis}"]`) as HTMLElement | null;
   if (!handle) {
     handle = document.createElement("span");
     handle.className = INLINE_IMG_RESIZE_CLASS;
+    handle.dataset.axis = axis;
     frame.appendChild(handle);
   }
+  const copy = RESIZE_HANDLE_COPY[axis];
   handle.setAttribute("contenteditable", "false");
   handle.setAttribute("role", "button");
-  handle.setAttribute("aria-label", "이미지 크기 조절");
-  handle.title = "모서리를 좌우·상하로 끌어 크기를 조절합니다";
+  handle.setAttribute("aria-label", copy.label);
+  handle.title = copy.title;
+}
+
+function ensureResizeControl(frame: HTMLElement) {
+  frame.querySelectorAll(`:scope > .${INLINE_IMG_RESIZE_CLASS}`).forEach((node) => {
+    const axis = (node as HTMLElement).dataset.axis;
+    if (axis !== "x" && axis !== "y" && axis !== "both") node.remove();
+  });
+  paintResizeHandle(frame, "x");
+  paintResizeHandle(frame, "y");
+  paintResizeHandle(frame, "both");
+}
+
+function resizeHandleAtPoint(editor: HTMLElement, x: number, y: number) {
+  const handles = Array.from(editor.querySelectorAll(`.${INLINE_IMG_RESIZE_CLASS}`)).reverse();
+  for (const node of handles) {
+    const rect = node.getBoundingClientRect();
+    const slop = 12;
+    if (
+      x >= rect.left - slop &&
+      x <= rect.right + slop &&
+      y >= rect.top - slop &&
+      y <= rect.bottom + slop
+    ) {
+      return node as HTMLElement;
+    }
+  }
+  return null;
+}
+
+function resizeAxisOf(handle: HTMLElement): ResizeAxis {
+  const axis = handle.dataset.axis;
+  if (axis === "x" || axis === "y") return axis;
+  return "both";
 }
 
 function bindInlineImageResize(editor: HTMLElement) {
-  const flagged = editor as HTMLElement & { __inlineImageResizeBound?: boolean };
-  if (flagged.__inlineImageResizeBound) return;
-  flagged.__inlineImageResizeBound = true;
+  type ResizeBoundEditor = HTMLElement & {
+    __inlineImageResizeAbort?: AbortController;
+  };
+  const flagged = editor as ResizeBoundEditor;
+  flagged.__inlineImageResizeAbort?.abort();
+  const abort = new AbortController();
+  flagged.__inlineImageResizeAbort = abort;
+  const { signal } = abort;
 
   let drag: {
+    kind: "pointer" | "touch";
     pointerId: number;
     frame: HTMLElement;
+    axis: ResizeAxis;
     startX: number;
     startY: number;
     startWidth: number;
@@ -68,11 +143,10 @@ function bindInlineImageResize(editor: HTMLElement) {
     maxWidth: number;
   } | null = null;
 
-  const onPointerMove = (event: PointerEvent) => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    event.preventDefault();
-    const nextWidth = drag.startWidth + (event.clientX - drag.startX);
-    const nextHeight = drag.startHeight + (event.clientY - drag.startY);
+  const applyDrag = (clientX: number, clientY: number) => {
+    if (!drag) return;
+    const nextWidth = drag.axis === "y" ? drag.startWidth : drag.startWidth + (clientX - drag.startX);
+    const nextHeight = drag.axis === "x" ? drag.startHeight : drag.startHeight + (clientY - drag.startY);
     applyInlineImageDisplaySize(
       drag.frame,
       clampInlineImageWidth(nextWidth, drag.maxWidth),
@@ -80,54 +154,126 @@ function bindInlineImageResize(editor: HTMLElement) {
     );
   };
 
-  const finish = (event: PointerEvent) => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    drag.frame.classList.remove("is-resizing");
+  const endDrag = (commit: boolean) => {
+    if (!drag) return;
+    const frame = drag.frame;
     drag = null;
-    window.removeEventListener("pointermove", onPointerMove);
-    window.removeEventListener("pointerup", finish);
-    window.removeEventListener("pointercancel", finish);
-    editor.dispatchEvent(new Event("input", { bubbles: true }));
+    frame.classList.remove("is-resizing");
+    if (commit) editor.dispatchEvent(new Event("input", { bubbles: true }));
   };
+
+  const beginDrag = (
+    handle: HTMLElement,
+    kind: "pointer" | "touch",
+    pointerId: number,
+    clientX: number,
+    clientY: number,
+  ) => {
+    const frame = handle.closest(INLINE_IMG_FRAME_SELECTOR) as HTMLElement | null;
+    const img = frame?.querySelector("img");
+    if (!frame || !img) return false;
+    if (drag) endDrag(false);
+    frame.classList.add("is-image-selected", "is-resizing");
+    const rect = frame.getBoundingClientRect();
+    drag = {
+      kind,
+      pointerId,
+      frame,
+      axis: resizeAxisOf(handle),
+      startX: clientX,
+      startY: clientY,
+      startWidth: Math.max(rect.width, MIN_INLINE_IMG_WIDTH),
+      startHeight: Math.max(rect.height, MIN_INLINE_IMG_HEIGHT),
+      maxWidth: editorContentWidth(editor),
+    };
+    return true;
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!drag || drag.kind !== "pointer" || event.pointerId !== drag.pointerId) return;
+    event.preventDefault();
+    applyDrag(event.clientX, event.clientY);
+  };
+
+  const onPointerUp = (event: PointerEvent) => {
+    if (!drag || drag.kind !== "pointer" || event.pointerId !== drag.pointerId) return;
+    endDrag(true);
+  };
+
+  const onTouchMove = (event: TouchEvent) => {
+    if (!drag || drag.kind !== "touch") return;
+    const touch = Array.from(event.touches).find((item) => item.identifier === drag?.pointerId);
+    if (!touch) return;
+    event.preventDefault();
+    applyDrag(touch.clientX, touch.clientY);
+  };
+
+  const onTouchEnd = (event: TouchEvent) => {
+    if (!drag || drag.kind !== "touch") return;
+    const ended = Array.from(event.changedTouches).some((item) => item.identifier === drag?.pointerId);
+    if (!ended) return;
+    endDrag(true);
+  };
+
+  // Window/document listeners stay for the editor lifetime; abort removes them on rebind.
+  window.addEventListener("pointermove", onPointerMove, { passive: false, signal });
+  window.addEventListener("pointerup", onPointerUp, { signal });
+  window.addEventListener("pointercancel", onPointerUp, { signal });
+  document.addEventListener("touchmove", onTouchMove, { capture: true, passive: false, signal });
+  document.addEventListener("touchend", onTouchEnd, { capture: true, signal });
+  document.addEventListener("touchcancel", onTouchEnd, { capture: true, signal });
+  window.addEventListener("blur", () => endDrag(false), { signal });
+
+  editor.addEventListener(
+    "touchstart",
+    (event: TouchEvent) => {
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+      const handle = resizeHandleAtPoint(editor, touch.clientX, touch.clientY);
+      if (!handle || !editor.contains(handle)) return;
+      if (!beginDrag(handle, "touch", touch.identifier, touch.clientX, touch.clientY)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    { capture: true, passive: false, signal },
+  );
 
   editor.addEventListener(
     "pointerdown",
     (event: PointerEvent) => {
-      const target = event.target instanceof Element ? event.target : null;
-      const handle = target?.closest(`.${INLINE_IMG_RESIZE_CLASS}`) as HTMLElement | null;
-      if (!handle || !editor.contains(handle) || drag) return;
-      const frame = handle.closest(INLINE_IMG_FRAME_SELECTOR) as HTMLElement | null;
-      const img = frame?.querySelector("img");
-      if (!frame || !img) return;
+      // iOS contentEditable: prefer the touchstart path to avoid double-drags.
+      if (event.pointerType === "touch") return;
+      const handle = resizeHandleAtPoint(editor, event.clientX, event.clientY);
+      if (!handle || !editor.contains(handle)) return;
+      if (!beginDrag(handle, "pointer", event.pointerId, event.clientX, event.clientY)) return;
       event.preventDefault();
       event.stopPropagation();
-      frame.classList.add("is-image-selected", "is-resizing");
-      const rect = frame.getBoundingClientRect();
-      drag = {
-        pointerId: event.pointerId,
-        frame,
-        startX: event.clientX,
-        startY: event.clientY,
-        startWidth: rect.width,
-        startHeight: rect.height,
-        maxWidth: editorContentWidth(editor),
-      };
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", finish);
-      window.addEventListener("pointercancel", finish);
+      try {
+        handle.setPointerCapture(event.pointerId);
+      } catch {
+        /* capture is optional */
+      }
     },
-    true,
+    { capture: true, signal },
+  );
+
+  editor.addEventListener(
+    "lostpointercapture",
+    (event: PointerEvent) => {
+      if (!drag || drag.kind !== "pointer" || event.pointerId !== drag.pointerId) return;
+      endDrag(true);
+    },
+    { capture: true, signal },
   );
 
   editor.addEventListener(
     "click",
     (event: MouseEvent) => {
-      const target = event.target instanceof Element ? event.target : null;
-      if (!target?.closest(`.${INLINE_IMG_RESIZE_CLASS}`) || !editor.contains(target)) return;
+      if (!resizeHandleAtPoint(editor, event.clientX, event.clientY)) return;
       event.preventDefault();
       event.stopPropagation();
     },
-    true,
+    { capture: true, signal },
   );
 }
 
@@ -148,16 +294,19 @@ function ensureDeleteControl(wrap: HTMLElement, img: HTMLImageElement) {
 /** Wrap a pasted/inline image so the editor can show a delete control. */
 export function ensureInlineImageWrap(img: HTMLImageElement) {
   const parent = img.parentElement;
+  img.setAttribute("draggable", "false");
   if (parent?.classList.contains(INLINE_IMG_WRAP_CLASS)) {
     parent.setAttribute("contenteditable", "false");
     parent.classList.remove(IMG_SLOT_CLASS);
     ensureDeleteControl(parent, img);
     ensureResizeControl(parent);
+    restoreInlineImageDisplaySize(parent);
     return parent;
   }
   if (parent?.classList.contains("generalInfoInlineImageBlock")) {
     parent.setAttribute("contenteditable", "false");
     ensureResizeControl(parent);
+    restoreInlineImageDisplaySize(parent);
     return parent;
   }
   const wrap = document.createElement("span");
@@ -514,6 +663,7 @@ export function enhanceRichInlineImages(editor: HTMLElement | null) {
     if (!frame.querySelector("img")) return;
     frame.setAttribute("contenteditable", "false");
     ensureResizeControl(frame);
+    restoreInlineImageDisplaySize(frame);
   });
   bindInlineImageResize(editor);
 }
