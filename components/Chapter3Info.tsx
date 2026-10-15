@@ -716,7 +716,7 @@ export function Chapter3Info({
                 onTextImage={() => setShowTextToImageModal(true)}
                 onHandwriting={() => setShowHandwritingModal(true)}
               />
-              <p className="mutedText collectImageSourceHint">본문에 S. 또는 s. 를 입력하면 사진 칸이 생깁니다. 그 칸에서 사진찍기, 사진첩 또는 붙여넣기로 넣습니다.</p>
+              <p className="mutedText collectImageSourceHint">본문에 S. 또는 s. 를 입력하면 사진 칸이 생깁니다. 그 칸에서 사진찍기, 사진첩 또는 붙여넣기로 넣습니다. 여러 장을 한 번에 넣으면 두 열로 보입니다.</p>
               <div className="collectImageSourceRow">
                 <label
                   className="collectImageSourceBtn"

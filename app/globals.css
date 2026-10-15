@@ -12018,6 +12018,67 @@ body {
   overflow-wrap: anywhere !important;
   word-break: break-word !important;
 }
+.generalInfoRichTextEditor .rich-inline-img-row,
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-row,
+.generalInfoFormattedTextView .rich-inline-img-row,
+.giParagraphCard .rich-inline-img-row {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 8px 0 !important;
+  box-sizing: border-box !important;
+  float: none !important;
+}
+.generalInfoRichTextEditor .rich-inline-img-row > .rich-inline-img-wrap,
+.generalInfoRichTextEditor .rich-inline-img-row > .generalInfoInlineImageBlock,
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-row > .rich-inline-img-wrap,
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-row > .generalInfoInlineImageBlock,
+.generalInfoFormattedTextView .rich-inline-img-row > .rich-inline-img-wrap,
+.generalInfoFormattedTextView .rich-inline-img-row > .generalInfoInlineImageBlock,
+.giParagraphCard .rich-inline-img-row > .rich-inline-img-wrap,
+.giParagraphCard .rich-inline-img-row > .generalInfoInlineImageBlock {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  float: none !important;
+  min-width: 0 !important;
+}
+.generalInfoRichTextEditor .rich-inline-img-row > .rich-inline-img-wrap > img,
+.generalInfoRichTextEditor .rich-inline-img-row > .generalInfoInlineImageBlock > img,
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-row > .rich-inline-img-wrap > img,
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-row > .generalInfoInlineImageBlock > img,
+.generalInfoFormattedTextView .rich-inline-img-row > .rich-inline-img-wrap > img,
+.generalInfoFormattedTextView .rich-inline-img-row > .generalInfoInlineImageBlock > img,
+.giParagraphCard .rich-inline-img-row > .rich-inline-img-wrap > img,
+.giParagraphCard .rich-inline-img-row > .generalInfoInlineImageBlock > img {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  object-fit: cover !important;
+  aspect-ratio: 3 / 4 !important;
+}
+.generalInfoRichTextEditor .rich-inline-img-row > .rich-inline-img-wrap[data-height="1"] > img,
+.generalInfoRichTextEditor .rich-inline-img-row > .generalInfoInlineImageBlock[data-height="1"] > img,
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-row > .rich-inline-img-wrap[data-height="1"] > img,
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-row > .generalInfoInlineImageBlock[data-height="1"] > img {
+  aspect-ratio: auto !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-row > .rich-inline-img-wrap[data-resized="1"],
+.generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-row > .generalInfoInlineImageBlock[data-resized="1"] {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+.generalInfoRichTextEditor .rich-inline-img-row .rich-inline-img-resize[data-axis="x"] {
+  display: none !important;
+}
+
 .generalInfoRichTextEditor.collectPaperEditor .rich-inline-img-wrap,
 .generalInfoRichTextEditor.collectPaperEditor .generalInfoInlineImageBlock,
 .generalInfoRichTextEditor.collectPaperEditor figure {

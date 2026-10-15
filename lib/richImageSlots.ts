@@ -8,12 +8,14 @@ export const INLINE_IMG_CLASS = "rich-inline-img";
 export const INLINE_IMG_WRAP_CLASS = "rich-inline-img-wrap";
 export const INLINE_IMG_DEL_CLASS = "rich-inline-img-del";
 export const INLINE_IMG_RESIZE_CLASS = "rich-inline-img-resize";
+export const INLINE_IMG_ROW_CLASS = "rich-inline-img-row";
 export const IMG_SLOT_CLASS = "rich-img-slot";
 export const INLINE_IMG_WIDTH_VAR = "--inline-img-width";
 export const INLINE_IMG_HEIGHT_VAR = "--inline-img-height";
 export const MIN_INLINE_IMG_WIDTH = 80;
 export const MIN_INLINE_IMG_HEIGHT = 80;
 const MAX_INLINE_IMG_HEIGHT = 2400;
+const INLINE_IMG_ROW_GAP = 8;
 
 const INLINE_IMG_FRAME_SELECTOR = `.${INLINE_IMG_WRAP_CLASS}, .generalInfoInlineImageBlock`;
 
@@ -32,28 +34,48 @@ function editorContentWidth(editor: HTMLElement) {
   return Math.max(MIN_INLINE_IMG_WIDTH, editor.clientWidth - pad);
 }
 
+function frameInImageRow(frame: HTMLElement) {
+  return frame.closest(`.${INLINE_IMG_ROW_CLASS}`) as HTMLElement | null;
+}
+
+/** In a 2-col row, width follows the cell; only height is freely resized. */
+function frameMaxResizeWidth(editor: HTMLElement, frame: HTMLElement) {
+  const row = frameInImageRow(frame);
+  if (!row) return editorContentWidth(editor);
+  const rowWidth = Math.max(MIN_INLINE_IMG_WIDTH, row.clientWidth || editorContentWidth(editor));
+  return Math.max(MIN_INLINE_IMG_WIDTH, Math.floor((rowWidth - INLINE_IMG_ROW_GAP) / 2));
+}
+
 type ResizeAxis = "x" | "y" | "both";
 
 /** Remember the on-screen size. The image file itself is not recompressed. */
 export function applyInlineImageDisplaySize(frame: HTMLElement, widthPx: number, heightPx: number) {
-  const width = Math.round(widthPx);
   const height = Math.round(heightPx);
+  const inRow = Boolean(frameInImageRow(frame));
+  const width = Math.round(widthPx);
   frame.dataset.resized = "1";
   frame.dataset.height = "1";
-  frame.style.setProperty(INLINE_IMG_WIDTH_VAR, `${width}px`);
   frame.style.setProperty(INLINE_IMG_HEIGHT_VAR, `${height}px`);
-  frame.style.setProperty("display", "inline-block", "important");
-  frame.style.setProperty("width", `${width}px`, "important");
   frame.style.setProperty("height", `${height}px`, "important");
   frame.style.setProperty("max-width", "100%", "important");
   frame.style.setProperty("box-sizing", "border-box", "important");
+  if (inRow) {
+    // Stay inside the 2-col cell; do not pin a pixel width that breaks the grid.
+    frame.style.removeProperty(INLINE_IMG_WIDTH_VAR);
+    frame.style.setProperty("display", "block", "important");
+    frame.style.setProperty("width", "100%", "important");
+  } else {
+    frame.style.setProperty(INLINE_IMG_WIDTH_VAR, `${width}px`);
+    frame.style.setProperty("display", "inline-block", "important");
+    frame.style.setProperty("width", `${width}px`, "important");
+  }
   const img = frame.querySelector("img");
   if (img instanceof HTMLElement) {
     img.style.setProperty("width", "100%", "important");
     img.style.setProperty("height", "100%", "important");
     img.style.setProperty("max-width", "100%", "important");
     img.style.setProperty("max-height", "none", "important");
-    img.style.setProperty("object-fit", "fill", "important");
+    img.style.setProperty("object-fit", inRow ? "cover" : "fill", "important");
     img.setAttribute("draggable", "false");
   }
 }
@@ -184,7 +206,7 @@ function bindInlineImageResize(editor: HTMLElement) {
       startY: clientY,
       startWidth: Math.max(rect.width, MIN_INLINE_IMG_WIDTH),
       startHeight: Math.max(rect.height, MIN_INLINE_IMG_HEIGHT),
-      maxWidth: editorContentWidth(editor),
+      maxWidth: frameMaxResizeWidth(editor, frame),
     };
     return true;
   };
@@ -325,8 +347,44 @@ export function createInlineImage(src: string, alt: string, slotId?: string) {
   img.alt = alt;
   img.className = `${INLINE_IMG_CLASS} generalInfoInlineImage`;
   img.setAttribute("contenteditable", "false");
+  img.setAttribute("draggable", "false");
   if (slotId) img.setAttribute("data-img-slot", slotId);
   return ensureInlineImageWrap(img);
+}
+
+/** One image stays full width; two or more go into a 2-column row. */
+export function createInlineImageInsert(urls: Array<{ src: string; alt?: string }>, slotId?: string | null) {
+  const nodes = urls.map((item, index) =>
+    createInlineImage(
+      item.src,
+      item.alt || (slotId ? (index === 0 ? slotId : `${slotId}-${index + 1}`) : "이미지"),
+      index === 0 && slotId ? slotId : undefined,
+    ),
+  );
+  if (nodes.length <= 1) return nodes[0] || null;
+  const row = document.createElement("div");
+  row.className = INLINE_IMG_ROW_CLASS;
+  row.setAttribute("contenteditable", "false");
+  row.setAttribute("data-img-row", "2");
+  nodes.forEach((node) => row.appendChild(node));
+  return row;
+}
+
+function compactImageRowAfterRemove(row: HTMLElement | null) {
+  if (!row || !row.classList.contains(INLINE_IMG_ROW_CLASS)) return;
+  const left = Array.from(row.children).filter((node) => {
+    if (!(node instanceof HTMLElement)) return false;
+    return (
+      node.classList.contains(INLINE_IMG_WRAP_CLASS) ||
+      node.classList.contains("generalInfoInlineImageBlock")
+    );
+  }) as HTMLElement[];
+  if (left.length >= 2) return;
+  if (left.length === 1) {
+    row.replaceWith(left[0]);
+    return;
+  }
+  row.remove();
 }
 
 export function nextSlotId(html: string) {
@@ -423,7 +481,8 @@ export function tryConsumeDateTimeTrigger(editor: HTMLElement | null): boolean {
   return true;
 }
 
-export const IMAGE_SLOT_GUIDE = "본문에 S. 또는 s. 를 입력하면 사진 칸이 생깁니다. 그 칸에서 사진찍기, 사진첩 또는 붙여넣기로 넣으세요.";
+export const IMAGE_SLOT_GUIDE =
+  "본문에 S. 또는 s. 를 입력하면 사진 칸이 생깁니다. 그 칸에서 사진찍기, 사진첩 또는 붙여넣기로 넣으세요. 여러 장을 한 번에 넣으면 두 열로 보입니다.";
 
 function caretText(editor: HTMLElement): { node: Text; offset: number } | null {
   const sel = window.getSelection();
@@ -571,36 +630,27 @@ export function insertImagesAtSlotOrCaret(
       `.${IMG_SLOT_CLASS}[data-img-slot="${escaped}"]`,
     );
     if (slot) {
-      const fragment = document.createDocumentFragment();
-      urls.forEach((item, index) => {
-        fragment.appendChild(
-          createInlineImage(
-            item.src,
-            item.alt || (index === 0 ? awaitId : `${awaitId}-${index + 1}`),
-            index === 0 ? awaitId : undefined,
-          ),
-        );
-      });
-      slot.replaceWith(fragment);
+      const node = createInlineImageInsert(urls, awaitId);
+      if (!node) return false;
+      slot.replaceWith(node);
       return true;
     }
     if (slotId) return false;
   }
 
-  const fragment = document.createDocumentFragment();
-  urls.forEach((item) => {
-    fragment.appendChild(createInlineImage(item.src, item.alt || "이미지"));
-  });
+  const node = createInlineImageInsert(urls, null);
+  if (!node) return false;
   const sel = window.getSelection();
   if (sel && sel.rangeCount > 0 && editor.contains(sel.getRangeAt(0).commonAncestorContainer)) {
     const range = sel.getRangeAt(0);
     range.deleteContents();
-    range.insertNode(fragment);
-    range.collapse(false);
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.collapse(true);
     sel.removeAllRanges();
     sel.addRange(range);
   } else {
-    editor.appendChild(fragment);
+    editor.appendChild(node);
   }
   return true;
 }
@@ -622,7 +672,9 @@ export function handleRichImageSlotPointer(
     if (options?.confirmImage !== false) {
       if (!window.confirm(`${alt}을(를) 지울까요?`)) return true;
     }
+    const row = frameInImageRow(wrap);
     wrap.remove();
+    compactImageRowAfterRemove(row);
     return true;
   }
 
@@ -649,6 +701,7 @@ export function enhanceRichInlineImages(editor: HTMLElement | null) {
     if (img.closest(".generalInfoInlineImageBlock")) return;
     img.classList.add(INLINE_IMG_CLASS, "generalInfoInlineImage");
     img.setAttribute("contenteditable", "false");
+    img.setAttribute("draggable", "false");
     ensureInlineImageWrap(img);
   });
   editor.querySelectorAll(`.${IMG_SLOT_CLASS}[data-img-slot]`).forEach((node) => {
@@ -657,6 +710,12 @@ export function enhanceRichInlineImages(editor: HTMLElement | null) {
     if (slot.classList.contains(INLINE_IMG_WRAP_CLASS)) return;
     if (slot.querySelector("img")) return;
     paintEmptyImageSlot(slot);
+  });
+  editor.querySelectorAll(`.${INLINE_IMG_ROW_CLASS}`).forEach((node) => {
+    const row = node as HTMLElement;
+    row.setAttribute("contenteditable", "false");
+    row.setAttribute("data-img-row", "2");
+    compactImageRowAfterRemove(row);
   });
   editor.querySelectorAll(".generalInfoInlineImageBlock").forEach((node) => {
     const frame = node as HTMLElement;
