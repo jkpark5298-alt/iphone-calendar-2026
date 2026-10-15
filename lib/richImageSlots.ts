@@ -68,9 +68,9 @@ function restoreInlineImageDisplaySize(frame: HTMLElement) {
 }
 
 const RESIZE_HANDLE_COPY: Record<ResizeAxis, { label: string; title: string }> = {
-  x: { label: "가로 크기 조절", title: "↔ 를 좌우로 끌어 가로를 조절합니다" },
-  y: { label: "세로 크기 조절", title: "↕ 를 상하로 끌어 세로를 조절합니다" },
-  both: { label: "이미지 크기 조절", title: "↘ 를 끌어 가로와 세로를 함께 조절합니다" },
+  x: { label: "가로 크기 조절", title: "오른쪽 선을 좌우로 끌어 가로를 조절합니다" },
+  y: { label: "세로 크기 조절", title: "아래 선을 상하로 끌어 세로를 조절합니다" },
+  both: { label: "이미지 크기 조절", title: "모서리 선을 끌어 가로와 세로를 함께 조절합니다" },
 };
 
 function paintResizeHandle(frame: HTMLElement, axis: ResizeAxis) {
