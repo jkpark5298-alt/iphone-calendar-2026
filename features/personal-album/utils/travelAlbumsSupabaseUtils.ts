@@ -180,9 +180,10 @@ function mergeAlbumRecords(
   }
 
   // 로컬이 더 최신이면 로컬에서 삭제된 앨범은 원격에서 다시 넣지 않음
+  // 단, 로컬이 비어 있으면(신규 기기·깨진 저장소) 원격 앨범을 지우지 않음
   const localTime = Date.parse(options?.localUpdatedAt || "");
   const remoteTime = Date.parse(options?.remoteUpdatedAt || "");
-  if (localTime > remoteTime) {
+  if (localTime > remoteTime && local.length > 0) {
     const localIds = new Set(local.map((a) => a.id));
     for (const id of map.keys()) {
       if (!localIds.has(id)) map.delete(id);
@@ -229,6 +230,13 @@ export function mergeTravelAlbumsStates(
   if (!local) return normalizeTravelAlbumsState(remote);
   if (!remote) return normalizeTravelAlbumsState(local);
 
+  const localAlbumCount = local.albums.length;
+  const remoteAlbumCount = remote.albums.length;
+  // 빈 로컬 + 최신 updatedAt 이 원격 앨범을 통째로 지우는 사고 방지
+  if (localAlbumCount === 0 && remoteAlbumCount > 0) {
+    return normalizeTravelAlbumsState(remote);
+  }
+
   let deletedMerged = mergeAlbumRecords(local.deletedAlbums || [], remote.deletedAlbums || [], {
     localUpdatedAt: local.updatedAt,
     remoteUpdatedAt: remote.updatedAt,
@@ -237,7 +245,8 @@ export function mergeTravelAlbumsStates(
   const localTime = Date.parse(local.updatedAt || "");
   const remoteTime = Date.parse(remote.updatedAt || "");
   // 이 기기에서 방금 복원·저장한 앨범은 서버의 예전 삭제 기록으로 다시 지우지 않음
-  if (localTime >= remoteTime) {
+  // (로컬에 활성 앨범이 있을 때만 — 빈 로컬의 최신 시각으로 삭제 기록을 무시하지 않음)
+  if (localTime >= remoteTime && localAlbumCount > 0) {
     const localActiveIds = new Set(local.albums.map((album) => album.id));
     deletedMerged = deletedMerged.filter((tomb) => !localActiveIds.has(tomb.id));
   }
@@ -263,9 +272,9 @@ export function mergeTravelAlbumsStates(
     deletedAlbums,
     manualTrips,
     updatedAt:
-      localTime >= remoteTime
+      localTime >= remoteTime && localAlbumCount > 0
         ? local.updatedAt
-        : remote.updatedAt || new Date().toISOString(),
+        : remote.updatedAt || local.updatedAt || new Date().toISOString(),
   });
 }
 
@@ -373,6 +382,18 @@ export const saveTravelAlbumsToSupabase = async (
 ): Promise<boolean> => {
   if (!isSupabaseConfigured) return false;
   try {
+    // 빈 로컬이 최신 시각만으로 클라우드 앨범을 통째로 지우는 사고 방지
+    if ((state.albums?.length || 0) === 0) {
+      const remote = await loadTravelAlbumsFromSupabase();
+      if (remote && remote.albums.length > 0) {
+        console.warn(
+          "travel albums: refusing empty upsert over remote albums",
+          remote.albums.length,
+        );
+        return false;
+      }
+    }
+
     const supabase = getSupabase();
     const preparedAlbums: SavedTravelAlbum[] = [];
     for (const album of state.albums) {

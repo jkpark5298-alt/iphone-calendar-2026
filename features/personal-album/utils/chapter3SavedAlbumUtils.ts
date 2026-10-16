@@ -39,7 +39,8 @@ export interface SavedTravelAlbum {
 }
 
 export function albumKindOf(album: Pick<SavedTravelAlbum, "kind"> | null | undefined): AlbumKind {
-  return album?.kind === "personal" ? "personal" : "travel";
+  // 개인앨범 앱: kind 없는 구데이터는 personal로 본다 (travel은 명시된 경우만)
+  return album?.kind === "travel" ? "travel" : "personal";
 }
 
 export function filterAlbumsByKind(
@@ -60,7 +61,13 @@ export type SavedAlbumsRoot = {
 };
 
 function emptyRoot(): SavedAlbumsRoot {
-  return { version: 1, albums: [], deletedAlbums: [], updatedAt: new Date().toISOString() };
+  // 최신 시각을 넣으면 빈 로컬이 원격 앨범을 덮어쓰는 병합 사고가 난다
+  return {
+    version: 1,
+    albums: [],
+    deletedAlbums: [],
+    updatedAt: "1970-01-01T00:00:00.000Z",
+  };
 }
 
 function normalizeDeletedAlbum(raw: Partial<SavedTravelAlbum>): SavedTravelAlbum | null {
@@ -127,7 +134,7 @@ function normalizePhotoArchive(raw: unknown): AlbumPhotoArchive | undefined {
 export function normalizeSavedAlbum(raw: Partial<SavedTravelAlbum>): SavedTravelAlbum | null {
   if (!raw?.id || typeof raw.id !== "string") return null;
   const now = new Date().toISOString();
-  const kind: AlbumKind = raw.kind === "personal" ? "personal" : "travel";
+  const kind: AlbumKind = raw.kind === "travel" ? "travel" : "personal";
   const defaultTitle = kind === "personal" ? "개인앨범" : "여행 앨범";
   return {
     id: raw.id,

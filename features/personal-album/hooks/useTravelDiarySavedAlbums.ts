@@ -268,9 +268,15 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
           merged.deletedAlbums || [],
         );
         const albumsDeduped = repairAndDedupeAlbums(recovered);
+        const localAlbumCount = localState?.albums.length || 0;
+        const remoteAlbumCount = remoteState?.albums.length || 0;
         const hadLocalOnly =
-          localState &&
-          (!remoteState || (localState.updatedAt || "") > (remoteState.updatedAt || ""));
+          localAlbumCount > 0 &&
+          Boolean(
+            localState &&
+              (!remoteState ||
+                (localState.updatedAt || "") > (remoteState.updatedAt || "")),
+          );
         const hadDuplicates = albumsDeduped.length < merged.albums.length;
         const beforeStatusKey = merged.albums
           .map((a) => `${a.id}:${a.status}`)
@@ -281,6 +287,12 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
           .sort()
           .join("|");
         const statusRepaired = beforeStatusKey !== afterStatusKey;
+        // 빈 로컬·빈 병합 결과를 클라우드에 올리지 않음 (원격 앨범 삭제 사고 방지)
+        const safeToPush =
+          albumsDeduped.length > 0 || remoteAlbumCount === 0;
+        // 클라우드가 비었는데 이 기기에 앨범이 있으면 복구 업로드 (빈 덮어쓰기 사고 복구)
+        const needsCloudRestore =
+          albumsDeduped.length > 0 && remoteAlbumCount === 0;
 
         applyMergedState(
           { ...merged, albums: albumsDeduped },
@@ -289,10 +301,12 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
             : "PC·아이폰 Supabase 동기화 완료 (서버 자료 없음)",
           {
             pushRemote: Boolean(
-              hadLocalOnly ||
-                (localState && !remoteState) ||
-                hadDuplicates ||
-                statusRepaired,
+              safeToPush &&
+                (hadLocalOnly ||
+                  needsCloudRestore ||
+                  (localAlbumCount > 0 && !remoteState) ||
+                  hadDuplicates ||
+                  statusRepaired),
             ),
           },
         );
@@ -398,16 +412,16 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
       const originAlbumId = input.originAlbumId?.trim() || undefined;
       const byId = input.id ? prev.find((a) => a.id === input.id) : undefined;
       const kind: AlbumKind =
-        input.kind === "personal"
-          ? "personal"
-          : input.kind === "travel"
-            ? "travel"
-            : byId?.kind === "personal"
-              ? "personal"
-              : "travel";
+        input.kind === "travel"
+          ? "travel"
+          : input.kind === "personal"
+            ? "personal"
+            : byId?.kind === "travel"
+              ? "travel"
+              : "personal";
       const defaultTitle = kind === "personal" ? "개인앨범" : "여행 앨범";
       const sameKind = (album: SavedTravelAlbum) =>
-        (album.kind === "personal" ? "personal" : "travel") === kind;
+        (album.kind === "travel" ? "travel" : "personal") === kind;
 
       let existing: SavedTravelAlbum | undefined;
       if (input.status === "draft") {
