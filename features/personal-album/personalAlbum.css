@@ -2398,10 +2398,52 @@
 
 .personalAlbumRoot .chapter3AlbumViewerHeader {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.personalAlbumRoot .chapter3AlbumViewerHeader .secondaryButton.on {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerYears {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.personalAlbumRoot .chapter3AlbumViewerYear {
+  flex: 0 0 auto;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: #111827;
+  color: #e5e7eb;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerYear.on {
+  border-color: #38bdf8;
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerMapPane {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  overflow: hidden;
 }
 
 .personalAlbumRoot .chapter3AlbumViewerTitle {

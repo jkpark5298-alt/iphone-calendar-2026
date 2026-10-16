@@ -13,7 +13,6 @@ import {
 import { openTravelAlbumPdfWindow } from "../utils/albumPdfUtils";
 import { canSaveAlbumPcBackup, formatAlbumBackupHint } from "../utils/albumFullBackupUtils";
 import { photoDisplayUrl } from "../utils/chapter3AlbumSyncUtils";
-import { Chapter3AlbumBrowseView } from "./Chapter3AlbumBrowseView";
 import { Chapter3AlbumFullscreenViewer } from "./Chapter3AlbumFullscreenViewer";
 import { EmptyState } from "./SharedComponents";
 
@@ -96,7 +95,6 @@ export function Chapter3SavedAlbumList({
       cancelled = true;
     };
   }, [variant]);
-  const [browseAlbumId, setBrowseAlbumId] = useState<string | null>(null);
   const [deletedSectionOpen, setDeletedSectionOpen] = useState(false);
   const [selectedDeletedId, setSelectedDeletedId] = useState<string | null>(null);
   const [viewerStartPhotoId, setViewerStartPhotoId] = useState<string | null>(null);
@@ -151,10 +149,6 @@ export function Chapter3SavedAlbumList({
   const viewerAlbum = useMemo(
     () => albums.find((album) => album.id === viewerAlbumId) || null,
     [albums, viewerAlbumId],
-  );
-  const browseAlbum = useMemo(
-    () => albums.find((album) => album.id === browseAlbumId) || null,
-    [albums, browseAlbumId],
   );
 
   const visibleAlbums = useMemo(() => {
@@ -303,16 +297,9 @@ export function Chapter3SavedAlbumList({
                 <div className="chapter3SavedAlbumActions">
                   <button
                     type="button"
-                    className={`secondaryButton${
+                    className={`secondaryButton chapter3AlbumViewerButton${
                       variant === "saved" ? " chapter3AlbumConfirmViewButton" : ""
                     }`}
-                    onClick={() => setBrowseAlbumId(album.id)}
-                  >
-                    보기
-                  </button>
-                  <button
-                    type="button"
-                    className="secondaryButton chapter3AlbumViewerButton"
                     disabled={photoCount === 0}
                     onClick={() => {
                       setViewerStartPhotoId(null);
@@ -389,7 +376,6 @@ export function Chapter3SavedAlbumList({
                         )
                       ) {
                         onDelete(album.id);
-                        if (browseAlbumId === album.id) setBrowseAlbumId(null);
                         if (viewerAlbumId === album.id) setViewerAlbumId(null);
                       }
                     }}
@@ -403,24 +389,12 @@ export function Chapter3SavedAlbumList({
         </div>
       )}
 
-      {browseAlbum && (
-        <Chapter3AlbumBrowseView
-          album={browseAlbum}
-          onClose={() => setBrowseAlbumId(null)}
-          enableGroupBy={enableGroupBy}
-          onUpdateMemo={
-            onUpdatePhotoMemo
-              ? (photoId, memo) => onUpdatePhotoMemo(browseAlbum.id, photoId, memo)
-              : undefined
-          }
-        />
-      )}
-
       {viewerAlbum && (
         <Chapter3AlbumFullscreenViewer
           key={`${viewerAlbum.id}:${viewerStartPhotoId ?? "start"}`}
           album={viewerAlbum}
           startPhotoId={viewerStartPhotoId ?? undefined}
+          enableYearFilter={enableGroupBy}
           onClose={() => {
             setViewerAlbumId(null);
             setViewerStartPhotoId(null);
