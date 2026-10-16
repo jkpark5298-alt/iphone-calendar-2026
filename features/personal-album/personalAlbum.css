@@ -1,0 +1,3543 @@
+/* 개인 앨범 전용 스타일 — travel-diary travelDiary.css 에서 사용 클래스만 추출하여 .personalAlbumRoot 하위로 스코프 */
+.personalAlbumRoot, .personalAlbumRoot * { box-sizing: border-box; }
+.personalAlbumRoot { margin: 0; }
+.personalAlbumRoot button, .personalAlbumRoot input, .personalAlbumRoot textarea { font-family: inherit; }
+.personalAlbumRoot button:disabled { opacity: 0.45; cursor: not-allowed; }
+.personalAlbumRoot .eyebrow {
+  margin: 0 0 8px;
+  color: #38bdf8;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+.personalAlbumRoot .storageStatus {
+  margin: 16px 40px 0;
+  padding: 13px 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border-radius: 16px;
+  border: 1px solid rgba(52, 211, 153, 0.22);
+  background: rgba(6, 78, 59, 0.22);
+}
+/* Chapter 1 — simplified layout */
+.personalAlbumRoot .storageStatus strong {
+  display: block;
+  color: #bbf7d0;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.personalAlbumRoot .storageStatus span,
+.personalAlbumRoot .storageStatus small {
+  color: #a7f3d0;
+  font-size: 12px;
+}
+.personalAlbumRoot .storageActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.personalAlbumRoot .storageActions button,
+.personalAlbumRoot .smallDangerButton {
+  border: 1px solid rgba(248, 113, 113, 0.42);
+  background: rgba(127, 29, 29, 0.22);
+  color: #fecaca;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.personalAlbumRoot .smallDangerButton {
+  margin-top: 10px;
+}
+.personalAlbumRoot .chapterTitleBox {
+  background: rgba(14, 116, 144, 0.13);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 18px;
+  padding: 18px;
+}
+.personalAlbumRoot .chapterTitleBox span {
+  display: inline-block;
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.personalAlbumRoot .chapterTitleBox h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.personalAlbumRoot .chapterTitleBox p {
+  margin: 8px 0 0;
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.personalAlbumRoot .layoutGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 22px;
+  padding: 24px 40px;
+}
+.personalAlbumRoot .layoutGrid.chapterFullWidth {
+  grid-template-columns: 1fr;
+}
+.personalAlbumRoot .leftColumn {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.personalAlbumRoot .card {
+  background: rgba(15, 23, 42, 0.84);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.24);
+}
+.personalAlbumRoot .compactCard { position: sticky; top: 16px; }
+.personalAlbumRoot .cardHeader {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+.personalAlbumRoot .cardNumber {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #38bdf8, #7c3aed);
+  color: white;
+  font-weight: 800;
+}
+.personalAlbumRoot .cardHeader h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.personalAlbumRoot .cardHeader p {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.personalAlbumRoot .secondaryButton, .personalAlbumRoot .primaryButton, .personalAlbumRoot .gradientButton {
+  border: 0;
+  cursor: pointer;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.personalAlbumRoot .primaryButton {
+  background: #38bdf8;
+  color: #082f49;
+  padding: 12px 16px;
+}
+.personalAlbumRoot .secondaryButton {
+  background: #334155;
+  color: #dbeafe;
+  padding: 12px 16px;
+}
+.personalAlbumRoot .full { width: 100%; margin-top: 12px; }
+.personalAlbumRoot .gradientButton {
+  width: 100%;
+  margin-top: 14px;
+  padding: 14px 16px;
+  color: white;
+  background: linear-gradient(135deg, #0ea5e9, #7c3aed);
+  box-shadow: 0 10px 26px rgba(14, 165, 233, 0.2);
+}
+
+.personalAlbumRoot .dropZone {
+  border: 2px dashed #334155;
+  border-radius: 16px;
+  background: #020617;
+  padding: 34px 18px;
+  text-align: center;
+}
+.personalAlbumRoot .dropZone.dragOver {
+  border-color: #38bdf8;
+  background: rgba(14, 116, 144, 0.16);
+}
+.personalAlbumRoot .dropZone p { color: #94a3b8; margin: 0 0 16px; }
+.personalAlbumRoot .emptyState {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.personalAlbumRoot .emptyState {
+  min-height: 110px;
+  border: 1px dashed #334155;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  background: rgba(2, 6, 23, 0.45);
+}
+.personalAlbumRoot .emptyState span { font-size: 34px; }
+.personalAlbumRoot .emptyState p { margin: 6px 0 0; }
+.personalAlbumRoot .searchBox {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  background: #020617;
+  margin-bottom: 8px;
+}
+.personalAlbumRoot .searchBox input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  padding: 6px 0;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+.personalAlbumRoot .searchBox button {
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: #1e293b;
+  color: #cbd5e1;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.personalAlbumRoot .smallActionButton {
+  padding: 7px 10px;
+  min-height: auto;
+  font-size: 12px;
+}
+
+.personalAlbumRoot .searchBox input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  color: #e2e8f0;
+  padding: 11px 12px;
+  font-size: 13px;
+}
+
+/* AI 보고서 뷰 모드 스타일 및 프리미엄 서식 */
+
+/* 마크다운 뷰어 타이포그래피 */
+
+/* 상태별 프리미엄 배지 */
+
+/* 원본 본문 텍스트 관리 카드 */
+
+/* AI 보고서 첨부 이미지 갤러리 스타일 */
+
+/* 인쇄 및 PDF 저장 전용 스타일 (중요) */
+
+@media print {
+  /* 1. 화면 전체 감추기 및 배경색 초기화 */
+  .personalAlbumRoot, .personalAlbumRoot {
+    background: white !important;
+    color: black !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  /* 2. 인쇄 비대상 숨김 처리 */
+  
+  /* 3. 고정 오버레이 해제 및 전체 인쇄 흐름 적용 */
+  .personalAlbumRoot .overlay {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+  }
+  
+  /* 6. 인쇄 전용 헤더 서식 */
+  
+  /* 7. 보고서 내용 인쇄 레이아웃 */
+  
+  /* 마크다운 타이포그래피 인쇄 최적화 */
+}
+
+.personalAlbumRoot .searchBox {
+  margin-bottom: 12px;
+}
+
+.personalAlbumRoot .supabaseStatusPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: calc(100% - 36px);
+  margin: 10px auto 0;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  background: rgba(15, 23, 42, 0.5);
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.personalAlbumRoot .supabaseStatusPanel span {
+  color: #7dd3fc;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.personalAlbumRoot .supabaseStatusPanel strong {
+  color: #cbd5e1;
+  font-weight: 700;
+}
+
+@media (max-width: 560px) {
+
+  .personalAlbumRoot .supabaseStatusPanel {
+    width: calc(100% - 36px);
+    justify-content: flex-start;
+    border-radius: 12px;
+    margin-top: 8px;
+  }
+}
+
+.personalAlbumRoot .bundleList { display: grid; gap: 10px; max-height: 58vh; overflow-y: auto; padding-right: 2px; }
+.personalAlbumRoot .bundleCard {
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-left: 4px solid #38bdf8;
+  border-radius: 14px;
+  padding: 12px;
+}
+.personalAlbumRoot .bundleCard h4 { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+.personalAlbumRoot .overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 9999 !important;
+  padding: 18px;
+  padding-top: max(18px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.personalAlbumRoot .loadingCard {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 36px);
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 22px;
+  padding: 26px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.52);
+}
+.personalAlbumRoot .loadingCard { text-align: center; }
+.personalAlbumRoot .loadingIcon { font-size: 48px; }
+.personalAlbumRoot .loadingCard h3 { margin: 8px 0 6px; color: #38bdf8; }
+.personalAlbumRoot .loadingCard p { margin: 0; color: #94a3b8; font-size: 14px; line-height: 1.55; }
+.personalAlbumRoot .loadingBar { height: 6px; background: #1e293b; border-radius: 999px; overflow: hidden; margin-top: 20px; }
+.personalAlbumRoot .loadingBar span { display: block; height: 100%; width: 42%; background: #38bdf8; border-radius: 999px; animation: loadingMove 1.2s ease-in-out infinite; }
+@keyframes loadingMove { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+
+.personalAlbumRoot .naverMapMockBox {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  background: linear-gradient(135deg, rgba(20, 83, 45, 0.3), rgba(15, 23, 42, 0.85));
+}
+
+.personalAlbumRoot .naverMapMockBox strong {
+  color: #86efac;
+}
+
+.personalAlbumRoot .naverMapMockBox p {
+  margin: 6px 0 0;
+  color: #cbd5e1;
+  font-size: 0.86rem;
+}
+
+
+/* iPhone modal scroll fix */
+@media (max-width: 640px) {
+  .personalAlbumRoot .overlay {
+    place-items: start center;
+    padding: 12px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(28px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .personalAlbumRoot .loadingCard {
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 900px) {
+  .personalAlbumRoot .layoutGrid { grid-template-columns: 1fr; padding: 18px; }
+  .personalAlbumRoot .compactCard { position: static; }
+}
+@media (max-width: 560px) {
+  .personalAlbumRoot .overlay {
+    padding: 10px;
+    place-items: center;
+  }
+  .personalAlbumRoot .card { padding: 15px; border-radius: 16px; }
+}
+
+/* ===== Chapter 3 inline grid mobile fallback ===== */
+/* ===== End Chapter 3 inline grid mobile fallback ===== */
+
+
+/* ===== Chapter 3 responsive layout fix for iPhone ===== */
+
+@media (max-width: 1100px) {
+  .personalAlbumRoot,
+  .personalAlbumRoot {
+    overflow-x: hidden !important;
+  }
+}
+/* ===== End Chapter 3 responsive layout fix for iPhone ===== */
+
+
+
+/* ===== Chapter 3 AI editable result controls ===== */
+/* ===== End Chapter 3 AI editable result controls ===== */
+
+
+
+/* ===== Chapter 3 manual AI edit panel ===== */
+/* ===== End Chapter 3 manual AI edit panel ===== */
+
+
+
+/* ===== Chapter 3 keyword input and factcheck display ===== */
+/* ===== End Chapter 3 keyword input and factcheck display ===== */
+
+.personalAlbumRoot .secondaryButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+
+/* ===== Chapter 1 saved card count badges ===== */
+/* ===== End Chapter 1 saved card count badges ===== */
+
+
+
+
+
+/* ===== Chapter 1 detail media summary gallery ===== */
+/* ===== End Chapter 1 detail media summary gallery ===== */
+
+
+
+
+
+/* CH3_EXACT_PC_HALF_LAYOUT */
+/* END_CH3_EXACT_PC_HALF_LAYOUT */
+
+
+/* CH3_FORCE_HALF_LAYOUT_CLASS */
+/* END_CH3_FORCE_HALF_LAYOUT_CLASS */
+
+
+/* CH3_MANUAL_REPORT_INPUT_STYLE */
+/* END_CH3_MANUAL_REPORT_INPUT_STYLE */
+
+
+/* CH3_REPORT_PANEL_TOP_STYLE */
+/* END_CH3_REPORT_PANEL_TOP_STYLE */
+
+
+/* CH3_REPORT_PANEL_FULL_WIDTH_FIX */
+/* END_CH3_REPORT_PANEL_FULL_WIDTH_FIX */
+
+
+/* CH3_REPORT_TEXTAREA_FORCE_FULL_WIDTH_FINAL */
+/* END_CH3_REPORT_TEXTAREA_FORCE_FULL_WIDTH_FINAL */
+
+
+/* CH3_REPORT_UNDER_EACH_CARD_STYLE */
+/* END_CH3_REPORT_UNDER_EACH_CARD_STYLE */
+
+
+/* CH3_IPHONE_LAYOUT_AND_PASTE_FINAL_FIX */
+@media (max-width: 760px) {
+  .personalAlbumRoot,
+  .personalAlbumRoot {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .personalAlbumRoot .chapterTitleBox,
+  .personalAlbumRoot .card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+/* END_CH3_IPHONE_LAYOUT_AND_PASTE_FINAL_FIX */
+
+/* CH3_RICH_TEXT_EDITOR_STYLE */
+/* END_CH3_RICH_TEXT_EDITOR_STYLE */
+
+
+/* CH3_RICH_EDITOR_VISIBLE_AND_LAYOUT_FIX */
+
+/* PC: Chapter 3 醫뚯슦 50:50 */
+
+/* iPhone / 醫곸? ?붾㈃: 臾댁“嫄?1??*/
+
+/* Text ?몄쭛湲?諛뺤뒪 */
+/* END_CH3_RICH_EDITOR_VISIBLE_AND_LAYOUT_FIX */
+
+
+/* CH3_RICH_TOOLBAR_DESIGN_FINAL */
+/* END_CH3_RICH_TOOLBAR_DESIGN_FINAL */
+
+
+/* CH3_FINAL_EXACT_50_50_LAYOUT_FIX */
+
+/* PC: 醫뚯륫 ?낅젰 50% / ?곗륫 ??ν븿 50% */
+
+/* iPhone / 醫곸? ?붾㈃: 臾댁“嫄?1??*/
+/* END_CH3_FINAL_EXACT_50_50_LAYOUT_FIX */
+
+
+/* CH3_IPHONE_ONE_COLUMN_PC_HALF_FINAL */
+
+/* PC / ?명듃遺? 5:5 */
+
+/* iPhone / iPad ?몃줈 / 醫곸? ?붾㈃: 臾댁“嫄?1??*/
+@media screen and (max-width: 1100px) {
+  .personalAlbumRoot,
+  .personalAlbumRoot {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .personalAlbumRoot .searchBox {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 10px !important;
+  }
+
+  .personalAlbumRoot .searchBox input {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* ?꾩씠??Safari?먯꽌 ?곗튂 ?섍꼍?대㈃ ??媛뺥븯寃?1??*/
+/* END_CH3_IPHONE_ONE_COLUMN_PC_HALF_FINAL */
+
+
+/* CH3_EXACT_HALF_STRONG_FINAL */
+
+/* PC: Chapter 3 ?뺥솗??5:5 */
+
+/* ?꾩씠???쒕툝由?醫곸? ?붾㈃: 臾댁“嫄?1??*/
+
+/* ?곗튂 湲곌린?먯꽌???붾㈃ ??씠 ?볦뼱??1???곗꽑 */
+/* END_CH3_EXACT_HALF_STRONG_FINAL */
+
+
+/* CH3_REAL_50_50_LAYOUT_FINAL */
+
+/* PC: ?ㅼ젣 5:5 */
+
+/* ?꾩씠??/ 醫곸? ?붾㈃: 臾댁“嫄?1??*/
+
+/* ?곗튂 湲곌린: 臾댁“嫄?1??*/
+/* END_CH3_REAL_50_50_LAYOUT_FINAL */
+
+
+/* CH3_RUNTIME_MOBILE_ONE_COLUMN_FINAL */
+
+/* CH3_IPHONE_PRIORITY_ONE_COLUMN_OVERRIDE */
+/* PC 5:5는 유지하고, 아이폰/터치기기에서는 마지막에 무조건 1열로 덮어쓴다. */
+
+/* PC에서는 현재 확정된 5:5 유지 */
+/* END_CH3_IPHONE_PRIORITY_ONE_COLUMN_OVERRIDE */
+
+/* ==========================================================================
+   Print Styles for Travel Plan PDF Saving
+   ========================================================================== */
+@media print {
+  /* 1. Global Reset for Print */
+  .personalAlbumRoot, .personalAlbumRoot, .personalAlbumRoot #__next, .personalAlbumRoot main {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: auto !important;
+    box-shadow: none !important;
+  }
+
+  /* 2. Hide Global Layout Components & Unrelated Cards */
+  .personalAlbumRoot .storageStatus,
+  .personalAlbumRoot .chapterTitleBox {
+    display: none !important;
+  }
+
+  /* 3. Re-structure Grid to single column and clear page padding */
+  .personalAlbumRoot .layoutGrid {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  .personalAlbumRoot .leftColumn {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide Card 1 (Plan Generator Form) and Card 3 (Share Panel) */
+  .personalAlbumRoot .leftColumn > .card {
+    display: none !important;
+  }
+  
+  /* Show only Card 2 (Plan Details) */
+  
+  /* Style the Printed Card Header */
+
+  /* 4. Hide Non-Printable Elements Inside Card 2 (Map remains visible for print) */
+
+  /* Force Google Map to be visible and clear shadow/dark border for print */
+
+  /* 5. Format Plan Container & Day Cards */
+
+  /* Time Blocks (Morning/Afternoon) for Print */
+
+  /* Force accordion to show all details in printing */
+
+  /* Meal Recommendation Box */
+
+  /* Plan Meta Grid at bottom of day card */
+}
+
+/* ==========================================================================
+   Compact Timeline & Accordion Interactive UI Styles
+   ========================================================================== */
+
+/* Timeline Vertical Line */
+
+/* Timeline Round Dot */
+
+@keyframes slideDownFade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 요약 행 미니 썸네일 */
+
+/* 괄호 설명 텍스트 */
+
+/* 맛집 및 숙소 구글맵 검색 연동 링크 */
+
+/* 일자별 개별 지도 컨테이너 */
+
+/* Chapter 2 plan structured UI */
+
+.personalAlbumRoot .naverMapManualPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalAlbumRoot .naverMapManualPanel.compact {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(251, 191, 36, 0.2);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.personalAlbumRoot .naverMapManualTitle {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.personalAlbumRoot .naverMapManualList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalAlbumRoot .naverMapManualRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.personalAlbumRoot .naverMapManualRowHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.personalAlbumRoot .naverMapManualRowFields {
+  display: grid;
+  grid-template-columns: 1fr 28px;
+  gap: 6px;
+  align-items: center;
+}
+
+.personalAlbumRoot .naverMapManualPlaceHint {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.personalAlbumRoot .naverMapManualPlaceName {
+  font-size: 12px;
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.personalAlbumRoot .naverMapManualAddressInput {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.personalAlbumRoot .naverMapManualSearchLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #03c75a;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.personalAlbumRoot .naverMapManualRetryBtn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.personalAlbumRoot .naverMapManualSaveHint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.personalAlbumRoot .naverMapToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.personalAlbumRoot .naverMapToolBtn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(30, 41, 59, 0.8);
+  color: #cbd5e1;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .naverMapToolBtn.active {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
+.personalAlbumRoot .naverMapToolHint {
+  margin-left: auto;
+  font-size: 10px;
+  color: #64748b;
+}
+
+/* Chapter 3 — 여행 지도 & 앨범 */
+.personalAlbumRoot .chapter3SubNav {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0 8px;
+}
+
+.personalAlbumRoot .chapter3SubNav button {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.6);
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.personalAlbumRoot .chapter3SubNav button.active {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+}
+
+.personalAlbumRoot .chapter3SubNav button.tabPersonal {
+  color: #d8b4fe;
+}
+.personalAlbumRoot .chapter3SubNav button.tabPersonal.active {
+  border-color: rgba(168, 85, 247, 0.55);
+  background: rgba(168, 85, 247, 0.14);
+  color: #a855f7;
+}
+
+.personalAlbumRoot .chapterTitleBox h2.chapterTitleMap {
+  color: #22c55e;
+}
+
+.personalAlbumRoot .chapterTitleBox h2 .navPersonal {
+  color: #a855f7;
+  font-style: normal;
+}
+
+.personalAlbumRoot .chapter3AlbumGroupBy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.personalAlbumRoot .chapter3AlbumGroupByLabel {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-right: 4px;
+}
+
+.personalAlbumRoot .chapter3AlbumGroupByBtn {
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  background: rgba(15, 23, 42, 0.55);
+  color: #d8b4fe;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.personalAlbumRoot .chapter3AlbumGroupByBtn.on {
+  border-color: rgba(168, 85, 247, 0.65);
+  background: rgba(168, 85, 247, 0.18);
+  color: #a855f7;
+  font-weight: 700;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseMapEmpty {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  color: #94a3b8;
+  font-size: 13px;
+  text-align: center;
+  padding: 16px;
+}
+
+.personalAlbumRoot .chapter3DayTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.personalAlbumRoot .chapter3DayTab {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.5);
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.personalAlbumRoot .chapter3DayTab.active {
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.personalAlbumRoot .chapter3MapLayout {
+  display: flex;
+  gap: 12px;
+  min-height: 400px;
+}
+
+.personalAlbumRoot .chapter3MapSidebar {
+  width: 32%;
+  min-width: 220px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(2, 6, 23, 0.5);
+  overflow-y: auto;
+  max-height: 480px;
+}
+
+.personalAlbumRoot .chapter3MapSidebar h4 {
+  margin: 8px 0 6px;
+  font-size: 12px;
+  color: #38bdf8;
+}
+
+.personalAlbumRoot .chapter3MapPanel {
+  flex: 1;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #020617;
+}
+
+.personalAlbumRoot .chapter3MapToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  font-size: 12px;
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3MapToolbarActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.personalAlbumRoot .chapter3NaverLink {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #03c75a;
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.personalAlbumRoot .chapter3PlaceList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.personalAlbumRoot .chapter3PlaceItem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-left-width: 3px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3PlaceItem strong {
+  font-size: 12px;
+}
+
+.personalAlbumRoot .chapter3PlaceItem small {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3PlaceItemIcon {
+  font-size: 12px;
+}
+
+.personalAlbumRoot .chapter3PlaceItemLabel {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.personalAlbumRoot .chapter3LegList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalAlbumRoot .chapter3LegItem {
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.personalAlbumRoot .chapter3LegMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.personalAlbumRoot .chapter3LegStep {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.18);
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 700;
+}
+.personalAlbumRoot .chapter3RouteTotal {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(12, 74, 110, 0.22);
+  font-size: 13px;
+  color: #e2e8f0;
+}
+.personalAlbumRoot .chapter3SimRoutePreview {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(12, 74, 110, 0.18);
+}
+.personalAlbumRoot .chapter3SimRoutePreview strong {
+  font-size: 13px;
+  color: #bae6fd;
+}
+.personalAlbumRoot .chapter3SimRoutePreview > span {
+  font-size: 13px;
+  color: #e2e8f0;
+}
+.personalAlbumRoot .chapter3SimRoutePreview ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.personalAlbumRoot .chapter3SimRoutePreview li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.personalAlbumRoot .chapter3SimSavedLegs {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+.personalAlbumRoot .chapter3SimSavedLegs small {
+  display: block;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.personalAlbumRoot .chapter3Muted {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.personalAlbumRoot .chapter3AlbumSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.personalAlbumRoot .chapter3AlbumExifUpload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px;
+  border: 1px dashed rgba(56, 189, 248, 0.45);
+  border-radius: 12px;
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.personalAlbumRoot .chapter3AlbumExifUpload p {
+  margin: 0;
+  flex: 1;
+  min-width: 220px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+.personalAlbumRoot .chapter3AlbumExifUploadCount {
+  flex: 1 0 100%;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3AlbumExifUploadActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 0 100%;
+}
+
+.personalAlbumRoot .chapter3AlbumDayToolbar {
+  padding: 10px 12px 0;
+}
+
+.personalAlbumRoot .chapter3AlbumDayToolbarHint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3AlbumDayDateRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.personalAlbumRoot .chapter3AlbumDayDateRow .chapter3FieldLabel {
+  margin: 0;
+  min-width: 160px;
+}
+
+.personalAlbumRoot .chapter3AlbumDayDeleteBtn {
+  margin-left: auto;
+}
+
+.personalAlbumRoot .chapter3AlbumDay {
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.personalAlbumRoot .chapter3AlbumDayHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.7);
+  border: none;
+  color: #e2e8f0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.personalAlbumRoot .chapter3AlbumDayTitle {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.personalAlbumRoot .chapter3AlbumDayMeta {
+  margin-left: auto;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3AlbumDayBody {
+  padding: 10px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalAlbumRoot .chapter3AlbumPlace {
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.personalAlbumRoot .chapter3AlbumPlaceHeader {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: rgba(2, 6, 23, 0.6);
+  border: none;
+  color: #f1f5f9;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.personalAlbumRoot .chapter3AlbumPhotoCount {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3AlbumPlaceBody {
+  padding: 10px 12px 14px;
+}
+
+.personalAlbumRoot .chapter3PlaceAddress {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0 0 8px;
+}
+
+.personalAlbumRoot .chapter3AlbumPhotoPlaces {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalAlbumRoot .chapter3AlbumPhotoPlaceItem {
+  margin: 0;
+}
+
+.personalAlbumRoot .chapter3FieldLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: #cbd5e1;
+  margin-bottom: 10px;
+}
+
+.personalAlbumRoot .chapter3Textarea {
+  min-height: 72px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.8);
+  color: #f8fafc;
+  resize: vertical;
+}
+
+.personalAlbumRoot .chapter3PhotoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.personalAlbumRoot .chapter3PhotoAddSlot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  border: 2px dashed rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  color: #64748b;
+  background: rgba(15, 23, 42, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.personalAlbumRoot .chapter3HiddenFileInput {
+  position: fixed;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.personalAlbumRoot .chapter3PhotoActionBtn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.personalAlbumRoot .chapter3PhotoAddSlot span {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.personalAlbumRoot .chapter3AlbumSourceNav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.personalAlbumRoot .chapter3AlbumSourceNav button {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.5);
+  color: #cbd5e1;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3AlbumSourceNav button.active {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+}
+
+.personalAlbumRoot .chapter3AlbumLibraryFilter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -4px 0 4px;
+}
+
+.personalAlbumRoot .chapter3AlbumLibraryFilter button {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: transparent;
+  color: #cbd5e1;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3AlbumLibraryFilter button.active {
+  border-color: rgba(250, 204, 21, 0.5);
+  background: rgba(250, 204, 21, 0.12);
+  color: #fde047;
+}
+
+.personalAlbumRoot .chapter3AlbumTab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedBox {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedToggle {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedToggle.active {
+  border-color: rgba(56, 189, 248, 0.65);
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedToggleHint {
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedHelp {
+  margin: 8px 0 0;
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedBox h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedList {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedList li {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedSelect {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: transparent;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedSelect.active {
+  border-color: rgba(56, 189, 248, 0.7);
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedDetail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 0 4px 4px;
+}
+
+.personalAlbumRoot .chapter3AlbumDeletedDetail p {
+  margin: 0;
+}
+
+.personalAlbumRoot .chapter3ManualPlanEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(2, 6, 23, 0.35);
+}
+
+.personalAlbumRoot .chapter3ManualTripBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.personalAlbumRoot .chapter3ManualTripBar .chapter3SimSelect {
+  flex: 1;
+  min-width: 160px;
+}
+
+.personalAlbumRoot .chapter3ManualMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.personalAlbumRoot .chapter3ManualMetaGrid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3ManualDayEditor {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.personalAlbumRoot .chapter3ManualDayFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.personalAlbumRoot .chapter3ManualDayFields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3ManualScheduleBlock {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.personalAlbumRoot .chapter3ManualScheduleHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.personalAlbumRoot .chapter3ManualScheduleHead h5 {
+  margin: 0;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3ManualSegment {
+  margin-bottom: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.personalAlbumRoot .chapter3ManualSegmentHead {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.personalAlbumRoot .chapter3ManualSegmentHead .chapter3SimInput {
+  flex: 1;
+}
+
+.personalAlbumRoot .chapter3ManualSegmentNotes {
+  margin-top: 6px;
+  min-height: 48px;
+}
+
+.personalAlbumRoot .chapter3ManualEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.personalAlbumRoot .chapter3DayTabAdd {
+  border-style: dashed !important;
+  opacity: 0.85;
+}
+
+.personalAlbumRoot .chapter3SimNotice {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3SimConfigBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+
+.personalAlbumRoot .chapter3SimConfigBar label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+  min-width: 140px;
+  flex: 1;
+}
+
+.personalAlbumRoot .chapter3MapRegionToggle {
+  display: inline-flex;
+  gap: 0;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(2, 6, 23, 0.55);
+  margin-bottom: 2px;
+  flex-shrink: 0;
+}
+
+.personalAlbumRoot .chapter3MapRegionToggle .chapter3MapModeButton {
+  min-width: 96px;
+  padding: 8px 12px;
+  font-weight: 600;
+}
+
+.personalAlbumRoot .chapter3MapModeToggle {
+  display: inline-flex;
+  gap: 0;
+  margin: 0 0 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(2, 6, 23, 0.35);
+}
+
+.personalAlbumRoot .chapter3MapModeButton {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3MapModeButton + .chapter3MapModeButton {
+  border-left: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.personalAlbumRoot .chapter3MapModeButton.active {
+  background: rgba(56, 189, 248, 0.16);
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3SimActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.personalAlbumRoot .chapter3SimEditor {
+  margin-bottom: 12px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(2, 6, 23, 0.4);
+}
+
+.personalAlbumRoot .chapter3SimEditorHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3SimAddButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.personalAlbumRoot .chapter3SimPlaceRow {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) 100px auto;
+  gap: 6px;
+  margin-bottom: 8px;
+  align-items: start;
+}
+
+.personalAlbumRoot .chapter3SimPlaceLookup {
+  min-width: 0;
+}
+
+.personalAlbumRoot .chapter3SimPlaceLookup .travelPlaceLookupRow {
+  grid-template-columns: 1fr 1.2fr;
+}
+
+.personalAlbumRoot .chapter3SimSavePanel {
+  margin: 0 0 14px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: rgba(14, 165, 233, 0.06);
+}
+
+.personalAlbumRoot .chapter3SimSaveBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.personalAlbumRoot .chapter3SimSaveBar .chapter3FieldLabel {
+  flex: 1;
+  min-width: 180px;
+  margin: 0;
+}
+
+.personalAlbumRoot .chapter3SimSavedList {
+  margin-top: 12px;
+}
+
+.personalAlbumRoot .chapter3SimSavedList strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3SimSavedList ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalAlbumRoot .chapter3SimSavedList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(2, 6, 23, 0.35);
+}
+
+.personalAlbumRoot .chapter3SimSavedList li.active {
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.personalAlbumRoot .chapter3SimSavedList li p {
+  margin: 0;
+  font-size: 13px;
+  color: #f8fafc;
+}
+
+.personalAlbumRoot .chapter3SimSavedList li small {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.personalAlbumRoot .chapter3SimSavedActions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.personalAlbumRoot .chapter3AlbumDayMap {
+  margin: 12px 0 16px;
+}
+
+.personalAlbumRoot .chapter3AlbumDayMap h5 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3AlbumDayMapPanel {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.personalAlbumRoot .chapter3AlbumDayMapNote {
+  margin: 0;
+  padding: 8px 12px 0;
+  font-size: 12px;
+}
+
+.personalAlbumRoot .chapter3SimInput,
+.personalAlbumRoot .chapter3SimSelect {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.8);
+  color: #f8fafc;
+  font-size: 12px;
+  width: 100%;
+}
+
+.personalAlbumRoot .chapter3DayTabLabel {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  width: 72px;
+  padding: 0;
+}
+
+.personalAlbumRoot .chapter3ManualPlaceInput {
+  flex: 1;
+}
+
+.personalAlbumRoot .chapter3SegmentPhotoSection {
+  margin-top: 8px;
+}
+
+.personalAlbumRoot .chapter3PhotoAlbumToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: rgba(56, 189, 248, 0.06);
+  color: #7dd3fc;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3PhotoAlbumToggle.active {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.personalAlbumRoot .chapter3SegmentPhotoPanel {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  background: rgba(2, 6, 23, 0.35);
+  outline: none;
+}
+
+.personalAlbumRoot .chapter3SegmentPhotoPanel:focus {
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.personalAlbumRoot .chapter3SegmentPhotoHint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+.personalAlbumRoot .chapter3PhotoActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.personalAlbumRoot .chapter3PhotoActionBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.8);
+  color: #e2e8f0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3PhotoActionHint {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMap {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.personalAlbumRoot .chapter3DayPhotoMap h5 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapLayout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapMain {
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapSelectedAddress {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(15, 23, 42, 0.65);
+  font-size: 12px;
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapMemoField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapMemoLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapSelectedNum {
+  min-width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapSelectedPlace {
+  color: #7dd3fc;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapMapNote {
+  margin: 0;
+  padding: 6px 12px 10px;
+  font-size: 11px;
+}
+
+.personalAlbumRoot .chapter3PhotoRouteOsmShell {
+  position: relative;
+  width: 100%;
+}
+
+.personalAlbumRoot .chapter3PhotoRouteOsmMap {
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  z-index: 1;
+}
+
+.personalAlbumRoot .chapter3PhotoRouteOsmLoading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #94a3b8;
+  font-size: 13px;
+  background: rgba(15, 23, 42, 0.75);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.personalAlbumRoot .chapter3PhotoRouteLeafletIcon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.personalAlbumRoot .chapter3PhotoRouteNaverShell {
+  position: relative;
+  width: 100%;
+}
+
+.personalAlbumRoot .chapter3PhotoRouteNaverMap {
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapMemo {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapThumbBtn {
+  position: relative;
+  padding: 0;
+  border: 2px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapThumbBtn.active {
+  border-color: rgba(220, 38, 38, 0.85);
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.35);
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapThumbNum {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  z-index: 1;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapThumbBtn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapHint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3AlbumSaveBar {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.personalAlbumRoot .chapter3AlbumSaveActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.personalAlbumRoot .chapter3SavedAlbumList {
+  display: grid;
+  gap: 12px;
+}
+
+/* 확정/작업 중 앨범 목록은 페이지 스크롤만 쓰고, 내부 스크롤바는 두지 않는다. */
+.personalAlbumRoot .chapter3SavedAlbumList .chapter3AlbumBundleList,
+.personalAlbumRoot .chapter3AlbumBundleList {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.personalAlbumRoot .chapter3SavedAlbumListHeader {
+  display: grid;
+  gap: 10px;
+}
+
+.personalAlbumRoot .chapter3SavedAlbumListHeader h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .chapter3SavedAlbumCard {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.personalAlbumRoot .chapter3SavedAlbumActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.personalAlbumRoot .chapter3SavedAlbumActions .secondaryButton {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.personalAlbumRoot .chapter3SavedAlbumActions .chapter3AlbumConfirmViewButton {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.personalAlbumRoot .chapter3SavedAlbumActions .chapter3AlbumViewerButton {
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.personalAlbumRoot .chapter3SavedAlbumTitleInput {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: rgba(2, 6, 23, 0.7);
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.personalAlbumRoot .chapter3AlbumEditingBanner {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.personalAlbumRoot .chapter3AlbumEditingBanner strong {
+  font-weight: 800;
+}
+
+.personalAlbumRoot .chapter3AlbumEditingBanner span {
+  font-weight: 600;
+  opacity: 0.95;
+}
+
+.personalAlbumRoot .chapter3AlbumEditingBannerConfirmed {
+  border: 1px solid rgba(34, 197, 94, 0.55);
+  background: rgba(22, 163, 74, 0.16);
+  color: #86efac;
+}
+
+.personalAlbumRoot .chapter3AlbumEditingBannerDraft {
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  background: rgba(250, 204, 21, 0.12);
+  color: #fde047;
+}
+
+.personalAlbumRoot .chapter3DriveBanner {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.55), rgba(15, 23, 42, 0.9));
+}
+
+.personalAlbumRoot .chapter3DriveBannerText {
+  margin: 0;
+  color: #d1fae5;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.personalAlbumRoot .chapter3DriveBannerButton {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #052e16;
+  background: #34d399;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3DriveBannerButton:hover {
+  background: #6ee7b7;
+}
+
+.personalAlbumRoot .chapter3AlbumListHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.personalAlbumRoot .chapter3AlbumCreateToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+  align-items: center;
+}
+
+.personalAlbumRoot .chapter3AlbumCreateToolbar .chapter3AlbumToolbarPrimary,
+.personalAlbumRoot .chapter3AlbumCreateToolbar .gradientButton {
+  width: auto;
+  flex: 1 1 140px;
+  margin-top: 0;
+}
+
+.personalAlbumRoot .chapter3AlbumListMeta {
+  display: grid;
+  gap: 4px;
+}
+
+.personalAlbumRoot .chapter3AlbumListTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #facc15;
+}
+
+.personalAlbumRoot .chapter3AlbumEditingBadge {
+  display: inline;
+  margin-left: 6px;
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  animation: chapter3AlbumEditingBlink 1s ease-in-out infinite;
+}
+
+@keyframes chapter3AlbumEditingBlink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.personalAlbumRoot .chapter3AlbumListTravelDate {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #38bdf8;
+}
+
+.personalAlbumRoot .chapter3AlbumListCreatedDate {
+  margin: 0;
+  font-size: 12px;
+  color: #0f172a;
+  background: rgba(248, 250, 252, 0.92);
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.personalAlbumRoot .chapter3AlbumListHint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3DateSlashLabel {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #38bdf8;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapThumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.personalAlbumRoot .chapter3PhotoTileGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 768px) {
+  .personalAlbumRoot .chapter3PhotoTileGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.personalAlbumRoot .chapter3PhotoTile {
+  position: relative;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.55);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.personalAlbumRoot .chapter3PhotoZoomBtn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.82);
+  color: #e2e8f0;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .photoZoomBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(2, 6, 23, 0.92);
+  display: flex;
+  flex-direction: column;
+}
+
+.personalAlbumRoot .photoZoomToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 12px;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.personalAlbumRoot .photoZoomStage {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.personalAlbumRoot .photoZoomImage {
+  max-width: 95vw;
+  max-height: 80vh;
+  object-fit: contain;
+  transition: transform 0.08s ease-out;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.personalAlbumRoot .chapter3AlbumViewer {
+  position: fixed;
+  inset: 0;
+  z-index: 13000;
+  background: #020617;
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.personalAlbumRoot .chapter3AlbumViewerTitle {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 700;
+  color: #facc15;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerCount {
+  font-size: 13px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerAuto.on {
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerStage {
+  flex: 1 1 auto;
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerCaption {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  max-width: min(280px, calc(100% - 20px));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.55);
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  pointer-events: none;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerCaptionPlace {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerCaptionDetail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerCaptionDetail {
+  font-size: 11px;
+  font-weight: 500;
+  color: #bae6fd;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerCaption.missing {
+  font-weight: 500;
+  color: #cbd5e1;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerPhoto {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerPhotoButton {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerPhoto img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerEmpty {
+  margin: auto;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerMemo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 0 16px 8px;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerMemoLabel {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerMemoInput {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerStrip {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+  overflow-x: auto;
+  padding: 4px 16px 14px;
+  scroll-snap-type: x proximity;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerThumb {
+  position: relative;
+  flex: 0 0 76px;
+  width: 76px;
+  height: 56px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0f172a;
+  opacity: 0.72;
+  scroll-snap-align: center;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerThumb.on {
+  border-color: #38bdf8;
+  opacity: 1;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.personalAlbumRoot .chapter3AlbumViewerThumbIndex {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #f8fafc;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+@media (max-width: 640px) {
+  .personalAlbumRoot .chapter3AlbumViewerHeader {
+    flex-wrap: wrap;
+  }
+
+  .personalAlbumRoot .chapter3AlbumViewerTitle {
+    flex-basis: 100%;
+  }
+
+  .personalAlbumRoot .chapter3AlbumViewerCaption {
+    top: 8px;
+    left: 8px;
+    max-width: calc(100% - 16px);
+    font-size: 11px;
+  }
+}
+
+.personalAlbumRoot .chapter3PhotoTile.selected {
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25);
+}
+
+.personalAlbumRoot .chapter3PhotoTile.reorderable {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+.personalAlbumRoot .chapter3PhotoTile.reorderable input,
+.personalAlbumRoot .chapter3PhotoTile.reorderable textarea,
+.personalAlbumRoot .chapter3PhotoTileMemoInput,
+.personalAlbumRoot .chapter3PhotoTilePlaceInput {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+  cursor: text;
+  touch-action: manipulation;
+}
+
+.personalAlbumRoot .chapter3PhotoTile.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+  touch-action: none;
+}
+
+.personalAlbumRoot .chapter3PhotoTile.dragOver {
+  border-color: rgba(250, 204, 21, 0.85);
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.35);
+}
+
+.personalAlbumRoot .chapter3PhotoReorderBadge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 3;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  background: rgba(15, 23, 42, 0.9);
+  color: #facc15;
+  font-size: 16px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+.personalAlbumRoot .chapter3PhotoTileMapBtn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: rgba(14, 116, 144, 0.35);
+  color: #e0f2fe;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3PhotoTileMapBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.personalAlbumRoot .chapter3PhotoTileGeoError {
+  margin: 4px 0 0;
+  color: #fca5a5;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapThumbHandle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 2;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #facc15;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.personalAlbumRoot .chapter3PhotoRouteWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalAlbumRoot .chapter3PhotoRouteWrapFill {
+  position: relative;
+  gap: 0;
+  height: 100%;
+}
+
+.personalAlbumRoot .chapter3PhotoRouteDistanceOverlay {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 6;
+  margin: 0;
+  pointer-events: none;
+}
+
+.personalAlbumRoot .chapter3PhotoRouteDistance {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+}
+
+.personalAlbumRoot .chapter3PhotoRouteDistanceTotal {
+  margin: 0;
+  color: #bbf7d0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.personalAlbumRoot .chapter3PhotoRouteDistanceLegs {
+  margin: 8px 0 0;
+  padding: 0 0 0 18px;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.personalAlbumRoot .chapter3PhotoTileNoDate {
+  color: #fbbf24;
+}
+
+.personalAlbumRoot .chapter3PhotoDragGhost {
+  position: fixed;
+  z-index: 20000;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.92);
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapThumbBtn.reorderable {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapThumbBtn.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+  touch-action: none;
+}
+
+.personalAlbumRoot .chapter3DayPhotoMapThumbBtn.dragOver {
+  border-color: rgba(250, 204, 21, 0.9);
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.35);
+}
+
+.personalAlbumRoot .chapter3PhotoTileBtn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+}
+
+.personalAlbumRoot .chapter3PhotoTileBtn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.personalAlbumRoot .chapter3PhotoTileCaption {
+  padding: 6px 8px;
+  font-size: 10px;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.35;
+  flex: 1;
+}
+
+.personalAlbumRoot .chapter3PhotoTileField {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.personalAlbumRoot .chapter3PhotoTileFieldLabel {
+  font-size: 9px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.personalAlbumRoot .chapter3PhotoTileMemoInput,
+.personalAlbumRoot .chapter3PhotoTilePlaceInput {
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(2, 6, 23, 0.65);
+  color: #e2e8f0;
+  font-size: 11px;
+}
+
+.personalAlbumRoot .chapter3PhotoTileMemoInput::placeholder,
+.personalAlbumRoot .chapter3PhotoTilePlaceInput::placeholder {
+  color: #64748b;
+}
+
+.personalAlbumRoot .chapter3PhotoTilePlaceInput {
+  color: #7dd3fc;
+}
+
+.personalAlbumRoot .chapter3PhotoTileDelete {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3PhotoTileMemo {
+  margin: 0;
+  font-size: 11px;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+}
+
+.personalAlbumRoot .chapter3PhotoTileExifMeta {
+  font-size: 10px;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.personalAlbumRoot .chapter3PhotoTileAdd {
+  aspect-ratio: 1;
+  min-height: 108px;
+}
+
+.personalAlbumRoot .chapter3ManualSegmentTextOnly {
+  margin-top: 8px;
+}
+
+.personalAlbumRoot .chapter3ManualSegmentList {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalAlbumRoot .chapter3DayTabRemove {
+  margin-left: 4px;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .personalAlbumRoot .chapter3MapLayout {
+    flex-direction: column;
+  }
+
+  .personalAlbumRoot .chapter3MapSidebar {
+    width: 100%;
+    max-height: 220px;
+  }
+
+  .personalAlbumRoot .chapter3SimPlaceRow {
+    grid-template-columns: 1fr;
+  }
+
+  .personalAlbumRoot .chapter3SimConfigBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .personalAlbumRoot .chapter3SimActions {
+    margin-left: 0;
+  }
+}
+
+/* --- 전역 여행지 DB / 주소 조회 --- */
+.personalAlbumRoot .travelPlaceLookup {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalAlbumRoot .travelPlaceLookupRow {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.personalAlbumRoot .travelPlaceLookupField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 140px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .travelPlaceLookupMetaRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+}
+
+.personalAlbumRoot .travelPlaceMapRegionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.personalAlbumRoot .travelPlaceMapRegionLabel {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.personalAlbumRoot .travelPlaceMapRegionRow .chapter3MapRegionToggle {
+  margin-bottom: 0;
+}
+
+.personalAlbumRoot .travelPlaceCategoryRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.personalAlbumRoot .travelPlaceCategoryLabel {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.personalAlbumRoot .travelPlaceCategoryToggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.personalAlbumRoot .travelPlaceCategoryButton {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.55);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .travelPlaceCategoryButton:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #e2e8f0;
+}
+
+.personalAlbumRoot .travelPlaceCategoryButton.active {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(14, 165, 233, 0.18);
+  color: #7dd3fc;
+}
+
+.personalAlbumRoot .travelPlaceCategoryChip {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  background: rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+}
+
+.personalAlbumRoot .travelPlaceCategoryChip.compact {
+  margin-right: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+}
+
+.personalAlbumRoot .travelPlaceLookupInput {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.7);
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.personalAlbumRoot .travelPlaceLookupDropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 40;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.personalAlbumRoot .travelPlaceLookupOption {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #e2e8f0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .travelPlaceLookupOption:hover {
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.personalAlbumRoot .travelPlaceLookupOptionBadge {
+  font-size: 10px;
+  color: #7dd3fc;
+}
+
+.personalAlbumRoot .travelPlaceLookupOption small {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .travelPlaceLookupHint {
+  margin: 0;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.personalAlbumRoot .travelPlaceLookupHint.travelPlaceAddressRecommend {
+  color: #fbbf24;
+}
+
+.personalAlbumRoot .travelPlaceLookupHint.travelPlaceAddressRecommend strong {
+  color: #fde68a;
+}
+
+.personalAlbumRoot .travelPlaceAddToDbRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.personalAlbumRoot .travelPlaceAddToDbButton {
+  flex-shrink: 0;
+}
+
+.personalAlbumRoot .travelPlaceAddToDbRow .travelPlaceLookupHint {
+  margin: 0;
+  flex: 1;
+  min-width: 160px;
+}
+
+.personalAlbumRoot .travelPlaceDbSearch {
+  margin-bottom: 12px;
+}
+
+.personalAlbumRoot .travelPlaceDbSearch label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .travelPlaceDbSearchList {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.personalAlbumRoot .travelPlaceDbSearchItem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.6);
+  color: #e2e8f0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.personalAlbumRoot .travelPlaceDbSearchItem:hover {
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.personalAlbumRoot .travelPlaceDbSearchMeta {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.personalAlbumRoot .travelPlaceDbLookupPanel .travelPlaceDbSearchList li.expanded .travelPlaceDbSearchItem {
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.personalAlbumRoot .travelPlaceDbSearchItemMain {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.personalAlbumRoot .travelPlaceDbSearchDate {
+  font-size: 10px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.personalAlbumRoot .travelPlaceDbSearchPreview {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .travelPlaceDbSearchDetail {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.personalAlbumRoot .travelPlaceDbSearchAddress {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+  word-break: break-word;
+}
+
+.personalAlbumRoot .travelPlaceDbSearchDetailActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* —— Chapter 4 여행지 DB —— */
+
+.personalAlbumRoot .secondaryButton.active {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(14, 165, 233, 0.16);
+  color: #7dd3fc;
+}
+
+.personalAlbumRoot .chapter3PlaceCheck {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(148, 163, 184, 0.55);
+  background: rgba(15, 23, 42, 0.55);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.personalAlbumRoot .chapter3PlaceCheck.checked {
+  border-color: #ef4444;
+  background: #ef4444;
+}
+
+.personalAlbumRoot .chapter3PlaceRouteOrder {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.9);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.personalAlbumRoot .overseasPlacesMapWrap {
+  position: relative;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.personalAlbumRoot .overseasPlacesMapCanvas {
+  background: #e2e8f0;
+}
+
+.personalAlbumRoot .overseasPlacesMapStatus {
+  position: absolute;
+  z-index: 5;
+  left: 12px;
+  right: 12px;
+  top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.personalAlbumRoot .overseasPlacesMapPin {
+  background: transparent !important;
+  border: none !important;
+}
+
+.personalAlbumRoot .smallActionButton.active {
+  border-color: #38bdf8;
+  color: #bae6fd;
+}
+
+.personalAlbumRoot .smallActionButton.danger,
+.personalAlbumRoot .secondaryButton.danger {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+@media (max-width: 900px) {
+
+  /* PC 오른쪽 지도 숨김 — 모바일은 행 아래 인라인 지도 */
+}
+
+.personalAlbumRoot .chapter3AlbumBrowse {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  flex-direction: column;
+  background: #0b1220;
+  color: #e5e7eb;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseHeaderTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseTitle {
+  margin: 0;
+  min-width: 0;
+  font-size: 16px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseDays {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseDay {
+  flex: 0 0 auto;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: #111827;
+  color: #cbd5e1;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseDay.on {
+  background: #0ea5e9;
+  border-color: #0ea5e9;
+  color: #fff;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseMap {
+  position: relative;
+  flex: 1 1 52%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseMemo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  background: #111827;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseMemoLabel {
+  flex: 0 0 auto;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseMemoInput {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0b1220;
+  color: #e5e7eb;
+  padding: 8px 10px;
+  font-size: 16px;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowsePhotos {
+  flex: 1 1 48%;
+  min-height: 112px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowsePhoto {
+  position: relative;
+  flex: 0 0 auto;
+  height: 100%;
+  max-height: 100%;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: #111827;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowsePhotoPlace {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 16px 6px 4px;
+  background: linear-gradient(to top, rgba(2, 6, 23, 0.88), rgba(2, 6, 23, 0));
+  color: #f8fafc;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: left;
+  pointer-events: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowsePhotoPlace.pending {
+  font-weight: 500;
+  color: #cbd5e1;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowsePhoto img {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 72vw;
+  object-fit: cover;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowsePhoto.on {
+  border-color: #38bdf8;
+  opacity: 1;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowsePhotos.isPicked .chapter3AlbumBrowsePhoto:not(.on) {
+  opacity: 0.32;
+}
+
+.personalAlbumRoot .chapter3AlbumBrowseEmpty {
+  margin: 16px;
+  color: #94a3b8;
+}
+
+.personalAlbumRoot .chapter3AlbumDayMapPlaceList {
+  margin: 0;
+  padding: 8px 16px 12px 28px;
+  color: #e5e7eb;
+}
+
+.personalAlbumRoot .chapter3AlbumDayMapPlaceList li + li {
+  margin-top: 6px;
+}
+
+@media (min-width: 801px) {
+  .personalAlbumRoot .chapter3AlbumBrowseBody {
+    flex-direction: row;
+  }
+
+  .personalAlbumRoot .chapter3AlbumBrowseMap {
+    flex: 1 1 46%;
+    overflow: hidden;
+  }
+
+  .personalAlbumRoot .chapter3AlbumBrowsePhotos {
+    flex: 1 1 54%;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    grid-auto-rows: 148px;
+    align-content: start;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .personalAlbumRoot .chapter3AlbumBrowsePhoto,
+  .personalAlbumRoot .chapter3AlbumBrowsePhoto img {
+    width: 100%;
+    height: 148px;
+    max-width: none;
+  }
+}
+
+
+/* ---- 캘린더 앱 임베드용 보정 ---- */
+.personalAlbumRoot {
+  color: #e2e8f0;
+  font-family: Arial, Helvetica, sans-serif;
+  text-align: left;
+  width: 100%;
+}
+.personalAlbumRoot .layoutGrid {
+  padding: 8px 0;
+}
+.personalAlbumRoot .noticeBar {
+  position: sticky;
+  top: 8px;
+  z-index: 50;
+  margin: 0 0 8px;
+}

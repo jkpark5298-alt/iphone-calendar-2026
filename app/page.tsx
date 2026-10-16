@@ -22,7 +22,8 @@ import { readClipboardImageFiles, runCollectRichCommand } from "../lib/collectRi
 import { CollectFormatToolbar } from "../components/CollectFormatToolbar";
 import { HandwritingModal } from "../components/HandwritingModal";
 import { TextToImageModal } from "../components/TextToImageModal";
-import { PhotobookPersonAlbumGallery, PhotobookPersonAlbumScreen } from "../components/PhotobookPersonAlbumGallery";
+import dynamic from "next/dynamic";
+import { PhotobookPersonAlbumGallery } from "../components/PhotobookPersonAlbumGallery";
 import { keepPersonPhotosFromDeletedItems } from "../lib/client-photobook-person-album";
 import { isPersonAlbumCategory, type PhotobookPersonSource } from "../lib/photobook-person-album";
 import {
@@ -34,6 +35,12 @@ import {
 } from "../lib/informationEntries";
 import { importWorkScheduleFromFile, type ImportedWorkMarkType } from "../lib/workScheduleImport";
 import { readAppFileIndexArchive } from "../lib/infoIndex";
+
+// 개인 앨범 (travel-diary Chapter3 개인 앨범 엔진) — heic2any/leaflet 등 브라우저 전용 모듈이라 SSR 제외
+const PersonalAlbumApp = dynamic(() => import("../features/personal-album/PersonalAlbumApp"), {
+  ssr: false,
+  loading: () => <div style={{ padding: 24, color: "#cbd5e1" }}>개인 앨범 불러오는 중…</div>,
+});
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
 type PhotoItem = {
@@ -569,7 +576,17 @@ export default function HomePage() {
   const [photoBookInputImage, setPhotoBookInputImage] = useState<File | null>(null);
   const [photoBookInputImageMemos, setPhotoBookInputImageMemos] = useState<string[]>([]);
   const [pbMemoEditIdx, setPbMemoEditIdx] = useState<number | null>(null);
-  const [photoBookTab, setPhotoBookTab] = useState<"index" | "register" | "person-album">("index");
+  const [photoBookTab, setPhotoBookTab] = useState<"index" | "register" | "personal-album">("index");
+
+  // Google Drive OAuth 콜백 → 포토북 개인앨범 탭으로 복귀
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get("googleDrive") && params.get("personalAlbum") !== "1") return;
+    setView("info");
+    setInfoSubView("photobook");
+    setPhotoBookTab("personal-album");
+  }, []);
 
   // Restructured Info Repository states for global notes catalog
   const [allInstaCards, setAllInstaCards] = useState<InstaInfoCard[]>([]);
@@ -6350,11 +6367,11 @@ ${photo.memoText}
             /* Photo Book Tab-based Layout */
             <div style={{ width: "100%" }}>
               {/* Tab buttons */}
-              <div className="ch3TabBar">
+              <div className="ch3TabBar pbPhotoBookTabs">
                 <button
                   className={`ch3TabBtn ${photoBookTab === "index" ? "active" : ""}`}
                   onClick={() => setPhotoBookTab("index")}
-                >📖 포토북 인덱스</button>
+                >포토북 인덱스</button>
                 <button
                   className={`ch3TabBtn ${photoBookTab === "register" ? "active" : ""}`}
                   onClick={() => {
@@ -6370,11 +6387,11 @@ ${photo.memoText}
                     setPhotoBookInputDate(entryDate(currentMonth, currentDay));
                     setPhotoBookTab("register");
                   }}
-                >📖 포토북 등록</button>
+                >포토북 등록</button>
                 <button
-                  className={`ch3TabBtn ${photoBookTab === "person-album" ? "active" : ""}`}
-                  onClick={() => setPhotoBookTab("person-album")}
-                >人 앨범</button>
+                  className={`ch3TabBtn tabPersonalAlbum ${photoBookTab === "personal-album" ? "active" : ""}`}
+                  onClick={() => setPhotoBookTab("personal-album")}
+                >개인앨범</button>
               </div>
 
               {/* Register Tab: edit / create / detail forms */}
@@ -7124,17 +7141,9 @@ ${photo.memoText}
               </div>
               )}
 
-              {photoBookTab === "person-album" && (
+              {photoBookTab === "personal-album" && (
               <div style={{ position: "relative" }}>
-                <PhotobookPersonAlbumScreen
-                  items={allPhotoBookItems
-                    .map((photo) => toPhotobookPersonSource(photo))
-                    .filter((item): item is PhotobookPersonSource => Boolean(item))}
-                  onOpenItem={(id) => {
-                    setActiveItem({ type: "photobook", id });
-                    setPhotoBookTab("register");
-                  }}
-                />
+                <PersonalAlbumApp />
               </div>
               )}
 

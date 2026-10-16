@@ -8036,6 +8036,26 @@ body {
   color: #7ab8ff;
 }
 
+/* 포토북 탭: 인덱스 | 등록 | 개인앨범 — 한 줄 */
+.pbPhotoBookTabs {
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.pbPhotoBookTabs .ch3TabBtn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.pbPhotoBookTabs .ch3TabBtn.tabPersonalAlbum.active {
+  background: rgba(168, 85, 247, 0.16);
+  border-color: rgba(168, 85, 247, 0.5);
+  color: #c084fc;
+}
+
 /* ==========================================
    정보저장함 카드 — 가로형 (이미지 2/5 · 제목 2/5 · 버튼 1/5)
    ========================================== */
