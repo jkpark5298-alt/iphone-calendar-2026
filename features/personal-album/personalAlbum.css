@@ -2381,21 +2381,15 @@
   -webkit-user-drag: none;
 }
 
-/* PC: 정보보관소 레이아웃 안에 갇히지 않도록 뷰어는 화면 전체 */
+/* PC: 정보보관소 사이드바에 안 가리도록 뷰어는 뷰포트 전체 */
 .personalAlbumRoot .chapter3AlbumViewer {
   position: fixed;
   inset: 0;
-  z-index: 12000;
+  z-index: 13000;
   width: 100vw;
   max-width: 100vw;
   height: 100dvh;
   box-sizing: border-box;
-}
-.personalAlbumRoot .chapter3AlbumViewer {
-
-  position: fixed;
-  inset: 0;
-  z-index: 13000;
   background: #020617;
   color: #e2e8f0;
   display: flex;
