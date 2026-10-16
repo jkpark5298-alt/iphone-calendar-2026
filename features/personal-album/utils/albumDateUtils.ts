@@ -1,3 +1,12 @@
+/** EXIF DateTime(2016:04:28 12:30:00) / ISO → YYYY/MM/DD */
+export function formatExifDateSlash(value: string | undefined): string {
+  const trimmed = (value || "").trim();
+  if (!trimmed) return "";
+  const exif = trimmed.match(/^(\d{4}):(\d{2}):(\d{2})/);
+  if (exif) return `${exif[1]}/${exif[2]}/${exif[3]}`;
+  return formatDateSlash(trimmed);
+}
+
 /** ISO(YYYY-MM-DD) 또는 Date 파싱 가능 문자열 → YYYY/MM/DD */
 export function formatDateSlash(value: string): string {
   const trimmed = value.trim();

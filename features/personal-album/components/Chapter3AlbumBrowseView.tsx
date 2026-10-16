@@ -5,6 +5,7 @@ import {
   ALBUM_GROUP_BY_OPTIONS,
   buildAlbumBrowseSections,
 } from "../utils/albumGroupByUtils";
+import { formatExifDateSlash } from "../utils/albumDateUtils";
 import { photoDisplayUrl } from "../utils/chapter3AlbumSyncUtils";
 import type { AlbumGroupBy, SavedTravelAlbum } from "../utils/chapter3SavedAlbumUtils";
 import {
@@ -92,15 +93,24 @@ function BrowsePhotoPlace({ photo }: { photo: Chapter3AlbumPhoto }) {
     };
   }, [photo.id, stored, gps, photo.exifLat, photo.exifLng]);
 
-  const text =
-    stored ||
-    resolved ||
-    (gps ? (pending ? "위치 확인 중…" : `${photo.exifLat!.toFixed(5)}, ${photo.exifLng!.toFixed(5)}`) : "");
-  if (!text) return null;
+  const placeName = stored || resolved;
+  const placeText =
+    placeName ||
+    (gps ? (pending ? "위치 확인 중…" : "위치 미확인") : "");
+  const dateText = formatExifDateSlash(photo.exifDateTime);
+  if (!placeText && !dateText) return null;
+  const label = [placeText, dateText].filter(Boolean).join(" · ");
+  const coordFallback =
+    !placeName && !pending && gps
+      ? `${photo.exifLat!.toFixed(5)}, ${photo.exifLng!.toFixed(5)}`
+      : "";
 
   return (
-    <span className={`chapter3AlbumBrowsePhotoPlace${text === "위치 확인 중…" ? " pending" : ""}`}>
-      {text}
+    <span
+      className={`chapter3AlbumBrowsePhotoPlace${placeText === "위치 확인 중…" ? " pending" : ""}`}
+      title={coordFallback || label}
+    >
+      {label}
     </span>
   );
 }
@@ -357,6 +367,9 @@ export function Chapter3AlbumBrowseView({
                 const src = photoDisplayUrl(photo);
                 if (!src) return null;
                 const selected = photo.id === selectedId;
+                const memoText = (
+                  selected ? memoDraft : memoDrafts[photo.id] ?? photo.memo ?? ""
+                ).trim();
                 return (
                   <button
                     key={photo.id}
@@ -367,8 +380,13 @@ export function Chapter3AlbumBrowseView({
                     className={`chapter3AlbumBrowsePhoto${selected ? " on" : ""}`}
                     onClick={() => selectPhoto(photo.id)}
                   >
-                    <img src={src} alt={photo.fileName || "여행 사진"} draggable={false} />
+                    <img src={src} alt={photo.fileName || "개인 사진"} draggable={false} />
                     <BrowsePhotoPlace photo={photo} />
+                    {memoText ? (
+                      <span className="chapter3AlbumBrowseMemoChip" title={memoText}>
+                        {memoText}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })

@@ -9,7 +9,11 @@ import {
   useState,
   type TouchEvent,
 } from "react";
-import { formatDateSlash, resolveAlbumDayDateIso } from "../utils/albumDateUtils";
+import {
+  formatDateSlash,
+  formatExifDateSlash,
+  resolveAlbumDayDateIso,
+} from "../utils/albumDateUtils";
 import { sortAlbumPhotos } from "../utils/albumPhotoOrderUtils";
 import { photoDisplayUrl } from "../utils/chapter3AlbumSyncUtils";
 import type { SavedTravelAlbum } from "../utils/chapter3SavedAlbumUtils";
@@ -104,19 +108,24 @@ function AlbumViewerLocation({
     };
   }, [slide.id, slide.location, slide.hasGps, slide.lat, slide.lng]);
 
-  const text =
-    slide.location ||
-    resolved ||
+  const placeName = slide.location || resolved;
+  const placeText =
+    placeName ||
     (slide.hasGps
       ? pending
         ? "위치 확인 중…"
-        : slide.lat != null && slide.lng != null
-          ? `${slide.lat.toFixed(5)}, ${slide.lng.toFixed(5)}`
-          : "위치 정보 없음"
+        : "위치 미확인"
       : "위치 정보 없음");
-  const missing = text === "위치 정보 없음" || text === "위치 확인 중…";
-
-  const detail = [slide.takenAt, slide.dayLabel].filter(Boolean).join(" · ");
+  const missing = !placeName || placeText === "위치 확인 중…" || placeText === "위치 미확인";
+  const dateText = formatExifDateSlash(slide.takenAt) || slide.dayLabel || "";
+  const coordFallback =
+    !placeName &&
+    !pending &&
+    slide.hasGps &&
+    slide.lat != null &&
+    slide.lng != null
+      ? `${slide.lat.toFixed(5)}, ${slide.lng.toFixed(5)}`
+      : "";
 
   return (
     <span
@@ -127,8 +136,13 @@ function AlbumViewerLocation({
           : undefined
       }
     >
-      <span className="chapter3AlbumViewerCaptionPlace">{text}</span>
-      {detail ? <span className="chapter3AlbumViewerCaptionDetail">{detail}</span> : null}
+      <span className="chapter3AlbumViewerCaptionPlace">
+        {placeText}
+        {dateText ? ` · ${dateText}` : ""}
+      </span>
+      {coordFallback ? (
+        <span className="chapter3AlbumViewerCaptionDetail">{coordFallback}</span>
+      ) : null}
     </span>
   );
 }
@@ -468,28 +482,35 @@ export function Chapter3AlbumFullscreenViewer({
             >
               <img ref={photoRef} src={slide.src} alt={slide.alt} draggable={false} />
               <AlbumViewerLocation slide={slide} style={captionBox} />
+              {memoDraft.trim() ? (
+                <span className="chapter3AlbumViewerMemoChip" title={memoDraft}>
+                  {memoDraft.trim()}
+                </span>
+              ) : null}
             </button>
           </div>
         </div>
-        {paused && (
-          <label className="chapter3AlbumViewerMemo">
-            <span className="chapter3AlbumViewerMemoLabel">메모</span>
-            <input
-              className="chapter3AlbumViewerMemoInput"
-              type="text"
-              value={memoDraft}
-              placeholder="사진 메모 (예: 공항 도착)"
-              onChange={(event) => scheduleMemo(slide.id, event.target.value)}
-              onBlur={() => flushMemo(slide.id, memoDraft)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  (event.target as HTMLInputElement).blur();
-                }
-              }}
-            />
-          </label>
-        )}
+        <label className="chapter3AlbumViewerMemo">
+          <span className="chapter3AlbumViewerMemoLabel">메모</span>
+          <input
+            className="chapter3AlbumViewerMemoInput"
+            type="text"
+            value={memoDraft}
+            placeholder="사진 메모 (예: 공항 도착)"
+            onChange={(event) => scheduleMemo(slide.id, event.target.value)}
+            onFocus={() => {
+              setAutoPlay(false);
+              setPaused(true);
+            }}
+            onBlur={() => flushMemo(slide.id, memoDraft)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                (event.target as HTMLInputElement).blur();
+              }
+            }}
+          />
+        </label>
         {slides.length > 0 && (
           <div
             ref={stripRef}
