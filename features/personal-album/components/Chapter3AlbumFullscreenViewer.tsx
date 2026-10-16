@@ -676,6 +676,7 @@ export function Chapter3AlbumFullscreenViewer({
                     height={mapHeight}
                     distancePlacement="overlay"
                     dimOthers
+                    variant="places"
                   />
                 ) : (
                   <p className="chapter3AlbumViewerEmpty">지도에 표시할 GPS 사진이 없습니다.</p>

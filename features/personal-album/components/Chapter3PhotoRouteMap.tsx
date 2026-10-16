@@ -81,6 +81,8 @@ function buildPhotoRouteMarkerHtml(opts: {
   active: boolean;
   dimmed?: boolean;
   asButton?: boolean;
+  /** 개인 앨범 — 여행 동선 번호 숨김 */
+  hideIndex?: boolean;
 }): string {
   const addr = escapeHtml(opts.address.slice(0, 36));
   const img = escapeHtml(opts.imageUrl);
@@ -91,13 +93,75 @@ function buildPhotoRouteMarkerHtml(opts: {
   const opacity = opts.dimmed ? 0.28 : 1;
   const tag = opts.asButton ? "button" : "div";
   const extraAttrs = opts.asButton ? ' type="button"' : ' role="img"';
+  const indexBadge = opts.hideIndex
+    ? ""
+    : `<span style="margin-top:4px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:${numBg};border:2px solid #fff;color:#fff;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.35);">${opts.index}</span>`;
   return `<${tag} aria-label="사진 ${opts.index}"${extraAttrs} style="display:flex;flex-direction:column;align-items:center;width:${width}px;padding:0;margin:0;border:none;background:transparent;cursor:${opts.asButton ? "pointer" : "default"};font-family:inherit;opacity:${opacity};${opts.asButton ? "" : "pointer-events:none;"}">
     <div style="width:${photo}px;height:${photo}px;border-radius:8px;overflow:hidden;border:${border};box-shadow:0 2px 8px rgba(0,0,0,.45);background:#0f172a;">
       <img src="${img}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" />
     </div>
-    <span style="margin-top:4px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:${numBg};border:2px solid #fff;color:#fff;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.35);">${opts.index}</span>
+    ${indexBadge}
     <span style="margin-top:3px;max-width:${width}px;padding:2px 4px;border-radius:4px;background:rgba(15,23,42,.88);color:#f1f5f9;font-size:9px;line-height:1.25;text-align:center;word-break:keep-all;">${addr}</span>
   </${tag}>`;
+}
+
+function getBrowserGoogleMapsKey(): string | null {
+  return (
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY?.trim() ||
+    null
+  );
+}
+
+type GoogleMapsRuntime = {
+  maps: {
+    Map: new (
+      el: HTMLElement,
+      opts: Record<string, unknown>,
+    ) => {
+      setCenter: (c: { lat: number; lng: number }) => void;
+      setZoom: (z: number) => void;
+      fitBounds: (b: unknown, padding?: number) => void;
+    };
+    LatLng: new (lat: number, lng: number) => unknown;
+    LatLngBounds: new () => { extend: (c: { lat: number; lng: number }) => void };
+    Polyline: new (opts: Record<string, unknown>) => unknown;
+    OverlayView: new () => {
+      onAdd: () => void;
+      draw: () => void;
+      onRemove: () => void;
+      setMap: (map: unknown) => void;
+      getPanes: () => { overlayMouseTarget: HTMLElement } | null;
+      getProjection: () => {
+        fromLatLngToDivPixel: (latLng: unknown) => { x: number; y: number } | null;
+      } | null;
+    };
+  };
+};
+
+function loadGoogleMapsApi(apiKey: string): Promise<GoogleMapsRuntime> {
+  const win = window as Window & {
+    google?: GoogleMapsRuntime;
+    __iphoneCalGmapsPromise?: Promise<GoogleMapsRuntime>;
+  };
+  if (win.google?.maps) return Promise.resolve(win.google);
+  if (win.__iphoneCalGmapsPromise) return win.__iphoneCalGmapsPromise;
+
+  win.__iphoneCalGmapsPromise = new Promise((resolve, reject) => {
+    const callbackName = `__iphoneCalGmapsCb_${Date.now()}`;
+    (window as unknown as Record<string, unknown>)[callbackName] = () => {
+      delete (window as unknown as Record<string, unknown>)[callbackName];
+      if (win.google?.maps) resolve(win.google);
+      else reject(new Error("google maps unavailable"));
+    };
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&language=en&callback=${callbackName}`;
+    script.onerror = () => reject(new Error("google maps script failed"));
+    document.head.appendChild(script);
+  });
+
+  return win.__iphoneCalGmapsPromise;
 }
 
 type RoutePoint = {
@@ -198,6 +262,7 @@ export function Chapter3PhotoRouteMap({
   height = 380,
   distancePlacement = "below",
   dimOthers = false,
+  variant = "route",
 }: {
   photos: Chapter3AlbumPhoto[];
   selectedPhotoId?: string | null;
@@ -209,7 +274,12 @@ export function Chapter3PhotoRouteMap({
   distancePlacement?: "below" | "overlay";
   /** 선택한 사진 외의 마커를 흐리게 둡니다. */
   dimOthers?: boolean;
+  /** route: 여행 동선(번호·경로). places: 개인 앨범 위치만 */
+  variant?: "route" | "places";
 }) {
+  const hideIndex = variant === "places";
+  const hideIndexRef = useRef(hideIndex);
+  hideIndexRef.current = hideIndex;
   const layoutKey = useMemo(() => routeLayoutKey(photos), [photos]);
   const pointsRef = useRef<RoutePoint[]>([]);
   const points = useMemo(() => {
@@ -282,7 +352,7 @@ export function Chapter3PhotoRouteMap({
   }, [isDomestic, mapConfig]);
 
   useEffect(() => {
-    if (points.length < 2) {
+    if (variant === "places" || points.length < 2) {
       setRoute(EMPTY_ROUTE);
       return;
     }
@@ -337,152 +407,279 @@ export function Chapter3PhotoRouteMap({
       cancelled = true;
       controller.abort();
     };
-  }, [isDomestic, points]);
+  }, [isDomestic, points, variant]);
 
-  // 해외: Leaflet + OpenStreetMap — GPS 좌표에 마커 고정
-  // selectedPhotoId 변경만으로는 지도를 다시 만들지 않음 (메모 입력 시 화면 점프 방지)
+  // 해외: Google Maps (영문). 키 없으면 OSM(Leaflet) 폴백
+  const googleMapRef = useRef<{
+    setCenter: (c: { lat: number; lng: number }) => void;
+    setZoom: (z: number) => void;
+  } | null>(null);
   const leafletMapRef = useRef<import("leaflet").Map | null>(null);
+  const [overseasProvider, setOverseasProvider] = useState<"google" | "osm" | "loading" | "none">(
+    "loading",
+  );
+
   useEffect(() => {
     if (isDomestic || !mapRef.current || points.length === 0) return;
 
-    let map: import("leaflet").Map | null = null;
     let cancelled = false;
-    const runId = Symbol("leaflet-route-map");
-    (mapRef.current as HTMLElement & { __leafletRun?: symbol }).__leafletRun = runId;
+    const container = mapRef.current;
+    container.replaceChildren();
+    setOverseasProvider("loading");
+    setOsmReady(false);
+    googleMapRef.current = null;
+    leafletMapRef.current = null;
+    markerHandlesRef.current = [];
+
+    const googleKey = getBrowserGoogleMapsKey();
 
     void (async () => {
-      const leaflet = await import("leaflet");
-      const container = mapRef.current;
-      if (cancelled || !container) return;
-      if ((container as HTMLElement & { __leafletRun?: symbol }).__leafletRun !== runId) return;
-
-      // 이전 인스턴스가 남아 있으면 제거 (날짜 전환 시 "already initialized" 방지)
-      const existing = (container as HTMLElement & { _leaflet_id?: number })._leaflet_id;
-      if (existing) {
+      if (googleKey) {
         try {
-          leafletMapRef.current?.remove();
-        } catch {
-          /* ignore */
-        }
-        delete (container as HTMLElement & { _leaflet_id?: number })._leaflet_id;
-        container.replaceChildren();
-      }
+          const g = await loadGoogleMapsApi(googleKey);
+          if (cancelled || !mapRef.current) return;
+          const maps = g.maps;
+          const activeId = selectedPhotoIdRef.current;
+          const focus = points.find((p) => p.id === activeId) || points[0];
+          const map = new maps.Map(mapRef.current, {
+            center: { lat: focus.lat, lng: focus.lng },
+            zoom: activeId ? 15 : 13,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+            clickableIcons: false,
+          });
+          googleMapRef.current = map;
 
-      const L = leaflet.default;
-      try {
-        map = L.map(container, { zoomControl: true, attributionControl: true });
-      } catch (error) {
-        console.warn("leaflet map init failed", error);
-        return;
-      }
-      if (cancelled || (container as HTMLElement & { __leafletRun?: symbol }).__leafletRun !== runId) {
-        map.remove();
-        return;
-      }
-      leafletMapRef.current = map;
+          const overlays: Array<{
+            id: string;
+            overlay: { setMap: (map: unknown) => void };
+            apply: (selectedId: string | null) => void;
+          }> = [];
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
-      }).addTo(map);
-
-      const activeId = selectedPhotoIdRef.current;
-      const markerHandles: Array<{ id: string; apply: (selectedId: string | null) => void }> = [];
-      points.forEach((point) => {
-        const paint = (selectedId: string | null | undefined) => {
-          const selectedOnMap = selectedId != null && points.some((item) => item.id === selectedId);
-          const active = selectedOnMap && point.id === selectedId;
-          const dimmed = Boolean(dimOthersRef.current && selectedOnMap && !active);
-          const width = active ? 96 : MARKER_WIDTH;
-          const height = active ? 128 : MARKER_HEIGHT;
-          return {
-            active,
-            dimmed,
-            icon: L.divIcon({
-              className: "chapter3PhotoRouteLeafletIcon",
-              html: buildPhotoRouteMarkerHtml({
-                index: point.index,
-                imageUrl: point.imageUrl || "",
-                address: point.name || "",
+          points.forEach((point) => {
+            const paint = (selectedId: string | null | undefined) => {
+              const selectedOnMap =
+                selectedId != null && points.some((item) => item.id === selectedId);
+              const active = selectedOnMap && point.id === selectedId;
+              const dimmed = Boolean(dimOthersRef.current && selectedOnMap && !active);
+              const width = active ? 96 : MARKER_WIDTH;
+              const heightPx = hideIndexRef.current
+                ? active
+                  ? 100
+                  : MARKER_HEIGHT - 24
+                : active
+                  ? 128
+                  : MARKER_HEIGHT;
+              return {
                 active,
-                dimmed,
-              }),
-              iconSize: [width, height],
-              iconAnchor: [width / 2, height],
-            }),
-          };
-        };
-        const first = paint(activeId);
-        const marker = L.marker([point.lat, point.lng], {
-          icon: first.icon,
-          zIndexOffset: first.active ? 1000 : point.index * 10,
-        }).addTo(map!);
-        marker.on("click", () => onPhotoSelectRef.current?.(point.id));
-        markerHandles.push({
-          id: point.id,
-          apply: (selectedId) => {
-            try {
-              const next = paint(selectedId);
-              marker.setIcon(next.icon);
-              marker.setZIndexOffset(next.active ? 1000 : point.index * 10);
-            } catch (error) {
-              console.warn("leaflet marker update failed", error);
+                width,
+                heightPx,
+                html: buildPhotoRouteMarkerHtml({
+                  index: point.index,
+                  imageUrl: point.imageUrl || "",
+                  address: point.name || "",
+                  active,
+                  dimmed,
+                  asButton: true,
+                  hideIndex: hideIndexRef.current,
+                }),
+              };
+            };
+
+            const first = paint(activeId);
+            const div = document.createElement("div");
+            div.style.position = "absolute";
+            div.style.transform = "translate(-50%, -100%)";
+            div.style.cursor = "pointer";
+            div.innerHTML = first.html;
+            div.addEventListener("click", (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onPhotoSelectRef.current?.(point.id);
+            });
+
+            const overlay = new maps.OverlayView();
+            overlay.onAdd = function onAdd() {
+              this.getPanes()?.overlayMouseTarget.appendChild(div);
+            };
+            overlay.draw = function draw() {
+              const projection = this.getProjection();
+              if (!projection) return;
+              const pos = projection.fromLatLngToDivPixel(
+                new maps.LatLng(point.lat, point.lng),
+              );
+              if (!pos) return;
+              div.style.left = `${pos.x}px`;
+              div.style.top = `${pos.y}px`;
+            };
+            overlay.onRemove = function onRemove() {
+              div.remove();
+            };
+            overlay.setMap(map);
+
+            overlays.push({
+              id: point.id,
+              overlay,
+              apply: (selectedId) => {
+                try {
+                  const next = paint(selectedId);
+                  div.innerHTML = next.html;
+                  div.style.zIndex = next.active ? "1000" : String(100 + point.index);
+                } catch (error) {
+                  console.warn("google marker update failed", error);
+                }
+              },
+            });
+          });
+
+          markerHandlesRef.current = overlays.map(({ id, apply }) => ({ id, apply }));
+          overlays.forEach((item) => item.apply(selectedPhotoIdRef.current ?? null));
+
+          if (variant === "route" && route.usedRoad && roadPath.length >= 2) {
+            new maps.Polyline({
+              path: roadPath.map((p) => ({ lat: p.lat, lng: p.lng })),
+              strokeColor: ROUTE_GREEN,
+              strokeOpacity: 0.9,
+              strokeWeight: 5,
+              map,
+            });
+          }
+
+          if (activeId) {
+            const sel = points.find((p) => p.id === activeId);
+            if (sel) {
+              map.setCenter({ lat: sel.lat, lng: sel.lng });
+              map.setZoom(16);
             }
-          },
-        });
-      });
-      markerHandlesRef.current = markerHandles;
-      markerHandles.forEach((item) => item.apply(selectedPhotoIdRef.current ?? null));
+          } else if (points.length === 1) {
+            map.setCenter({ lat: points[0].lat, lng: points[0].lng });
+            map.setZoom(15);
+          } else {
+            const bounds = new maps.LatLngBounds();
+            points.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lng }));
+            map.fitBounds(bounds, 48);
+          }
 
-      const routePath =
-        route.usedRoad && roadPath.length >= 2
-          ? roadPath.map((p) => [p.lat, p.lng] as [number, number])
-          : [];
-      if (routePath.length >= 2) {
-        L.polyline(routePath, {
-          color: ROUTE_GREEN,
-          weight: 5,
-          opacity: 0.9,
+          if (!cancelled) {
+            setOverseasProvider("google");
+            setOsmReady(true);
+          }
+
+          return () => {
+            overlays.forEach((item) => item.overlay.setMap(null));
+          };
+        } catch (error) {
+          console.warn("google maps init failed, fallback to OSM", error);
+        }
+      }
+
+      // OSM 폴백
+      try {
+        const leaflet = await import("leaflet");
+        if (cancelled || !mapRef.current) return;
+        const L = leaflet.default;
+        const map = L.map(mapRef.current, { zoomControl: true, attributionControl: true });
+        leafletMapRef.current = map;
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+          maxZoom: 19,
         }).addTo(map);
-      }
 
-      const focus = points.find((p) => p.id === activeId) || null;
-      if (focus) {
-        map.setView([focus.lat, focus.lng], 16, { animate: false });
-      } else if (points.length === 1) {
-        map.setView([points[0].lat, points[0].lng], 15, { animate: false });
-      } else {
-        const bounds = L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number]));
-        map.fitBounds(bounds, { padding: [80, 48], maxZoom: 15 });
-      }
+        const activeId = selectedPhotoIdRef.current;
+        const markerHandles: Array<{ id: string; apply: (selectedId: string | null) => void }> = [];
+        points.forEach((point) => {
+          const paint = (selectedId: string | null | undefined) => {
+            const selectedOnMap =
+              selectedId != null && points.some((item) => item.id === selectedId);
+            const active = selectedOnMap && point.id === selectedId;
+            const dimmed = Boolean(dimOthersRef.current && selectedOnMap && !active);
+            const width = active ? 96 : MARKER_WIDTH;
+            const heightPx = active ? 128 : MARKER_HEIGHT;
+            return {
+              active,
+              icon: L.divIcon({
+                className: "chapter3PhotoRouteLeafletIcon",
+                html: buildPhotoRouteMarkerHtml({
+                  index: point.index,
+                  imageUrl: point.imageUrl || "",
+                  address: point.name || "",
+                  active,
+                  dimmed,
+                  hideIndex: hideIndexRef.current,
+                }),
+                iconSize: [width, heightPx],
+                iconAnchor: [width / 2, heightPx],
+              }),
+            };
+          };
+          const first = paint(activeId);
+          const marker = L.marker([point.lat, point.lng], {
+            icon: first.icon,
+            zIndexOffset: first.active ? 1000 : point.index * 10,
+          }).addTo(map);
+          marker.on("click", () => onPhotoSelectRef.current?.(point.id));
+          markerHandles.push({
+            id: point.id,
+            apply: (selectedId) => {
+              try {
+                const next = paint(selectedId);
+                marker.setIcon(next.icon);
+                marker.setZIndexOffset(next.active ? 1000 : point.index * 10);
+              } catch (error) {
+                console.warn("leaflet marker update failed", error);
+              }
+            },
+          });
+        });
+        markerHandlesRef.current = markerHandles;
+        markerHandles.forEach((item) => item.apply(selectedPhotoIdRef.current ?? null));
 
-      if (!cancelled) setOsmReady(true);
+        const focus = points.find((p) => p.id === activeId) || null;
+        if (focus) map.setView([focus.lat, focus.lng], 16, { animate: false });
+        else if (points.length === 1) map.setView([points[0].lat, points[0].lng], 15, { animate: false });
+        else {
+          const bounds = L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number]));
+          map.fitBounds(bounds, { padding: [80, 48], maxZoom: 15 });
+        }
+
+        if (!cancelled) {
+          setOverseasProvider("osm");
+          setOsmReady(true);
+        }
+      } catch (error) {
+        console.warn("overseas map failed", error);
+        if (!cancelled) setOverseasProvider("none");
+      }
     })();
 
     return () => {
       cancelled = true;
       setOsmReady(false);
       markerHandlesRef.current = [];
-      const current = leafletMapRef.current || map;
-      leafletMapRef.current = null;
       try {
-        current?.remove();
+        googleMapRef.current = null;
       } catch {
         /* ignore */
       }
-      const container = mapRef.current as
-        | (HTMLElement & { _leaflet_id?: number; __leafletRun?: symbol })
-        | null;
-      if (container) {
-        delete container._leaflet_id;
-        container.replaceChildren();
+      try {
+        leafletMapRef.current?.remove();
+      } catch {
+        /* ignore */
       }
+      leafletMapRef.current = null;
+      if (mapRef.current) mapRef.current.replaceChildren();
     };
-  }, [isDomestic, points, roadPath, route.usedRoad]);
+  }, [isDomestic, points, roadPath, route.usedRoad, variant]);
 
   useEffect(() => {
-    if (isDomestic || !selectedPoint || !leafletMapRef.current) return;
-    leafletMapRef.current.setView([selectedPoint.lat, selectedPoint.lng], 16, { animate: true });
+    if (isDomestic || !selectedPoint) return;
+    if (googleMapRef.current) {
+      googleMapRef.current.setCenter({ lat: selectedPoint.lat, lng: selectedPoint.lng });
+      googleMapRef.current.setZoom(16);
+      return;
+    }
+    leafletMapRef.current?.setView([selectedPoint.lat, selectedPoint.lng], 16, { animate: true });
   }, [isDomestic, selectedPoint]);
 
   const naverMapApiRef = useRef<{
@@ -542,55 +739,57 @@ export function Chapter3PhotoRouteMap({
           return {
             active,
             icon: {
-              content: buildPhotoRouteMarkerHtml({
-                index: point.index,
-                imageUrl: point.imageUrl || "",
-                address: point.name || "",
-                active,
-                dimmed,
-                asButton: true,
-              }),
-              anchor: new naver.maps.Point(width / 2, height),
-            },
-            zIndex: active ? 500 : 100 + point.index,
-          };
-        };
-        const first = paint(activeId);
-        const marker = new naver.maps.Marker({
-          position: new naver.maps.LatLng(point.lat, point.lng),
-          map,
-          icon: first.icon,
-          zIndex: first.zIndex,
-        });
-        naver.maps.Event.addListener(marker, "click", () => onPhotoSelectRef.current?.(point.id));
-        return {
-          id: point.id,
-          marker,
-          apply: (selectedId: string | null) => {
-            try {
-              const next = paint(selectedId);
-              marker.setIcon(next.icon);
-              marker.setZIndex(next.zIndex);
-            } catch (error) {
-              console.warn("naver marker update failed", error);
-            }
+            content: buildPhotoRouteMarkerHtml({
+              index: point.index,
+              imageUrl: point.imageUrl || "",
+              address: point.name || "",
+              active,
+              dimmed,
+              asButton: true,
+              hideIndex: hideIndexRef.current,
+            }),
+            anchor: new naver.maps.Point(width / 2, height),
           },
+          zIndex: active ? 500 : 100 + point.index,
         };
+      };
+      const first = paint(activeId);
+      const marker = new naver.maps.Marker({
+        position: new naver.maps.LatLng(point.lat, point.lng),
+        map,
+        icon: first.icon,
+        zIndex: first.zIndex,
       });
-      markerHandlesRef.current = markers.map(({ id, apply }) => ({ id, apply }));
+      naver.maps.Event.addListener(marker, "click", () => onPhotoSelectRef.current?.(point.id));
+      return {
+        id: point.id,
+        marker,
+        apply: (selectedId: string | null) => {
+          try {
+            const next = paint(selectedId);
+            marker.setIcon(next.icon);
+            marker.setZIndex(next.zIndex);
+          } catch (error) {
+            console.warn("naver marker update failed", error);
+          }
+        },
+      };
+    });
+    markerHandlesRef.current = markers.map(({ id, apply }) => ({ id, apply }));
 
-      const path = route.usedRoad && roadPath.length >= 2 ? roadPath : [];
-      polyline =
-        path.length >= 2
-          ? new naver.maps.Polyline({
-              path: path.map((p) => new naver.maps.LatLng(p.lat, p.lng)),
-              strokeColor: ROUTE_GREEN,
-              strokeOpacity: 0.9,
-              strokeWeight: 5,
-              map,
-              zIndex: 50,
-            })
-          : null;
+    const path =
+      variant !== "places" && route.usedRoad && roadPath.length >= 2 ? roadPath : [];
+    polyline =
+      path.length >= 2
+        ? new naver.maps.Polyline({
+            path: path.map((p) => new naver.maps.LatLng(p.lat, p.lng)),
+            strokeColor: ROUTE_GREEN,
+            strokeOpacity: 0.9,
+            strokeWeight: 5,
+            map,
+            zIndex: 50,
+          })
+        : null;
 
       if (activeId) {
         const sel = points.find((p) => p.id === activeId);
@@ -646,7 +845,7 @@ export function Chapter3PhotoRouteMap({
         console.warn("naver photo route map cleanup failed", error);
       }
     };
-  }, [distancePlacement, isDomestic, naverLoaded, points, roadPath, route.usedRoad]);
+  }, [distancePlacement, isDomestic, naverLoaded, points, roadPath, route.usedRoad, variant]);
 
   useEffect(() => {
     if (!isDomestic || !selectedPoint || !naverMapApiRef.current) return;
@@ -694,11 +893,13 @@ export function Chapter3PhotoRouteMap({
       className={`chapter3PhotoRouteWrap${distancePlacement === "overlay" ? " chapter3PhotoRouteWrapFill" : ""}`}
     >
       {inner}
-      <PhotoRouteDistancePanel
-        points={points}
-        route={route}
-        overlay={distancePlacement === "overlay"}
-      />
+      {variant !== "places" && (
+        <PhotoRouteDistancePanel
+          points={points}
+          route={route}
+          overlay={distancePlacement === "overlay"}
+        />
+      )}
     </div>
   );
 
@@ -711,7 +912,11 @@ export function Chapter3PhotoRouteMap({
           style={{ height, minHeight: height }}
         />
         {!osmReady && (
-          <div className="chapter3PhotoRouteOsmLoading">지도 로딩 중…</div>
+          <div className="chapter3PhotoRouteOsmLoading">
+            {overseasProvider === "none"
+              ? "해외 지도를 불러오지 못했습니다."
+              : "지도 로딩 중…"}
+          </div>
         )}
       </div>,
     );
