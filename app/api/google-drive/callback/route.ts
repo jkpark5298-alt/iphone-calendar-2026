@@ -30,8 +30,13 @@ export async function GET(request: NextRequest) {
   try {
     const token = await exchangeGoogleDriveCode(code, redirectUri);
     if (token.error) {
-      console.error("google drive token exchange failed", token.error, token.error_description);
-      return back("token");
+      console.error("google drive token exchange failed", token.error, token.error_description, {
+        redirectUri,
+      });
+      const detail = String(token.error)
+        .replace(/[^a-z0-9_-]/gi, "")
+        .slice(0, 40);
+      return back(detail ? `token-${detail}` : "token");
     }
     if (!token.refresh_token) {
       console.error("google drive callback missing refresh_token");

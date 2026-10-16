@@ -41,6 +41,12 @@ export default function PersonalAlbumApp() {
       "test-user": "Google에서 액세스가 거부되었습니다. OAuth 동의 화면 → 테스트 사용자에 계정을 추가하세요.",
       state: "Google Drive 연결 세션이 만료되었습니다. 다시 「Google Drive 연결」을 눌러 주세요.",
       token: "Google 토큰 교환에 실패했습니다. Client Secret·리디렉션 URI를 확인하세요.",
+      "token-invalid_client":
+        "Client ID/Secret이 맞지 않습니다. Google Cloud의 iphone-calendar-drive Secret을 Vercel에 다시 넣어야 합니다.",
+      "token-invalid_grant":
+        "인증 코드가 만료·재사용되었습니다. Google Drive 연결을 처음부터 다시 눌러 주세요.",
+      "token-redirect_uri_mismatch":
+        "리디렉션 URI가 일치하지 않습니다. Google Cloud에 https://iphone-calendar-2026.vercel.app/api/google-drive/callback 이 있는지 확인하세요.",
       "no-refresh": "refresh_token이 없습니다. myaccount.google.com/connections 에서 여행앨범·캘린더 앱을 삭제한 뒤 다시 연결하세요.",
       denied: "Google Drive 권한이 거부되었습니다. 「계속」→「허용」을 선택하세요.",
       storage: "Drive 토큰을 Supabase private 버킷에 저장하지 못했습니다. 서비스 롤·버킷을 확인하세요.",
