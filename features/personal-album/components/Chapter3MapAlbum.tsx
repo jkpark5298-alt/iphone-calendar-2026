@@ -2350,6 +2350,16 @@ export function Chapter3MapAlbum({
         </button>
         <button
           type="button"
+          className={albumView === "library" && libraryFilter === "draft" ? "active" : ""}
+          onClick={() => {
+            setLibraryFilter("draft");
+            setAlbumView("library");
+          }}
+        >
+          작업 중 ({draftAlbumList.length})
+        </button>
+        <button
+          type="button"
           className={albumView === "create" ? "active" : ""}
           onClick={() => {
             setAlbumView("create");
@@ -2358,7 +2368,7 @@ export function Chapter3MapAlbum({
             }
           }}
         >
-          {editingSavedAlbumId ? `편집 (${draftAlbumList.length})` : `새 앨범 (${draftAlbumList.length})`}
+          {editingSavedAlbumId ? "편집" : "새 앨범"}
         </button>
       </nav>
 
