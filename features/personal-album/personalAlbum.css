@@ -2437,8 +2437,17 @@
   font-weight: 700;
 }
 
+.personalAlbumRoot .chapter3AlbumViewerMain {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .personalAlbumRoot .chapter3AlbumViewerMapPane {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -2548,7 +2557,7 @@
 
 .personalAlbumRoot .chapter3AlbumViewerPhoto img {
   max-width: 100%;
-  max-height: min(72dvh, 100%);
+  max-height: min(58dvh, 100%);
   width: auto;
   height: auto;
   object-fit: contain;
@@ -2583,13 +2592,31 @@
 }
 
 @media (min-width: 801px) {
+  .personalAlbumRoot .chapter3AlbumViewerMain.withMap {
+    flex-direction: row;
+  }
+
+  .personalAlbumRoot .chapter3AlbumViewerMain.withMap .chapter3AlbumViewerMapPane {
+    flex: 1 1 50%;
+    border-right: 1px solid rgba(148, 163, 184, 0.28);
+  }
+
+  .personalAlbumRoot .chapter3AlbumViewerMain.withMap .chapter3AlbumViewerStage {
+    flex: 1 1 50%;
+  }
+
   .personalAlbumRoot .chapter3AlbumViewerPhoto {
     padding: 20px;
   }
 
   .personalAlbumRoot .chapter3AlbumViewerPhoto img {
     max-width: min(92vw, 1100px);
-    max-height: min(78dvh, 860px);
+    max-height: min(70dvh, 820px);
+  }
+
+  .personalAlbumRoot .chapter3AlbumViewerMain.withMap .chapter3AlbumViewerPhoto img {
+    max-width: 100%;
+    max-height: min(68dvh, 100%);
   }
 
   .personalAlbumRoot .chapter3AlbumViewerMemoChip {
@@ -2604,7 +2631,23 @@
   }
 
   .personalAlbumRoot .chapter3AlbumViewerPhoto img {
-    max-height: min(68dvh, 100%);
+    max-height: min(42dvh, 100%);
+  }
+
+  .personalAlbumRoot .chapter3AlbumViewerMain.withMap .chapter3AlbumViewerMapPane {
+    flex: 0 0 36%;
+    min-height: 150px;
+    max-height: 42dvh;
+    padding: 6px 8px 0;
+  }
+
+  .personalAlbumRoot .chapter3AlbumViewerMain.withMap .chapter3AlbumViewerStage {
+    flex: 1 1 auto;
+    min-height: 120px;
+  }
+
+  .personalAlbumRoot .chapter3AlbumViewerMain.withMap .chapter3AlbumViewerPhoto img {
+    max-height: min(28dvh, 100%);
   }
 
   .personalAlbumRoot .chapter3AlbumViewerMemo {

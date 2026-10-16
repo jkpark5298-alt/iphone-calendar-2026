@@ -258,6 +258,8 @@ export function Chapter3AlbumFullscreenViewer({
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [yearFilter, setYearFilter] = useState<string>("all");
   const [mapOpen, setMapOpen] = useState(false);
+  const mapPaneRef = useRef<HTMLDivElement>(null);
+  const [mapHeight, setMapHeight] = useState(280);
 
   const slides = useMemo(
     () => orderViewerSlides(allSlides, sortDir, yearFilter),
@@ -436,7 +438,7 @@ export function Chapter3AlbumFullscreenViewer({
         }
         onClose();
       }
-      if (typing || mapOpen) return;
+      if (typing) return;
       if (event.key === "ArrowRight") {
         event.preventDefault();
         go(1);
@@ -543,6 +545,17 @@ export function Chapter3AlbumFullscreenViewer({
     setMapOpen(true);
   };
 
+  useEffect(() => {
+    if (!mapOpen) return;
+    const pane = mapPaneRef.current;
+    if (!pane) return;
+    const apply = () => setMapHeight(Math.max(180, Math.floor(pane.clientHeight)));
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, [mapOpen, slide?.id]);
+
   return (
     <div
       className="chapter3AlbumViewer"
@@ -592,7 +605,7 @@ export function Chapter3AlbumFullscreenViewer({
           type="button"
           className="secondaryButton"
           onClick={() => go(-1)}
-          disabled={safeIndex <= 0 || mapOpen}
+          disabled={safeIndex <= 0}
         >
           이전
         </button>
@@ -600,7 +613,7 @@ export function Chapter3AlbumFullscreenViewer({
           type="button"
           className="secondaryButton"
           onClick={() => go(1)}
-          disabled={atEnd || mapOpen}
+          disabled={atEnd}
         >
           다음
         </button>
@@ -645,26 +658,30 @@ export function Chapter3AlbumFullscreenViewer({
 
       {slide ? (
         <>
-          {mapOpen ? (
-            <div className="chapter3AlbumViewerMapPane">
-              {mapPhotos.length > 0 ? (
-                <Chapter3PhotoRouteMap
-                  key={`viewer-map-${yearFilter}-${sortDir}-${slide.id}`}
-                  photos={mapPhotos}
-                  selectedPhotoId={slide.id}
-                  onPhotoSelect={(photoId) => {
-                    const found = slides.findIndex((item) => item.id === photoId);
-                    if (found >= 0) setIndex(found);
-                  }}
-                  height={Math.max(280, Math.min(520, typeof window !== "undefined" ? Math.floor(window.innerHeight * 0.55) : 360))}
-                  distancePlacement="overlay"
-                  dimOthers
-                />
-              ) : (
-                <p className="chapter3AlbumViewerEmpty">지도에 표시할 GPS 사진이 없습니다.</p>
-              )}
-            </div>
-          ) : (
+          <div className={`chapter3AlbumViewerMain${mapOpen ? " withMap" : ""}`}>
+            {mapOpen && (
+              <div className="chapter3AlbumViewerMapPane" ref={mapPaneRef}>
+                {mapPhotos.length > 0 ? (
+                  <Chapter3PhotoRouteMap
+                    key={`viewer-map-${yearFilter}-${sortDir}`}
+                    photos={mapPhotos}
+                    selectedPhotoId={slide.id}
+                    onPhotoSelect={(photoId) => {
+                      const found = slides.findIndex((item) => item.id === photoId);
+                      if (found >= 0) {
+                        setPaused(true);
+                        setIndex(found);
+                      }
+                    }}
+                    height={mapHeight}
+                    distancePlacement="overlay"
+                    dimOthers
+                  />
+                ) : (
+                  <p className="chapter3AlbumViewerEmpty">지도에 표시할 GPS 사진이 없습니다.</p>
+                )}
+              </div>
+            )}
             <div
               className="chapter3AlbumViewerStage"
               onTouchStart={onTouchStart}
@@ -688,7 +705,7 @@ export function Chapter3AlbumFullscreenViewer({
                 </button>
               </div>
             </div>
-          )}
+          </div>
           <label className="chapter3AlbumViewerMemo">
             <span className="chapter3AlbumViewerMemoLabel">메모</span>
             <input
