@@ -41,8 +41,10 @@ export default function PersonalAlbumApp() {
       "test-user": "Google에서 액세스가 거부되었습니다. OAuth 동의 화면 → 테스트 사용자에 계정을 추가하세요.",
       state: "Google Drive 연결 세션이 만료되었습니다. 다시 「Google Drive 연결」을 눌러 주세요.",
       token: "Google 토큰 교환에 실패했습니다. Client Secret·리디렉션 URI를 확인하세요.",
-      "no-refresh": "refresh_token이 없습니다. Google 계정 → 보안 → 제3자 액세스에서 이 앱을 삭제한 뒤 다시 연결하세요.",
-      denied: "Google Drive 권한이 거부되었습니다. 경고 화면에서 「계속」→「허용」을 선택하세요.",
+      "no-refresh": "refresh_token이 없습니다. myaccount.google.com/connections 에서 여행앨범·캘린더 앱을 삭제한 뒤 다시 연결하세요.",
+      denied: "Google Drive 권한이 거부되었습니다. 「계속」→「허용」을 선택하세요.",
+      storage: "Drive 토큰을 Supabase private 버킷에 저장하지 못했습니다. 서비스 롤·버킷을 확인하세요.",
+      folder: "Google Drive 폴더를 만들지 못했습니다. Drive API 사용 설정을 확인하세요.",
       error: "Google Drive 연결에 실패했습니다. 다시 시도해 주세요.",
     };
     showPasteHint(driveMessages[driveFlag] || `Google Drive 연결 결과: ${driveFlag}`);

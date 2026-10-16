@@ -1,11 +1,18 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
-import { connectGoogleDrive, exchangeGoogleDriveCode } from "../../../../lib/googleDrive";
+import {
+  connectGoogleDrive,
+  exchangeGoogleDriveCode,
+  googleDriveRedirectUri,
+} from "../../../../lib/googleDrive";
 
 export async function GET(request: NextRequest) {
   const back = (flag: string) =>
-    NextResponse.redirect(new URL(`/?googleDrive=${flag}`, request.url));
+    NextResponse.redirect(
+      new URL(`/?googleDrive=${encodeURIComponent(flag)}&personalAlbum=1`, request.url),
+    );
+
   const error = request.nextUrl.searchParams.get("error");
-  if (error) return back(error === "access_denied" ? "test-user" : "error");
+  if (error) return back(error === "access_denied" ? "denied" : "error");
 
   const code = request.nextUrl.searchParams.get("code");
   const state = request.nextUrl.searchParams.get("state");
@@ -19,7 +26,7 @@ export async function GET(request: NextRequest) {
     return back("state");
   }
 
-  const redirectUri = new URL("/api/google-drive/callback", request.nextUrl.origin).toString();
+  const redirectUri = googleDriveRedirectUri(request.nextUrl.origin);
   try {
     const token = await exchangeGoogleDriveCode(code, redirectUri);
     if (token.error) {
@@ -35,7 +42,10 @@ export async function GET(request: NextRequest) {
     response.cookies.delete("google_drive_oauth_state");
     return response;
   } catch (cause) {
-    console.error("google drive callback failed", cause);
+    const message = cause instanceof Error ? cause.message : String(cause);
+    console.error("google drive callback failed", message, cause);
+    if (/service role|Supabase|bucket|storage/i.test(message)) return back("storage");
+    if (/Drive 폴더|folder|drive\.googleapis/i.test(message)) return back("folder");
     return back("error");
   }
 }

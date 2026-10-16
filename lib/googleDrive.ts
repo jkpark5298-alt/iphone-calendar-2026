@@ -25,6 +25,19 @@ export function googleDriveConfigured(): boolean {
   return Boolean(clientId() && clientSecret());
 }
 
+/** OAuth redirect_uri — Vercel 배포 URL과 프로덕션 도메인이 섞이지 않게 고정 */
+export function googleDriveRedirectUri(requestOrigin?: string): string {
+  const configured =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    "";
+  const origin = (configured || requestOrigin || "https://iphone-calendar-2026.vercel.app").replace(
+    /\/$/,
+    "",
+  );
+  return `${origin}/api/google-drive/callback`;
+}
+
 export function clientId(): string {
   return process.env.GOOGLE_DRIVE_CLIENT_ID?.trim() || "";
 }

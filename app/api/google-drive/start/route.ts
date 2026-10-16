@@ -1,17 +1,24 @@
 ﻿import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { googleDriveAuthUrl, googleDriveConfigured } from "../../../../lib/googleDrive";
+import {
+  googleDriveAuthUrl,
+  googleDriveConfigured,
+  googleDriveRedirectUri,
+} from "../../../../lib/googleDrive";
 
 export async function GET(request: NextRequest) {
   if (!googleDriveConfigured()) {
-    return NextResponse.redirect(new URL("/?googleDrive=missing", request.url));
+    return NextResponse.redirect(
+      new URL("/?googleDrive=missing&personalAlbum=1", request.url),
+    );
   }
   const state = randomBytes(16).toString("hex");
-  const redirectUri = new URL("/api/google-drive/callback", request.nextUrl.origin).toString();
+  const redirectUri = googleDriveRedirectUri(request.nextUrl.origin);
   const response = NextResponse.redirect(googleDriveAuthUrl(redirectUri, state));
   response.cookies.set("google_drive_oauth_state", state, {
     httpOnly: true,
     sameSite: "lax",
+    secure: true,
     path: "/",
     maxAge: 600,
   });
