@@ -336,6 +336,7 @@ export function Chapter3MapAlbum({
   }, [defaultAlbumTitle, editingSavedAlbumId]);
 
   const sourceLabel = useMemo(() => {
+    if (isPersonalAlbum) return "개인앨범";
     if (manualState.activeSource === "manual") {
       const trip = manualState.activeTrip;
       const destinations = trip?.planRequest.destinations?.trim();
@@ -345,6 +346,7 @@ export function Chapter3MapAlbum({
     }
     return planRequest.destinations?.trim() || "2번 챕터 확정 계획";
   }, [
+    isPersonalAlbum,
     manualState.activeSource,
     manualState.activeTrip?.title,
     manualState.activeTrip?.planRequest.destinations,

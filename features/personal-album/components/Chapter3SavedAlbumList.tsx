@@ -143,7 +143,9 @@ export function Chapter3SavedAlbumList({
   const emptyText =
     emptyMessage ||
     (variant === "saved"
-      ? "확정된 여행 앨범이 없습니다. 「새 앨범」에서 작성 후 「확정」을 눌러 주세요."
+      ? enableGroupBy
+        ? "확정된 개인앨범이 없습니다. 「새 앨범」에서 작성 후 「확정」을 눌러 주세요."
+        : "확정된 여행 앨범이 없습니다. 「새 앨범」에서 작성 후 「확정」을 눌러 주세요."
       : "작업 중 앨범이 없습니다. 편집 중 「작업 중 저장」을 누르거나, 확정 앨범에서 「수정」을 시작하면 여기에 표시됩니다.");
 
   const viewerAlbum = useMemo(
@@ -219,7 +221,9 @@ export function Chapter3SavedAlbumList({
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="제목·여행일자·여행지로 검색"
+              placeholder={
+                enableGroupBy ? "제목·일자·장소로 검색" : "제목·여행일자·여행지로 검색"
+              }
             />
             {searchTerm && (
               <button type="button" onClick={() => setSearchTerm("")}>
@@ -288,7 +292,8 @@ export function Chapter3SavedAlbumList({
                     </p>
                   )}
                   <p className="chapter3AlbumListTravelDate">
-                    여행 {getAlbumDateRangeText(album.days)}
+                    {enableGroupBy || album.kind === "personal" ? "기간" : "여행"}{" "}
+                    {getAlbumDateRangeText(album.days)}
                   </p>
                   <p className="chapter3AlbumListCreatedDate">
                     작성 {formatAlbumCreatedDate(album.createdAt)} · {album.days.length}일 ·{" "}
@@ -487,7 +492,8 @@ export function Chapter3SavedAlbumList({
                       {selected ? (
                         <div className="chapter3AlbumDeletedDetail">
                           <p>
-                            여행 {getAlbumDateRangeText(album.days)} · {album.days.length}일 · 사진{" "}
+                            {enableGroupBy || album.kind === "personal" ? "기간" : "여행"}{" "}
+                            {getAlbumDateRangeText(album.days)} · {album.days.length}일 · 사진{" "}
                             {photoCount}장
                           </p>
                           <p>
