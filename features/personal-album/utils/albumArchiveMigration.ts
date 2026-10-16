@@ -1,6 +1,7 @@
 import { getSupabase, isSupabaseConfigured, TRAVEL_DIARY_BUCKET } from "../../../lib/supabaseClient";
 import { fileToViewJpegFile } from "./albumPhotoPackUtils";
 import {
+  albumHasIncompleteDriveMove,
   applyCompressedPhotos,
   countOriginalPhotos,
   eachAlbumPhoto,
@@ -359,10 +360,11 @@ async function runAlbumStorageMigrationInner(
     let used = await measureStorageBytes();
     noteStorageUsageRatio(used, quota);
     const pendingDeletes = readPendingDeletes().length > 0;
-    const needsDriveMove = albums.some(
-      (album) => album.status === "saved" && !album.deletedAt && countOriginalPhotos(album) > 0,
-    );
-    if (!shouldStartStorageMigration(used, quota) && !pendingDeletes && !needsDriveMove) {
+    // 예전: 확정 앨범에 원본만 있어도 무조건 Drive 이전 → 용량 여유여도 돌아감
+    // 지금: 80% 이상일 때만 시작. 이미 일부만 옮긴 앨범은 이어서 마무리
+    const needsResumeIncomplete = albums.some(albumHasIncompleteDriveMove);
+    const overMigrateThreshold = shouldStartStorageMigration(used, quota);
+    if (!overMigrateThreshold && !pendingDeletes && !needsResumeIncomplete) {
       return unchanged;
     }
 
@@ -381,10 +383,12 @@ async function runAlbumStorageMigrationInner(
       !isCancelled() &&
       (started
         ? shouldKeepMigrating(used, quota) ||
-          current.some(
-            (album) => album.status === "saved" && !album.deletedAt && countOriginalPhotos(album) > 0,
-          )
-        : shouldStartStorageMigration(used, quota) || needsDriveMove)
+          current.some(albumHasIncompleteDriveMove) ||
+          (overMigrateThreshold &&
+            current.some(
+              (album) => album.status === "saved" && !album.deletedAt && countOriginalPhotos(album) > 0,
+            ))
+        : overMigrateThreshold || needsResumeIncomplete)
     ) {
       const nextAlbum = pickNextAlbumToMigrate(current, archiveMigrationSkipAlbumId());
       if (!nextAlbum || countOriginalPhotos(nextAlbum) === 0) break;

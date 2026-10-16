@@ -126,6 +126,19 @@ export function countOriginalPhotos(album: SavedTravelAlbum): number {
   return eachAlbumPhoto(album).filter((photo) => migrateSourcePath(photo)).length;
 }
 
+/** 이미 Drive로 일부만 옮긴 앨범 — 용량과 무관하게 이어서 마무리 */
+export function albumHasIncompleteDriveMove(album: SavedTravelAlbum): boolean {
+  if (album.status !== "saved" || album.deletedAt) return false;
+  const photos = eachAlbumPhoto(album);
+  let originals = 0;
+  let archived = 0;
+  for (const photo of photos) {
+    if (migrateSourcePath(photo)) originals += 1;
+    if (photoIsArchived(photo)) archived += 1;
+  }
+  return originals > 0 && archived > 0;
+}
+
 export function pickNextAlbumToMigrate(
   albums: SavedTravelAlbum[],
   skipAlbumId?: string | null,
