@@ -3449,6 +3449,14 @@
   overflow: hidden;
 }
 
+.personalAlbumRoot .chapter3AlbumBrowsePhotosPane {
+  flex: 1 1 48%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .personalAlbumRoot .chapter3AlbumBrowseMemo {
   display: flex;
   align-items: center;
@@ -3478,7 +3486,7 @@
 }
 
 .personalAlbumRoot .chapter3AlbumBrowsePhotos {
-  flex: 1 1 48%;
+  flex: 1 1 auto;
   min-height: 112px;
   display: flex;
   gap: 8px;
@@ -3561,11 +3569,6 @@
 
 .personalAlbumRoot .chapter3AlbumBrowsePhoto.on {
   border-color: #38bdf8;
-  opacity: 1;
-}
-
-.personalAlbumRoot .chapter3AlbumBrowsePhotos.isPicked .chapter3AlbumBrowsePhoto:not(.on) {
-  opacity: 0.32;
 }
 
 .personalAlbumRoot .chapter3AlbumBrowseEmpty {
@@ -3593,8 +3596,12 @@
     overflow: hidden;
   }
 
-  .personalAlbumRoot .chapter3AlbumBrowsePhotos {
+  .personalAlbumRoot .chapter3AlbumBrowsePhotosPane {
     flex: 1 1 54%;
+  }
+
+  .personalAlbumRoot .chapter3AlbumBrowsePhotos {
+    flex: 1 1 auto;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
     grid-auto-rows: 148px;

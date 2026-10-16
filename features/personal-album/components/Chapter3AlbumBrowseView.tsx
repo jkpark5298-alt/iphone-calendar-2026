@@ -188,14 +188,13 @@ export function Chapter3AlbumBrowseView({
 
   const selectPhoto = useCallback(
     (photoId: string) => {
-      setSelectedId((current) => {
-        if (current && current !== photoId) {
-          const previous = photos.find((photo) => photo.id === current);
-          const value = memoDraftsRef.current[current] ?? previous?.memo ?? "";
-          flushMemo(current, value);
-        }
-        return photoId;
-      });
+      const current = selectedIdRef.current;
+      if (current && current !== photoId) {
+        const previous = photos.find((photo) => photo.id === current);
+        const value = memoDraftsRef.current[current] ?? previous?.memo ?? "";
+        flushMemo(current, value);
+      }
+      setSelectedId(photoId);
     },
     [flushMemo, photos],
   );
@@ -337,60 +336,59 @@ export function Chapter3AlbumBrowseView({
               </div>
             )}
           </div>
-          {selectedPhoto && (
-            <label className="chapter3AlbumBrowseMemo">
-              <span className="chapter3AlbumBrowseMemoLabel">메모</span>
-              <input
-                className="chapter3AlbumBrowseMemoInput"
-                type="text"
-                value={memoDraft}
-                placeholder="사진 메모 (예: 공항 도착)"
-                onChange={(event) => scheduleMemo(selectedPhoto.id, event.target.value)}
-                onBlur={(event) => flushMemo(selectedPhoto.id, event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    (event.target as HTMLInputElement).blur();
-                  }
-                }}
-              />
-            </label>
-          )}
-          <div
-            className={`chapter3AlbumBrowsePhotos${selectedId ? " isPicked" : ""}`}
-            aria-label="사진"
-          >
-            {photos.length === 0 ? (
-              <p className="chapter3AlbumBrowseEmpty">{emptyPhotosText}</p>
-            ) : (
-              photos.map((photo) => {
-                const src = photoDisplayUrl(photo);
-                if (!src) return null;
-                const selected = photo.id === selectedId;
-                const memoText = (
-                  selected ? memoDraft : memoDrafts[photo.id] ?? photo.memo ?? ""
-                ).trim();
-                return (
-                  <button
-                    key={photo.id}
-                    type="button"
-                    ref={(node) => {
-                      photoButtonRefs.current[photo.id] = node;
-                    }}
-                    className={`chapter3AlbumBrowsePhoto${selected ? " on" : ""}`}
-                    onClick={() => selectPhoto(photo.id)}
-                  >
-                    <img src={src} alt={photo.fileName || "개인 사진"} draggable={false} />
-                    <BrowsePhotoPlace photo={photo} />
-                    {memoText ? (
-                      <span className="chapter3AlbumBrowseMemoChip" title={memoText}>
-                        {memoText}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })
+          <div className="chapter3AlbumBrowsePhotosPane">
+            {selectedPhoto && (
+              <label className="chapter3AlbumBrowseMemo">
+                <span className="chapter3AlbumBrowseMemoLabel">메모</span>
+                <input
+                  className="chapter3AlbumBrowseMemoInput"
+                  type="text"
+                  value={memoDraft}
+                  placeholder="사진 메모 (예: 공항 도착)"
+                  onChange={(event) => scheduleMemo(selectedPhoto.id, event.target.value)}
+                  onBlur={(event) => flushMemo(selectedPhoto.id, event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      (event.target as HTMLInputElement).blur();
+                    }
+                  }}
+                />
+              </label>
             )}
+            <div className="chapter3AlbumBrowsePhotos" aria-label="사진">
+              {photos.length === 0 ? (
+                <p className="chapter3AlbumBrowseEmpty">{emptyPhotosText}</p>
+              ) : (
+                photos.map((photo) => {
+                  const src = photoDisplayUrl(photo);
+                  if (!src) return null;
+                  const selected = photo.id === selectedId;
+                  const memoText = (
+                    selected ? memoDraft : memoDrafts[photo.id] ?? photo.memo ?? ""
+                  ).trim();
+                  return (
+                    <button
+                      key={photo.id}
+                      type="button"
+                      ref={(node) => {
+                        photoButtonRefs.current[photo.id] = node;
+                      }}
+                      className={`chapter3AlbumBrowsePhoto${selected ? " on" : ""}`}
+                      onClick={() => selectPhoto(photo.id)}
+                    >
+                      <img src={src} alt={photo.fileName || "개인 사진"} draggable={false} />
+                      <BrowsePhotoPlace photo={photo} />
+                      {memoText ? (
+                        <span className="chapter3AlbumBrowseMemoChip" title={memoText}>
+                          {memoText}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       )}

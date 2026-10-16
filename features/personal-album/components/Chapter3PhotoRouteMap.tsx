@@ -66,8 +66,8 @@ type NaverMapsApi = {
   };
 };
 
-function escapeHtml(text: string): string {
-  return text
+function escapeHtml(text: string | undefined | null): string {
+  return String(text ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -184,10 +184,10 @@ function buildRoutePoints(photos: Chapter3AlbumPhoto[]): RoutePoint[] {
   }));
 }
 
-/** 메모 등 표시 전용 필드 변경은 지도 재생성 트리거에서 제외 */
+/** 메모·표시명 변경은 지도 재생성 트리거에서 제외 (선택·메모 입력 시 크래시/점프 방지) */
 function routeLayoutKey(photos: Chapter3AlbumPhoto[]): string {
   return buildRoutePoints(photos)
-    .map((p) => `${p.id}:${p.lat}:${p.lng}:${p.index}:${p.imageUrl}:${p.name}`)
+    .map((p) => `${p.id}:${p.lat}:${p.lng}:${p.index}:${p.imageUrl}`)
     .join("|");
 }
 
@@ -578,7 +578,11 @@ export function Chapter3PhotoRouteMap({
     const selectedOnMap =
       selectedPhotoId != null && markerHandlesRef.current.some((item) => item.id === selectedPhotoId);
     const focusId = selectedOnMap ? selectedPhotoId : null;
-    markerHandlesRef.current.forEach((item) => item.apply(focusId));
+    try {
+      markerHandlesRef.current.forEach((item) => item.apply(focusId));
+    } catch (error) {
+      console.warn("photo route marker update failed", error);
+    }
   }, [selectedPhotoId, dimOthers]);
 
   useEffect(() => {
