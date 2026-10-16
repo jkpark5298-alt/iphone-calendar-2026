@@ -347,14 +347,38 @@ export function Chapter3PhotoRouteMap({
 
     let map: import("leaflet").Map | null = null;
     let cancelled = false;
+    const runId = Symbol("leaflet-route-map");
+    (mapRef.current as HTMLElement & { __leafletRun?: symbol }).__leafletRun = runId;
 
     void (async () => {
       const leaflet = await import("leaflet");
-      if (cancelled || !mapRef.current) return;
+      const container = mapRef.current;
+      if (cancelled || !container) return;
+      if ((container as HTMLElement & { __leafletRun?: symbol }).__leafletRun !== runId) return;
+
+      // 이전 인스턴스가 남아 있으면 제거 (날짜 전환 시 "already initialized" 방지)
+      const existing = (container as HTMLElement & { _leaflet_id?: number })._leaflet_id;
+      if (existing) {
+        try {
+          leafletMapRef.current?.remove();
+        } catch {
+          /* ignore */
+        }
+        delete (container as HTMLElement & { _leaflet_id?: number })._leaflet_id;
+        container.replaceChildren();
+      }
 
       const L = leaflet.default;
-      const container = mapRef.current;
-      map = L.map(container, { zoomControl: true, attributionControl: true });
+      try {
+        map = L.map(container, { zoomControl: true, attributionControl: true });
+      } catch (error) {
+        console.warn("leaflet map init failed", error);
+        return;
+      }
+      if (cancelled || (container as HTMLElement & { __leafletRun?: symbol }).__leafletRun !== runId) {
+        map.remove();
+        return;
+      }
       leafletMapRef.current = map;
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -364,7 +388,7 @@ export function Chapter3PhotoRouteMap({
 
       const activeId = selectedPhotoIdRef.current;
       const markerHandles: Array<{ id: string; apply: (selectedId: string | null) => void }> = [];
-      const markers = points.map((point) => {
+      points.forEach((point) => {
         const paint = (selectedId: string | null | undefined) => {
           const selectedOnMap = selectedId != null && points.some((item) => item.id === selectedId);
           const active = selectedOnMap && point.id === selectedId;
@@ -378,8 +402,8 @@ export function Chapter3PhotoRouteMap({
               className: "chapter3PhotoRouteLeafletIcon",
               html: buildPhotoRouteMarkerHtml({
                 index: point.index,
-                imageUrl: point.imageUrl,
-                address: point.name,
+                imageUrl: point.imageUrl || "",
+                address: point.name || "",
                 active,
                 dimmed,
               }),
@@ -397,12 +421,15 @@ export function Chapter3PhotoRouteMap({
         markerHandles.push({
           id: point.id,
           apply: (selectedId) => {
-            const next = paint(selectedId);
-            marker.setIcon(next.icon);
-            marker.setZIndexOffset(next.active ? 1000 : point.index * 10);
+            try {
+              const next = paint(selectedId);
+              marker.setIcon(next.icon);
+              marker.setZIndexOffset(next.active ? 1000 : point.index * 10);
+            } catch (error) {
+              console.warn("leaflet marker update failed", error);
+            }
           },
         });
-        return marker;
       });
       markerHandlesRef.current = markerHandles;
       markerHandles.forEach((item) => item.apply(selectedPhotoIdRef.current ?? null));
@@ -429,21 +456,26 @@ export function Chapter3PhotoRouteMap({
         map.fitBounds(bounds, { padding: [80, 48], maxZoom: 15 });
       }
 
-      setOsmReady(true);
-
-      return () => {
-        markers.forEach((m) => m.remove());
-      };
+      if (!cancelled) setOsmReady(true);
     })();
 
     return () => {
       cancelled = true;
       setOsmReady(false);
       markerHandlesRef.current = [];
+      const current = leafletMapRef.current || map;
       leafletMapRef.current = null;
-      if (map) {
-        map.remove();
-        map = null;
+      try {
+        current?.remove();
+      } catch {
+        /* ignore */
+      }
+      const container = mapRef.current as
+        | (HTMLElement & { _leaflet_id?: number; __leafletRun?: symbol })
+        | null;
+      if (container) {
+        delete container._leaflet_id;
+        container.replaceChildren();
       }
     };
   }, [isDomestic, points, roadPath, route.usedRoad]);
@@ -464,105 +496,155 @@ export function Chapter3PhotoRouteMap({
     const naver = (window as Window & { naver?: NaverMapsApi }).naver;
     if (!naver?.maps) return;
 
-    const activeId = selectedPhotoIdRef.current;
-    const focus = points.find((p) => p.id === activeId) || points[0];
-    mapRef.current.replaceChildren();
-    const map = new naver.maps.Map(mapRef.current, {
-      center: new naver.maps.LatLng(focus.lat, focus.lng),
-      zoom: activeId ? 15 : 13,
-    });
-    naverMapApiRef.current = map;
-    const resizeMap = () => naver.maps.Event.trigger(map, "resize");
-    const resizeObserver = new ResizeObserver(() => resizeMap());
-    if (mapRef.current) resizeObserver.observe(mapRef.current);
-    const resizeFrame = window.requestAnimationFrame(resizeMap);
+    const container = mapRef.current;
+    let map: {
+      setCenter: (c: unknown) => void;
+      setZoom: (z: number) => void;
+      fitBounds: (b: unknown, padding?: unknown) => void;
+      destroy?: () => void;
+    } | null = null;
+    let polyline: { setMap: (m: unknown) => void } | null = null;
+    let markers: Array<{
+      id: string;
+      marker: { setMap: (m: unknown) => void; setIcon: (icon: unknown) => void; setZIndex: (z: number) => void };
+      apply: (selectedId: string | null) => void;
+    }> = [];
+    let resizeObserver: ResizeObserver | null = null;
+    let resizeFrame = 0;
 
-    const markers = points.map((point) => {
-      const paint = (selectedId: string | null | undefined) => {
-        const selectedOnMap = selectedId != null && points.some((item) => item.id === selectedId);
-        const active = selectedOnMap && point.id === selectedId;
-        const dimmed = Boolean(dimOthersRef.current && selectedOnMap && !active);
-        const width = active ? 96 : MARKER_WIDTH;
-        const height = active ? 128 : MARKER_HEIGHT;
-        return {
-          active,
-          icon: {
-            content: buildPhotoRouteMarkerHtml({
-              index: point.index,
-              imageUrl: point.imageUrl,
-              address: point.name,
-              active,
-              dimmed,
-              asButton: true,
-            }),
-            anchor: new naver.maps.Point(width / 2, height),
-          },
-          zIndex: active ? 500 : 100 + point.index,
+    try {
+      const activeId = selectedPhotoIdRef.current;
+      const focus = points.find((p) => p.id === activeId) || points[0];
+      container.replaceChildren();
+      map = new naver.maps.Map(container, {
+        center: new naver.maps.LatLng(focus.lat, focus.lng),
+        zoom: activeId ? 15 : 13,
+      });
+      naverMapApiRef.current = map;
+      const resizeMap = () => {
+        try {
+          if (map) naver.maps.Event.trigger(map, "resize");
+        } catch {
+          /* map already destroyed */
+        }
+      };
+      resizeObserver = new ResizeObserver(resizeMap);
+      resizeObserver.observe(container);
+      resizeFrame = window.requestAnimationFrame(resizeMap);
+
+      markers = points.map((point) => {
+        const paint = (selectedId: string | null | undefined) => {
+          const selectedOnMap = selectedId != null && points.some((item) => item.id === selectedId);
+          const active = selectedOnMap && point.id === selectedId;
+          const dimmed = Boolean(dimOthersRef.current && selectedOnMap && !active);
+          const width = active ? 96 : MARKER_WIDTH;
+          const height = active ? 128 : MARKER_HEIGHT;
+          return {
+            active,
+            icon: {
+              content: buildPhotoRouteMarkerHtml({
+                index: point.index,
+                imageUrl: point.imageUrl || "",
+                address: point.name || "",
+                active,
+                dimmed,
+                asButton: true,
+              }),
+              anchor: new naver.maps.Point(width / 2, height),
+            },
+            zIndex: active ? 500 : 100 + point.index,
+          };
         };
-      };
-      const first = paint(activeId);
-      const marker = new naver.maps.Marker({
-        position: new naver.maps.LatLng(point.lat, point.lng),
-        map,
-        icon: first.icon,
-        zIndex: first.zIndex,
+        const first = paint(activeId);
+        const marker = new naver.maps.Marker({
+          position: new naver.maps.LatLng(point.lat, point.lng),
+          map,
+          icon: first.icon,
+          zIndex: first.zIndex,
+        });
+        naver.maps.Event.addListener(marker, "click", () => onPhotoSelectRef.current?.(point.id));
+        return {
+          id: point.id,
+          marker,
+          apply: (selectedId: string | null) => {
+            try {
+              const next = paint(selectedId);
+              marker.setIcon(next.icon);
+              marker.setZIndex(next.zIndex);
+            } catch (error) {
+              console.warn("naver marker update failed", error);
+            }
+          },
+        };
       });
-      naver.maps.Event.addListener(marker, "click", () => onPhotoSelectRef.current?.(point.id));
-      return {
-        id: point.id,
-        marker,
-        apply: (selectedId: string | null) => {
-          const next = paint(selectedId);
-          marker.setIcon(next.icon);
-          marker.setZIndex(next.zIndex);
-        },
-      };
-    });
-    markerHandlesRef.current = markers.map(({ id, apply }) => ({ id, apply }));
+      markerHandlesRef.current = markers.map(({ id, apply }) => ({ id, apply }));
 
-    const path = route.usedRoad && roadPath.length >= 2 ? roadPath : [];
+      const path = route.usedRoad && roadPath.length >= 2 ? roadPath : [];
+      polyline =
+        path.length >= 2
+          ? new naver.maps.Polyline({
+              path: path.map((p) => new naver.maps.LatLng(p.lat, p.lng)),
+              strokeColor: ROUTE_GREEN,
+              strokeOpacity: 0.9,
+              strokeWeight: 5,
+              map,
+              zIndex: 50,
+            })
+          : null;
 
-    const polyline =
-      path.length >= 2
-        ? new naver.maps.Polyline({
-            path: path.map((p) => new naver.maps.LatLng(p.lat, p.lng)),
-            strokeColor: ROUTE_GREEN,
-            strokeOpacity: 0.9,
-            strokeWeight: 5,
-            map,
-            zIndex: 50,
-          })
-        : null;
-
-    if (activeId) {
-      const sel = points.find((p) => p.id === activeId);
-      if (sel) {
-        map.setCenter(new naver.maps.LatLng(sel.lat, sel.lng));
-        map.setZoom(16);
+      if (activeId) {
+        const sel = points.find((p) => p.id === activeId);
+        if (sel) {
+          map.setCenter(new naver.maps.LatLng(sel.lat, sel.lng));
+          map.setZoom(16);
+        }
+      } else if (points.length === 1) {
+        map.setCenter(new naver.maps.LatLng(points[0].lat, points[0].lng));
+        map.setZoom(15);
+      } else {
+        const bounds = new naver.maps.LatLngBounds();
+        points.forEach((p) => bounds.extend(new naver.maps.LatLng(p.lat, p.lng)));
+        map.fitBounds(bounds, {
+          top: 72,
+          right: 40,
+          bottom: distancePlacement === "overlay" ? 64 : 40,
+          left: 40,
+          maxZoom: 14,
+        });
       }
-    } else if (points.length === 1) {
-      map.setCenter(new naver.maps.LatLng(points[0].lat, points[0].lng));
-      map.setZoom(15);
-    } else {
-      const bounds = new naver.maps.LatLngBounds();
-      points.forEach((p) => bounds.extend(new naver.maps.LatLng(p.lat, p.lng)));
-      map.fitBounds(bounds, {
-        top: 72,
-        right: 40,
-        bottom: distancePlacement === "overlay" ? 64 : 40,
-        left: 40,
-        maxZoom: 14,
-      });
+    } catch (error) {
+      console.warn("naver photo route map failed", error);
+      naverMapApiRef.current = null;
+      markerHandlesRef.current = [];
     }
 
     return () => {
-      window.cancelAnimationFrame(resizeFrame);
-      resizeObserver.disconnect();
-      naverMapApiRef.current = null;
-      markerHandlesRef.current = [];
-      markers.forEach((item) => item.marker.setMap(null));
-      polyline?.setMap(null);
-      (map as { destroy?: () => void }).destroy?.();
+      try {
+        window.cancelAnimationFrame(resizeFrame);
+        resizeObserver?.disconnect();
+        naverMapApiRef.current = null;
+        markerHandlesRef.current = [];
+        markers.forEach((item) => {
+          try {
+            item.marker.setMap(null);
+          } catch {
+            /* ignore */
+          }
+        });
+        try {
+          polyline?.setMap(null);
+        } catch {
+          /* ignore */
+        }
+        try {
+          (map as { destroy?: () => void } | null)?.destroy?.();
+        } catch {
+          /* ignore */
+        }
+        container.replaceChildren();
+      } catch (error) {
+        console.warn("naver photo route map cleanup failed", error);
+      }
     };
   }, [distancePlacement, isDomestic, naverLoaded, points, roadPath, route.usedRoad]);
 

@@ -317,6 +317,7 @@ export function Chapter3AlbumBrowseView({
           <div className="chapter3AlbumBrowseMap" ref={mapPaneRef}>
             {gpsPhotos.length > 0 ? (
               <Chapter3PhotoRouteMap
+                key={section?.key || "map"}
                 photos={gpsPhotos}
                 selectedPhotoId={selectedId}
                 onPhotoSelect={selectPhoto}
