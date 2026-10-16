@@ -577,6 +577,8 @@ export default function HomePage() {
   const [photoBookInputImageMemos, setPhotoBookInputImageMemos] = useState<string[]>([]);
   const [pbMemoEditIdx, setPbMemoEditIdx] = useState<number | null>(null);
   const [photoBookTab, setPhotoBookTab] = useState<"index" | "register" | "personal-album">("index");
+  /** 한 번 연 뒤에는 언마운트하지 않아 앨범 목록이 빈 화면으로 깜빡이지 않게 함 */
+  const [personalAlbumKeepAlive, setPersonalAlbumKeepAlive] = useState(false);
 
   // Google Drive OAuth 콜백 → 포토북 개인앨범 탭으로 복귀
   useEffect(() => {
@@ -587,6 +589,10 @@ export default function HomePage() {
     setInfoSubView("photobook");
     setPhotoBookTab("personal-album");
   }, []);
+
+  useEffect(() => {
+    if (photoBookTab === "personal-album") setPersonalAlbumKeepAlive(true);
+  }, [photoBookTab]);
 
   // Restructured Info Repository states for global notes catalog
   const [allInstaCards, setAllInstaCards] = useState<InstaInfoCard[]>([]);
@@ -7141,8 +7147,13 @@ ${photo.memoText}
               </div>
               )}
 
-              {photoBookTab === "personal-album" && (
-              <div style={{ position: "relative" }}>
+              {personalAlbumKeepAlive && (
+              <div
+                style={{
+                  position: "relative",
+                  display: photoBookTab === "personal-album" ? "block" : "none",
+                }}
+              >
                 <PersonalAlbumApp />
               </div>
               )}

@@ -242,8 +242,22 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
     let cancelled = false;
 
     const hydrate = async () => {
+      // 원격 응답 전에 로컬을 먼저 그려 「앨범이 사라졌다 나왔다」 깜빡임을 막음
       const localState = readTravelAlbumsStateFromLocalStorage();
-      setSyncStatus("PC·아이폰 Supabase 불러오는 중");
+      if (localState) {
+        const localRecovered = recoverOrphanedPlanAlbums(
+          localState.albums,
+          localState.deletedAlbums || [],
+        );
+        applyAlbumLists(localRecovered, localState.deletedAlbums || []);
+        lastRemoteUpdatedAtRef.current = localState.updatedAt || "";
+        setSyncStatus(
+          `로컬 앨범 표시 중 (${repairAndDedupeAlbums(localRecovered).length}건) · 동기화…`,
+        );
+      } else {
+        setSyncStatus("PC·아이폰 Supabase 불러오는 중");
+      }
+
       const remoteState = await loadTravelAlbumsFromSupabase();
       if (cancelled) return;
 
@@ -296,9 +310,12 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
     void hydrate();
     return () => {
       cancelled = true;
-      flushCloudSave();
+      // 언마운트 시에만 클라우드 flush (의존성 변경으로 재실행될 때 목록이 비지 않게)
+      flushCloudSaveRef.current();
     };
-  }, [applyMergedState, applyAlbumLists, flushCloudSave]);
+    // mount 1회만: 콜백 identity 변경으로 hydrate가 재시작되면 목록이 깜빡임
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // PC · 아이폰 간 주기적 동기화 (포커스 · 30초)
   useEffect(() => {
