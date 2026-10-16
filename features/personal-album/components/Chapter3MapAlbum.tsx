@@ -2368,11 +2368,12 @@ export function Chapter3MapAlbum({
           <p className="chapter3DriveBannerText">Google Drive 연결됨 — 압축 앨범을 Drive에서 엽니다.</p>
         ) : (
           <>
-            <p className="chapter3DriveBannerText">
-              저장 공간이 부족하면 압축본을 Google Drive로 옮깁니다. 먼저 연결해 주세요.
-              허용 후에도 이 버튼이 남으면 Google 계정 → 보안 → 제3자 액세스에서 「여행앨범」을
-              삭제한 뒤 다시 연결하세요.
-            </p>
+                <p className="chapter3DriveBannerText">
+                  저장 공간이 부족하면 압축본을 Google Drive로 옮깁니다. 먼저 연결해 주세요.
+                  Google 경고 화면에서는 큰 파란 버튼이 아니라 왼쪽 「계속」을 누른 뒤 「허용」하세요.
+                  허용 후에도 이 버튼이 남으면 Google 계정 → 보안 → 제3자 액세스에서
+                  「iphone-calendar-drive」를 삭제한 뒤 다시 연결하세요.
+                </p>
             <button
               type="button"
               className="chapter3DriveBannerButton"
