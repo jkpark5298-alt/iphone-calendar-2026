@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  getNaverGeocodeCredentials,
+  isKoreaCoordinates,
+  reverseGeocodeWithNaver,
+} from "../../../features/personal-album/utils/naverGeocodeUtils";
+
 type NominatimAddress = {
   city?: string;
   town?: string;
@@ -30,7 +36,7 @@ function looksLikeCoordinateText(text?: string) {
 /** 아이폰 사진앱 스타일: "파주시 - 기산리" */
 function formatKoreanPlaceName(
   parts: { city?: string; detail?: string; state?: string },
-  displayName?: string
+  displayName?: string,
 ): string {
   const city = normalizePlacePart(parts.city);
   const detail = normalizePlacePart(parts.detail);
@@ -68,8 +74,33 @@ function formatFromNominatim(address?: NominatimAddress | null, displayName?: st
       detail,
       state: address.state || address.province,
     },
-    displayName
+    displayName,
   );
+}
+
+function formatFromNaverFullAddress(full: string): string {
+  const parts = full.split(/\s+/).filter(Boolean);
+  // "경기도 파주시 운정2동 …" → "파주시 - 운정2동"
+  if (parts.length >= 3 && /[시도]$/.test(parts[0]) && /[시군구]$/.test(parts[1])) {
+    return formatKoreanPlaceName({ state: parts[0], city: parts[1], detail: parts[2] });
+  }
+  if (parts.length >= 2 && /[시군구]$/.test(parts[0])) {
+    return formatKoreanPlaceName({ city: parts[0], detail: parts[1] });
+  }
+  return full;
+}
+
+async function reverseWithNaver(lat: number, lon: number): Promise<string> {
+  const credentials = getNaverGeocodeCredentials();
+  if (!credentials || !isKoreaCoordinates(lat, lon)) return "";
+  const full = await reverseGeocodeWithNaver(
+    lat,
+    lon,
+    credentials.keyId,
+    credentials.keySecret,
+  );
+  if (!full?.trim()) return "";
+  return formatFromNaverFullAddress(full.trim());
 }
 
 async function reverseWithBigDataCloud(lat: number, lon: number): Promise<string> {
@@ -94,7 +125,6 @@ async function reverseWithBigDataCloud(lat: number, lon: number): Promise<string
   };
 
   const admin = data.localityInfo?.administrative || [];
-  // adminLevel 6 ≈ 시/군, 8+ ≈ 읍/면/동/리
   const cityFromAdmin = admin.find((item) => item.adminLevel === 6)?.name || data.city;
   const detailFromAdmin =
     [...admin].reverse().find((item) => (item.adminLevel || 0) >= 8)?.name || data.locality;
@@ -131,32 +161,98 @@ async function reverseWithNominatim(lat: number, lon: number): Promise<string> {
   return formatFromNominatim(data.address, data.display_name);
 }
 
-export async function GET(request: NextRequest) {
-  const lat = Number(request.nextUrl.searchParams.get("lat"));
-  const lon = Number(request.nextUrl.searchParams.get("lon"));
+async function resolvePlaceName(lat: number, lon: number, preferDomestic: boolean) {
+  let place = "";
+  let provider = "";
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return NextResponse.json({ error: "invalid coordinates" }, { status: 400 });
+  if (preferDomestic || isKoreaCoordinates(lat, lon)) {
+    place = await reverseWithNaver(lat, lon);
+    if (place) provider = "naver";
   }
-  if (Math.abs(lat) < 0.00001 && Math.abs(lon) < 0.00001) {
-    return NextResponse.json({ place: "" });
+
+  if (!place) {
+    place = await reverseWithBigDataCloud(lat, lon);
+    if (place) provider = "bigdatacloud";
+  }
+
+  if (!place) {
+    place = await reverseWithNominatim(lat, lon);
+    if (place) provider = "nominatim";
+  }
+
+  if (looksLikeCoordinateText(place)) {
+    place = "";
+    provider = "";
+  }
+
+  return { place, provider };
+}
+
+function parseCoords(input: { lat?: unknown; lon?: unknown; lng?: unknown }) {
+  const lat = Number(input.lat);
+  const lon = Number(input.lon ?? input.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) < 0.00001 && Math.abs(lon) < 0.00001) return null;
+  return { lat, lon };
+}
+
+function placeResponse(place: string, provider: string) {
+  return NextResponse.json({
+    ok: Boolean(place),
+    place,
+    placeName: place,
+    provider: provider || undefined,
+  });
+}
+
+export async function GET(request: NextRequest) {
+  const coords = parseCoords({
+    lat: request.nextUrl.searchParams.get("lat"),
+    lon: request.nextUrl.searchParams.get("lon"),
+    lng: request.nextUrl.searchParams.get("lng"),
+  });
+  if (!coords) {
+    return NextResponse.json({ ok: false, error: "invalid coordinates", place: "", placeName: "" }, { status: 400 });
   }
 
   try {
-    // BigDataCloud가 Vercel/브라우저에서 더 안정적인 경우가 많아 우선 사용
-    let place = await reverseWithBigDataCloud(lat, lon);
-    let provider = "bigdatacloud";
-    if (!place) {
-      place = await reverseWithNominatim(lat, lon);
-      provider = "nominatim";
+    const domesticHint = request.nextUrl.searchParams.get("isDomestic");
+    const preferDomestic =
+      domesticHint === "1" ||
+      domesticHint === "true" ||
+      isKoreaCoordinates(coords.lat, coords.lon);
+    const result = await resolvePlaceName(coords.lat, coords.lon, preferDomestic);
+    return placeResponse(result.place, result.provider);
+  } catch (error) {
+    console.warn("reverse-geocode GET failed", error);
+    return placeResponse("", "");
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = (await request.json()) as {
+      lat?: unknown;
+      lng?: unknown;
+      lon?: unknown;
+      isDomestic?: unknown;
+    };
+    const coords = parseCoords(body);
+    if (!coords) {
+      return NextResponse.json(
+        { ok: false, error: "invalid coordinates", place: "", placeName: "" },
+        { status: 400 },
+      );
     }
 
-    return NextResponse.json({
-      place: looksLikeCoordinateText(place) ? "" : place,
-      provider,
-    });
+    const preferDomestic =
+      body.isDomestic === true ||
+      body.isDomestic === "true" ||
+      isKoreaCoordinates(coords.lat, coords.lon);
+    const result = await resolvePlaceName(coords.lat, coords.lon, preferDomestic);
+    return placeResponse(result.place, result.provider);
   } catch (error) {
-    console.warn("reverse-geocode failed", error);
-    return NextResponse.json({ place: "" }, { status: 200 });
+    console.warn("reverse-geocode POST failed", error);
+    return placeResponse("", "");
   }
 }

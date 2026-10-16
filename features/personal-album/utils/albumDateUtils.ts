@@ -24,11 +24,18 @@ export function formatDateSlash(value: string): string {
     return `${slashMatch[1]}/${month}/${day}`;
   }
 
-  const dotted = trimmed.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})/);
+  const dotted = trimmed.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
   if (dotted) {
     const month = dotted[2].padStart(2, "0");
     const day = dotted[3].padStart(2, "0");
     return `${dotted[1]}/${month}/${day}`;
+  }
+
+  const korean = trimmed.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\./);
+  if (korean) {
+    const month = korean[2].padStart(2, "0");
+    const day = korean[3].padStart(2, "0");
+    return `${korean[1]}/${month}/${day}`;
   }
 
   const parsed = Date.parse(trimmed.includes("T") ? trimmed : `${trimmed}T00:00:00`);
@@ -40,7 +47,7 @@ export function formatDateSlash(value: string): string {
     return `${y}/${m}/${d}`;
   }
 
-  return trimmed;
+  return "";
 }
 
 export function resolveAlbumDayDateIso(day: {

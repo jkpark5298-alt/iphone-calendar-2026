@@ -477,10 +477,11 @@ export async function resolveExifPlaceName(
       const data = (await res.json()) as {
         ok?: boolean;
         placeName?: string;
+        place?: string;
         fallback?: string;
       };
-      const placeName = data.placeName?.trim();
-      if (data.ok && placeName && !isGpsCoordinateLabel(placeName)) {
+      const placeName = (data.placeName || data.place || "").trim();
+      if (placeName && !isGpsCoordinateLabel(placeName) && data.ok !== false) {
         return placeName;
       }
     } catch {
