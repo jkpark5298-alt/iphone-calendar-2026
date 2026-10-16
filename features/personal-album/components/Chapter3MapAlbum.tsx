@@ -2362,6 +2362,30 @@ export function Chapter3MapAlbum({
         </button>
       </nav>
 
+      {/* 확정·새 앨범 어느 탭에서도 Drive 연결이 보이도록 (이전엔 library만) */}
+      <div className="chapter3DriveBanner" role="status">
+        {driveConnected ? (
+          <p className="chapter3DriveBannerText">Google Drive 연결됨 — 압축 앨범을 Drive에서 엽니다.</p>
+        ) : (
+          <>
+            <p className="chapter3DriveBannerText">
+              저장 공간이 부족하면 압축본을 Google Drive로 옮깁니다. 먼저 연결해 주세요.
+              허용 후에도 이 버튼이 남으면 Google 계정 → 보안 → 제3자 액세스에서 「여행앨범」을
+              삭제한 뒤 다시 연결하세요.
+            </p>
+            <button
+              type="button"
+              className="chapter3DriveBannerButton"
+              onClick={() => {
+                window.location.href = "/api/google-drive/start";
+              }}
+            >
+              Google Drive 연결
+            </button>
+          </>
+        )}
+      </div>
+
       {albumView === "library" ? (
         <>
           <nav className="chapter3AlbumLibraryFilter" aria-label="앨범 상태 필터">
@@ -2380,29 +2404,6 @@ export function Chapter3MapAlbum({
               작업 중 ({draftAlbumList.length})
             </button>
           </nav>
-
-          <div className="chapter3DriveBanner" role="status">
-            {driveConnected ? (
-              <p className="chapter3DriveBannerText">Google Drive 연결됨 — 압축 앨범을 Drive에서 엽니다.</p>
-            ) : (
-              <>
-                <p className="chapter3DriveBannerText">
-                  저장 공간이 부족하면 압축본을 Google Drive로 옮깁니다. 먼저 연결해 주세요.
-                  허용 후에도 이 버튼이 남으면 Google 계정 → 보안 → 제3자 액세스에서 「여행앨범」을
-                  삭제한 뒤 다시 연결하세요.
-                </p>
-                <button
-                  type="button"
-                  className="chapter3DriveBannerButton"
-                  onClick={() => {
-                    window.location.href = "/api/google-drive/start";
-                  }}
-                >
-                  Google Drive 연결
-                </button>
-              </>
-            )}
-          </div>
 
           <div className="chapter3AlbumCreateToolbar">
             <button type="button" className="gradientButton chapter3AlbumToolbarPrimary" onClick={startNewAlbum}>
