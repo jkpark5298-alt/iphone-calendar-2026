@@ -2594,15 +2594,20 @@
 @media (min-width: 801px) {
   .personalAlbumRoot .chapter3AlbumViewerMain.withMap {
     flex-direction: row;
+    align-items: stretch;
   }
 
   .personalAlbumRoot .chapter3AlbumViewerMain.withMap .chapter3AlbumViewerMapPane {
     flex: 1 1 50%;
+    height: auto;
+    align-self: stretch;
     border-right: 1px solid rgba(148, 163, 184, 0.28);
   }
 
   .personalAlbumRoot .chapter3AlbumViewerMain.withMap .chapter3AlbumViewerStage {
     flex: 1 1 50%;
+    height: auto;
+    align-self: stretch;
   }
 
   .personalAlbumRoot .chapter3AlbumViewerPhoto {
@@ -2616,7 +2621,7 @@
 
   .personalAlbumRoot .chapter3AlbumViewerMain.withMap .chapter3AlbumViewerPhoto img {
     max-width: 100%;
-    max-height: min(68dvh, 100%);
+    max-height: min(68dvh, 720px);
   }
 
   .personalAlbumRoot .chapter3AlbumViewerMemoChip {

@@ -305,7 +305,13 @@ export function Chapter3PhotoRouteMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutKey]);
 
-  const isDomestic = points.length > 0 && points.every((p) => isDomesticPhotoLocation(p.lat, p.lng));
+  /** 지금 보고 있는 사진(선택) 기준 — 한국이면 네이버, 해외면 구글 */
+  const isDomestic = useMemo(() => {
+    if (points.length === 0) return true;
+    const focus =
+      (selectedPhotoId ? points.find((p) => p.id === selectedPhotoId) : null) || points[0];
+    return isDomesticPhotoLocation(focus.lat, focus.lng);
+  }, [points, selectedPhotoId]);
   const mapRef = useRef<HTMLDivElement>(null);
   const [naverLoaded, setNaverLoaded] = useState(false);
   const [mapConfig, setMapConfig] = useState<ReturnType<typeof getNaverMapKey>>(null);
