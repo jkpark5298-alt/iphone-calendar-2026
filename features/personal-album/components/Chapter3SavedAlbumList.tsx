@@ -255,8 +255,13 @@ export function Chapter3SavedAlbumList({
             return (
               <article className="bundleCard compact chapter3SavedAlbumCard" key={album.id}>
                 {firstPhoto && (
-                  <div className="bundleThumbnail">
-                    <img src={photoDisplayUrl(firstPhoto)} alt="" />
+                  <div className="bundleThumbnail" aria-hidden="true">
+                    <img
+                      src={photoDisplayUrl(firstPhoto)}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                    />
                   </div>
                 )}
                 <div className="bundleCompactInfo chapter3AlbumListMeta">
