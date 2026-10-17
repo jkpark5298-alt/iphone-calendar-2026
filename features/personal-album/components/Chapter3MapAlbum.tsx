@@ -2529,6 +2529,7 @@ export function Chapter3MapAlbum({
               draftAlbums={draftAlbumList}
               deletedAlbums={kindDeletedAlbums}
               syncStatus={savedAlbums.syncStatus}
+              storageStatus={savedAlbums.storageStatus}
               enableGroupBy={isPersonalAlbum}
               emptyMessage={
                 isPersonalAlbum
@@ -2545,6 +2546,7 @@ export function Chapter3MapAlbum({
               variant="draft"
               albums={draftAlbumList}
               syncStatus={savedAlbums.syncStatus}
+              storageStatus={savedAlbums.storageStatus}
               enableGroupBy={isPersonalAlbum}
               emptyMessage={
                 isPersonalAlbum
@@ -2650,6 +2652,9 @@ export function Chapter3MapAlbum({
                 </button>
               </div>
               <p className="chapter3Muted">{savedAlbums.syncStatus}</p>
+              {savedAlbums.storageStatus && (
+                <p className="chapter3Muted">{savedAlbums.storageStatus}</p>
+              )}
             </div>
           )}
 

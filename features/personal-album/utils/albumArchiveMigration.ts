@@ -122,7 +122,7 @@ function writePendingDeletes(paths: string[]): void {
   else localStorage.setItem(PENDING_DELETE_KEY, JSON.stringify(unique));
 }
 
-async function measureStorageBytes(): Promise<number> {
+export async function measureStorageBytes(): Promise<number> {
   const supabase = getSupabase();
   const walk = async (prefix: string, depth: number): Promise<number> => {
     if (depth > 6) return 0;

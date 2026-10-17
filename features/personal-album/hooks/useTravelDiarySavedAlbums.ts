@@ -30,8 +30,13 @@ import {
   type TravelAlbumsState,
 } from "../utils/travelAlbumsSupabaseUtils";
 import { dispatchChapter3CloudSync } from "../utils/chapter3CloudSyncUtils";
-import { photoIsArchived } from "../utils/albumArchivePlan";
-import { runAlbumStorageMigration } from "../utils/albumArchiveMigration";
+import { photoIsArchived, storageQuotaBytes } from "../utils/albumArchivePlan";
+import { measureStorageBytes, runAlbumStorageMigration } from "../utils/albumArchiveMigration";
+import {
+  formatStorageUsageLabel,
+  noteStorageUsageRatio,
+} from "../utils/albumArchivePressure";
+import { isSupabaseConfigured } from "../../../lib/supabaseClient";
 
 function recoverOrphanedPlanAlbums(
   albums: SavedTravelAlbum[],
@@ -80,6 +85,7 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
   const [deletedAlbums, setDeletedAlbums] = useState<SavedTravelAlbum[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [syncStatus, setSyncStatus] = useState("PC·아이폰 앨범 동기화 준비 중");
+  const [storageStatus, setStorageStatus] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const hydratedRef = useRef(false);
   const albumsRef = useRef<SavedTravelAlbum[]>([]);
@@ -365,41 +371,62 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
     };
   }, [hydrated, refreshFromSupabase, flushCloudSave]);
 
+  const refreshStorageStatus = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setStorageStatus(null);
+      return;
+    }
+    try {
+      const used = await measureStorageBytes();
+      const quota = storageQuotaBytes();
+      noteStorageUsageRatio(used, quota);
+      setStorageStatus(formatStorageUsageLabel(used, quota));
+    } catch (error) {
+      console.error("supabase storage usage failed", error);
+      setStorageStatus(formatStorageUsageLabel() || "Supabase 저장 공간을 확인하지 못했습니다");
+    }
+  }, []);
+
   useEffect(() => {
     if (!hydrated) return;
     let cancelled = false;
-    void runAlbumStorageMigration(albumsRef.current, {
-      deletedAlbums: deletedAlbumsRef.current,
-      onStatus: (message) => {
-        if (!cancelled) setSyncStatus(message);
-      },
-      isCancelled: () => cancelled,
-      getAlbums: () => albumsRef.current,
-      onAlbumReady: async (_nextAlbums, { before, after }) => {
-        // 압축하는 동안 그 앨범이 수정·삭제됐으면 예전 사본으로 덮지 않는다
-        const live = albumsRef.current.find((album) => album.id === after.id);
-        if (!live || live.updatedAt !== before.updatedAt) return false;
-        const updatedAt = new Date().toISOString();
-        persistRef.current(
-          albumsRef.current.map((album) => (album.id === after.id ? after : album)),
-          { updatedAt },
-        );
-        return saveTravelAlbumsToSupabase({
-          albums: albumsRef.current,
-          deletedAlbums: deletedAlbumsRef.current,
-          updatedAt,
-        });
-      },
-    }).then((result) => {
+    void (async () => {
+      await refreshStorageStatus();
+      if (cancelled) return;
+      const result = await runAlbumStorageMigration(albumsRef.current, {
+        deletedAlbums: deletedAlbumsRef.current,
+        onStatus: (message) => {
+          if (!cancelled) setSyncStatus(message);
+        },
+        isCancelled: () => cancelled,
+        getAlbums: () => albumsRef.current,
+        onAlbumReady: async (_nextAlbums, { before, after }) => {
+          // 압축하는 동안 그 앨범이 수정·삭제됐으면 예전 사본으로 덮지 않는다
+          const live = albumsRef.current.find((album) => album.id === after.id);
+          if (!live || live.updatedAt !== before.updatedAt) return false;
+          const updatedAt = new Date().toISOString();
+          persistRef.current(
+            albumsRef.current.map((album) => (album.id === after.id ? after : album)),
+            { updatedAt },
+          );
+          return saveTravelAlbumsToSupabase({
+            albums: albumsRef.current,
+            deletedAlbums: deletedAlbumsRef.current,
+            updatedAt,
+          });
+        },
+      });
+      if (cancelled) return;
+      await refreshStorageStatus();
       if (cancelled || result.migratedTitles.length === 0) return;
       const titles = result.migratedTitles.map((title) => `「${title}」`).join(", ");
       showPasteHintRef.current(`저장 공간이 80%를 넘어 ${titles} 사진을 압축 파일로 옮겼습니다.`);
       setSyncStatus(`압축 파일로 옮김 ${titles}`);
-    });
+    })();
     return () => {
       cancelled = true;
     };
-  }, [hydrated]);
+  }, [hydrated, refreshStorageStatus]);
 
   const filteredAlbums = useMemo(
     () => searchSavedAlbums(albums, searchTerm),
@@ -691,6 +718,8 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
     filteredAlbums,
     hydrated,
     syncStatus,
+    storageStatus,
+    refreshStorageStatus,
     searchTerm,
     setSearchTerm,
     upsertAlbum,

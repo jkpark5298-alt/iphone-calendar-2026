@@ -24,6 +24,7 @@ export function Chapter3SavedAlbumList({
   draftAlbums = [],
   deletedAlbums,
   syncStatus,
+  storageStatus,
   maxVisible,
   enableGroupBy = false,
   emptyMessage,
@@ -44,6 +45,7 @@ export function Chapter3SavedAlbumList({
   draftAlbums?: SavedTravelAlbum[];
   deletedAlbums?: SavedTravelAlbum[];
   syncStatus: string;
+  storageStatus?: string | null;
   maxVisible?: number;
   /** 개인 앨범 — 보기에서 일자/년도/장소 구분 */
   enableGroupBy?: boolean;
@@ -185,6 +187,7 @@ export function Chapter3SavedAlbumList({
         <div>
           <h3>{title}</h3>
           <p className="chapter3Muted">{syncStatus}</p>
+          {storageStatus && <p className="chapter3Muted">{storageStatus}</p>}
           {variant === "saved" && driveState === "connected" && (
             <p className="chapter3Muted">Google Drive 연결됨</p>
           )}
