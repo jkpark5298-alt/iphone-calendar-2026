@@ -51,6 +51,7 @@ import { useTravelPlacesDb } from "../hooks/TravelPlacesDbContext";
 import { travelPlaceLabel, isDomesticPlaceRecord, travelPlaceMapQuery } from "../utils/travelPlacesDb";
 import { TravelPlaceDbSearch, TravelPlaceLookupFields } from "./TravelPlaceLookupInput";
 import { readChapter3Album, writeChapter3Album, removeChapter3Album } from "../utils/chapter3Storage";
+import { restoreMissingAlbumPhotos } from "../utils/albumEditorGuard";
 import {
   clearAlbumEditingSession,
   readAlbumEditingSession,
@@ -136,6 +137,11 @@ export function Chapter3MapAlbum({
   const [albumView, setAlbumView] = useState<AlbumTabView>("library");
   const [libraryFilter, setLibraryFilter] = useState<AlbumLibraryFilter>("saved");
   const [editingSavedAlbumId, setEditingSavedAlbumId] = useState<string | null>(null);
+  /** 편집기 사진이 실제로 불러온 앨범 id — 다른 앨범 내용이 이 앨범에 자동 저장되지 않게 */
+  const editorAlbumIdRef = useRef<string | null>(null);
+  /** 동기화 중 목록에서 잠깐 빠져도 편집 중인 앨범을 다시 저장할 수 있게 마지막 모습을 기억 */
+  const lastEditingAlbumRef = useRef<SavedTravelAlbum | null>(null);
+  const sessionRestoredRef = useRef(false);
   const [editingSourcePlanId, setEditingSourcePlanId] = useState<string | null>(null);
   const [albumEditOrigin, setAlbumEditOrigin] = useState<AlbumEditOrigin | null>(null);
   const [forceAlbumEdit, setForceAlbumEdit] = useState(false);
@@ -424,11 +430,12 @@ export function Chapter3MapAlbum({
       writeChapter3Album(planKey, days);
       setForceAlbumEdit(true);
       setEditingSavedAlbumId(album.id);
+      editorAlbumIdRef.current = album.id;
       setEditingSourcePlanId(planKey);
       setAlbumTitleDraft(album.title);
       setAlbumView("create");
       syncPlanContextFromAlbum(album);
-      chapter3State.setAlbumDays(days);
+      chapter3State.loadAlbumDays(days);
       setPhotoUploadRounds(0);
       if (!options?.silent) {
         showPasteHint(`📷 「${album.title}」 앨범을 불러왔습니다.`);
@@ -495,8 +502,21 @@ export function Chapter3MapAlbum({
       const sourcePlanId = resolveSaveSourcePlanId();
       const current =
         (editingSavedAlbumId &&
-          savedAlbums.albums.find((a) => a.id === editingSavedAlbumId)) ||
+          (savedAlbums.albums.find((a) => a.id === editingSavedAlbumId) ||
+            (lastEditingAlbumRef.current?.id === editingSavedAlbumId &&
+            !savedAlbums.isAlbumDeleted(editingSavedAlbumId)
+              ? lastEditingAlbumRef.current
+              : undefined))) ||
         undefined;
+      const guarded = current
+        ? restoreMissingAlbumPhotos(
+            chapter3State.albumDays,
+            current.days,
+            chapter3State.removedPhotoIdsRef.current,
+            { manualMode: manualState.activeSource === "manual" },
+          )
+        : { days: chapter3State.albumDays, restored: 0 };
+      if (guarded.restored > 0) chapter3State.setAlbumDays(guarded.days);
       const originAlbumId =
         current?.status === "saved" ? current.id : current?.originAlbumId;
       const albumId =
@@ -513,10 +533,11 @@ export function Chapter3MapAlbum({
         kind: albumKindOf(current) === "personal" || isPersonalAlbum ? "personal" : "travel",
         sourcePlanId: current?.sourcePlanId || sourcePlanId,
         sourceLabel,
-        days: withResolvedPlaceDescriptions(chapter3State.albumDays),
+        days: withResolvedPlaceDescriptions(guarded.days),
         originAlbumId: status === "draft" ? originAlbumId : undefined,
       });
       setEditingSavedAlbumId(saved.id);
+      editorAlbumIdRef.current = saved.id;
       setEditingSourcePlanId(saved.sourcePlanId);
       if (status === "draft") {
         showPasteHint(
@@ -546,6 +567,9 @@ export function Chapter3MapAlbum({
     [
       albumEnabled,
       chapter3State.albumDays,
+      chapter3State.setAlbumDays,
+      chapter3State.removedPhotoIdsRef,
+      manualState.activeSource,
       savedAlbums,
       resolveEditingAlbumId,
       resolveSaveSourcePlanId,
@@ -602,11 +626,12 @@ export function Chapter3MapAlbum({
   const startNewAlbum = useCallback(() => {
     const confirmed = savedAlbums.albums.filter((album) => album.status === "saved");
     setEditingSavedAlbumId(null);
+    editorAlbumIdRef.current = null;
     setEditingSourcePlanId(createFreshAlbumPlanId());
     setAlbumEditOrigin(null);
     setAlbumTitleDraft(defaultAlbumTitle);
     setForceAlbumEdit(true);
-    chapter3State.setAlbumDays([]);
+    chapter3State.loadAlbumDays([]);
     setPhotoUploadRounds(0);
     setAlbumView("create");
     if (confirmed.length > 0) {
@@ -624,6 +649,8 @@ export function Chapter3MapAlbum({
   }, [savedAlbums.albums, defaultAlbumTitle, chapter3State, showPasteHint]);
 
   useEffect(() => {
+    // 복원 전 첫 렌더의 빈 상태로 저장된 편집 세션을 지우지 않는다
+    if (!sessionRestoredRef.current) return;
     writeAlbumEditingSession({
       editingSavedAlbumId,
       editingSourcePlanId,
@@ -634,7 +661,6 @@ export function Chapter3MapAlbum({
     });
   }, [editingSavedAlbumId, editingSourcePlanId, albumView, libraryFilter, activeTab, albumEditOrigin]);
 
-  const sessionRestoredRef = useRef(false);
   useEffect(() => {
     if (!savedAlbums.hydrated || sessionRestoredRef.current) return;
     sessionRestoredRef.current = true;
@@ -698,17 +724,19 @@ export function Chapter3MapAlbum({
     );
     writeChapter3Album(album.sourcePlanId, restoredDays);
     syncPlanContextFromAlbum(album);
-    chapter3State.setAlbumDays(restoredDays);
+    editorAlbumIdRef.current = album.id;
+    chapter3State.loadAlbumDays(restoredDays);
   }, [savedAlbums.hydrated, savedAlbums.albums, syncPlanContextFromAlbum, chapter3State]);
 
   const resetAlbumEditor = useCallback(
     (options?: { clearPlanStorage?: string | null }) => {
       setEditingSavedAlbumId(null);
+      editorAlbumIdRef.current = null;
       setEditingSourcePlanId(null);
       setAlbumEditOrigin(null);
       setForceAlbumEdit(false);
       setAlbumTitleDraft(defaultAlbumTitle);
-      chapter3State.setAlbumDays([]);
+      chapter3State.loadAlbumDays([]);
       if (options?.clearPlanStorage) {
         removeChapter3Album(options.clearPlanStorage);
       }
@@ -719,12 +747,18 @@ export function Chapter3MapAlbum({
 
   useEffect(() => {
     if (!savedAlbums.hydrated || !editingSavedAlbumId) return;
-    const stillExists = savedAlbums.albums.some((a) => a.id === editingSavedAlbumId);
-    if (stillExists) return;
+    const current = savedAlbums.albums.find((a) => a.id === editingSavedAlbumId);
+    if (current) {
+      lastEditingAlbumRef.current = current;
+      return;
+    }
+    // 동기화 중 목록에서 잠깐 빠진 것만으로 편집기(올린 사진)를 비우지 않는다. 삭제 기록이 있을 때만 닫는다.
+    if (!savedAlbums.isAlbumDeleted(editingSavedAlbumId)) return;
     resetAlbumEditor({ clearPlanStorage: editingSourcePlanId });
   }, [
     savedAlbums.hydrated,
     savedAlbums.albums,
+    savedAlbums.isAlbumDeleted,
     editingSavedAlbumId,
     editingSourcePlanId,
     resetAlbumEditor,
@@ -768,8 +802,16 @@ export function Chapter3MapAlbum({
     if (!savedAlbums.hydrated || !albumEnabled) return;
     if (albumView !== "create") return;
     if (!editingSavedAlbumId) return;
+    // 편집기가 이 앨범을 불러온 상태가 아니면 (다른 앨범·빈 편집기) 저장본을 덮지 않는다
+    if (editorAlbumIdRef.current !== editingSavedAlbumId) return;
 
-    const existing = savedAlbums.albums.find((a) => a.id === editingSavedAlbumId);
+    const findEditingAlbum = () =>
+      savedAlbums.albums.find((a) => a.id === editingSavedAlbumId) ||
+      (lastEditingAlbumRef.current?.id === editingSavedAlbumId &&
+      !savedAlbums.isAlbumDeleted(editingSavedAlbumId)
+        ? lastEditingAlbumRef.current
+        : undefined);
+    const existing = findEditingAlbum();
     if (!existing) return;
     // 확정본을 만들기 탭에 올려 둔 채 자동 임시저장되면 확정→임시로 보이는 버그 발생
     if (existing.status === "saved") return;
@@ -796,8 +838,19 @@ export function Chapter3MapAlbum({
         lastAutoSyncKeyRef.current = syncKey;
         return;
       }
-      const current = savedAlbums.albums.find((a) => a.id === editingSavedAlbumId);
+      const current = findEditingAlbum();
       if (!current || current.status !== "draft") return;
+      if (editorAlbumIdRef.current !== current.id) return;
+      const guarded = restoreMissingAlbumPhotos(
+        chapter3State.albumDays,
+        current.days,
+        chapter3State.removedPhotoIdsRef.current,
+        { manualMode: manualState.activeSource === "manual" },
+      );
+      if (guarded.restored > 0) {
+        chapter3State.setAlbumDays(guarded.days);
+        showPasteHint(`🛟 편집기에 없던 기존 사진 ${guarded.restored}장을 앨범에 그대로 남겼습니다.`);
+      }
       const saved = savedAlbums.upsertAlbum({
         id: current.id,
         title: albumTitleDraft.trim() || current.title || defaultAlbumTitle,
@@ -805,9 +858,10 @@ export function Chapter3MapAlbum({
         kind: albumKindOf(current),
         sourcePlanId: current.sourcePlanId || editingSourcePlanId || albumPlanId,
         sourceLabel: current.sourceLabel || sourceLabel,
-        days: withResolvedPlaceDescriptions(chapter3State.albumDays),
+        days: withResolvedPlaceDescriptions(guarded.days),
         originAlbumId: current.originAlbumId,
       });
+      editorAlbumIdRef.current = saved.id;
       if (saved.id !== editingSavedAlbumId) {
         setEditingSavedAlbumId(saved.id);
       }
@@ -828,6 +882,11 @@ export function Chapter3MapAlbum({
     defaultAlbumTitle,
     albumPlanId,
     sourceLabel,
+    savedAlbums.isAlbumDeleted,
+    chapter3State.setAlbumDays,
+    chapter3State.removedPhotoIdsRef,
+    manualState.activeSource,
+    showPasteHint,
   ]);
 
   // PC에서 원격(아이폰) 임시저장 앨범을 편집기에 반영
@@ -860,9 +919,10 @@ export function Chapter3MapAlbum({
     if (localCount === 0 || remoteCount > localCount) {
       autoSyncSkipRef.current = true;
       lastRemoteMergeRef.current = mergeKey;
-      chapter3State.setAlbumDays(
+      chapter3State.loadAlbumDays(
         preservePlaceDescriptions(remote.days, chapter3State.albumDays),
       );
+      editorAlbumIdRef.current = remote.id;
       setEditingSavedAlbumId(remote.id);
       setEditingSourcePlanId(remote.sourcePlanId || albumPlanId);
       setAlbumTitleDraft(remote.title);

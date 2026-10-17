@@ -323,12 +323,20 @@ async function migrateAlbum(
   };
 }
 
+/** false를 돌려주면 이번 앨범 결과를 버리고 멈춘다 (원본 삭제도 하지 않음). */
+export type AlbumReadyHandler = (
+  albums: SavedTravelAlbum[],
+  migrated: { before: SavedTravelAlbum; after: SavedTravelAlbum },
+) => Promise<boolean>;
+
 export async function runAlbumStorageMigration(
   albums: SavedTravelAlbum[],
   options: {
     deletedAlbums?: SavedTravelAlbum[];
     onStatus?: (message: string) => void;
-    onAlbumReady?: (albums: SavedTravelAlbum[]) => Promise<boolean>;
+    onAlbumReady?: AlbumReadyHandler;
+    /** 마이그레이션 도중 바뀐 최신 목록 — 시작 시점 사본으로 다른 앨범을 덮지 않게 */
+    getAlbums?: () => SavedTravelAlbum[];
     isCancelled?: () => boolean;
   } = {},
 ): Promise<AlbumMigrationResult> {
@@ -344,7 +352,8 @@ async function runAlbumStorageMigrationInner(
   options: {
     deletedAlbums?: SavedTravelAlbum[];
     onStatus?: (message: string) => void;
-    onAlbumReady?: (albums: SavedTravelAlbum[]) => Promise<boolean>;
+    onAlbumReady?: AlbumReadyHandler;
+    getAlbums?: () => SavedTravelAlbum[];
     isCancelled?: () => boolean;
   },
 ): Promise<AlbumMigrationResult> {
@@ -390,6 +399,7 @@ async function runAlbumStorageMigrationInner(
             ))
         : overMigrateThreshold || needsResumeIncomplete)
     ) {
+      if (options.getAlbums) current = options.getAlbums().slice();
       const nextAlbum = pickNextAlbumToMigrate(current, archiveMigrationSkipAlbumId());
       if (!nextAlbum || countOriginalPhotos(nextAlbum) === 0) break;
       onStatus(
@@ -399,14 +409,16 @@ async function runAlbumStorageMigrationInner(
       const result = await migrateAlbum(nextAlbum, guardedNow, quota, onStatus, isCancelled);
       if (!result.changed) break;
       const nextList = current.map((album) => (album.id === result.album.id ? result.album : album));
-      const saved = options.onAlbumReady ? await options.onAlbumReady(nextList) : true;
+      const saved = options.onAlbumReady
+        ? await options.onAlbumReady(nextList, { before: nextAlbum, after: result.album })
+        : true;
       if (!saved) break;
       if (result.pathsToDelete.length > 0) {
         const removed = await removeTravelDiaryStoragePaths(result.pathsToDelete);
         if (!removed) writePendingDeletes([...readPendingDeletes(), ...result.pathsToDelete]);
       }
       await clearPendingPhotos(result.album.id, result.clearPhotoIds);
-      current = nextList;
+      current = options.getAlbums ? options.getAlbums().slice() : nextList;
       await retryPendingDeletes([...current, ...(options.deletedAlbums || [])]);
       migratedTitles.push(result.album.title);
       started = true;

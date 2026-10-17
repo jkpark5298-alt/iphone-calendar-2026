@@ -31,9 +31,13 @@ export interface SavedTravelAlbum {
   updatedAt: string;
   /** 최초 「확정」 완료 시각 — 수정 중 여부 판별용 */
   savedAt?: string;
+  /** 마지막 「확정」(확정에 반영 포함) 시각 — 압축 이동·메모 수정으로 바뀌는 updatedAt과 구분 */
+  confirmedAt?: string;
   /** 확정 앨범을 수정할 때 만든 임시 저장의 원본 id */
   originAlbumId?: string;
   deletedAt?: string;
+  /** "confirmed": 확정에 흡수된 임시본 — 삭제 목록에 보이지 않는 동기화용 기록 */
+  deletedReason?: "confirmed";
   /** PC·아이폰이 함께 보는 압축 사진 위치 */
   photoArchive?: AlbumPhotoArchive;
 }
@@ -149,8 +153,10 @@ export function normalizeSavedAlbum(raw: Partial<SavedTravelAlbum>): SavedTravel
     savedAt:
       raw.savedAt ||
       (raw.status === "saved" ? raw.updatedAt || raw.createdAt || now : undefined),
+    confirmedAt: raw.status === "draft" ? undefined : raw.confirmedAt || undefined,
     originAlbumId: raw.originAlbumId?.trim() || undefined,
     deletedAt: raw.deletedAt,
+    deletedReason: raw.deletedAt && raw.deletedReason === "confirmed" ? "confirmed" : undefined,
     photoArchive: normalizePhotoArchive(raw.photoArchive),
   };
 }
@@ -371,13 +377,15 @@ function collapseAlbumFamily(group: SavedTravelAlbum[]): SavedTravelAlbum[] {
     }
   }
 
-  // 확정이 있으면: 확정 이후에 수정된 임시본만 유지 (확정 직후 남은 구형 임시는 제거)
+  // 확정이 있으면: 마지막 확정 이후에 수정된 임시본만 유지 (확정 직후 남은 구형 임시는 제거)
   let keptDraft: SavedTravelAlbum | null = null;
   if (keptSaved) {
+    const savedTime = Date.parse(
+      keptSaved.confirmedAt || keptSaved.updatedAt || keptSaved.createdAt || "",
+    );
     const newerDrafts = drafts.filter((album) => {
       if (album.id === keptSaved!.id) return false;
       const draftTime = Date.parse(album.updatedAt || album.createdAt || "");
-      const savedTime = Date.parse(keptSaved!.updatedAt || keptSaved!.createdAt || "");
       return draftTime > savedTime;
     });
     if (newerDrafts.length > 0) {

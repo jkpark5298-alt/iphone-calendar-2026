@@ -365,21 +365,50 @@ export const loadTravelAlbumsFromSupabase = async (): Promise<TravelAlbumsState 
   }
 };
 
-/** 이 기기에 없는 서버 앨범은 삭제 기록이 있을 때만 빼고, 없으면 저장본에 다시 넣는다. */
+/**
+ * 저장 직전에 서버 내용과 맞춘다.
+ * - 이 기기에 없는 서버 앨범은 삭제 기록이 있을 때만 빼고, 없으면 저장본에 다시 넣는다.
+ * - 같은 id인데 서버 쪽이 더 최신이면 서버 것을 쓴다 (다른 기기의 최신 수정을 예전 사본으로 덮지 않게).
+ * - 서버의 삭제 기록도 합친다.
+ */
 export function keepRemoteAlbumsMissingLocally(
   state: TravelAlbumsState,
   remote: TravelAlbumsState | null,
 ): TravelAlbumsState {
-  if (!remote || remote.albums.length === 0) return state;
-  const tombstones = state.deletedAlbums || [];
-  const ids = new Set(state.albums.map((album) => album.id));
+  if (!remote) return state;
+  const localDeleted = state.deletedAlbums || [];
+  const localDeletedIds = new Set(localDeleted.map((album) => album.id));
+  const tombstones = [
+    ...localDeleted,
+    ...(remote.deletedAlbums || []).filter((album) => !localDeletedIds.has(album.id)),
+  ];
+  const remoteById = new Map(remote.albums.map((album) => [album.id, album]));
+  let changed = tombstones.length !== localDeleted.length;
+
+  const albums = state.albums.map((album) => {
+    const remoteAlbum = remoteById.get(album.id);
+    if (!remoteAlbum) return album;
+    const localTime = Date.parse(album.updatedAt || album.createdAt || "");
+    const remoteTime = Date.parse(remoteAlbum.updatedAt || remoteAlbum.createdAt || "");
+    if (!(remoteTime > localTime)) return album;
+    changed = true;
+    return mergeSameIdAlbum(album, remoteAlbum);
+  });
+  const ids = new Set(albums.map((album) => album.id));
   const missing = remote.albums.filter(
     (album) => !ids.has(album.id) && !albumIsHiddenByTombstone(album, tombstones),
   );
-  if (missing.length === 0) return state;
+  if (missing.length > 0) changed = true;
+  if (!changed) return state;
+
+  const active = [...albums, ...missing].filter(
+    (album) => !albumIsHiddenByTombstone(album, tombstones),
+  );
+  const activeIds = new Set(active.map((album) => album.id));
   return {
     ...state,
-    albums: [...state.albums, ...missing],
+    albums: active,
+    deletedAlbums: capDeletedAlbums(tombstones.filter((album) => !activeIds.has(album.id))),
   };
 }
 
@@ -428,8 +457,11 @@ export const saveTravelAlbumsToSupabase = async (
       updatedAt: stateToSave.updatedAt || new Date().toISOString(),
     });
 
-    // 로컬에는 표시용 URL이 채워진 상태 유지
-    applyTravelAlbumsStateToLocalStorage(normalized);
+    // 로컬에는 표시용 URL이 채워진 상태 유지.
+    // 저장하는 동안 이 기기에서 새로 저장된 내용이 있으면 예전 사본으로 덮지 않는다.
+    if (typeof window !== "undefined" && readSavedAlbumsRoot().updatedAt === state.updatedAt) {
+      applyTravelAlbumsStateToLocalStorage(normalized);
+    }
 
     const remotePayload = travelAlbumsStateToRow(normalized);
 

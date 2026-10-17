@@ -21,6 +21,8 @@ const EMPTY_PLAN_REQUEST: PlanRequest = {
   styles: [],
 };
 
+const EMPTY_DAY_PLANS: React.ComponentProps<typeof Chapter3MapAlbum>["dayPlans"] = [];
+
 export interface PersonalAlbumShellProps {
   showPasteHint: (msg: string) => void;
 }
@@ -31,7 +33,7 @@ export function PersonalAlbumShell({ showPasteHint }: PersonalAlbumShellProps) {
       personalOnly
       panelMode="albums"
       planRequest={EMPTY_PLAN_REQUEST}
-      dayPlans={[]}
+      dayPlans={EMPTY_DAY_PLANS}
       additionalTravelInfo={null}
       isPlanConfirmed={false}
       activePlanId={null}

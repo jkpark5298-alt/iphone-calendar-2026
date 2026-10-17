@@ -109,7 +109,7 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
       albumsRef.current = repaired;
       deletedAlbumsRef.current = deleted;
       setAlbums(repaired);
-      setDeletedAlbums(deleted);
+      setDeletedAlbums(deleted.filter((album) => album.deletedReason !== "confirmed"));
       return { albums: repaired, deletedAlbums: deleted };
     },
     [],
@@ -224,9 +224,12 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
     setSyncStatus("PC·아이폰 Supabase 저장 중");
     void saveTravelAlbumsToSupabase(pending).then((okSync) => {
       if (okSync) {
-        const root = readSavedAlbumsRoot();
-        const refreshed = applyAlbumLists(root.albums, root.deletedAlbums || []);
-        setSyncStatus(`PC·아이폰 Supabase 저장 완료 (${refreshed.albums.length}건)`);
+        // 저장 중에 목록이 또 바뀌었으면 예전 저장본으로 화면을 되돌리지 않는다
+        if (albumsRef.current === pending.albums) {
+          const root = readSavedAlbumsRoot();
+          applyAlbumLists(root.albums, root.deletedAlbums || []);
+        }
+        setSyncStatus(`PC·아이폰 Supabase 저장 완료 (${albumsRef.current.length}건)`);
       } else {
         setSyncStatus("PC·아이폰 Supabase 저장 실패 — 사진 용량/네트워크를 확인해 주세요");
         showPasteHint("⚠️ 앨범 클라우드 동기화에 실패했습니다. 다시 저장해 주세요.");
@@ -371,11 +374,18 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
         if (!cancelled) setSyncStatus(message);
       },
       isCancelled: () => cancelled,
-      onAlbumReady: async (nextAlbums) => {
+      getAlbums: () => albumsRef.current,
+      onAlbumReady: async (_nextAlbums, { before, after }) => {
+        // 압축하는 동안 그 앨범이 수정·삭제됐으면 예전 사본으로 덮지 않는다
+        const live = albumsRef.current.find((album) => album.id === after.id);
+        if (!live || live.updatedAt !== before.updatedAt) return false;
         const updatedAt = new Date().toISOString();
-        persistRef.current(nextAlbums, { updatedAt });
+        persistRef.current(
+          albumsRef.current.map((album) => (album.id === after.id ? after : album)),
+          { updatedAt },
+        );
         return saveTravelAlbumsToSupabase({
-          albums: nextAlbums,
+          albums: albumsRef.current,
           deletedAlbums: deletedAlbumsRef.current,
           updatedAt,
         });
@@ -498,6 +508,7 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
         updatedAt: now,
         savedAt:
           input.status === "saved" ? existing?.savedAt || now : existing?.savedAt,
+        confirmedAt: input.status === "saved" ? now : undefined,
         originAlbumId: input.status === "draft" ? resolvedOrigin : undefined,
         photoArchive: (() => {
           const archivedCount = input.days.reduce(
@@ -524,14 +535,27 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
         ? prev.map((a) => (a.id === existing!.id ? nextAlbum : a))
         : [nextAlbum, ...prev];
 
+      let nextDeleted: SavedTravelAlbum[] | undefined;
       if (input.status === "saved" && nextAlbum.id) {
-        // 확정 시 같은 여행의 임시본은 모두 제거
-        next = next.filter(
-          (a) => a.id === nextAlbum.id || a.status !== "draft" || !albumsAreSameFamily(a, nextAlbum),
+        // 확정 시 같은 여행의 임시본은 모두 제거. 다른 기기 사본이 되살리지 않게 삭제 기록을 남긴다.
+        const absorbed = next.filter(
+          (a) => a.id !== nextAlbum.id && a.status === "draft" && albumsAreSameFamily(a, nextAlbum),
         );
+        if (absorbed.length > 0) {
+          const absorbedIds = new Set(absorbed.map((a) => a.id));
+          next = next.filter((a) => !absorbedIds.has(a.id));
+          nextDeleted = capDeletedAlbums([
+            ...absorbed.map((album) => ({
+              ...album,
+              deletedAt: now,
+              deletedReason: "confirmed" as const,
+            })),
+            ...deletedAlbumsRef.current.filter((a) => !absorbedIds.has(a.id)),
+          ]);
+        }
       }
 
-      persist(next);
+      persist(next, nextDeleted ? { deleted: nextDeleted } : undefined);
       return nextAlbum;
     },
     [persist],
@@ -641,7 +665,7 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
   );
 
   const restoreAllDeletedAlbums = useCallback(() => {
-    const targets = deletedAlbumsRef.current.slice();
+    const targets = deletedAlbumsRef.current.filter((album) => album.deletedReason !== "confirmed");
     if (targets.length === 0) return [];
     const restoredList: SavedTravelAlbum[] = [];
     for (const target of targets) {
@@ -650,6 +674,11 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
     }
     return restoredList;
   }, [restoreAlbum]);
+
+  const isAlbumDeleted = useCallback(
+    (id: string) => deletedAlbumsRef.current.some((album) => album.id === id),
+    [],
+  );
 
   const clearAll = useCallback(() => {
     clearSavedAlbumsStorage();
@@ -673,6 +702,7 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
     findDraftForOrigin: (originAlbumId: string) =>
       findDraftForOrigin(albumsRef.current, originAlbumId),
     clearAll,
+    isAlbumDeleted,
     countAlbumPhotos,
     refreshFromSupabase,
   };

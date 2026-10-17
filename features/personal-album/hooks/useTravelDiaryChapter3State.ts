@@ -88,19 +88,37 @@ export function useTravelDiaryChapter3State({
 
   const mergeFn = manualMode ? mergeManualAlbumDays : mergeAlbumDays;
   const hydratedPlanIdRef = useRef<string | null>(null);
+  const explicitDaysLoadedRef = useRef(false);
   const geocodedPhotoIdsRef = useRef<Set<string>>(new Set());
   const albumDaysRef = useRef<Chapter3AlbumDay[]>([]);
+  /** 편집기에서 사용자가 직접 지운 사진 — 자동 저장이 이 사진만 빼고 나머지는 지키게 한다 */
+  const removedPhotoIdsRef = useRef<Set<string>>(new Set());
 
   const [albumDays, setAlbumDays] = useState<Chapter3AlbumDay[]>([]);
   albumDaysRef.current = albumDays;
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
 
+  /** 저장된 앨범을 편집기에 올린다. 이어지는 계획서 동기화가 다른 저장 키로 덮어쓰지 않는다. */
+  const loadAlbumDays = useCallback((days: Chapter3AlbumDay[]) => {
+    explicitDaysLoadedRef.current = true;
+    removedPhotoIdsRef.current = new Set();
+    setAlbumDays(days);
+  }, []);
+
   // 계획서 변경 시: 새 planId면 localStorage 로드, 아니면 메모리 사진 유지하며 골격만 동기화
   useEffect(() => {
     if (!enabled || !albumPlanId) {
       setAlbumDays([]);
       hydratedPlanIdRef.current = null;
+      explicitDaysLoadedRef.current = false;
+      return;
+    }
+
+    if (explicitDaysLoadedRef.current) {
+      explicitDaysLoadedRef.current = false;
+      hydratedPlanIdRef.current = albumPlanId;
+      setAlbumDays((prev) => normalizeAlbumDaysPhotos(mergeFn(skeleton, prev)));
       return;
     }
 
@@ -114,6 +132,11 @@ export function useTravelDiaryChapter3State({
 
     setAlbumDays((prev) => normalizeAlbumDaysPhotos(mergeFn(skeleton, prev)));
   }, [albumPlanId, skeleton, enabled, manualMode, mergeFn]);
+
+  // 위 effect가 이번 커밋에 돌지 않았으면 표시를 남겨 두지 않는다 (다음 계획서 전환은 정상 로드)
+  useEffect(() => {
+    explicitDaysLoadedRef.current = false;
+  }, [albumDays]);
 
   useEffect(() => {
     if (!enabled || albumDays.length === 0) return;
@@ -392,6 +415,7 @@ export function useTravelDiaryChapter3State({
   }, [albumDays, enabled, applyPhotoExifPlaceName]);
 
   const removePhoto = useCallback((day: number, placeId: string, photoId: string) => {
+    removedPhotoIdsRef.current.add(photoId);
     setAlbumDays((prev) =>
       prev.map((d) =>
         d.day !== day
@@ -455,6 +479,7 @@ export function useTravelDiaryChapter3State({
         const newPhotos: Chapter3AlbumPhoto[] = [];
         const seenKeys = collectAlbumDedupeKeys(albumDaysRef.current);
         let skippedDuplicates = 0;
+        let uploadFailed = 0;
         let lastPercent = -1;
         const reportProgress = (done: number) => {
           const percent = albumUploadPercent(done, fileList.length);
@@ -548,6 +573,7 @@ export function useTravelDiaryChapter3State({
           }
 
           if (!photo.dataUrl && !photo.fileUrl) {
+            if (uploadCompressed) uploadFailed += 1;
             identityKeys.forEach((key) => seenKeys.delete(key));
             reportProgress(i + 1);
             continue;
@@ -558,6 +584,19 @@ export function useTravelDiaryChapter3State({
         }
 
         if (newPhotos.length === 0) {
+          if (uploadFailed > 0) {
+            showPasteHint(
+              withProgress(
+                `⚠️ Google Drive 업로드에 실패해 사진 ${uploadFailed}장을 넣지 못했습니다. 연결을 확인하고 다시 올려 주세요.`,
+              ),
+            );
+            return {
+              status: "failed",
+              added: 0,
+              skippedDuplicates,
+              selected: fileList.length,
+            };
+          }
           if (skippedDuplicates > 0) {
             showPasteHint(
               withProgress(
@@ -623,9 +662,13 @@ export function useTravelDiaryChapter3State({
           : "";
         const duplicateNote =
           skippedDuplicates > 0 ? ` · 중복 ${skippedDuplicates}장은 제외` : "";
+        const failedNote =
+          uploadFailed > 0
+            ? ` · ⚠️ Drive 업로드 실패 ${uploadFailed}장은 빠졌습니다. 다시 올려 주세요`
+            : "";
         showPasteHint(
           withProgress(
-            `📷 ${roundNote}사진 ${newPhotos.length}장 · ${arranged}${undatedNote}${duplicateNote}${cloudNote}`,
+            `📷 ${roundNote}사진 ${newPhotos.length}장 · ${arranged}${undatedNote}${duplicateNote}${cloudNote}${failedNote}`,
           ),
         );
 
@@ -728,6 +771,11 @@ export function useTravelDiaryChapter3State({
           showPasteHint("⚠️ 최소 1일차는 유지해야 합니다.");
           return prev;
         }
+        prev
+          .find((d) => d.day === day)
+          ?.places.forEach((place) =>
+            place.photos.forEach((photo) => removedPhotoIdsRef.current.add(photo.id)),
+          );
         return removeAlbumDayFromList(prev, day);
       });
       setExpandedDay((cur) => (cur === day ? null : cur));
@@ -743,6 +791,8 @@ export function useTravelDiaryChapter3State({
   return {
     albumDays,
     setAlbumDays,
+    loadAlbumDays,
+    removedPhotoIdsRef,
     expandedPlaceId,
     setExpandedPlaceId,
     expandedDay,
