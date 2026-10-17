@@ -166,7 +166,6 @@ function mergeSameIdAlbum(local: SavedTravelAlbum, remote: SavedTravelAlbum): Sa
 function mergeAlbumRecords(
   local: SavedTravelAlbum[],
   remote: SavedTravelAlbum[],
-  options?: { localUpdatedAt?: string; remoteUpdatedAt?: string },
 ): SavedTravelAlbum[] {
   const map = new Map<string, SavedTravelAlbum>();
   for (const album of local) map.set(album.id, album);
@@ -179,16 +178,9 @@ function mergeAlbumRecords(
     map.set(remoteAlbum.id, mergeSameIdAlbum(existing, remoteAlbum));
   }
 
-  // 로컬이 더 최신이면 로컬에서 삭제된 앨범은 원격에서 다시 넣지 않음
-  // 단, 로컬이 비어 있으면(신규 기기·깨진 저장소) 원격 앨범을 지우지 않음
-  const localTime = Date.parse(options?.localUpdatedAt || "");
-  const remoteTime = Date.parse(options?.remoteUpdatedAt || "");
-  if (localTime > remoteTime && local.length > 0) {
-    const localIds = new Set(local.map((a) => a.id));
-    for (const id of map.keys()) {
-      if (!localIds.has(id)) map.delete(id);
-    }
-  }
+  // 목록에 없다는 이유만으로 상대 앨범을 지우지 않음.
+  // 삭제는 deletedAlbums(삭제 기록)로만 반영한다.
+  // 예전: 로컬 updatedAt이 더 최신이면 로컬 id 목록을 전체로 보고 나머지를 삭제 → 아이폰 부분 목록이 서버 앨범을 지움.
 
   // 같은 sourcePlanId라도 확정·임시는 각각 1개씩 유지
   // (예전: 최신 1개만 남겨 임시가 확정을 덮어쓰는 버그가 있었음)
@@ -237,10 +229,7 @@ export function mergeTravelAlbumsStates(
     return normalizeTravelAlbumsState(remote);
   }
 
-  let deletedMerged = mergeAlbumRecords(local.deletedAlbums || [], remote.deletedAlbums || [], {
-    localUpdatedAt: local.updatedAt,
-    remoteUpdatedAt: remote.updatedAt,
-  });
+  let deletedMerged = mergeAlbumRecords(local.deletedAlbums || [], remote.deletedAlbums || []);
 
   const localTime = Date.parse(local.updatedAt || "");
   const remoteTime = Date.parse(remote.updatedAt || "");
@@ -257,10 +246,9 @@ export function mergeTravelAlbumsStates(
   const localActive = local.albums.filter((album) => !isDeleted(album));
   const remoteActive = remote.albums.filter((album) => !isDeleted(album));
 
-  const albums = mergeAlbumRecords(localActive, remoteActive, {
-    localUpdatedAt: local.updatedAt,
-    remoteUpdatedAt: remote.updatedAt,
-  }).filter((album) => !isDeleted(album));
+  const albums = mergeAlbumRecords(localActive, remoteActive).filter(
+    (album) => !isDeleted(album),
+  );
 
   const activeIds = new Set(albums.map((album) => album.id));
   const deletedAlbums = capDeletedAlbums(
@@ -377,26 +365,46 @@ export const loadTravelAlbumsFromSupabase = async (): Promise<TravelAlbumsState 
   }
 };
 
+/** 이 기기에 없는 서버 앨범은 삭제 기록이 있을 때만 빼고, 없으면 저장본에 다시 넣는다. */
+export function keepRemoteAlbumsMissingLocally(
+  state: TravelAlbumsState,
+  remote: TravelAlbumsState | null,
+): TravelAlbumsState {
+  if (!remote || remote.albums.length === 0) return state;
+  const tombstones = state.deletedAlbums || [];
+  const ids = new Set(state.albums.map((album) => album.id));
+  const missing = remote.albums.filter(
+    (album) => !ids.has(album.id) && !albumIsHiddenByTombstone(album, tombstones),
+  );
+  if (missing.length === 0) return state;
+  return {
+    ...state,
+    albums: [...state.albums, ...missing],
+  };
+}
+
+async function withRemoteAlbumsKept(state: TravelAlbumsState): Promise<TravelAlbumsState> {
+  const remote = await loadTravelAlbumsFromSupabase();
+  const kept = keepRemoteAlbumsMissingLocally(state, remote);
+  if (kept.albums.length !== state.albums.length) {
+    console.warn(
+      "travel albums: keeping remote albums missing from this device",
+      kept.albums.length - state.albums.length,
+    );
+  }
+  return kept;
+}
+
 export const saveTravelAlbumsToSupabase = async (
   state: TravelAlbumsState,
 ): Promise<boolean> => {
   if (!isSupabaseConfigured) return false;
   try {
-    // 빈 로컬이 최신 시각만으로 클라우드 앨범을 통째로 지우는 사고 방지
-    if ((state.albums?.length || 0) === 0) {
-      const remote = await loadTravelAlbumsFromSupabase();
-      if (remote && remote.albums.length > 0) {
-        console.warn(
-          "travel albums: refusing empty upsert over remote albums",
-          remote.albums.length,
-        );
-        return false;
-      }
-    }
+    const stateToSave = await withRemoteAlbumsKept(state);
 
     const supabase = getSupabase();
     const preparedAlbums: SavedTravelAlbum[] = [];
-    for (const album of state.albums) {
+    for (const album of stateToSave.albums) {
       const syncedDays = await prepareAlbumDaysForSync(album.days);
       preparedAlbums.push({
         ...album,
@@ -404,7 +412,7 @@ export const saveTravelAlbumsToSupabase = async (
       });
     }
     const preparedDeleted: SavedTravelAlbum[] = [];
-    for (const album of state.deletedAlbums || []) {
+    for (const album of stateToSave.deletedAlbums || []) {
       const syncedDays = await prepareAlbumDaysForSync(album.days);
       preparedDeleted.push({
         ...album,
@@ -416,8 +424,8 @@ export const saveTravelAlbumsToSupabase = async (
     const normalized = normalizeTravelAlbumsState({
       albums: preparedAlbums,
       deletedAlbums: preparedDeleted,
-      manualTrips: state.manualTrips ?? readManualTripsStore(),
-      updatedAt: state.updatedAt || new Date().toISOString(),
+      manualTrips: stateToSave.manualTrips ?? readManualTripsStore(),
+      updatedAt: stateToSave.updatedAt || new Date().toISOString(),
     });
 
     // 로컬에는 표시용 URL이 채워진 상태 유지
