@@ -755,6 +755,7 @@ export default function HomePage() {
   function handleDiaryRichEditorClick(event: React.MouseEvent<HTMLDivElement>) {
     const editor = diaryRichTextRef.current;
     if (!editor) return;
+    handleDiaryRichInput();
     const target = event.target as HTMLElement;
     if (removeClassCellFromEvent(editor, target)) {
       event.preventDefault();

@@ -429,8 +429,8 @@ export function createImageSlotElement(id: string) {
   return slot;
 }
 
-/** S. 또는 s. 한 묶음이 사진 칸 하나 */
-const IMAGE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z])([Ss]\.)$/;
+/** S. 또는 s. (s1., s2., S1. 및 한글 자판 ㄴ. 포함) 한 묶음이 사진 칸 하나 */
+const IMAGE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z0-9가-힣])([Ssㄴ]\d*\.\s*)$/;
 
 /** date. 한 묶음이 그 순간의 년월일시분 */
 const DATE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z])(date\.)$/i;
@@ -482,7 +482,7 @@ export function tryConsumeDateTimeTrigger(editor: HTMLElement | null): boolean {
 }
 
 export const IMAGE_SLOT_GUIDE =
-  "본문에 S. 또는 s. 를 입력하면 사진 칸이 생깁니다. 그 칸에서 사진찍기, 사진첩 또는 붙여넣기로 넣으세요. 여러 장을 한 번에 넣으면 두 열로 보입니다.";
+  "본문에 s. (또는 s1., s2., S.)를 입력하면 사진 칸이 생깁니다. 그 칸에서 사진찍기, 사진첩 또는 복사한 이미지 붙여넣기로 넣으세요. 여러 장을 한 번에 넣으면 두 열로 보입니다.";
 
 function caretText(editor: HTMLElement): { node: Text; offset: number } | null {
   const sel = window.getSelection();
@@ -526,7 +526,12 @@ export function tryConsumeImageTriggerToSlot(editor: HTMLElement | null): string
     const id = node.getAttribute("data-img-slot");
     if (id) used.add(id);
   });
-  const allocSlotId = () => {
+  const allocSlotId = (preferredNumber?: number) => {
+    if (preferredNumber && !used.has(`S${preferredNumber}`)) {
+      const id = `S${preferredNumber}`;
+      used.add(id);
+      return id;
+    }
     let n = 1;
     while (used.has(`S${n}`)) n += 1;
     const id = `S${n}`;
@@ -542,7 +547,9 @@ export function tryConsumeImageTriggerToSlot(editor: HTMLElement | null): string
     const start = before.length - consumed.length;
     text = `${text.slice(0, start)}${text.slice(offset)}`;
     offset = start;
-    ids.push(allocSlotId());
+    const numMatch = consumed.match(/\d+/);
+    const preferredNum = numMatch ? parseInt(numMatch[0], 10) : undefined;
+    ids.push(allocSlotId(preferredNum));
   }
 
   if (!ids.length) return null;

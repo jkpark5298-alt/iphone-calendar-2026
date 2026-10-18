@@ -369,6 +369,7 @@ export function Chapter3Info({
   const handleCollectEditorClick = React.useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       handleGeneralInfoRichEditorClick(event);
+      handleCollectEditorInput();
       if (!findAwaitingSlotId(generalInfoRichTextRef.current)) setImageSlotPrompt(null);
       const target = event.target as HTMLElement;
       if (removeClassCellFromEvent(generalInfoRichTextRef.current, target)) {
