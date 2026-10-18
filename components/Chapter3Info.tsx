@@ -10,6 +10,7 @@ import React from "react";
 import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "../types/generalInfo";
 import { stepCollectFontSize } from "../lib/collectFormatPalette";
 import {
+  IMAGE_SLOT_GUIDE,
   enhanceRichInlineImages,
   findAwaitingSlotId,
   insertImagesAtSlotOrCaret,
@@ -17,15 +18,19 @@ import {
 import { readClipboardImageFiles } from "../lib/collectRichFormat";
 import { extractFirstSentence, categoryKeywordsList, formatCategoryKeywords } from "../lib/generalInfoText";
 import { extractGeneralInfoBodyImageSrcs, isUsableGeneralInfoCoverSrc, getGeneralInfoInfographicItems } from "../lib/generalInfoHelpers";
+import { EntryLookup, plainSnippet } from "./EntryLookup";
 import {
   extractInstagramUrls,
   INSTAGRAM_POST_URL_HINT,
   isInstagramHomeOrAccountUrl,
   isInstagramHostText,
 } from "../lib/instagramMeta";
+import { makeWhiteCellId, removeClassCellFromEvent, splitWhiteCells } from "../lib/collectClassCell";
 import { htmlForActiveEditor, isParagraphEmpty } from "../lib/generalInfoParagraphs";
 import { Card } from "./SharedComponents";
 import { CollectFormatToolbar } from "./CollectFormatToolbar";
+import { CollectWhiteCell } from "./CollectWhiteCell";
+import { SlotImagePanel } from "./SlotImagePanel";
 import { HandwritingModal } from "./HandwritingModal";
 import { TextToImageModal } from "./TextToImageModal";
 import { InfoIndexPanel } from "./InfoIndexPanel";
@@ -49,7 +54,7 @@ export interface Chapter3InfoProps {
   handleGeneralInfoRichInput: () => void;
   handleGeneralInfoRichEditorClick: (event: React.MouseEvent<HTMLDivElement>) => void;
   handleGeneralInfoRichImagePick: (files: FileList | null) => void;
-  handleGeneralInfoInsertImageSlot: () => void;
+  uploadRichImages: (files: File[]) => Promise<string[]>;
   getGeneralInfoToolbarButtonStyle: () => React.CSSProperties;
 
   handleResetGeneralInfoDraft: () => void;
@@ -87,7 +92,7 @@ export interface Chapter3InfoProps {
   handleDeleteGeneralInfo: (itemId: number) => void;
 
   handleImportGeneralInfoAppFile: (files: FileList | null) => Promise<string | void> | string | void;
-  handleExportGeneralInfoAppBundle: () => string | void;
+  handleExportGeneralInfoAppBundle: () => string | void | Promise<string | void>;
   handleExportSelectedGeneralInfoAppFiles: (input: {
     savedIds: number[];
     commitTempDraft: boolean;
@@ -107,6 +112,7 @@ export interface Chapter3InfoProps {
   generalInfoCategories: string[];
   normalizeGeneralInfoMediaItems: (draft: GeneralInfoDraft) => GeneralInfoMediaItem[];
   getGeneralInfoDisplayMediaItems: (item: GeneralInfoItem) => GeneralInfoMediaItem[];
+  onOpenTheme?: (themeId: string) => void;
 }
 
 export function Chapter3Info({
@@ -125,7 +131,7 @@ export function Chapter3Info({
   handleGeneralInfoRichInput,
   handleGeneralInfoRichEditorClick,
   handleGeneralInfoRichImagePick,
-  handleGeneralInfoInsertImageSlot,
+  uploadRichImages,
   getGeneralInfoToolbarButtonStyle,
   handleResetGeneralInfoDraft,
   handleUndoGeneralInfoDraft,
@@ -148,15 +154,15 @@ export function Chapter3Info({
   generalInfoDeleteUndo,
   handleUndoDeleteGeneralInfo,
   handleStartEditGeneralInfo,
-  handleDeleteGeneralInfo: _handleDeleteGeneralInfo,
+  handleDeleteGeneralInfo,
   handleImportGeneralInfoAppFile,
   handleExportGeneralInfoAppBundle,
   handleExportSelectedGeneralInfoAppFiles,
   handleOpenGeneralInfoTempDraft,
   generalInfoItems,
-  filteredGeneralInfoItems: _filteredGeneralInfoItems,
-  generalInfoSearchTerm: _generalInfoSearchTerm,
-  setGeneralInfoSearchTerm: _setGeneralInfoSearchTerm,
+  filteredGeneralInfoItems,
+  generalInfoSearchTerm,
+  setGeneralInfoSearchTerm,
   generalInfoDetailId: _generalInfoDetailId,
   setGeneralInfoDetailId,
   handleTogglePinGeneralInfo,
@@ -165,9 +171,24 @@ export function Chapter3Info({
   generalInfoCategories,
   normalizeGeneralInfoMediaItems: _normalizeGeneralInfoMediaItems,
   getGeneralInfoDisplayMediaItems: _getGeneralInfoDisplayMediaItems,
+  onOpenTheme,
 }: Chapter3InfoProps) {
   const activeTab = generalInfoActiveTab;
   const setActiveTab = setGeneralInfoActiveTab;
+  const [infoLookupDraft, setInfoLookupDraft] = React.useState("");
+  const [infoLookupNote, setInfoLookupNote] = React.useState("");
+  const infoLookupHits = generalInfoSearchTerm.trim()
+    ? filteredGeneralInfoItems.slice(0, 20).map((item) => ({
+        id: String(item.id),
+        title: item.title || "제목 없음",
+        snippet: plainSnippet([item.summary, item.text].filter(Boolean).join(" ")),
+      }))
+    : [];
+  const infoLookupStatus = generalInfoSearchTerm.trim()
+    ? infoLookupHits.length
+      ? `${filteredGeneralInfoItems.length}건`
+      : "맞는 일반정보가 없습니다."
+    : "";
   const generalInfoImageFileRef = React.useRef<HTMLInputElement | null>(null);
   const infographicFileRef = React.useRef<HTMLInputElement | null>(null);
   const [showHandwritingModal, setShowHandwritingModal] = React.useState(false);
@@ -177,6 +198,8 @@ export function Chapter3Info({
   const [indexComposeOpen, setIndexComposeOpen] = React.useState(false);
   const [copyBodyState, setCopyBodyState] = React.useState("");
   const [imageSlotPrompt, setImageSlotPrompt] = React.useState<string | null>(null);
+  const [whiteCellIds, setWhiteCellIds] = React.useState<string[]>([]);
+  const whiteCellHtmlRef = React.useRef<Record<string, string>>({});
   const [keyboardInset, setKeyboardInset] = React.useState(0);
 
   const bodyPlain = String(generalInfoDraft.text || "").trim();
@@ -296,8 +319,9 @@ export function Chapter3Info({
       const list = new DataTransfer();
       files.forEach((f) => list.items.add(f));
       handleGeneralInfoRichImagePick(list.files);
+      setImageSlotPrompt(null);
     } catch {
-      alert("클립보드 이미지 읽기를 지원하지 않습니다. 본문에 직접 붙여넣기 하세요.");
+      alert("클립보드 읽기가 막혀 있습니다. 사진 칸의 붙여넣기 칸에 직접 붙여넣으세요.");
     }
   }, [handleGeneralInfoRichImagePick]);
 
@@ -334,26 +358,31 @@ export function Chapter3Info({
     };
   }, [imageSlotPrompt]);
 
-  const noteNewImageSlot = React.useCallback(() => {
-    const id = findAwaitingSlotId(generalInfoRichTextRef.current);
-    if (id) setImageSlotPrompt(id);
-  }, [generalInfoRichTextRef]);
-
   const handleCollectEditorInput = React.useCallback(() => {
     const before = findAwaitingSlotId(generalInfoRichTextRef.current);
     handleGeneralInfoRichInput();
     const after = findAwaitingSlotId(generalInfoRichTextRef.current);
     if (after && after !== before) setImageSlotPrompt(after);
+    else if (!after) setImageSlotPrompt(null);
   }, [generalInfoRichTextRef, handleGeneralInfoRichInput]);
 
   const handleCollectEditorClick = React.useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       handleGeneralInfoRichEditorClick(event);
-      const slot = (event.target as HTMLElement).closest?.(".rich-img-slot");
+      if (!findAwaitingSlotId(generalInfoRichTextRef.current)) setImageSlotPrompt(null);
+      const target = event.target as HTMLElement;
+      if (removeClassCellFromEvent(generalInfoRichTextRef.current, target)) {
+        event.preventDefault();
+        event.stopPropagation();
+        syncGeneralInfoRichTextToDraft();
+        return;
+      }
+      if (target.closest?.(".rich-img-slot-del")) return;
+      const slot = target.closest?.(".rich-img-slot");
       const id = slot?.getAttribute("data-img-slot");
       if (id) setImageSlotPrompt(id);
     },
-    [handleGeneralInfoRichEditorClick],
+    [generalInfoRichTextRef, handleGeneralInfoRichEditorClick, syncGeneralInfoRichTextToDraft],
   );
 
   const fillSlotFromFiles = React.useCallback(
@@ -379,10 +408,16 @@ export function Chapter3Info({
   React.useLayoutEffect(() => {
     const el = generalInfoRichTextRef.current;
     if (!el) return;
-    const next = htmlForActiveEditor(generalInfoRichTextInitialHtml || "");
-    if (el.innerHTML !== next) {
-      el.innerHTML = next;
+    const parsed = splitWhiteCells(htmlForActiveEditor(generalInfoRichTextInitialHtml || ""));
+    if (el.innerHTML !== parsed.main) {
+      el.innerHTML = parsed.main;
     }
+    const ids = parsed.extras.map((html) => {
+      const id = makeWhiteCellId();
+      whiteCellHtmlRef.current[id] = html;
+      return id;
+    });
+    setWhiteCellIds(ids);
     enhanceRichInlineImages(el);
   }, [generalInfoRichTextEditorKey, generalInfoRichTextInitialHtml, generalInfoRichTextRef]);
 
@@ -480,6 +515,22 @@ export function Chapter3Info({
             </div>
 
             <div className="generalInfoTextBox generalInfoRichTextBox" style={{ marginTop: 14 }}>
+              <EntryLookup
+                placeholder="일반정보 내용 조회"
+                query={infoLookupDraft}
+                onQuery={setInfoLookupDraft}
+                onSearch={() => {
+                  const keyword = infoLookupDraft.trim();
+                  setGeneralInfoSearchTerm(keyword);
+                  setInfoLookupNote(keyword ? "" : "조회할 내용을 입력하세요.");
+                }}
+                hits={infoLookupHits}
+                status={infoLookupNote || infoLookupStatus}
+                onOpen={(id) => {
+                  const item = generalInfoItems.find((entry) => entry.id === Number(id));
+                  if (item) handleStartEditGeneralInfo(item);
+                }}
+              />
               <div className="generalInfoRichTextHeader">
                 <strong>본문 단락</strong>
                 <span>새 단락은 위에 작성 · 이전 단락은 아래로 이동 · 사진은 본문에 붙여넣거나 이미지 버튼으로 넣기</span>
@@ -648,16 +699,34 @@ export function Chapter3Info({
                 onColor={(c) => handleGeneralInfoRichCommand("foreColor", c)}
                 onHighlight={(c) => handleGeneralInfoRichCommand("highlight", c)}
                 onInsertChar={(ch) => handleGeneralInfoRichCommand("insertText", ch)}
-                onImage={() => generalInfoImageFileRef.current?.click()}
+                onImage={() => {
+                  if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
+                    alert(IMAGE_SLOT_GUIDE);
+                    return;
+                  }
+                  generalInfoImageFileRef.current?.click();
+                }}
                 onPasteImage={() => {
+                  if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
+                    alert(IMAGE_SLOT_GUIDE);
+                    return;
+                  }
                   void handleCollectPasteImage();
                 }}
                 onTextImage={() => setShowTextToImageModal(true)}
                 onHandwriting={() => setShowHandwritingModal(true)}
               />
-              <p className="mutedText collectImageSourceHint">사진보관함과 파일 선택에서 사진을 여러 장 고르면 모두 본문에 들어갑니다.</p>
+              <p className="mutedText collectImageSourceHint">본문에 S. 또는 s. 를 입력하면 사진 칸이 생깁니다. 그 칸에서 사진찍기, 사진첩 또는 붙여넣기로 넣습니다. 여러 장을 한 번에 넣으면 두 열로 보입니다.</p>
               <div className="collectImageSourceRow">
-                <label className="collectImageSourceBtn">
+                <label
+                  className="collectImageSourceBtn"
+                  onClick={(event) => {
+                    if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
+                      event.preventDefault();
+                      alert(IMAGE_SLOT_GUIDE);
+                    }
+                  }}
+                >
                   사진보관함
                   <input
                     ref={generalInfoImageFileRef}
@@ -671,7 +740,15 @@ export function Chapter3Info({
                     }}
                   />
                 </label>
-                <label className="collectImageSourceBtn">
+                <label
+                  className="collectImageSourceBtn"
+                  onClick={(event) => {
+                    if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
+                      event.preventDefault();
+                      alert(IMAGE_SLOT_GUIDE);
+                    }
+                  }}
+                >
                   파일 선택
                   <input
                     type="file"
@@ -701,12 +778,34 @@ export function Chapter3Info({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
-                    handleGeneralInfoInsertImageSlot();
-                    noteNewImageSlot();
+                    const id = makeWhiteCellId();
+                    whiteCellHtmlRef.current[id] = "";
+                    setWhiteCellIds((prev) => [...prev, id]);
+                    window.setTimeout(syncGeneralInfoRichTextToDraft, 0);
                   }}
-                  title="이미지 칸 추가"
+                  title="아래에 하얀 칸 추가"
                 >
                   ＋ 칸
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    const id = whiteCellIds[whiteCellIds.length - 1];
+                    if (!id) {
+                      alert("삭제할 칸이 없습니다.");
+                      return;
+                    }
+                    const cell = document.querySelector(`[data-white-id="${id}"] .collect-white-cell`);
+                    const text = cell?.textContent?.replace(/\u00a0/g, " ").trim() || "";
+                    if (text && !window.confirm("이 칸을 지울까요?")) return;
+                    delete whiteCellHtmlRef.current[id];
+                    setWhiteCellIds((prev) => prev.filter((item) => item !== id));
+                    window.setTimeout(syncGeneralInfoRichTextToDraft, 0);
+                  }}
+                  title="마지막 칸 삭제"
+                >
+                  － 칸
                 </button>
                 <button
                   type="button"
@@ -723,6 +822,7 @@ export function Chapter3Info({
                 className="generalInfoRichTextEditor collectPaperEditor"
                 contentEditable
                 suppressContentEditableWarning
+                spellCheck={false}
                 role="textbox"
                 tabIndex={0}
                 data-paragraph-id={activeParagraph?.id || ""}
@@ -739,6 +839,7 @@ export function Chapter3Info({
                   if (hasImage) setImageSlotPrompt(null);
                 }}
                 onInput={handleCollectEditorInput}
+                onKeyUp={handleCollectEditorInput}
                 onClick={handleCollectEditorClick}
                 data-placeholder="새 항목을 입력하거나 붙여넣으세요."
                 style={{
@@ -762,50 +863,35 @@ export function Chapter3Info({
                   wordBreak: "break-word",
                 }}
               />
+              {whiteCellIds.map((id) => (
+                <CollectWhiteCell
+                  key={id}
+                  cellId={id}
+                  initialHtml={whiteCellHtmlRef.current[id] || ""}
+                  placeholder="새 항목을 입력하거나 붙여넣으세요."
+                  onUploadImages={uploadRichImages}
+                  onInput={syncGeneralInfoRichTextToDraft}
+                  onRemove={() => {
+                    const cell = document.querySelector(`[data-white-id="${id}"] .collect-white-cell`);
+                    const text = cell?.textContent?.replace(/\u00a0/g, " ").trim() || "";
+                    if (text && !window.confirm("이 칸을 지울까요?")) return;
+                    delete whiteCellHtmlRef.current[id];
+                    setWhiteCellIds((prev) => prev.filter((item) => item !== id));
+                    window.setTimeout(syncGeneralInfoRichTextToDraft, 0);
+                  }}
+                />
+              ))}
 
               {imageSlotPrompt ? (
-                <div
-                  className="collectSlotImagePanel"
-                  role="dialog"
-                  aria-label={`${imageSlotPrompt} 이미지 넣기`}
+                <SlotImagePanel
                   style={{ bottom: keyboardInset + 8 }}
-                >
-                  <div className="collectSlotImagePanelHead">
-                    <strong>{imageSlotPrompt}</strong>
-                    <span>여러 장을 고르면 이 칸부터 모두 들어갑니다. 복사한 사진은 본문에 붙여넣어도 됩니다.</span>
-                    <button type="button" className="secondaryButton" onClick={() => setImageSlotPrompt(null)}>
-                      닫기
-                    </button>
-                  </div>
-                  <div className="collectImageSourceRow">
-                    <label className="collectImageSourceBtn">
-                      사진보관함
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        title="사진보관함에서 여러 장을 선택할 수 있습니다"
-                        onChange={(event) => {
-                          fillSlotFromFiles(event.target.files);
-                          event.target.value = "";
-                        }}
-                      />
-                    </label>
-                    <label className="collectImageSourceBtn">
-                      파일 선택
-                      <input
-                        type="file"
-                        accept="image/*,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.bmp,.tif,.tiff"
-                        multiple
-                        title="파일에서 여러 장을 선택할 수 있습니다"
-                        onChange={(event) => {
-                          fillSlotFromFiles(event.target.files);
-                          event.target.value = "";
-                        }}
-                      />
-                    </label>
-                  </div>
-                </div>
+                  onClose={() => setImageSlotPrompt(null)}
+                  onFiles={(files) => {
+                    const transfer = new DataTransfer();
+                    files.forEach((file) => transfer.items.add(file));
+                    fillSlotFromFiles(transfer.files);
+                  }}
+                />
               ) : null}
 
               {olderParagraphs.length > 0 && (
@@ -1156,6 +1242,7 @@ export function Chapter3Info({
               const item = generalInfoItems.find((entry) => entry.id === id);
               if (item) handleStartEditGeneralInfo(item);
             }}
+            onDeleteLocal={handleDeleteGeneralInfo}
             onToggleLocalPin={handleTogglePinGeneralInfo}
             onExportLocalAppFiles={handleExportGeneralInfoAppBundle}
             onExportSelectedAppFiles={handleExportSelectedGeneralInfoAppFiles}
@@ -1163,6 +1250,7 @@ export function Chapter3Info({
             onOpenTempDraft={handleOpenGeneralInfoTempDraft}
             composeOpen={indexComposeOpen}
             onComposeOpenChange={setIndexComposeOpen}
+            onOpenTheme={onOpenTheme}
           />
         </aside>
       )}

@@ -4,6 +4,7 @@ export const INFO_INDEX_CATEGORIES = [
   "경제",
   "사회",
   "기술",
+  "AI",
   "국제",
   "건강",
   "책",
@@ -17,9 +18,9 @@ export const INFO_INDEX_CATEGORIES = [
 
 export type InfoIndexCategory = (typeof INFO_INDEX_CATEGORIES)[number];
 
-export type InfoIndexSource = "insta-fact-library" | "builder-zeta-eight" | "local";
+export type InfoIndexSource = "insta-fact-library" | "builder-zeta-eight" | "newsflash" | "local" | "theme";
 
-export type InfoIndexView = "category" | "date" | "tag";
+export type InfoIndexView = "category" | "date" | "tag" | "all";
 
 export type InfoIndexItem = {
   id: string;
@@ -58,14 +59,36 @@ export type AppFileIndexArchiveEntry = {
 export const INFO_INDEX_SOURCE_LABEL: Record<InfoIndexSource, string> = {
   "insta-fact-library": "insta-fact-library",
   "builder-zeta-eight": "builder-zeta-eight",
+  newsflash: "NEWS",
   local: "일반정보수집",
+  theme: "테마",
 };
 
 export const INFO_INDEX_SOURCE_SHORT: Record<InfoIndexSource, string> = {
   "insta-fact-library": "insta",
   "builder-zeta-eight": "builder",
+  newsflash: "NEWS",
   local: "일반정보수집",
+  theme: "테마",
 };
+
+/** 좁은 화면에서 제목 아래에 붙이는 발생처. 일반정보수집만 짧게 줄입니다. */
+export const INFO_INDEX_SOURCE_BADGE: Record<InfoIndexSource, string> = {
+  "insta-fact-library": "insta",
+  "builder-zeta-eight": "builder",
+  newsflash: "NEWS",
+  local: "일반",
+  theme: "테마",
+};
+
+export const INFO_INDEX_SOURCE_FILTERS: { value: InfoIndexSource | "all"; label: string }[] = [
+  { value: "all", label: "전체" },
+  { value: "builder-zeta-eight", label: "builder" },
+  { value: "insta-fact-library", label: "insta" },
+  { value: "newsflash", label: "NEWS" },
+  { value: "local", label: "일반" },
+  { value: "theme", label: "테마" },
+];
 
 export const INFO_INDEX_SOURCE_OPTIONS: { value: InfoIndexSource; label: string }[] = [
   { value: "builder-zeta-eight", label: "builder-zeta-eight" },
@@ -78,6 +101,9 @@ export const BUILDER_APP_URL =
 
 export const IFL_APP_URL =
   process.env.NEXT_PUBLIC_IFL_APP_URL || "https://insta-fact-library.vercel.app";
+
+export const NEWSFLASH_APP_URL =
+  process.env.NEXT_PUBLIC_NEWSFLASH_APP_URL || "https://newsflash-web-seven.vercel.app";
 
 export function cleanIndexTitle(raw: string, maxLen = 40) {
   let text = String(raw || "").trim();
@@ -127,28 +153,94 @@ export function unescapeJsonString(value: string) {
 export function infoIndexSourceClass(source: InfoIndexSource) {
   if (source === "builder-zeta-eight") return "source-builder";
   if (source === "insta-fact-library") return "source-ifl";
+  if (source === "newsflash") return "source-news";
+  if (source === "theme") return "source-theme";
   return "source-local";
 }
 
 export function infoIndexSourceHomeUrl(source: InfoIndexSource) {
   if (source === "builder-zeta-eight") return BUILDER_APP_URL;
   if (source === "insta-fact-library") return IFL_APP_URL;
+  if (source === "newsflash") return NEWSFLASH_APP_URL;
   return "";
 }
 
 export function infoIndexDetailLabel(source: InfoIndexSource) {
   if (source === "builder-zeta-eight") return "builder";
   if (source === "insta-fact-library") return "insta";
+  if (source === "newsflash") return "NEWS";
+  if (source === "theme") return "테마";
   return "상세보기";
+}
+
+const THEME_TAG_LABELS = [
+  "1인 기업",
+  "뇌과학",
+  "애플",
+  "과학",
+  "경제",
+  "사회",
+  "기술",
+  "AI",
+  "국제",
+  "건강",
+  "마케팅",
+  "화장품",
+  "영화",
+  "기타",
+  "코딩",
+  "책",
+  "AV",
+  "맛집",
+];
+
+export function extractThemeTags(html: string): string[] {
+  const text = String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ");
+  const tags: string[] = [];
+  for (const label of THEME_TAG_LABELS) {
+    if (text.includes(`#${label}`)) tags.push(label);
+  }
+  for (const match of text.matchAll(/#([^\s#<]{2,23})/g)) {
+    const tag = match[1];
+    if (!tags.some((item) => item === tag || item.startsWith(tag))) tags.push(tag);
+  }
+  return tags.slice(0, 8);
+}
+
+export function themeNoteToIndexItem(note: {
+  id: string;
+  title: string;
+  html: string;
+  updatedAt: string;
+}): InfoIndexItem {
+  const tags = extractThemeTags(note.html);
+  const named = tags.find((tag) => INFO_INDEX_CATEGORIES.includes(tag as InfoIndexCategory));
+  const thumb = String(note.html || "").match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] || "";
+  const thumbUrl = /^https?:\/\//i.test(thumb) ? thumb : undefined;
+  return buildIndexItem({
+    id: `theme:${note.id}`,
+    title: note.title || "새 테마",
+    createdAt: note.updatedAt || new Date(0).toISOString(),
+    categoryRaw: named || "",
+    tags,
+    source: "theme",
+    detailUrl: "",
+    thumbUrl,
+    saveStatus: "저장",
+  });
 }
 
 export function formatIndexDateLabel(raw: string) {
   const date = parseIndexDate(raw);
   if (!date) return String(raw || "").trim() || "날짜 없음";
-  const y = date.getFullYear();
+  const y = String(date.getFullYear()).slice(-2);
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
-  return `${y}.${m}.${d}`;
+  return `'${y}.${m}.${d}`;
 }
 
 export function indexDateKey(raw: string) {
@@ -184,9 +276,10 @@ export function mapToIndexCategory(raw: string, extra: string[] = []): InfoIndex
   if (/뇌|두뇌|신경|뉴런/.test(blob)) return "뇌";
   if (/문화|예술|전시|공연|박물관/.test(blob)) return "문화";
   if (/건강|의료|병원|영양|수면|치매|알츠하이머|피부|혈관|wine|와인/.test(blob)) return "건강";
+  if (/(^|[^a-z0-9])ai([^a-z0-9]|$)|인공지능|챗\s*gpt|chatgpt|생성형|제미나이|gemini|claude|llm/.test(blob)) return "AI";
   if (/과학|우주|연구|유전|물리|화학|nasa|성경|고대/.test(blob)) return "과학";
   if (/경제|증시|금리|환율|부동산|투자|경매/.test(blob)) return "경제";
-  if (/기술|ai|인공지능|소프트웨어|로봇|반도체|리모델/.test(blob)) return "기술";
+  if (/기술|소프트웨어|로봇|반도체|리모델/.test(blob)) return "기술";
   if (/국제|해외|미국|중국|일본|bbc|외교|정상회담/.test(blob)) return "국제";
   if (/사회|교육|학교|패션|역사/.test(blob)) return "사회";
   return "기타";
@@ -195,11 +288,34 @@ export function mapToIndexCategory(raw: string, extra: string[] = []): InfoIndex
 export function normalizeIndexTags(values: unknown): string[] {
   const list = Array.isArray(values) ? values : [values];
   const tags = list
-    .flatMap((value) => String(value || "").split(/[#,\s]+/))
+    .flatMap((value) => {
+      let text = String(value || "");
+      const held: string[] = [];
+      if (text.includes("1인 기업")) {
+        held.push("1인 기업");
+        text = text.split("1인 기업").join(" ");
+      }
+      return [...held, ...text.split(/[#,\s]+/)];
+    })
     .map((item) => item.replace(/^#+/, "").trim())
-    .filter((item) => item.length > 1 && item.length < 24)
+    .filter((item) => item.length < 24)
+    .filter((item) => item.length > 1 || INFO_INDEX_CATEGORIES.includes(item as InfoIndexCategory))
     .filter((item) => !/^(youtube|report|has-script|url-article|fc-pass|type-[a-z]|heuristic-factcheck|manual-review|report-assembled|shared-goodnotes|no-script|manual-overview)$/i.test(item));
   return Array.from(new Set(tags)).slice(0, 8);
+}
+
+function cleanNewsHeadline(raw: string) {
+  const text = String(raw || "")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+  return text || "제목 없음";
 }
 
 export function buildIndexItem(input: {
@@ -215,7 +331,7 @@ export function buildIndexItem(input: {
   appFileMark?: "saved" | "removed";
   saveStatus?: "저장" | "임시 저장" | "삭제됨";
 }): InfoIndexItem {
-  const title = cleanIndexTitle(input.title);
+  const title = input.source === "newsflash" ? cleanNewsHeadline(input.title) : cleanIndexTitle(input.title);
   const tags = normalizeIndexTags(input.tags);
   const category = mapToIndexCategory(
     input.categoryRaw || tags[0] || title,
@@ -318,7 +434,7 @@ export function groupIndexItems(
   for (const item of items) {
     if (view === "category") {
       push(item.category, item);
-    } else if (view === "date") {
+    } else if (view === "date" || view === "all") {
       push(item.dateKey || item.createdAtLabel, item);
     } else {
       const tags = item.tags.length ? item.tags : ["기타"];
@@ -354,7 +470,10 @@ export function groupIndexItems(
 export function dedupeIndexItems(items: InfoIndexItem[]) {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const key = `${item.source}|${item.appFileMark || ""}|${item.title.replace(/…$/, "").slice(0, 24)}|${item.dateKey}`;
+    const key =
+      item.source === "newsflash"
+        ? `newsflash|${item.id}`
+        : `${item.source}|${item.appFileMark || ""}|${item.title.replace(/…$/, "").slice(0, 24)}|${item.dateKey}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

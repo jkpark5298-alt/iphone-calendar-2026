@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   BUILDER_APP_URL,
   IFL_APP_URL,
+  NEWSFLASH_APP_URL,
   buildIndexItem,
   extractLibraryItemsFromHtml,
   parseIflLibraryPayload,
@@ -83,11 +84,56 @@ async function fetchIflLibraryItems(requestToken: string) {
   }
 }
 
+type NewsClipIndexRow = {
+  id?: string;
+  title?: string;
+  createdAt?: string;
+  deleted?: boolean;
+};
+
+async function fetchNewsflashItems() {
+  const base = NEWSFLASH_APP_URL.replace(/\/$/, "");
+  const result = await fetchText(`${base}/api/news-clip-index?ts=${Date.now()}`);
+  if (!result.ok) {
+    return {
+      items: [] as InfoIndexItem[],
+      status: result.status,
+      error: result.error || `news-http-${result.status}`,
+    };
+  }
+  try {
+    const payload = JSON.parse(result.text) as { items?: NewsClipIndexRow[] };
+    const rows = Array.isArray(payload.items) ? payload.items : [];
+    const items = rows
+      .filter((item) => item && item.id && item.createdAt)
+      .map((item) =>
+        buildIndexItem({
+          id: `newsflash:${item.id}`,
+          title: item.title || "제목 없음",
+          createdAt: String(item.createdAt),
+          categoryRaw: "",
+          tags: ["뉴스"],
+          source: "newsflash",
+          detailUrl: `${base}/?clip=${encodeURIComponent(String(item.id))}`,
+          saveStatus: item.deleted ? "삭제됨" : undefined,
+        }),
+      );
+    return { items, status: result.status, error: "" };
+  } catch {
+    return {
+      items: [] as InfoIndexItem[],
+      status: result.status,
+      error: "news-json",
+    };
+  }
+}
+
 export async function GET(request: NextRequest) {
   const iflToken = request.headers.get("x-ifl-token") || "";
-  const [builder, iflCloud] = await Promise.all([
+  const [builder, iflCloud, newsflash] = await Promise.all([
     fetchText(BUILDER_APP_URL),
     fetchIflLibraryItems(iflToken),
+    fetchNewsflashItems(),
   ]);
 
   const builderItems: InfoIndexItem[] = extractLibraryItemsFromHtml(builder.text).map((item) =>
@@ -103,7 +149,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    items: [...builderItems, ...iflCloud.items],
+    items: [...builderItems, ...iflCloud.items, ...newsflash.items],
     sources: {
       builder: {
         count: builderItems.length,
@@ -114,6 +160,11 @@ export async function GET(request: NextRequest) {
         count: iflCloud.items.length,
         status: iflCloud.status,
         error: iflCloud.error || "",
+      },
+      news: {
+        count: newsflash.items.length,
+        status: newsflash.status,
+        error: newsflash.error || "",
       },
     },
   });

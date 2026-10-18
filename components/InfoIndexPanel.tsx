@@ -6,17 +6,23 @@ import { pickGeneralInfoCoverSrc } from "../lib/generalInfoHelpers";
 import {
   BUILDER_APP_URL,
   IFL_APP_URL,
+  NEWSFLASH_APP_URL,
   INFO_INDEX_CATEGORIES,
+  INFO_INDEX_SOURCE_BADGE,
+  INFO_INDEX_SOURCE_FILTERS,
   INFO_INDEX_SOURCE_OPTIONS,
   INFO_INDEX_SOURCE_SHORT,
   APP_FILE_INDEX_ARCHIVE_EVENT,
   buildIndexItem,
+  formatIndexDateLabel,
   groupIndexItems,
   dedupeIndexItems,
+  forgetAppFileIndexArchive,
   infoIndexSourceClass,
   infoIndexSourceHomeUrl,
   parseIflLibraryPayload,
   readAppFileIndexArchive,
+  themeNoteToIndexItem,
   type AppFileIndexArchiveEntry,
   type InfoIndexCategory,
   type InfoIndexItem,
@@ -25,18 +31,22 @@ import {
 } from "../lib/infoIndex";
 import {
   GENERAL_INFO_TEMP_DRAFT_EVENT,
+  GENERAL_INFO_TEMP_DRAFT_KEY,
   readGeneralInfoTempDraftIndex,
 } from "../lib/generalInfoStorage";
+import { loadThemeNotes } from "../lib/themeNotes";
 
 const PIN_STORAGE_KEY = "travel-diary-info-index-pins-v1";
 const IFL_IMPORT_KEY = "travel-diary-ifl-index-v1";
 const IFL_TOKEN_KEY = "travel-diary-ifl-api-token";
 const MANUAL_STORAGE_KEY = "travel-diary-info-index-manual-v1";
+const HIDDEN_STORAGE_KEY = "travel-diary-info-index-hidden-v1";
 
 type Props = {
   localItems: GeneralInfoItem[];
   onOpenLocalDetail: (id: number) => void;
   onEditLocal?: (id: number) => void;
+  onDeleteLocal?: (id: number) => void;
   onToggleLocalPin: (id: number) => void;
   localStatus?: string;
   onExportLocalAppFiles?: () => string | void | Promise<string | void>;
@@ -46,6 +56,7 @@ type Props = {
   }) => string | void | Promise<string | void>;
   onImportLocalAppFiles?: (files: FileList | null) => string | void | Promise<string | void>;
   onOpenTempDraft?: () => void;
+  onOpenTheme?: (themeId: string) => void;
   composeOpen?: boolean;
   onComposeOpenChange?: (open: boolean) => void;
 };
@@ -70,6 +81,34 @@ function readPinnedIds(): Set<string> {
 
 function writePinnedIds(ids: Set<string>) {
   localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify(Array.from(ids)));
+}
+
+function readHiddenIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(HIDDEN_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeHiddenIds(ids: Set<string>) {
+  localStorage.setItem(HIDDEN_STORAGE_KEY, JSON.stringify(Array.from(ids).slice(-800)));
+}
+
+/** 이 앱의 글은 삭제, 다른 앱에서 온 목록은 인덱스에서만 제외 */
+function indexRemovalKind(item: InfoIndexItem): "delete" | "exclude" {
+  if (item.id === "local-temp:draft" || item.id.startsWith("manual:")) return "delete";
+  if (
+    item.source === "local" &&
+    typeof item.localNumericId === "number" &&
+    item.appFileMark !== "removed" &&
+    item.saveStatus !== "삭제됨"
+  ) {
+    return "delete";
+  }
+  return "exclude";
 }
 
 function readManualItems(): InfoIndexItem[] {
@@ -161,24 +200,28 @@ export function InfoIndexPanel({
   localItems,
   onOpenLocalDetail,
   onEditLocal,
+  onDeleteLocal,
   onToggleLocalPin,
   localStatus,
   onExportLocalAppFiles,
   onExportSelectedAppFiles,
   onImportLocalAppFiles,
   onOpenTempDraft,
+  onOpenTheme,
   composeOpen,
   onComposeOpenChange,
 }: Props) {
   const [view, setView] = React.useState<InfoIndexView>("date");
+  const [sourceFilter, setSourceFilter] = React.useState<InfoIndexSource | "all">("all");
   const [selectedKey, setSelectedKey] = React.useState<string>("");
   const [remoteItems, setRemoteItems] = React.useState<InfoIndexItem[]>([]);
+  const [themeItems, setThemeItems] = React.useState<InfoIndexItem[]>([]);
   const [importedIflItems, setImportedIflItems] = React.useState<InfoIndexItem[]>([]);
   const [manualItems, setManualItems] = React.useState<InfoIndexItem[]>([]);
   const [removedArchive, setRemovedArchive] = React.useState<AppFileIndexArchiveEntry[]>([]);
   const [status, setStatus] = React.useState("앱에서 인덱스를 불러오는 중…");
-  const [sourceNote, setSourceNote] = React.useState("");
   const [pinnedIds, setPinnedIds] = React.useState<Set<string>>(new Set());
+  const [hiddenIds, setHiddenIds] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(false);
   const [iflToken, setIflToken] = React.useState("");
   const [internalComposeOpen, setInternalComposeOpen] = React.useState(false);
@@ -222,6 +265,7 @@ export function InfoIndexPanel({
 
   React.useEffect(() => {
     setPinnedIds(readPinnedIds());
+    setHiddenIds(readHiddenIds());
     setManualItems(readManualItems());
     try {
       const saved = localStorage.getItem(IFL_IMPORT_KEY);
@@ -254,12 +298,8 @@ export function InfoIndexPanel({
       const data = await response.json();
       const items = Array.isArray(data.items) ? (data.items as InfoIndexItem[]) : [];
       setRemoteItems(items);
-      const builderCount = Number(data.sources?.builder?.count || 0);
       const iflCount = Number(data.sources?.ifl?.count || 0);
       const iflError = String(data.sources?.ifl?.error || "");
-      setSourceNote(
-        `builder-zeta-eight ${builderCount}건 · insta-fact-library 클라우드 ${iflCount}건`,
-      );
       if (iflCount > 0) {
         setStatus("인덱스를 불러왔습니다.");
       } else if (iflError === "no-token") {
@@ -283,6 +323,17 @@ export function InfoIndexPanel({
   React.useEffect(() => {
     void loadRemote();
   }, [loadRemote]);
+
+  React.useEffect(() => {
+    let alive = true;
+    void loadThemeNotes().then((notes) => {
+      if (!alive) return;
+      setThemeItems(notes.map(themeNoteToIndexItem));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const merged = React.useMemo(() => {
     void tempTick;
@@ -317,7 +368,8 @@ export function InfoIndexPanel({
           ]
         : [];
     const byId = new Map<string, InfoIndexItem>();
-    for (const item of [...remoteItems, ...importedIflItems, ...local, ...tempOnly, ...removed, ...manualItems]) {
+    for (const item of [...remoteItems, ...importedIflItems, ...themeItems, ...local, ...tempOnly, ...removed, ...manualItems]) {
+      if (hiddenIds.has(item.id)) continue;
       byId.set(item.id, {
         ...item,
         pinned:
@@ -331,9 +383,9 @@ export function InfoIndexPanel({
       if (!a.pinned && b.pinned) return 1;
       return (b.dateKey || "").localeCompare(a.dateKey || "");
     });
-  }, [localItems, remoteItems, importedIflItems, manualItems, pinnedIds, removedArchive, tempTick]);
+  }, [localItems, remoteItems, importedIflItems, themeItems, manualItems, pinnedIds, hiddenIds, removedArchive, tempTick]);
 
-  const filtered = React.useMemo(() => {
+  const searched = React.useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return merged;
     return merged.filter((item) => {
@@ -354,7 +406,16 @@ export function InfoIndexPanel({
     });
   }, [merged, searchQuery]);
 
-  const groups = React.useMemo(() => groupIndexItems(filtered, view), [filtered, view]);
+  const filtered = React.useMemo(
+    () => (sourceFilter === "all" ? searched : searched.filter((item) => item.source === sourceFilter)),
+    [searched, sourceFilter],
+  );
+
+  const listed = React.useMemo(
+    () => (view === "all" ? filtered : filtered.filter((item) => item.appFileMark !== "removed")),
+    [filtered, view],
+  );
+  const groups = React.useMemo(() => groupIndexItems(listed, view), [listed, view]);
   const visibleGroups = React.useMemo(() => {
     if (!selectedKey) return groups;
     return groups.filter((group) => group.key === selectedKey);
@@ -387,6 +448,16 @@ export function InfoIndexPanel({
           return;
         }
         saveImportedIfl(dedupeIndexItems([...importedIflItems, ...items]));
+        setHiddenIds((prev) => {
+          let changed = false;
+          const next = new Set(prev);
+          for (const row of items) {
+            if (next.delete(row.id)) changed = true;
+          }
+          if (!changed) return prev;
+          writeHiddenIds(next);
+          return next;
+        });
         setStatus(`insta-fact-library 앱파일 ${items.length}건을 인덱스에 넣었습니다.`);
       } catch {
         setStatus("IFL 앱파일을 읽지 못했습니다. .ifl.json 인지 확인하세요.");
@@ -442,6 +513,86 @@ export function InfoIndexPanel({
     setStatus("인덱스를 추가했습니다. 우선 표시 항목은 분류·일자·태그 맨 위에 나옵니다.");
   };
 
+  const rememberHidden = (id: string) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      writeHiddenIds(next);
+      return next;
+    });
+    setSelectedIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  const dropPin = (id: string) => {
+    setPinnedIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      writePinnedIds(next);
+      return next;
+    });
+  };
+
+  const removeIndexItem = (item: InfoIndexItem) => {
+    const kind = indexRemovalKind(item);
+    if (kind === "delete" && item.source === "local" && typeof item.localNumericId === "number") {
+      onDeleteLocal?.(item.localNumericId);
+      return;
+    }
+    if (kind === "delete" && item.id === "local-temp:draft") {
+      if (!window.confirm(`“${item.title}” 임시 저장을 삭제할까요?`)) return;
+      try {
+        localStorage.removeItem(GENERAL_INFO_TEMP_DRAFT_KEY);
+        window.dispatchEvent(new Event(GENERAL_INFO_TEMP_DRAFT_EVENT));
+      } catch {
+        /* ignore */
+      }
+      setStatus("임시 저장을 삭제했습니다.");
+      return;
+    }
+    if (kind === "delete" && item.id.startsWith("manual:")) {
+      if (!window.confirm(`“${item.title}” 인덱스 항목을 삭제할까요?`)) return;
+      saveManualItems(manualItems.filter((row) => row.id !== item.id));
+      dropPin(item.id);
+      setStatus("인덱스 항목을 삭제했습니다.");
+      return;
+    }
+
+    const themeItem = item.source === "theme";
+    const otherApp = item.source !== "local";
+    const sourceName = INFO_INDEX_SOURCE_SHORT[item.source];
+    const ok = window.confirm(
+      themeItem
+        ? `“${item.title}” 항목을 정보 인덱스에서 제외할까요?\n이 목록에서만 빠지고, 테마 글은 삭제되지 않습니다.`
+        : otherApp
+          ? `“${item.title}” 항목을 정보 인덱스에서 제외할까요?\n이 목록에서만 빠지고, ${sourceName} 앱의 글은 삭제되지 않습니다.`
+          : `“${item.title}” 항목을 정보 인덱스에서 제외할까요?\n이 목록에서만 빠집니다.`,
+    );
+    if (!ok) return;
+
+    if (importedIflItems.some((row) => row.id === item.id)) {
+      saveImportedIfl(importedIflItems.filter((row) => row.id !== item.id));
+    }
+    const archiveId = item.id.startsWith("local-removed:")
+      ? Number(item.id.slice("local-removed:".length))
+      : NaN;
+    if (Number.isFinite(archiveId)) forgetAppFileIndexArchive(archiveId);
+    dropPin(item.id);
+    rememberHidden(item.id);
+    setStatus(
+      themeItem
+        ? "정보 인덱스에서 제외했습니다. 테마 글은 그대로입니다."
+        : otherApp
+          ? "정보 인덱스에서 제외했습니다. 다른 앱의 글은 그대로입니다."
+          : "정보 인덱스에서 제외했습니다.",
+    );
+  };
+
   const openLocalDetail = (item: InfoIndexItem) => {
     if (item.localNumericId) onOpenLocalDetail(item.localNumericId);
   };
@@ -470,7 +621,7 @@ export function InfoIndexPanel({
 
   const groupLabel = (key: string) => {
     if (view === "tag") return key.startsWith("#") ? key : `#${key}`;
-    if (view === "date") return key.replace(/-/g, ".");
+    if (view === "date") return formatIndexDateLabel(key);
     return key;
   };
 
@@ -503,7 +654,7 @@ export function InfoIndexPanel({
     Promise.resolve(onExportSelectedAppFiles({ savedIds, commitTempDraft }))
       .then((message) => {
         if (message) setStatus(message);
-        if (typeof message === "string" && message.includes("앱파일을 저장했습니다")) {
+        if (typeof message === "string" && message.includes("앱파일을 저장")) {
           setSelectedIds(new Set());
           setSelectMode(false);
         }
@@ -530,10 +681,15 @@ export function InfoIndexPanel({
 
   const renderTitle = (item: InfoIndexItem) => {
     const title = (
-      <span className="infoIndexTitleLine">
-        {item.appFileMark ? <AppFileStar mark={item.appFileMark} /> : null}
-        <strong>{item.title}</strong>
-      </span>
+      <>
+        <span className="infoIndexTitleLine">
+          {item.appFileMark ? <AppFileStar mark={item.appFileMark} /> : null}
+          <strong>{item.title}</strong>
+        </span>
+        <span className={`infoIndexSourceBadge infoIndexSourceUnderTitle ${infoIndexSourceClass(item.source)}`}>
+          {INFO_INDEX_SOURCE_BADGE[item.source]}
+        </span>
+      </>
     );
     if (item.saveStatus === "임시 저장") {
       return (
@@ -551,6 +707,14 @@ export function InfoIndexPanel({
             setStatus("앱에서 삭제한 항목입니다. 빨간 ★로 인덱스에 남아 있으며, 앱파일 불러오기로 다시 넣을 수 있습니다.")
           }
         >
+          {title}
+        </button>
+      );
+    }
+    if (item.source === "theme") {
+      const themeId = item.id.startsWith("theme:") ? item.id.slice("theme:".length) : "";
+      return (
+        <button type="button" className="infoIndexTitleButton" onClick={() => onOpenTheme?.(themeId)}>
           {title}
         </button>
       );
@@ -577,8 +741,36 @@ export function InfoIndexPanel({
     return <div className="infoIndexTitleButton">{title}</div>;
   };
 
+  const renderRemoval = (item: InfoIndexItem) => {
+    const exclude = indexRemovalKind(item) === "exclude";
+    return (
+      <button
+        type="button"
+        className={exclude ? "infoIndexExcludeButton" : "infoIndexDeleteButton"}
+        onClick={() => removeIndexItem(item)}
+      >
+        {exclude ? "제외" : "삭제"}
+      </button>
+    );
+  };
+
   const renderDetail = (item: InfoIndexItem) => {
     const className = `infoIndexDetailButton ${infoIndexSourceClass(item.source)}`;
+    if (item.source === "theme") {
+      const themeId = item.id.startsWith("theme:") ? item.id.slice("theme:".length) : "";
+      const openTheme = () => onOpenTheme?.(themeId);
+      return (
+        <div className="infoIndexDetailActions">
+          <button type="button" className={className} onClick={openTheme}>
+            수정
+          </button>
+          <button type="button" className={className} onClick={openTheme}>
+            보기
+          </button>
+          {renderRemoval(item)}
+        </div>
+      );
+    }
     if (item.appFileMark === "removed") {
       const tellRemoved = () =>
         setStatus("앱에서 삭제한 항목입니다. 빨간 ★로 인덱스에 남아 있으며, 앱파일 불러오기로 다시 넣을 수 있습니다.");
@@ -590,6 +782,7 @@ export function InfoIndexPanel({
           <button type="button" className={`${className} isRemoved`} onClick={tellRemoved}>
             보기
           </button>
+          {renderRemoval(item)}
         </div>
       );
     }
@@ -609,6 +802,7 @@ export function InfoIndexPanel({
           >
             보기
           </button>
+          {renderRemoval(item)}
         </div>
       );
     }
@@ -621,6 +815,7 @@ export function InfoIndexPanel({
         <a className={className} href={href} target="_blank" rel="noopener noreferrer">
           보기
         </a>
+        {renderRemoval(item)}
       </div>
     );
   };
@@ -641,8 +836,8 @@ export function InfoIndexPanel({
           </button>
         </div>
         <p className="infoIndexHelp">
-          제목이나 상세보기를 누르면 작성된 앱으로 가서 내용을 확인합니다. 우선 표시는 분류·일자·태그에서 맨 위에 올립니다.
-          노란 ★는 앱파일로 저장한 항목이고, 그 항목을 앱에서 지워도 인덱스에 남습니다. 그때는 빨간 ★로 바뀝니다.
+          제목이나 상세보기를 누르면 작성된 앱으로 가서 내용을 확인합니다. NEWS는 뉴스 저장 앱에서 본문을 봅니다. 그 글을 지우면 여기에는 삭제됨으로 남습니다. NEWS·builder·insta 항목의 제외는 이 인덱스에서만 빠지고, 그 앱의 글은 삭제되지 않습니다. 테마로 만든 글도 이 목록에 나오며, 제목이나 상세보기를 누르면 그 테마로 갑니다. 인덱스에서 빼도 테마 글은 삭제되지 않습니다. 일반정보수집과 여기서 입력한 항목은 삭제하면 이 앱에서 지워집니다. 우선 표시는 분류·일자·태그에서 맨 위에 올립니다.
+          노란 ★는 앱파일로 저장한 항목입니다. 그 항목을 앱에서 지우면 빨간 ★로 남고, 분류·일자·태그 옆의 전체에서만 보입니다.
         </p>
       </div>
 
@@ -735,6 +930,13 @@ export function InfoIndexPanel({
             <div className="ch3TabBar infoIndexViewTabs">
               <button
                 type="button"
+                className={`ch3TabBtn ${view === "all" ? "active" : ""}`}
+                onClick={() => changeView("all")}
+              >
+                전체
+              </button>
+              <button
+                type="button"
                 className={`ch3TabBtn ${view === "category" ? "active" : ""}`}
                 onClick={() => changeView("category")}
               >
@@ -754,6 +956,23 @@ export function InfoIndexPanel({
               >
                 태그
               </button>
+            </div>
+            <div className="infoIndexSourceFilters" role="group" aria-label="발생처">
+              <span className="infoIndexSourceFilterLabel">발생처</span>
+              {INFO_INDEX_SOURCE_FILTERS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`infoIndexSourceFilter ${sourceFilter === option.value ? "active" : ""}`}
+                  aria-pressed={sourceFilter === option.value}
+                  onClick={() => {
+                    setSourceFilter(option.value);
+                    setSelectedKey("");
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
           </div>
           <div className="infoIndexCategoryChips">
@@ -790,6 +1009,9 @@ export function InfoIndexPanel({
               </a>
               <a href={BUILDER_APP_URL} target="_blank" rel="noopener noreferrer">
                 builder 열기
+              </a>
+              <a href={NEWSFLASH_APP_URL} target="_blank" rel="noopener noreferrer">
+                NEWS 열기
               </a>
             </div>
             <button
@@ -898,15 +1120,17 @@ export function InfoIndexPanel({
           </p>
 
           <p className="mutedText infoIndexStatusLine">
-            {sourceNote || "외부 앱 목록"} · 이 앱 {localItems.length}건
-            {searchQuery.trim() ? ` · 검색 ${filtered.length}건` : ""}
+            {`builder ${merged.filter((item) => item.source === "builder-zeta-eight").length}건 · insta ${merged.filter((item) => item.source === "insta-fact-library").length}건 · NEWS ${merged.filter((item) => item.source === "newsflash").length}건 · 테마 ${merged.filter((item) => item.source === "theme").length}건`} · 이 앱 {localItems.length}건
+            {searchQuery.trim() || sourceFilter !== "all" ? ` · 표시 ${filtered.length}건` : ""}
             {localStatus ? ` · ${localStatus}` : ""} · {status}
           </p>
 
           {merged.length === 0 ? (
             <p className="mutedText">아직 인덱스에 넣을 항목이 없습니다.</p>
-          ) : filtered.length === 0 ? (
+          ) : searched.length === 0 ? (
             <p className="mutedText">“{searchQuery.trim()}”에 맞는 항목이 없습니다.</p>
+          ) : filtered.length === 0 ? (
+            <p className="mutedText">이 발생처에 맞는 항목이 없습니다.</p>
           ) : visibleGroups.length === 0 ? (
             <p className="mutedText">선택한 분류에 항목이 없습니다. 전체를 누르면 목록이 다시 나옵니다.</p>
           ) : (
@@ -915,13 +1139,13 @@ export function InfoIndexPanel({
                 <thead>
                   <tr>
                     {selectMode ? <th className="infoIndexSelectCol">선택</th> : null}
-                    <th>{view === "category" ? "분류" : view === "date" ? "일자" : "태그"}</th>
-                    <th>제목</th>
-                    {view !== "date" ? <th className="infoIndexDateCol">일자</th> : null}
+                    <th className="infoIndexGroupCol">{view === "category" ? "분류" : view === "tag" ? "태그" : "일자"}</th>
+                    <th className="infoIndexTitleCol">제목</th>
+                    {view === "category" || view === "tag" ? <th className="infoIndexDateCol">일자</th> : null}
                     <th className="infoIndexSourceCol">발생처</th>
                     <th className="infoIndexSaveStatusCell">상태</th>
-                    <th>상세보기</th>
-                    <th>우선</th>
+                    <th className="infoIndexDetailCol">상세보기</th>
+                    <th className="infoIndexPinCol">우선</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -929,7 +1153,10 @@ export function InfoIndexPanel({
                     group.items.map((item) => (
                       <tr
                         key={`${group.key}-${item.id}`}
-                        className={[item.pinned ? "pinned" : "", item.appFileMark === "removed" ? "appFileRemoved" : ""]
+                        className={[
+                          item.pinned ? "pinned" : "",
+                          item.appFileMark === "removed" || item.saveStatus === "삭제됨" ? "appFileRemoved" : "",
+                        ]
                           .filter(Boolean)
                           .join(" ")}
                       >
@@ -955,7 +1182,7 @@ export function InfoIndexPanel({
                           </button>
                         </td>
                         <td className="infoIndexTitleCell">{renderTitle(item)}</td>
-                        {view !== "date" ? (
+                        {view === "category" || view === "tag" ? (
                           <td className="infoIndexDateCell infoIndexDateCol">{item.createdAtLabel}</td>
                         ) : null}
                         <td className="infoIndexSourceCell infoIndexSourceCol">
@@ -964,7 +1191,7 @@ export function InfoIndexPanel({
                           </span>
                         </td>
                         <td className="infoIndexSaveStatusCell">
-                          {item.source === "local" && item.saveStatus ? (
+                          {item.saveStatus ? (
                             <span className={`infoIndexSaveStatus is-${item.saveStatus === "임시 저장" ? "temp" : item.saveStatus === "삭제됨" ? "removed" : "saved"}`}>
                               {item.saveStatus}
                             </span>

@@ -1,14 +1,16 @@
 import {
   emptyPersonAlbumState,
   mergePersonAlbumKeeps,
+  PERSON_ALBUM_CATEGORIES,
   personAlbumKeepsFromItems,
   prunePersonAlbumHidden,
+  SCENE_ALBUMS,
   type PersonAlbumKeep,
   type PersonAlbumState,
   type PhotobookPersonSource,
 } from "./photobook-person-album";
 
-const STORAGE_KEY = "iphone-calendar-photobook-person-album-v1";
+const STORAGE_KEY = SCENE_ALBUMS.person.storageKey;
 
 function normalizeState(raw: unknown): PersonAlbumState {
   if (!raw || typeof raw !== "object") return emptyPersonAlbumState();
@@ -22,11 +24,14 @@ function normalizeState(raw: unknown): PersonAlbumState {
       const imagePath = String((entry as PersonAlbumKeep).imagePath || "").trim();
       if (!imagePath || seen.has(imagePath)) continue;
       seen.add(imagePath);
+      const memo = String((entry as PersonAlbumKeep).memo || "(제목 없음)");
+      const storedKeyword = String((entry as PersonAlbumKeep).keyword || "").trim();
       keeps.push({
         id: String((entry as PersonAlbumKeep).id || `pk_${keeps.length}`),
         sourceItemId: String((entry as PersonAlbumKeep).sourceItemId || ""),
         imagePath,
-        memo: String((entry as PersonAlbumKeep).memo || "(제목 없음)"),
+        memo,
+        keyword: storedKeyword || (memo.trim().startsWith("#") ? memo.trim() : ""),
         createdAt: String(
           (entry as PersonAlbumKeep).createdAt ||
             (entry as PersonAlbumKeep).keptAt ||
@@ -50,10 +55,10 @@ function normalizeState(raw: unknown): PersonAlbumState {
   return { keeps, hidden };
 }
 
-export function readPersonAlbumState(): PersonAlbumState {
+export function readPersonAlbumState(storageKey: string = STORAGE_KEY): PersonAlbumState {
   if (typeof window === "undefined") return emptyPersonAlbumState();
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey);
     if (!raw) return emptyPersonAlbumState();
     return normalizeState(JSON.parse(raw));
   } catch {
@@ -61,24 +66,31 @@ export function readPersonAlbumState(): PersonAlbumState {
   }
 }
 
-export function writePersonAlbumState(state: PersonAlbumState): PersonAlbumState {
+export function writePersonAlbumState(
+  state: PersonAlbumState,
+  storageKey: string = STORAGE_KEY,
+): PersonAlbumState {
   const normalized = normalizeState(state);
   if (typeof window === "undefined") return normalized;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    window.localStorage.setItem(storageKey, JSON.stringify(normalized));
   } catch (error) {
-    console.error("Person album write failed:", error);
+    console.error("Scene album write failed:", error);
   }
   return normalized;
 }
 
-/** Keep person photos in 人앨범 before photobook cards are deleted. */
+/** Keep matching photos in the scene album before photobook cards are deleted. */
 export function keepPersonPhotosFromDeletedItems(
   items: PhotobookPersonSource[],
+  options?: { storageKey?: string; categories?: readonly string[] },
 ): PersonAlbumState {
-  const current = readPersonAlbumState();
+  const storageKey = options?.storageKey || STORAGE_KEY;
+  const categories = options?.categories || PERSON_ALBUM_CATEGORIES;
+  const current = readPersonAlbumState(storageKey);
   const incoming = personAlbumKeepsFromItems(items, {
     hidden: current.hidden,
+    categories,
   });
   if (incoming.length === 0) {
     if (items.length === 0) return current;
@@ -87,11 +99,11 @@ export function keepPersonPhotosFromDeletedItems(
       items.map((item) => item.id),
     );
     if (pruned.length === current.hidden.length) return current;
-    return writePersonAlbumState({ ...current, hidden: pruned });
+    return writePersonAlbumState({ ...current, hidden: pruned }, storageKey);
   }
   const deletedIds = items.map((item) => item.id);
   return writePersonAlbumState({
     keeps: mergePersonAlbumKeeps(current.keeps, incoming),
     hidden: prunePersonAlbumHidden(current.hidden, deletedIds),
-  });
+  }, storageKey);
 }

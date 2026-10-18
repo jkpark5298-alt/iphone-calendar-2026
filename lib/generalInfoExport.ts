@@ -1,5 +1,6 @@
 import type { GeneralInfoItem } from "../types/generalInfo";
 import {
+  extractMediaSrcFromHtml,
   getGeneralInfoInfographicItems,
   getGeneralInfoFormattedHtml,
 } from "./generalInfoHelpers";
@@ -11,7 +12,7 @@ import {
 
 export const GENERAL_INFO_APP_FILE_FORMAT = "airzeta-general-info";
 export const GENERAL_INFO_APP_BUNDLE_FORMAT = "airzeta-general-info-bundle";
-export const GENERAL_INFO_APP_FILE_VERSION = 1;
+export const GENERAL_INFO_APP_FILE_VERSION = 2;
 export const GENERAL_INFO_APP_FILE_EXT = ".airzeta-gi.json";
 
 export type GeneralInfoAppFile = {
@@ -340,36 +341,147 @@ export function buildGeneralInfoAppFile(item: GeneralInfoItem): GeneralInfoAppFi
     item: {
       ...item,
       paragraphs,
-      formattedTextHtml:
-        serializeParagraphsToHtml(paragraphs) || item.formattedTextHtml || "",
+      formattedTextHtml: (() => {
+        const serialized = serializeParagraphsToHtml(paragraphs);
+        const original = item.formattedTextHtml || "";
+        if (original.includes("data:image/") && !serialized.includes("data:image/")) return original;
+        return serialized || original;
+      })(),
       text: item.text || paragraphs.map((p) => p.text).filter(Boolean).join("\n\n"),
     },
   };
 }
 
-export function downloadGeneralInfoAppFile(item: GeneralInfoItem) {
-  const payload = buildGeneralInfoAppFile(item);
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-    type: "application/json",
+export type GeneralInfoAppFileSaveResult = {
+  filename: string;
+  embedded: number;
+  missed: number;
+};
+
+const blobToDataUrl = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("이미지 읽기 실패"));
+    reader.readAsDataURL(blob);
   });
-  const filename = `${safeFileStem(item.title || "general-info")}${GENERAL_INFO_APP_FILE_EXT}`;
-  triggerBlobDownload(blob, filename);
-  return filename;
+
+const imageTypeForUrl = (url: string, blobType: string) => {
+  if (blobType.startsWith("image/")) return blobType;
+  if (/\.png(\?|#|$)/i.test(url)) return "image/png";
+  if (/\.gif(\?|#|$)/i.test(url)) return "image/gif";
+  if (/\.webp(\?|#|$)/i.test(url)) return "image/webp";
+  if (/\.avif(\?|#|$)/i.test(url)) return "image/avif";
+  if (/\.bmp(\?|#|$)/i.test(url)) return "image/bmp";
+  if (/\.jpe?g(\?|#|$)/i.test(url)) return "image/jpeg";
+  return "";
+};
+
+const remoteImageToDataUrl = async (url: string) => {
+  if (url.startsWith("data:image/")) return url;
+  if (!/^(https?:|blob:)/i.test(url)) return null;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  const blob = await response.blob();
+  const type = imageTypeForUrl(url, blob.type || "");
+  if (!type) return null;
+  const typed = blob.type === type ? blob : new Blob([await blob.arrayBuffer()], { type });
+  const dataUrl = await blobToDataUrl(typed);
+  return dataUrl.startsWith("data:image/") ? dataUrl : null;
+};
+
+const replaceImageUrl = (value: string, from: string, to: string) => {
+  if (!value || !from || from === to) return value;
+  let next = value.split(from).join(to);
+  const encoded = from.replace(/&/g, "&amp;");
+  if (encoded !== from && next.includes(encoded)) next = next.split(encoded).join(to);
+  return next;
+};
+
+/** 앱파일에 이미지 주소 대신 그림 파일을 넣습니다. */
+export async function embedImagesInGeneralInfoItem(item: GeneralInfoItem) {
+  const clone = JSON.parse(JSON.stringify(item)) as GeneralInfoItem;
+  const sources = new Set<string>();
+  const addHtml = (html: string) => {
+    extractMediaSrcFromHtml(html).forEach((src) => sources.add(src));
+  };
+  addHtml(clone.formattedTextHtml || "");
+  (clone.paragraphs || []).forEach((paragraph) => addHtml(paragraph.html || ""));
+  (clone.mediaItems || []).forEach((media) => {
+    [media.preview, media.fileUrl, media.url].forEach((src) => {
+      if (src) sources.add(String(src));
+    });
+  });
+  if (clone.filePreview) sources.add(clone.filePreview);
+
+  const replacements = new Map<string, string>();
+  let embedded = 0;
+  let missed = 0;
+  for (const src of sources) {
+    if (!/^(https?:|blob:|data:image\/)/i.test(src)) continue;
+    try {
+      const dataUrl = await remoteImageToDataUrl(src);
+      if (!dataUrl) {
+        if (!src.startsWith("data:image/")) missed += 1;
+        continue;
+      }
+      replacements.set(src, dataUrl);
+      embedded += 1;
+    } catch {
+      missed += 1;
+    }
+  }
+
+  const apply = (value: string) => {
+    let next = value;
+    replacements.forEach((to, from) => {
+      next = replaceImageUrl(next, from, to);
+    });
+    return next;
+  };
+
+  clone.formattedTextHtml = apply(clone.formattedTextHtml || "");
+  clone.paragraphs = (clone.paragraphs || []).map((paragraph) => ({
+    ...paragraph,
+    html: apply(paragraph.html || ""),
+  }));
+  clone.mediaItems = (clone.mediaItems || []).map((media) => {
+    const preview = media.preview ? apply(media.preview) : media.preview;
+    const fileUrl = media.fileUrl ? apply(media.fileUrl) : preview;
+    const url = media.url ? apply(media.url) : media.url;
+    return { ...media, preview, fileUrl, url };
+  });
+  if (clone.filePreview) clone.filePreview = apply(clone.filePreview);
+  return { item: clone, embedded, missed };
 }
 
-export function downloadGeneralInfoAppBundle(items: GeneralInfoItem[]) {
+export async function downloadGeneralInfoAppFile(item: GeneralInfoItem): Promise<GeneralInfoAppFileSaveResult> {
+  const embeddedItem = await embedImagesInGeneralInfoItem({ ...item, appFileSaved: true });
+  const payload = buildGeneralInfoAppFile(embeddedItem.item);
+  const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+  const filename = `${safeFileStem(item.title || "general-info")}${GENERAL_INFO_APP_FILE_EXT}`;
+  triggerBlobDownload(blob, filename);
+  return { filename, embedded: embeddedItem.embedded, missed: embeddedItem.missed };
+}
+
+export async function downloadGeneralInfoAppBundle(items: GeneralInfoItem[]): Promise<GeneralInfoAppFileSaveResult> {
+  const embeddedItems = await Promise.all(
+    items.map((item) => embedImagesInGeneralInfoItem({ ...item, appFileSaved: true })),
+  );
   const payload: GeneralInfoAppBundle = {
     format: GENERAL_INFO_APP_BUNDLE_FORMAT,
     version: GENERAL_INFO_APP_FILE_VERSION,
     exportedAt: new Date().toISOString(),
-    items: items.map((item) => buildGeneralInfoAppFile({ ...item, appFileSaved: true }).item),
+    items: embeddedItems.map((entry) => buildGeneralInfoAppFile(entry.item).item),
   };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-    type: "application/json",
-  });
+  const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
   const filename = `일반정보수집-${items.length}건${GENERAL_INFO_APP_FILE_EXT}`;
   triggerBlobDownload(blob, filename);
-  return filename;
+  return {
+    filename,
+    embedded: embeddedItems.reduce((total, entry) => total + entry.embedded, 0),
+    missed: embeddedItems.reduce((total, entry) => total + entry.missed, 0),
+  };
 }
 
 function normalizeGeneralInfoAppItem(itemRaw: Record<string, unknown>): GeneralInfoItem | null {

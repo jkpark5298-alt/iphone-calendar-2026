@@ -4,14 +4,64 @@ export const PERSON_ALBUM_SLIDE_MS = 3000;
 /** Pause autoplay this long after the user swipes or taps the strip. */
 export const PERSON_ALBUM_USER_PAUSE_MS = 8000;
 
+/**
+ * Photobook image albums keyed by 2차 분류.
+ * 人: 인물/She. 旅行: 여행·풍경.
+ */
+export const SCENE_ALBUMS = {
+  person: {
+    id: "person",
+    tab: "person-album",
+    title: "人 앨범",
+    categories: ["인물", "She"],
+    storageKey: "iphone-calendar-photobook-person-album-v1",
+    countLabel: "인물 사진",
+    emptyMessage: "인물/She로 분류된 사진이 없습니다.",
+  },
+  trip: {
+    id: "trip",
+    tab: "trip-album",
+    title: "旅行 앨범",
+    categories: ["여행", "풍경"],
+    storageKey: "iphone-calendar-photobook-trip-album-v1",
+    countLabel: "여행·풍경 사진",
+    emptyMessage: "여행/풍경으로 분류된 사진이 없습니다.",
+  },
+} as const;
+
+export type SceneAlbumId = keyof typeof SCENE_ALBUMS;
+export type SceneAlbumTab = (typeof SCENE_ALBUMS)[SceneAlbumId]["tab"];
+
 /** Categories that feed the photobook 人앨범 (matches insta-fact-library "인물"). */
-export const PERSON_ALBUM_CATEGORIES = ["인물", "She"] as const;
+export const PERSON_ALBUM_CATEGORIES = SCENE_ALBUMS.person.categories;
+
+export function sceneAlbumById(id: SceneAlbumId) {
+  return SCENE_ALBUMS[id];
+}
+
+export function sceneAlbumByTab(tab: string) {
+  const id = (Object.keys(SCENE_ALBUMS) as SceneAlbumId[]).find(
+    (key) => SCENE_ALBUMS[key].tab === tab,
+  );
+  return id ? SCENE_ALBUMS[id] : null;
+}
+
+/** Album that keeps photos for this 2차 분류, if any. */
+export function sceneAlbumForCategory(category2: string) {
+  const c = (category2 || "").trim();
+  const id = (Object.keys(SCENE_ALBUMS) as SceneAlbumId[]).find((key) =>
+    (SCENE_ALBUMS[key].categories as readonly string[]).includes(c),
+  );
+  return id ? SCENE_ALBUMS[id] : null;
+}
 
 export type PhotobookPersonSource = {
   id: string;
   keyword: string;
   category2: string;
   memo: string;
+  /** Per-image memo. Index matches imageUrls. */
+  imageMemos?: string[];
   /** Entry date YYYY-MM-DD */
   tag: string;
   imageUrls: string[];
@@ -23,6 +73,8 @@ export type PersonAlbumKeep = {
   sourceItemId: string;
   imagePath: string;
   memo: string;
+  /** Index keyword, shown as #keyword on the photo. */
+  keyword: string;
   createdAt: string;
   keptAt: string;
 };
@@ -32,6 +84,10 @@ export type PersonAlbumCard = {
   itemId: string;
   imagePath: string;
   memo: string;
+  /** Same label as the photobook index `#keyword`. */
+  keyword: string;
+  /** Image memo, or the entry memo, pinned on the photo. */
+  caption: string;
   dateLabel: string;
   sortAt: number;
   /** Set when the card comes from the keep store (item may be gone). */
@@ -52,9 +108,13 @@ export function personAlbumHideKey(itemId: string, imagePath: string) {
   return `${itemId}::${imagePath}`;
 }
 
-export function isPersonAlbumCategory(category2: string) {
+export function isAlbumCategory(category2: string, categories: readonly string[]) {
   const c = (category2 || "").trim();
-  return (PERSON_ALBUM_CATEGORIES as readonly string[]).includes(c);
+  return categories.includes(c);
+}
+
+export function isPersonAlbumCategory(category2: string) {
+  return isAlbumCategory(category2, PERSON_ALBUM_CATEGORIES);
 }
 
 /**
@@ -71,6 +131,18 @@ export function nextRandomAlbumIndex(
   const safeCurrent = Math.min(Math.max(0, current), length - 1);
   const pick = Math.floor(random() * (length - 1));
   return pick >= safeCurrent ? pick + 1 : pick;
+}
+
+/** Same `#keyword` label the photobook index shows. */
+export function albumKeywordLabel(keyword: string) {
+  const title = (keyword || "").trim();
+  if (!title) return "";
+  return title.startsWith("#") ? title : `#${title}`;
+}
+
+/** Per-image memo only. Keyword stays on photos that have no memo. */
+export function albumImageCaption(item: PhotobookPersonSource, index: number) {
+  return (item.imageMemos || [])[index]?.trim() || "";
 }
 
 /** Keyword, or first line of memo. */
@@ -112,19 +184,21 @@ function tagSortAt(tag: string) {
   return new Date(tag).getTime() || 0;
 }
 
-/** Snapshot person-category photos to keep when deleting photobook cards. */
+/** Snapshot category-matched photos to keep when deleting photobook cards. */
 export function personAlbumKeepsFromItems(
   items: PhotobookPersonSource[],
-  options?: { hidden?: Iterable<string>; now?: string },
+  options?: { hidden?: Iterable<string>; now?: string; categories?: readonly string[] },
 ): PersonAlbumKeep[] {
   const hidden = new Set(options?.hidden || []);
   const now = options?.now || new Date().toISOString();
+  const categories = options?.categories || PERSON_ALBUM_CATEGORIES;
   const next: PersonAlbumKeep[] = [];
   for (const item of items) {
-    if (!isPersonAlbumCategory(item.category2)) continue;
+    if (!isAlbumCategory(item.category2, categories)) continue;
     const paths = (item.imageUrls || []).filter(Boolean);
     if (paths.length === 0) continue;
     const memo = albumMemo(item);
+    const keyword = albumKeywordLabel(item.keyword);
     const createdAt = item.tag || now;
     paths.forEach((imagePath, index) => {
       if (hidden.has(personAlbumHideKey(item.id, imagePath))) return;
@@ -133,6 +207,7 @@ export function personAlbumKeepsFromItems(
         sourceItemId: item.id,
         imagePath,
         memo,
+        keyword,
         createdAt,
         keptAt: now,
       });
@@ -175,16 +250,18 @@ export function buildPersonAlbumCards(
   items: PhotobookPersonSource[],
   keeps: PersonAlbumKeep[] = [],
   hidden: Iterable<string> = [],
+  categories: readonly string[] = PERSON_ALBUM_CATEGORIES,
 ): PersonAlbumCard[] {
   const hiddenSet = new Set(hidden);
   const next: PersonAlbumCard[] = [];
   const livePaths = new Set<string>();
 
   for (const item of items) {
-    if (!isPersonAlbumCategory(item.category2)) continue;
+    if (!isAlbumCategory(item.category2, categories)) continue;
     const paths = (item.imageUrls || []).filter(Boolean);
     if (paths.length === 0) continue;
     const memo = albumMemo(item);
+    const keyword = albumKeywordLabel(item.keyword);
     const dateLabel = formatAlbumDate(item.tag);
     const sortAt = tagSortAt(item.tag);
     paths.forEach((imagePath, index) => {
@@ -195,6 +272,8 @@ export function buildPersonAlbumCards(
         itemId: item.id,
         imagePath,
         memo,
+        keyword,
+        caption: albumImageCaption(item, index),
         dateLabel,
         sortAt,
       });
@@ -208,6 +287,8 @@ export function buildPersonAlbumCards(
       itemId: keep.sourceItemId,
       imagePath: keep.imagePath,
       memo: keep.memo || "(제목 없음)",
+      keyword: keep.keyword || (keep.memo?.trim().startsWith("#") ? keep.memo.trim() : ""),
+      caption: "",
       dateLabel: formatAlbumDate(keep.createdAt),
       sortAt: tagSortAt(keep.createdAt),
       keepId: keep.id,
@@ -227,6 +308,7 @@ export function buildAlbumCardsFromSources(
     const paths = (item.imageUrls || []).filter(Boolean);
     if (paths.length === 0) continue;
     const memo = albumMemo(item);
+    const keyword = albumKeywordLabel(item.keyword);
     const dateLabel = formatAlbumDate(item.tag);
     const sortAt = tagSortAt(item.tag);
     paths.forEach((imagePath, index) => {
@@ -235,6 +317,8 @@ export function buildAlbumCardsFromSources(
         itemId: item.id,
         imagePath,
         memo,
+        keyword,
+        caption: albumImageCaption(item, index),
         dateLabel,
         sortAt,
       });

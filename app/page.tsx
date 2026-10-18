@@ -1,6 +1,7 @@
 "use client";
 
 import { Chapter3Info } from "../components/Chapter3Info";
+import { StorageUsageBar } from "../components/StorageUsageBar";
 import GeneralInfoDetailModal from "../components/GeneralInfoDetailModal";
 import { GeneralInfoExportActionsModal } from "../components/GeneralInfoExportActionsModal";
 import { useTravelDiaryGeneralInfoState } from "../hooks/useTravelDiaryGeneralInfoState";
@@ -10,22 +11,38 @@ import { ChangeEvent, ClipboardEvent, useCallback, useEffect, useLayoutEffect, u
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateApi";
 import {
+  IMAGE_SLOT_GUIDE,
   enhanceRichInlineImages,
+  findAwaitingSlotId,
   insertImagesAtSlotOrCaret,
-  insertEmptyImageSlot,
   tryConsumeImageTriggerToSlot,
+  tryConsumeDateTimeTrigger,
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
+import { makeWhiteCellId, readStackedHtml, removeClassCellFromEvent, splitWhiteCells } from "../lib/collectClassCell";
 import { stepCollectFontSize } from "../lib/collectFormatPalette";
 import { readClipboardImageFiles, runCollectRichCommand } from "../lib/collectRichFormat";
 import { CollectFormatToolbar } from "../components/CollectFormatToolbar";
+import { CollectWhiteCell } from "../components/CollectWhiteCell";
+import { SlotImagePanel } from "../components/SlotImagePanel";
+import { ClassTagSelect } from "../components/ClassTagSelect";
+import { EntryLookup, plainSnippet, type LookupHit } from "../components/EntryLookup";
+import { ThemeBoard } from "../components/ThemeBoard";
+import { appendHashtagToEditor } from "../lib/contentClass";
 import { HandwritingModal } from "../components/HandwritingModal";
 import { TextToImageModal } from "../components/TextToImageModal";
 import dynamic from "next/dynamic";
 import { PhotobookPersonAlbumGallery } from "../components/PhotobookPersonAlbumGallery";
 import { keepPersonPhotosFromDeletedItems } from "../lib/client-photobook-person-album";
-import { isPersonAlbumCategory, type PhotobookPersonSource } from "../lib/photobook-person-album";
+import {
+  SCENE_ALBUMS,
+  sceneAlbumByTab,
+  sceneAlbumForCategory,
+  type PhotobookPersonSource,
+  type SceneAlbumId,
+  type SceneAlbumTab,
+} from "../lib/photobook-person-album";
 import {
   loadInformationEntriesForMonth,
   getInformationAppDayUrl,
@@ -42,7 +59,7 @@ const PersonalAlbumApp = dynamic(() => import("../features/personal-album/Person
   loading: () => <div style={{ padding: 24, color: "#cbd5e1" }}>개인 앨범 불러오는 중…</div>,
 });
 
-type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate";
+type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate" | "theme";
 type PhotoItem = {
   url: string;
   name: string;
@@ -474,6 +491,7 @@ type UndoState = {
 export default function HomePage() {
   const todayDefault = useMemo(() => getSafeToday(), []);
   const [view, setView] = useState<View>("calendar");
+  const [themeFocusId, setThemeFocusId] = useState("");
   const [currentYear, setCurrentYear] = useState(todayDefault.year ?? 2026);
   const [currentMonth, setCurrentMonth] = useState(todayDefault.month);
   const [currentDay, setCurrentDay] = useState(todayDefault.day);
@@ -609,6 +627,14 @@ export default function HomePage() {
   const [isInfoBookModalOpen, setIsInfoBookModalOpen] = useState(false);
   const [infoBookSearchQuery, setInfoBookSearchQuery] = useState("");
   const [isPhotoMemoExpanded, setIsPhotoMemoExpanded] = useState(false);
+  const [photoListAuto, setPhotoListAuto] = useState<{
+    id: string;
+    urls: string[];
+    memos: string[];
+    index: number;
+  } | null>(null);
+  const photoBookMemoEditRef = useRef<HTMLTextAreaElement | null>(null);
+  const photoBookMemoCreateRef = useRef<HTMLTextAreaElement | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -621,6 +647,8 @@ export default function HomePage() {
   const diaryEditorSyncTokenRef = useRef(0);
   const diaryAppliedTokenRef = useRef(0);
   const [diaryEditorSync, setDiaryEditorSync] = useState<{ date: string; html: string; token: number } | null>(null);
+  const [diaryWhiteCellIds, setDiaryWhiteCellIds] = useState<string[]>([]);
+  const diaryWhiteHtmlRef = useRef<Record<string, string>>({});
 
   function publishDiaryEditorContent(date: string, html: string, ready: boolean) {
     diaryBoundDateRef.current = date;
@@ -679,48 +707,145 @@ export default function HomePage() {
     );
     if (inserted) {
       enhanceRichInlineImages(editor);
-      const html = editor.innerHTML || "";
-      saveDiary(html, voiceText);
+      saveDiary(readStackedHtml(editor), voiceText);
     }
   }
 
-  function handleDiaryInsertImageSlot() {
-    const editor = diaryRichTextRef.current;
-    if (!editor) return;
-    editor.focus();
-    insertEmptyImageSlot(editor);
-    saveDiary(editor.innerHTML || "", voiceText);
+  const diaryPendingSlotRef = useRef<string | null>(null);
+  const diaryImageFileRef = useRef<HTMLInputElement | null>(null);
+
+  function handleDiaryInsertClassCell() {
+    const id = makeWhiteCellId();
+    diaryWhiteHtmlRef.current[id] = "";
+    setDiaryWhiteCellIds((prev) => [...prev, id]);
+    window.setTimeout(() => {
+      saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
+    }, 0);
+  }
+
+  function handleDiaryRemoveLastWhiteCell() {
+    const id = diaryWhiteCellIds[diaryWhiteCellIds.length - 1];
+    if (!id) {
+      alert("삭제할 칸이 없습니다.");
+      return;
+    }
+    const cell = document.querySelector(`[data-white-id="${id}"] .collect-white-cell`);
+    const text = cell?.textContent?.replace(/\u00a0/g, " ").trim() || "";
+    if (text && !window.confirm("이 칸을 지울까요?")) return;
+    delete diaryWhiteHtmlRef.current[id];
+    setDiaryWhiteCellIds((prev) => prev.filter((item) => item !== id));
+    window.setTimeout(() => {
+      saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
+    }, 0);
   }
 
   function handleDiaryRichInput() {
     const editor = diaryRichTextRef.current;
     if (!editor) return;
+    tryConsumeDateTimeTrigger(editor);
     const slotId = tryConsumeImageTriggerToSlot(editor);
     if (slotId) {
       enhanceRichInlineImages(editor);
+      setDiaryImageSlotId(slotId);
+    } else if (!findAwaitingSlotId(editor)) {
+      setDiaryImageSlotId(null);
     }
   }
 
   function handleDiaryRichEditorClick(event: React.MouseEvent<HTMLDivElement>) {
     const editor = diaryRichTextRef.current;
     if (!editor) return;
-    const handled = handleRichImageSlotPointer(editor, event.target as Node);
+    const target = event.target as HTMLElement;
+    if (removeClassCellFromEvent(editor, target)) {
+      event.preventDefault();
+      event.stopPropagation();
+      saveDiary(readStackedHtml(editor), voiceText);
+      return;
+    }
+    const handled = handleRichImageSlotPointer(editor, target);
     if (handled) {
       event.preventDefault();
       event.stopPropagation();
-      saveDiary(editor.innerHTML || "", voiceText);
+      if (!findAwaitingSlotId(editor)) setDiaryImageSlotId(null);
+      saveDiary(readStackedHtml(editor), voiceText);
+      return;
     }
+    if (!target.closest(".rich-inline-img-del, .generalInfoInlineImageRemove, .rich-img-slot-del")) {
+      editor.querySelectorAll(".is-image-selected").forEach((node) => node.classList.remove("is-image-selected"));
+      const media = target.closest("img, video");
+      if (media && editor.contains(media)) {
+        if (media.tagName === "IMG") enhanceRichInlineImages(editor);
+        const wrap = media.closest(".rich-inline-img-wrap, .generalInfoInlineImageBlock");
+        (wrap || media).classList.add("is-image-selected");
+      }
+    }
+    const slot = target.closest?.(".rich-img-slot") as HTMLElement | null;
+    if (!slot || !editor.contains(slot) || slot.classList.contains("rich-inline-img-wrap") || slot.querySelector("img")) {
+      return;
+    }
+    const slotId = slot.getAttribute("data-img-slot");
+    if (!slotId || !diaryImageFileRef.current) return;
+    event.preventDefault();
+    diaryPendingSlotRef.current = slotId;
+    diaryImageFileRef.current.click();
   }
 
-  const diaryImageFileRef = useRef<HTMLInputElement | null>(null);
+  const [diaryImageSlotId, setDiaryImageSlotId] = useState<string | null>(null);
   const [showDiaryHandwritingModal, setShowDiaryHandwritingModal] = useState(false);
   const [showDiaryTextToImageModal, setShowDiaryTextToImageModal] = useState(false);
   const [diaryCollectFontSizePx, setDiaryCollectFontSizePx] = useState(15);
+  const [diaryLookup, setDiaryLookup] = useState("");
+  const [diaryLookupHits, setDiaryLookupHits] = useState<LookupHit[]>([]);
+  const [diaryLookupStatus, setDiaryLookupStatus] = useState("");
+
+  async function lookupDiaryEntries() {
+    const keyword = diaryLookup.trim();
+    if (!keyword) {
+      setDiaryLookupHits([]);
+      setDiaryLookupStatus("조회할 내용을 입력하세요.");
+      return;
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      setDiaryLookupHits([]);
+      setDiaryLookupStatus("저장된 일기를 불러올 수 없습니다.");
+      return;
+    }
+    setDiaryLookupStatus("조회 중...");
+    const safe = keyword.replace(/[%_,]/g, " ").trim();
+    const pattern = `%${safe}%`;
+    const { data, error } = await supabase
+      .from("diary_entries")
+      .select("entry_date, diary_text, voice_text")
+      .or(`diary_text.ilike.${pattern},voice_text.ilike.${pattern}`)
+      .order("entry_date", { ascending: false })
+      .limit(20);
+    if (error) {
+      setDiaryLookupHits([]);
+      setDiaryLookupStatus("조회하지 못했습니다.");
+      return;
+    }
+    const hits = (data || [])
+      .map((row) => {
+        const date = monthDayFromEntryDate(String(row.entry_date || ""));
+        if (!date) return null;
+        const text = plainSnippet([row.diary_text, row.voice_text].filter(Boolean).join(" "));
+        return {
+          id: String(row.entry_date),
+          title: `${date.year}.${pad(date.month)}.${pad(date.day)}`,
+          snippet: text,
+        };
+      })
+      .filter((hit): hit is LookupHit => Boolean(hit));
+    setDiaryLookupHits(hits);
+    setDiaryLookupStatus(hits.length ? `${hits.length}건` : "맞는 일기가 없습니다.");
+  }
 
   function handleDiaryRichImagePick(files: FileList | null) {
     const list = Array.from(files || []);
+    const slotId = diaryPendingSlotRef.current;
+    diaryPendingSlotRef.current = null;
     if (!list.length) return;
-    void insertDiaryInlineImages(list);
+    void insertDiaryInlineImages(list, slotId);
   }
 
   function insertDiaryDataUrl(dataUrl: string) {
@@ -731,20 +856,32 @@ export default function HomePage() {
     const inserted = insertImagesAtSlotOrCaret(editor, [{ src: dataUrl }]);
     if (inserted) {
       enhanceRichInlineImages(editor);
-      saveDiary(editor.innerHTML || "", voiceText);
+      saveDiary(readStackedHtml(editor), voiceText);
     }
   }
 
+  function diarySlotOrGuide() {
+    const slotId = findAwaitingSlotId(diaryRichTextRef.current);
+    if (!slotId) {
+      setDiaryImageSlotId(null);
+      alert(IMAGE_SLOT_GUIDE);
+    }
+    return slotId;
+  }
+
   async function handleDiaryCollectPasteImage() {
+    const slotId = diarySlotOrGuide();
+    if (!slotId) return;
     try {
       const files = await readClipboardImageFiles();
       if (!files.length) {
-        alert("클립보드에서 이미지를 찾지 못했습니다. 이미지를 복사한 뒤 다시 눌러 주세요.");
+        alert("클립보드에서 이미지를 찾지 못했습니다. 이미지를 복사한 뒤 사진 칸에 붙여넣으세요.");
         return;
       }
-      void insertDiaryInlineImages(files);
+      void insertDiaryInlineImages(files, slotId);
+      setDiaryImageSlotId(null);
     } catch {
-      alert("클립보드 이미지 읽기를 지원하지 않습니다. 본문에 직접 붙여넣기 하세요.");
+      alert("클립보드 읽기가 막혀 있습니다. 사진 칸의 붙여넣기 칸에 직접 붙여넣으세요.");
     }
   }
 
@@ -758,6 +895,12 @@ export default function HomePage() {
     if (!element) return;
     element.style.height = "auto";
     element.style.height = `${Math.max(element.scrollHeight, 180)}px`;
+  }
+
+  function resizePhotoBookMemoField(element: HTMLTextAreaElement | null) {
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${Math.max(element.scrollHeight, 200)}px`;
   }
 
   function updateVisualViewportHeight() {
@@ -2062,13 +2205,20 @@ export default function HomePage() {
     const dateToken = entryDate(currentMonth, currentDay, currentYear);
     if (!diaryEditorSync || diaryEditorSync.date !== dateToken) {
       if (editor.innerHTML) editor.innerHTML = "";
+      setDiaryWhiteCellIds((prev) => (prev.length ? [] : prev));
       return;
     }
     if (diaryAppliedTokenRef.current === diaryEditorSync.token) return;
 
     diaryAppliedTokenRef.current = diaryEditorSync.token;
-    const nextHtml = diaryEditorSync.html || "";
-    if (editor.innerHTML !== nextHtml) editor.innerHTML = nextHtml;
+    const parsed = splitWhiteCells(diaryEditorSync.html || "");
+    if (editor.innerHTML !== parsed.main) editor.innerHTML = parsed.main;
+    const ids = parsed.extras.map((html) => {
+      const id = makeWhiteCellId();
+      diaryWhiteHtmlRef.current[id] = html;
+      return id;
+    });
+    setDiaryWhiteCellIds(ids);
     enhanceRichInlineImages(editor);
   }, [view, currentYear, currentMonth, currentDay, diaryEditorSync]);
 
@@ -2085,6 +2235,36 @@ export default function HomePage() {
   useEffect(() => {
     setIsPhotoMemoExpanded(false);
   }, [activeItem]);
+
+  useEffect(() => {
+    if (!photoListAuto || photoListAuto.urls.length < 2) return;
+    const timer = window.setInterval(() => {
+      setPhotoListAuto((prev) => {
+        if (!prev || prev.urls.length < 2) return prev;
+        return { ...prev, index: (prev.index + 1) % prev.urls.length };
+      });
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [photoListAuto?.id, photoListAuto?.urls.length]);
+
+  useEffect(() => {
+    resizePhotoBookMemoField(photoBookMemoEditRef.current);
+    resizePhotoBookMemoField(photoBookMemoCreateRef.current);
+  }, [photoBookInputMemo, editingPhotoBookItemId, photoBookTab, activeItem]);
+
+  useEffect(() => {
+    if (!photoListAuto) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPhotoListAuto(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [photoListAuto?.id]);
 
   async function fetchWeatherFromKma() {
     if (!isSelectedDiaryDateToday(currentMonth, currentDay, currentYear)) {
@@ -2180,6 +2360,12 @@ export default function HomePage() {
     setInfoSubView("generalInfo");
     infoState.setGeneralInfoActiveTab("collect");
     setView("info");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openTheme(themeId = "") {
+    setThemeFocusId(themeId);
+    setView("theme");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -4010,7 +4196,7 @@ export default function HomePage() {
                     key={`${mark.type}-${mark.plus}`}
                     className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(mark.type)}`}
                   >
-                    {calendarMarkLabels[mark.type]}{mark.plus ? "+" : ""}
+                    {mark.plus ? <span className="calendar-mark-like" aria-label="리더">👍</span> : null}{calendarMarkLabels[mark.type]}
                   </span>
                 ))}
               </div>
@@ -4098,21 +4284,16 @@ export default function HomePage() {
             </span>
             <button type="button" className="month-badge month-diary-link" onClick={() => openDiary(currentMonth, currentDay, currentYear)} aria-label="선택 날짜 일기장으로 이동">{currentMonth}월</button>
           </h1>
-          <div className="head-actions calendar-top-actions calendar-top-actions-redesign">
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openDatePicker("diary")}>일기장</button>
-            <a className="pill-btn compact-pill calendar-info-app-link" href={getInformationAppDayUrl(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`)} target="_blank" rel="noopener noreferrer" title="정보함 앱에서 이 날짜 보기">🔗 정보함 앱</a>
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openGeneralInfoCollect(currentMonth, currentDay)}>일반정보수집</button>
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openInfoIndex(currentMonth, currentDay)}>정보인덱스</button>
-            <button type="button" className="pill-btn compact-pill calendar-primary-link" onClick={() => openPhotoBook(currentMonth, currentDay)}>포토북</button>
+          <div className="head-actions calendar-utility-actions">
             <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
-            <label className="mark-btn work-ics-import-btn" title="근무표 ICS/JSON 가져오기" style={{ cursor: "pointer" }}>
+            <label className="mark-btn work-ics-import-btn" title="근무표 ICS/JSON 가져오기">
               가져오기
               <input
+                className="work-ics-import-input"
                 type="file"
                 accept=".ics,.json,text/calendar,application/json"
-                hidden
                 onChange={(event) => {
                   const file = event.target.files?.[0] || null;
                   void importWorkScheduleMarksFromFile(file);
@@ -4121,9 +4302,20 @@ export default function HomePage() {
               />
             </label>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
+            <span className="calendar-mobile-break" aria-hidden="true" />
             <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
           </div>
+          <div className="calendar-app-nav">
+            <a className="pill-btn compact-pill calendar-nav-infoapp" href={getInformationAppDayUrl(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`)} target="_blank" rel="noopener noreferrer" title="정보함 앱에서 이 날짜 보기">🔗 정보함 앱</a>
+            <button type="button" className="pill-btn compact-pill calendar-nav-diary" onClick={() => openDatePicker("diary")}>일기장</button>
+            <button type="button" className="pill-btn compact-pill calendar-nav-theme" onClick={() => openTheme()}>테마</button>
+            <button type="button" className="pill-btn compact-pill calendar-nav-collect" onClick={() => openGeneralInfoCollect(currentMonth, currentDay)}>일반정보수집</button>
+            <button type="button" className="pill-btn compact-pill calendar-nav-index" onClick={() => openInfoIndex(currentMonth, currentDay)}>정보인덱스</button>
+            <button type="button" className="pill-btn compact-pill calendar-nav-photo" onClick={() => openPhotoBook(currentMonth, currentDay)}>포토북</button>
+          </div>
         </div>
+
+        <StorageUsageBar />
 
         <div className="calendar-search-box">
           <div className="calendar-search-row">
@@ -4197,12 +4389,16 @@ export default function HomePage() {
         <div className="diary-head diary-head-redesign diary-head-final">
           <div className="diary-date-nav-row diary-date-nav-final">
             <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(-1)}>← 이전일</button>
-            <h1>{currentYear}. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay, currentYear)})</h1>
+            <div className="diary-date-center">
+              <h1>{currentYear}. {pad(currentMonth)}. {pad(currentDay)} ({getWeekday(currentMonth, currentDay, currentYear)})</h1>
+              <button type="button" className="pill-btn date-nav-btn diary-today-btn" onClick={openTodayDiary}>Today</button>
+            </div>
             <button type="button" className="pill-btn date-nav-btn" onClick={() => moveDiaryDate(1)}>다음일 →</button>
           </div>
 
           <div className="diary-title-nav-row diary-action-nav-final">
             <button type="button" className="pill-btn" onClick={() => openCalendar(currentMonth)}>📅 캘린더</button>
+            <button type="button" className="pill-btn calendar-nav-theme" onClick={() => openTheme()}>테마</button>
             <button type="button" className="pill-btn" onClick={() => openInfo(currentMonth, currentDay)}>📂 정보 이동</button>
             <button type="button" className="weather-refresh-btn diary-weather-action-btn" onClick={fetchWeatherFromKma}>{weatherSource}</button>
             <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
@@ -4258,6 +4454,19 @@ export default function HomePage() {
         </div>
         {/* Text 입력 / 편집 (Builder FormatToolbar 이식) */}
         <div className="generalInfoTextBox generalInfoRichTextBox" style={{ margin: "10px 0" }}>
+          <EntryLookup
+            placeholder="일기장 내용 조회"
+            query={diaryLookup}
+            onQuery={setDiaryLookup}
+            onSearch={() => void lookupDiaryEntries()}
+            hits={diaryLookupHits}
+            status={diaryLookupStatus}
+            onOpen={(id) => {
+              const date = monthDayFromEntryDate(id);
+              if (!date) return;
+              openDiary(date.month, date.day, date.year);
+            }}
+          />
           <div className="generalInfoRichTextHeader">
             <strong>Text 입력 / 편집</strong>
             <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능 (Builder 서식)</span>
@@ -4275,16 +4484,35 @@ export default function HomePage() {
             onColor={(c) => handleDiaryRichCommand("foreColor", c)}
             onHighlight={(c) => handleDiaryRichCommand("highlight", c)}
             onInsertChar={(ch) => handleDiaryRichCommand("insertText", ch)}
-            onImage={() => diaryImageFileRef.current?.click()}
+            onImage={() => {
+              const slotId = diarySlotOrGuide();
+              if (!slotId) return;
+              diaryPendingSlotRef.current = slotId;
+              diaryImageFileRef.current?.click();
+            }}
             onPasteImage={() => {
               void handleDiaryCollectPasteImage();
             }}
             onTextImage={() => setShowDiaryTextToImageModal(true)}
             onHandwriting={() => setShowDiaryHandwritingModal(true)}
           />
+          <div className="classTagRow">
+            <ClassTagSelect
+              onSelect={(label) => {
+                const editor = diaryRichTextRef.current;
+                if (!editor) return;
+                appendHashtagToEditor(editor, label);
+                saveDiary(readStackedHtml(editor), voiceText);
+              }}
+            />
+            <span>분류를 고르면 이 칸 본문에 #태그가 붙습니다. 본문에 직접 입력할 수도 있습니다.</span>
+          </div>
           <div className="collectFormatSlotRow">
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertImageSlot} title="이미지 칸 추가">
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertClassCell} title="아래에 하얀 칸 추가">
               ＋ 칸
+            </button>
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryRemoveLastWhiteCell} title="마지막 칸 삭제">
+              － 칸
             </button>
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("removeFormat")}>
               서식 지우기
@@ -4295,7 +4523,7 @@ export default function HomePage() {
             type="file"
             accept="image/*,.heic,.heif,.jpeg,.jpg,.png,.webp"
             multiple
-            style={{ display: "none" }}
+            className="offscreen-file-input"
             onChange={(e) => {
               handleDiaryRichImagePick(e.target.files);
               e.target.value = "";
@@ -4304,27 +4532,34 @@ export default function HomePage() {
           <div
             key={`diary-rich-${currentYear}-${currentMonth}-${currentDay}`}
             ref={diaryRichTextRef}
-            className="generalInfoRichTextEditor collectPaperEditor"
+            className="generalInfoRichTextEditor collectPaperEditor diaryPaperEditor"
             contentEditable
             suppressContentEditableWarning
+            spellCheck={false}
             role="textbox"
             tabIndex={0}
             data-placeholder="오늘의 기록을 남겨보세요...."
             onInput={() => {
               handleDiaryRichInput();
-              const html = diaryRichTextRef.current?.innerHTML || "";
-              saveDiary(html, voiceText);
+              saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
             }}
+            onKeyUp={() => handleDiaryRichInput()}
             onBlur={() => {
-              const html = diaryRichTextRef.current?.innerHTML || "";
-              saveDiary(html, voiceText);
+              saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
             }}
             onClick={handleDiaryRichEditorClick}
             onPaste={(e) => {
               const pastedFiles = imageFilesFromClipboard(e.clipboardData);
               if (pastedFiles.length > 0) {
                 e.preventDefault();
-                void insertDiaryInlineImages(pastedFiles);
+                const slotId = findAwaitingSlotId(diaryRichTextRef.current);
+                if (!slotId) {
+                  setDiaryImageSlotId(null);
+                  alert(IMAGE_SLOT_GUIDE);
+                  return;
+                }
+                void insertDiaryInlineImages(pastedFiles, slotId);
+                setDiaryImageSlotId(null);
                 return;
               }
               e.preventDefault();
@@ -4349,6 +4584,39 @@ export default function HomePage() {
               wordBreak: "break-word",
             }}
           />
+          {diaryWhiteCellIds.map((id) => (
+            <CollectWhiteCell
+              key={id}
+              cellId={id}
+              initialHtml={diaryWhiteHtmlRef.current[id] || ""}
+              placeholder="오늘의 기록을 남겨보세요...."
+              imageDeleteOnly
+              showClassTag
+              onUploadImages={uploadDiaryInlineImages}
+              onInput={() => {
+                saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
+              }}
+              onRemove={() => {
+                const cell = document.querySelector(`[data-white-id="${id}"] .collect-white-cell`);
+                const text = cell?.textContent?.replace(/\u00a0/g, " ").trim() || "";
+                if (text && !window.confirm("이 칸을 지울까요?")) return;
+                delete diaryWhiteHtmlRef.current[id];
+                setDiaryWhiteCellIds((prev) => prev.filter((item) => item !== id));
+                window.setTimeout(() => {
+                  saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
+                }, 0);
+              }}
+            />
+          ))}
+          {diaryImageSlotId ? (
+            <SlotImagePanel
+              onFiles={(files) => {
+                void insertDiaryInlineImages(files, diaryImageSlotId);
+                setDiaryImageSlotId(null);
+              }}
+              onClose={() => setDiaryImageSlotId(null)}
+            />
+          ) : null}
         </div>
         {showDiaryHandwritingModal && (
           <HandwritingModal
@@ -4624,7 +4892,7 @@ function MarkDateView() {
               onChange={event => setMarkPlus(event.target.checked)}
               disabled={markType === "노조"}
             />
-            <span>+ 표시 추가 {markType === "노조" ? "(노조는 + 제외)" : `→ ${markType}+`}</span>
+            <span>👍 표시 추가 {markType === "노조" ? "(노조는 👍 제외)" : `→ 👍${markType}`}</span>
           </label>
 
           <p className="muted">날짜를 쉼표로 여러 개 입력하세요. 예: 1, 3, 15</p>
@@ -4638,7 +4906,7 @@ function MarkDateView() {
           />
 
           <button type="button" className="save-schedule-btn" onClick={addCalendarMarks}>
-            {markType}{markType !== "노조" && markPlus ? "+" : ""} 표시 저장
+            {markType !== "노조" && markPlus ? "👍" : ""}{markType} 표시 저장
           </button>
 
           <div className="saved-marks">
@@ -4648,7 +4916,7 @@ function MarkDateView() {
               <div className="saved-mark-row" key={`${day}-${item.type}-${item.plus}`}>
                 <span>{currentMonth}/{day}</span>
                 <span className={`calendar-mark calendar-mark-${calendarMarkClassSuffix(item.type)}`}>
-                  {calendarMarkLabels[item.type]}{item.plus ? "+" : ""}
+                  {item.plus ? <span className="calendar-mark-like" aria-label="리더">👍</span> : null}{calendarMarkLabels[item.type]}
                 </span>
                 <button type="button" className="soft-btn delete-btn" onClick={() => deleteCalendarMark(currentMonth, day, item)}>삭제</button>
               </div>
@@ -5513,12 +5781,13 @@ function MarkDateView() {
     const parsedOriginal = originalItem ? parsePhotoBookMemo(originalItem.memo || "") : null;
     const isPinned = parsedOriginal ? (parsedOriginal.isPinned || false) : false;
 
+    const imageMemos = photoBookInputImageUrls.map((_, index) => photoBookInputImageMemos[index] || "");
     const serializedCaption = JSON.stringify({
       type: "photobook",
       keyword: photoBookInputKeyword.trim() || "일반",
       category2: photoBookInputCategory2.trim() || "기타",
       memo: photoBookInputMemo,
-      imageMemos: photoBookInputImageMemos,
+      imageMemos,
       additionalImages,
       isPinned
     });
@@ -5573,20 +5842,18 @@ function MarkDateView() {
       }
 
       if (isSupabaseConfigured && supabase) {
-        if (editingPhotoBookItemId.startsWith("temp-")) {
-          await supabase.from("info_photos").update({ 
-            caption: serializedCaption, 
-            entry_date: dateStr,
-            public_url: primaryUrl,
-            storage_path: primaryStoragePath
-          }).eq("storage_path", originalStoragePath);
-        } else {
-          await supabase.from("info_photos").update({ 
-            caption: serializedCaption, 
-            entry_date: dateStr,
-            public_url: primaryUrl,
-            storage_path: primaryStoragePath
-          }).eq("id", editingPhotoBookItemId);
+        const updatePayload = {
+          caption: serializedCaption,
+          entry_date: dateStr,
+          public_url: primaryUrl,
+          storage_path: primaryStoragePath
+        };
+        const { error } = editingPhotoBookItemId.startsWith("temp-")
+          ? await supabase.from("info_photos").update(updatePayload).eq("storage_path", originalStoragePath)
+          : await supabase.from("info_photos").update(updatePayload).eq("id", editingPhotoBookItemId);
+        if (error) {
+          alert("이미지 메모 저장에 실패했습니다. 다시 저장해 주세요.\n" + error.message);
+          return;
         }
       }
       setEditingPhotoBookItemId(null);
@@ -5615,6 +5882,10 @@ function MarkDateView() {
           sort_order: sortOrder,
         }).select("id").maybeSingle();
 
+        if (error) {
+          alert("이미지 메모 저장에 실패했습니다. 다시 저장해 주세요.\n" + error.message);
+          return;
+        }
         if (data?.id) {
           uploadedItem.id = data.id;
         }
@@ -5748,6 +6019,7 @@ function MarkDateView() {
       keyword: parsed.keyword || "일반",
       category2: parsed.category2 || "기타",
       memo: parsed.memo || "",
+      imageMemos: parsed.imageMemos || [],
       tag: photo.tag || "",
       imageUrls,
     };
@@ -5760,12 +6032,14 @@ function MarkDateView() {
     if (!window.confirm("이 포토북 카드를 삭제할까요?")) return;
 
     const personSource = toPhotobookPersonSource(targetItem);
-    const keepInPersonAlbum = Boolean(
-      personSource && isPersonAlbumCategory(personSource.category2),
-    );
-    if (keepInPersonAlbum && personSource) {
-      // 人앨범에 사진을 남기므로 스토리지 파일은 삭제하지 않음
-      keepPersonPhotosFromDeletedItems([personSource]);
+    const matchedAlbum = personSource ? sceneAlbumForCategory(personSource.category2) : null;
+    const keepInSceneAlbum = Boolean(matchedAlbum && personSource);
+    if (keepInSceneAlbum && personSource && matchedAlbum) {
+      // 분류 앨범에 사진을 남기므로 스토리지 파일은 삭제하지 않음
+      keepPersonPhotosFromDeletedItems([personSource], {
+        storageKey: matchedAlbum.storageKey,
+        categories: matchedAlbum.categories,
+      });
     }
 
     const dateStr = targetItem.tag;
@@ -5781,7 +6055,7 @@ function MarkDateView() {
       previousData: JSON.stringify(previousItems),
     });
 
-    if (!keepInPersonAlbum) {
+    if (!keepInSceneAlbum) {
       if (targetItem.storagePath) {
         await deleteSupabasePhoto("info-photos", "info_photos", targetItem.storagePath);
       }
@@ -5799,11 +6073,11 @@ function MarkDateView() {
         }
       }
     } else if (isSupabaseConfigured && supabase && targetItem.id) {
-      // DB 행만 제거 (스토리지 URL은 人앨범 keep용으로 유지)
+      // DB 행만 제거 (스토리지 URL은 분류 앨범 keep용으로 유지)
       try {
         await supabase.from("info_photos").delete().eq("id", targetItem.id);
       } catch (error) {
-        console.warn("info_photos row delete for person-album keep failed", error);
+        console.warn("info_photos row delete for scene-album keep failed", error);
       }
     }
 
@@ -5847,6 +6121,7 @@ function MarkDateView() {
         // Set primary fallback images if not already set
         setPhotoBookInputImageUrl(prev => prev || uploadedItems[0].url);
         setPhotoBookInputImageStoragePath(prev => prev || uploadedItems[0].storagePath || "");
+        setPhotoBookInputImageMemos(prev => [...prev, ...uploadedItems.map(() => "")]);
 
         // Auto classify photo book using AI!
         await runPhotoBookAIClassification(fileList[0]);
@@ -5859,6 +6134,33 @@ function MarkDateView() {
     } finally {
       setInstaLoading(false);
     }
+  }
+
+  function updatePhotoBookImageMemo(index: number, value: string) {
+    setPhotoBookInputImageMemos((prev) => {
+      const length = Math.max(prev.length, photoBookInputImageUrls.length, index + 1);
+      const next = Array.from({ length }, (_, itemIndex) => prev[itemIndex] || "");
+      next[index] = value;
+      return next;
+    });
+  }
+
+  function renderPhotoBookImageMemoFields() {
+    if (photoBookInputImageUrls.length === 0) return null;
+    return (
+      <div className="pbImageMemoFields">
+        {photoBookInputImageUrls.map((url, idx) => (
+          <label key={`${idx}-${url.slice(0, 24)}`} className="pbImageMemoField">
+            <span>이미지 {idx + 1} 메모 입력</span>
+            <textarea
+              value={photoBookInputImageMemos[idx] || ""}
+              onChange={(event) => updatePhotoBookImageMemo(idx, event.target.value)}
+              placeholder="이미지 메모 입력..."
+            />
+          </label>
+        ))}
+      </div>
+    );
   }
 
   // Drag & Drop handlers for Photo book
@@ -6205,6 +6507,7 @@ ${photo.memoText}
     const photoCategories2 = [
       "여행", "일상", "음식", "기억", "풍경", "인물", "취미", "She", "기타"
     ];
+    const openSceneAlbum = sceneAlbumByTab(photoBookTab);
 
     // Filter Photo Book list
     const filteredPhotoBookItems = allPhotoBookItems.map(photo => {
@@ -6214,6 +6517,7 @@ ${photo.memoText}
         keyword: parsed.keyword,
         category2: parsed.category2,
         memoText: parsed.memo,
+        imageMemos: parsed.imageMemos || [],
         additionalImages: parsed.additionalImages || [],
         isPinned: parsed.isPinned || photo.isPinned || false
       };
@@ -6282,6 +6586,8 @@ ${photo.memoText}
             </div>
           </div>
 
+          <StorageUsageBar />
+
           {/* Tab Selector */}
           <div className="info-subview-tabs" style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
             <button
@@ -6326,7 +6632,7 @@ ${photo.memoText}
               handleGeneralInfoRichInput={infoState.handleGeneralInfoRichInput}
               handleGeneralInfoRichEditorClick={infoState.handleGeneralInfoRichEditorClick}
               handleGeneralInfoRichImagePick={infoState.handleGeneralInfoRichImagePick}
-              handleGeneralInfoInsertImageSlot={infoState.handleGeneralInfoInsertImageSlot}
+              uploadRichImages={infoState.handleGeneralInfoUploadRichImages}
               getGeneralInfoToolbarButtonStyle={infoState.getGeneralInfoToolbarButtonStyle}
               handleResetGeneralInfoDraft={infoState.handleResetGeneralInfoDraft}
               handleUndoGeneralInfoDraft={infoState.handleUndoGeneralInfoDraft}
@@ -6368,6 +6674,10 @@ ${photo.memoText}
               normalizeGeneralInfoMediaItems={infoState.normalizeGeneralInfoMediaItems}
               getGeneralInfoDisplayMediaItems={infoState.getGeneralInfoDisplayMediaItems}
               handleSaveTemporaryGeneralInfoDraft={infoState.handleSaveTemporaryGeneralInfoDraft}
+              onOpenTheme={(themeId) => {
+                if (!infoState.confirmLeaveGeneralInfoCollect()) return;
+                openTheme(themeId);
+              }}
             />
           ) : (
             /* Photo Book Tab-based Layout */
@@ -6568,6 +6878,7 @@ ${photo.memoText}
                           )}
                         </div>
 
+                        {renderPhotoBookImageMemoFields()}
                         <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
                           <label className="file-select-btn" style={{ margin: 0 }}>
                             📸 사진 가져오기
@@ -6667,17 +6978,22 @@ ${photo.memoText}
                         <div className="input-group" style={{ marginTop: "15px" }}>
                           <label className="field-label">메모 내용:</label>
                           <textarea
-                            className="info-text-textarea generalInfoFormattedTextView"
+                            ref={photoBookMemoEditRef}
+                            className="info-text-textarea generalInfoFormattedTextView pbMemoField"
                             style={{
                               width: "100%",
                               minHeight: "200px",
-                              maxHeight: "480px",
+                              height: "auto",
                               boxSizing: "border-box",
-                              resize: "vertical"
+                              resize: "none",
+                              overflow: "hidden"
                             }}
                             placeholder="사진에 관련된 메모나 일기 내용을 입력하세요."
                             value={photoBookInputMemo}
-                            onChange={e => setPhotoBookInputMemo(e.target.value)}
+                            onChange={(e) => {
+                              setPhotoBookInputMemo(e.target.value);
+                              resizePhotoBookMemoField(e.target);
+                            }}
                           />
                         </div>
 
@@ -6705,7 +7021,9 @@ ${photo.memoText}
                           const curIdx = allImgUrls.indexOf(curUrl) === -1 ? 0 : allImgUrls.indexOf(curUrl);
                           const hasPrev = curIdx > 0;
                           const hasNext = curIdx < allImgUrls.length - 1;
-                          const imgMemo = (activePhoto.imageMemos || [])[curIdx];
+                          const imageMemo = String((activePhoto.imageMemos || [])[curIdx] || "").trim();
+                          const entryMemo = String(activePhoto.memoText || "").trim();
+                          const overlayMemo = imageMemo;
                           const arrowBtnStyle: React.CSSProperties = {
                             position: "absolute",
                             top: "50%",
@@ -6741,6 +7059,23 @@ ${photo.memoText}
                                     ‹
                                   </button>
                                 )}
+                                {overlayMemo ? (
+                                  <div className={`pbImageMemoPin ${isPhotoMemoExpanded ? "is-open" : ""} ${overlayMemo.length > 80 ? "has-more" : ""}`}>
+                                    {overlayMemo}
+                                    {overlayMemo.length > 80 ? (
+                                      <button
+                                        type="button"
+                                        className="pbImageMemoPinMore"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          setIsPhotoMemoExpanded((open) => !open);
+                                        }}
+                                      >
+                                        {isPhotoMemoExpanded ? "접기" : "전체"}
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
                                 <img
                                   src={curUrl}
                                   alt="포토북 상세 사진"
@@ -6785,13 +7120,12 @@ ${photo.memoText}
                                 </>
                               )}
 
-                              {/* 현재 이미지 메모 */}
-                              {imgMemo && (
+                              {imageMemo && entryMemo && imageMemo !== entryMemo ? (
                                 <div className="generalInfoDetailMediaMemo" style={{ marginTop: "12px", padding: "12px 16px", borderRadius: "10px", background: "rgba(98,177,155,0.12)", border: "1px solid rgba(98,177,155,0.3)" }}>
                                   <span className="generalInfoDetailMediaMemoIcon" style={{ fontSize: "22px", marginRight: "8px" }}>📝</span>
-                                  <span className="generalInfoDetailMediaMemoText" style={{ fontSize: "18px", lineHeight: "1.7", fontWeight: "500" }}>{imgMemo}</span>
+                                  <span className="generalInfoDetailMediaMemoText" style={{ fontSize: "18px", lineHeight: "1.7", fontWeight: "500" }}>{entryMemo}</span>
                                 </div>
-                              )}
+                              ) : null}
                             </div>
                           );
                         })()}
@@ -6805,7 +7139,7 @@ ${photo.memoText}
                           </div>
                         </div>
 
-                        <div className="detail-content-box" style={{ margin: "20px 0" }}>
+                        {!activePhoto.url ? <div className="detail-content-box" style={{ margin: "20px 0" }}>
                           <h4 style={{ margin: "0 0 8px 0", color: "#aaa", fontSize: "17px" }}>📝 메모 내용</h4>
                           <div style={{
                             background: "rgba(0,0,0,0.15)",
@@ -6857,7 +7191,7 @@ ${photo.memoText}
                               {isPhotoMemoExpanded ? "🔼 접기" : "🔽 메모 전체 보기 (펼치기)"}
                             </button>
                           )}
-                        </div>
+                        </div> : null}
 
                         <div className="info-detail-actions no-print">
                           <button type="button" className="action-btn" onClick={() => { setActiveItem(null); setPhotoBookTab("index"); }} style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>🏠 목록으로</button>
@@ -7020,6 +7354,7 @@ ${photo.memoText}
                         )}
                       </div>
 
+                      {renderPhotoBookImageMemoFields()}
                       <div className="info-image-actions" style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
                         <label className="file-select-btn" style={{ margin: 0 }}>
                           📸 사진 가져오기
@@ -7119,17 +7454,22 @@ ${photo.memoText}
                       <div className="input-group" style={{ marginTop: "15px" }}>
                         <label className="field-label">메모 내용:</label>
                         <textarea
-                          className="info-text-textarea generalInfoFormattedTextView"
+                          ref={photoBookMemoCreateRef}
+                          className="info-text-textarea generalInfoFormattedTextView pbMemoField"
                           style={{
                             width: "100%",
                             minHeight: "200px",
-                            maxHeight: "480px",
+                            height: "auto",
                             boxSizing: "border-box",
-                            resize: "vertical"
+                            resize: "none",
+                            overflow: "hidden"
                           }}
                           placeholder="사진에 관련된 메모나 일기 내용을 입력하세요."
                           value={photoBookInputMemo}
-                          onChange={e => setPhotoBookInputMemo(e.target.value)}
+                          onChange={(e) => {
+                            setPhotoBookInputMemo(e.target.value);
+                            resizePhotoBookMemoField(e.target);
+                          }}
                         />
                       </div>
 
@@ -7273,6 +7613,25 @@ ${photo.memoText}
                               />
                             </div>
                             <button
+                              type="button"
+                              className="pbIndexCardBtnAuto"
+                              title="이 목록 이미지를 3초마다 전체 화면으로 재생"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const urls = [photo.url, ...(photo.additionalImages || []).map((img: { url: string }) => img.url)].filter(Boolean);
+                                if (!urls.length) {
+                                  alert("자동 재생할 이미지가 없습니다.");
+                                  return;
+                                }
+                                setPhotoListAuto({
+                                  id: photo.id || urls[0],
+                                  urls,
+                                  memos: urls.map((_, index) => String((photo.imageMemos || [])[index] || "").trim()),
+                                  index: 0,
+                                });
+                              }}
+                            >자동</button>
+                            <button
                               className={`pbIndexCardBtnPin ${isPinned ? "active" : ""}`}
                               title={isPinned ? "상단 고정 해제" : "상단 고정"}
                               onClick={(e) => { e.stopPropagation(); togglePhotoBookPin(photo); }}
@@ -7313,6 +7672,9 @@ ${photo.memoText}
     <main className={view === "info" ? "app appInfoWide" : "app"}>
       {view === "calendar" && CalendarView()}
       {view === "diary" && DiaryView()}
+      {view === "theme" && (
+        <ThemeBoard initialThemeId={themeFocusId} onBack={() => openCalendar(currentMonth)} />
+      )}
       {view === "info" && InfoView()}
       {view === "schedule" && ScheduleView()}
       {view === "redDate" && RedDateView()}
@@ -7352,6 +7714,25 @@ ${photo.memoText}
           </div>
         </div>
       )}
+      {photoListAuto && photoListAuto.urls[photoListAuto.index] ? (
+        <div className="pbPersonAlbumFullscreen" role="dialog" aria-modal="true" aria-label="포토북 자동 재생">
+          <img src={photoListAuto.urls[photoListAuto.index]} alt="" />
+          {photoListAuto.memos[photoListAuto.index] ? (
+            <div className="pbImageMemoPin pbImageMemoPinFullscreen">
+              {photoListAuto.memos[photoListAuto.index]}
+            </div>
+          ) : null}
+          <div className="pbPersonAlbumFullscreenBar">
+            <span>
+              {photoListAuto.index + 1} / {photoListAuto.urls.length}
+              {photoListAuto.urls.length > 1 ? " · 3초" : ""}
+            </span>
+            <button type="button" onClick={() => setPhotoListAuto(null)}>
+              자동 끄기
+            </button>
+          </div>
+        </div>
+      ) : null}
       {datePickerMode && (
         <div className="date-picker-modal" role="dialog" aria-modal="true" onClick={() => setDatePickerMode(null)}>
           <div className="date-picker-panel" onClick={event => event.stopPropagation()}>
@@ -7494,7 +7875,7 @@ ${photo.memoText}
           item={infoState.generalInfoExportItem}
           onClose={() => infoState.setGeneralInfoExportItem(null)}
           onPdfExported={(item) => infoState.markGeneralInfoPdfSaved(item.id)}
-          onAppFileExported={(item) => infoState.markGeneralInfoAppFileSaved(item.id)}
+          onAppFileExported={(item) => infoState.removeGeneralInfoAfterAppFileSave([item])}
         />
       )}
   
