@@ -429,8 +429,8 @@ export function createImageSlotElement(id: string) {
   return slot;
 }
 
-/** S. 또는 s. (s1., s2., S1. 및 한글 자판 ㄴ. 포함) 한 묶음이 사진 칸 하나 */
-const IMAGE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z0-9가-힣])([Ssㄴ]\d*\.\s*)$/;
+/** S. 또는 s. (s1., s2., S1. 등 포함) 한 묶음이 사진 칸 하나 */
+const IMAGE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z0-9가-힣])([Ss]\d*\.\s*)$/;
 
 /** date. 한 묶음이 그 순간의 년월일시분 */
 const DATE_TRIGGER_AT_CARET = /(?:^|[^A-Za-z])(date\.)$/i;
