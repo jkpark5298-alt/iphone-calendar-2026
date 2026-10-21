@@ -60,6 +60,17 @@ const PersonalAlbumApp = dynamic(() => import("../features/personal-album/Person
 });
 
 type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate" | "theme";
+/** 기기에 보관하는 일기 본문. pending = 아직 서버에 반영되지 않은 최신 내용 */
+type LocalDiaryEntry = { diaryText: string; voiceText: string; pending?: boolean; savedAt?: string | null };
+type DiarySaveStatus = { date: string; state: "pending" | "saving" | "saved" | "error" | "local" | "loadError"; at: string | null };
+
+function formatDiarySavedAt(iso: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
 type PhotoItem = {
   url: string;
   name: string;
@@ -649,6 +660,11 @@ export default function HomePage() {
   const [diaryEditorSync, setDiaryEditorSync] = useState<{ date: string; html: string; token: number } | null>(null);
   const [diaryWhiteCellIds, setDiaryWhiteCellIds] = useState<string[]>([]);
   const diaryWhiteHtmlRef = useRef<Record<string, string>>({});
+  const diarySaveQueueRef = useRef<{ date: string; month: number; day: number; year: number; diaryText: string; voiceText: string } | null>(null);
+  const diarySaveTimerRef = useRef<number | null>(null);
+  const diarySaveRetryRef = useRef<number | null>(null);
+  const diarySaveInFlightRef = useRef(false);
+  const [diarySaveStatus, setDiarySaveStatus] = useState<DiarySaveStatus | null>(null);
 
   function publishDiaryEditorContent(date: string, html: string, ready: boolean) {
     diaryBoundDateRef.current = date;
@@ -994,16 +1010,16 @@ export default function HomePage() {
 
     const { data, error } = await supabase
       .from("diary_entries")
-      .select("diary_text, voice_text, weather")
+      .select("diary_text, voice_text, weather, updated_at")
       .eq("entry_date", entryDate(month, day, year))
       .maybeSingle();
 
     if (error) {
       console.warn("Supabase diary load error:", error.message);
-      return null;
+      return { loadFailed: true } as const;
     }
 
-    return data as { diary_text?: string | null; voice_text?: string | null; weather?: any } | null;
+    return data as { diary_text?: string | null; voice_text?: string | null; weather?: any; updated_at?: string | null } | null;
   }
 
   async function loadInfoEntryFromSupabase(month: number, day: number, year: number = currentYear) {
@@ -1314,23 +1330,98 @@ export default function HomePage() {
 
 
 
+  /** 일기 본문 서버 저장: 입력이 멈추면 잠시 뒤 한 번만, 한 번에 하나씩 순서대로 보냅니다. */
   function saveDiaryEntryToSupabase(month: number, day: number, nextDiaryText: string, nextVoiceText: string, year: number = currentYear) {
-    if (!isSupabaseConfigured || !supabase) return;
+    const date = entryDate(month, day, year);
+    diarySaveQueueRef.current = { date, month, day, year, diaryText: nextDiaryText, voiceText: nextVoiceText };
+    if (!isSupabaseConfigured || !supabase) {
+      setDiarySaveStatus({ date, state: "local", at: new Date().toISOString() });
+      diarySaveQueueRef.current = null;
+      return;
+    }
+    setDiarySaveStatus((prev) => ({ date, state: "pending", at: prev?.date === date ? prev.at : null }));
+    if (diarySaveTimerRef.current) window.clearTimeout(diarySaveTimerRef.current);
+    diarySaveTimerRef.current = window.setTimeout(() => {
+      diarySaveTimerRef.current = null;
+      void flushDiarySave();
+    }, 700);
+  }
 
-    void supabase
-      .from("diary_entries")
-      .upsert(
+  async function flushDiarySave() {
+    if (diarySaveTimerRef.current) {
+      window.clearTimeout(diarySaveTimerRef.current);
+      diarySaveTimerRef.current = null;
+    }
+    if (diarySaveInFlightRef.current) return;
+    const job = diarySaveQueueRef.current;
+    if (!job || !isSupabaseConfigured || !supabase) return;
+    diarySaveQueueRef.current = null;
+    diarySaveInFlightRef.current = true;
+    setDiarySaveStatus((prev) => ({ date: job.date, state: "saving", at: prev?.date === job.date ? prev.at : null }));
+
+    const savedAt = new Date().toISOString();
+    let ok = false;
+    try {
+      const { error } = await supabase.from("diary_entries").upsert(
         {
-          entry_date: entryDate(month, day, year),
-          diary_text: nextDiaryText,
-          voice_text: nextVoiceText,
-          updated_at: new Date().toISOString(),
+          entry_date: job.date,
+          diary_text: job.diaryText,
+          voice_text: job.voiceText,
+          updated_at: savedAt,
         },
         { onConflict: "entry_date" }
-      )
-      .then(({ error }) => {
-        if (error) console.warn("Supabase diary save error:", error.message);
-      });
+      );
+      if (error) console.warn("Supabase diary save error:", error.message);
+      ok = !error;
+    } catch (error) {
+      console.warn("Supabase diary save error:", error);
+    }
+    diarySaveInFlightRef.current = false;
+
+    if (ok) {
+      // 기기 저장본이 방금 보낸 내용과 같을 때만 '서버 반영 완료'로 표시합니다.
+      const storageName = storageKey("diary", job.month, job.day, job.year);
+      const local = readLocalDiaryEntry(storageName);
+      if (local && local.diaryText === job.diaryText && local.voiceText === job.voiceText) {
+        writeLocalDiaryEntry(storageName, { ...local, pending: false, savedAt });
+      }
+      if (!diarySaveQueueRef.current) setDiarySaveStatus({ date: job.date, state: "saved", at: savedAt });
+    } else {
+      if (!diarySaveQueueRef.current) diarySaveQueueRef.current = job;
+      setDiarySaveStatus((prev) => ({ date: job.date, state: "error", at: prev?.date === job.date ? prev.at : null }));
+      if (diarySaveRetryRef.current) window.clearTimeout(diarySaveRetryRef.current);
+      diarySaveRetryRef.current = window.setTimeout(() => {
+        diarySaveRetryRef.current = null;
+        void flushDiarySave();
+      }, 5000);
+      return;
+    }
+
+    if (diarySaveQueueRef.current) void flushDiarySave();
+  }
+
+  function readLocalDiaryEntry(storageName: string): LocalDiaryEntry | null {
+    try {
+      const raw = localStorage.getItem(storageName);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      return {
+        diaryText: String(data?.diaryText || ""),
+        voiceText: String(data?.voiceText || ""),
+        pending: Boolean(data?.pending),
+        savedAt: typeof data?.savedAt === "string" ? data.savedAt : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function writeLocalDiaryEntry(storageName: string, entry: LocalDiaryEntry) {
+    try {
+      localStorage.setItem(storageName, JSON.stringify(entry));
+    } catch {
+      // 기기 저장 공간이 부족해도 서버 저장은 계속 진행합니다.
+    }
   }
 
   function saveInfoEntryToSupabase(month: number, day: number, nextInfoText: string, year: number = currentYear) {
@@ -1581,7 +1672,6 @@ export default function HomePage() {
         {
           entry_date: entryDate(month, day, year),
           weather: weatherData,
-          updated_at: new Date().toISOString(),
         },
         { onConflict: "entry_date" }
       )
@@ -2036,19 +2126,57 @@ export default function HomePage() {
       }
     }
 
-    loadDiaryEntryFromSupabase(currentMonth, currentDay, currentYear).then(remoteData => {
+    const diaryStorageName = storageKey("diary", currentMonth, currentDay, currentYear);
+    if (!isSupabaseConfigured || !supabase) {
+      const local = readLocalDiaryEntry(diaryStorageName);
+      setDiarySaveStatus(local?.savedAt ? { date: dateToken, state: "local", at: local.savedAt } : null);
+    } else {
+      setDiarySaveStatus(null);
+    }
+
+    loadDiaryEntryFromSupabase(currentMonth, currentDay, currentYear).then(remoteResult => {
       if (!isActive) return;
       if (!isSupabaseConfigured || !supabase) return;
+      const remoteLoadFailed = Boolean(remoteResult && "loadFailed" in remoteResult);
+      const remoteData = remoteResult && !("loadFailed" in remoteResult) ? remoteResult : null;
 
-      const remoteDiaryText = remoteData?.diary_text || "";
-      const remoteVoiceText = remoteData?.voice_text || "";
-      setDiaryText(remoteDiaryText);
-      setVoiceText(remoteVoiceText);
-      publishDiaryEditorContent(dateToken, remoteDiaryText, true);
-      localStorage.setItem(
-        storageKey("diary", currentMonth, currentDay, currentYear),
-        JSON.stringify({ diaryText: remoteDiaryText, voiceText: remoteVoiceText })
-      );
+      const local = readLocalDiaryEntry(diaryStorageName);
+      const queued = diarySaveQueueRef.current?.date === dateToken ? diarySaveQueueRef.current : null;
+
+      if (queued || local?.pending) {
+        // 아직 서버에 반영되지 않은 최신 내용이 있으면 그것을 보여 주고 다시 저장합니다.
+        const nextDiary = queued ? queued.diaryText : local!.diaryText;
+        const nextVoice = queued ? queued.voiceText : local!.voiceText;
+        setDiaryText(nextDiary);
+        setVoiceText(nextVoice);
+        publishDiaryEditorContent(dateToken, nextDiary, true);
+        if (!queued) saveDiaryEntryToSupabase(currentMonth, currentDay, nextDiary, nextVoice, currentYear);
+        else void flushDiarySave();
+      } else if (remoteLoadFailed) {
+        // 서버를 못 읽었을 때 빈 내용으로 덮어쓰지 않고 기기 저장본을 보여 줍니다.
+        const nextDiary = local?.diaryText || "";
+        const nextVoice = local?.voiceText || "";
+        setDiaryText(nextDiary);
+        setVoiceText(nextVoice);
+        publishDiaryEditorContent(dateToken, nextDiary, true);
+        setDiarySaveStatus({ date: dateToken, state: "loadError", at: local?.savedAt ?? null });
+        return;
+      } else {
+        const remoteDiaryText = remoteData?.diary_text || "";
+        const remoteVoiceText = remoteData?.voice_text || "";
+        const remoteSavedAt = remoteData?.updated_at || null;
+        setDiaryText(remoteDiaryText);
+        setVoiceText(remoteVoiceText);
+        publishDiaryEditorContent(dateToken, remoteDiaryText, true);
+        writeLocalDiaryEntry(diaryStorageName, {
+          diaryText: remoteDiaryText,
+          voiceText: remoteVoiceText,
+          pending: false,
+          savedAt: remoteSavedAt,
+        });
+        setDiarySaveStatus(remoteData && (remoteDiaryText || remoteVoiceText) ? { date: dateToken, state: "saved", at: remoteSavedAt } : null);
+      }
+      if (!remoteData) return;
 
       const remoteWeather = remoteData?.weather;
       if (remoteWeather && typeof remoteWeather === "object") {
@@ -2197,6 +2325,24 @@ export default function HomePage() {
     setDiaryText("");
     setVoiceText("");
   }, [view, currentYear, currentMonth, currentDay]);
+
+  // 일기장을 떠나거나 앱/탭이 가려질 때 기다리던 저장을 바로 보냅니다.
+  useEffect(() => {
+    if (view !== "diary") void flushDiarySave();
+  }, [view]);
+
+  useEffect(() => {
+    const flushNow = () => {
+      if (document.visibilityState === "hidden") void flushDiarySave();
+    };
+    const flushOnLeave = () => void flushDiarySave();
+    document.addEventListener("visibilitychange", flushNow);
+    window.addEventListener("pagehide", flushOnLeave);
+    return () => {
+      document.removeEventListener("visibilitychange", flushNow);
+      window.removeEventListener("pagehide", flushOnLeave);
+    };
+  }, []);
 
   useLayoutEffect(() => {
     if (view !== "diary") return;
@@ -2761,10 +2907,17 @@ export default function HomePage() {
 
     setDiaryText(nextDiaryText);
     setVoiceText(nextVoiceText);
-    localStorage.setItem(
-      storageKey("diary", currentMonth, currentDay, year),
-      JSON.stringify({ diaryText: nextDiaryText, voiceText: nextVoiceText })
-    );
+    const storageName = storageKey("diary", currentMonth, currentDay, year);
+    const previousLocal = readLocalDiaryEntry(storageName);
+    if (previousLocal && !previousLocal.pending && previousLocal.diaryText === nextDiaryText && previousLocal.voiceText === nextVoiceText) {
+      return; // 바뀐 내용이 없으면 다시 저장하지 않습니다.
+    }
+    writeLocalDiaryEntry(storageName, {
+      diaryText: nextDiaryText,
+      voiceText: nextVoiceText,
+      pending: Boolean(isSupabaseConfigured && supabase),
+      savedAt: previousLocal?.savedAt ?? null,
+    });
     saveDiaryEntryToSupabase(currentMonth, currentDay, nextDiaryText, nextVoiceText, year);
   }
 
@@ -4472,6 +4625,51 @@ export default function HomePage() {
             <strong>Text 입력 / 편집</strong>
             <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능 (Builder 서식)</span>
           </div>
+          {(() => {
+            const status = diarySaveStatus?.date === entryDate(currentMonth, currentDay, currentYear) ? diarySaveStatus : null;
+            const saveNowButton = (
+              <button
+                type="button"
+                className="pill-btn compact-pill diarySaveNowBtn"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  // 자동 저장 대기(0.7초) 없이 지금 내용을 바로 서버에 보냅니다.
+                  saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
+                  void flushDiarySave();
+                }}
+                disabled={status?.state === "saving"}
+              >
+                저장
+              </button>
+            );
+            if (!status) {
+              return (
+                <div className="diarySaveStatus" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, margin: "2px 0 6px" }}>
+                  {saveNowButton}
+                </div>
+              );
+            }
+            const at = formatDiarySavedAt(status.at);
+            const label =
+              status.state === "pending" || status.state === "saving"
+                ? at ? `저장 중… (마지막 저장 ${at})` : "저장 중…"
+                : status.state === "saved"
+                  ? `자동 저장됨 · ${at}`
+                  : status.state === "local"
+                    ? `기기에 저장됨 · ${at}`
+                    : status.state === "loadError"
+                      ? `서버를 불러오지 못해 기기 저장본을 표시 중${at ? ` (마지막 저장 ${at})` : ""}`
+                      : `서버 저장 실패 · 기기에 보관 중, 자동 재시도${at ? ` (마지막 저장 ${at})` : ""}`;
+            const color = status.state === "error" || status.state === "loadError" ? "#c0392b" : status.state === "saved" || status.state === "local" ? "#2e7d32" : "#7a8594";
+            return (
+              <div className="diarySaveStatus" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, margin: "2px 0 6px" }}>
+                <span role="status" aria-live="polite" style={{ fontSize: 12, color, textAlign: "right" }}>
+                  {label}
+                </span>
+                {saveNowButton}
+              </div>
+            );
+          })()}
           <CollectFormatToolbar
             onUndo={() => handleDiaryRichCommand("undo")}
             onRedo={() => handleDiaryRichCommand("redo")}
