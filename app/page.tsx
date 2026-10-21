@@ -64,6 +64,22 @@ type View = "calendar" | "diary" | "info" | "schedule" | "redDate" | "markDate" 
 type LocalDiaryEntry = { diaryText: string; voiceText: string; pending?: boolean; savedAt?: string | null };
 type DiarySaveStatus = { date: string; state: "pending" | "saving" | "saved" | "error" | "local" | "loadError"; at: string | null };
 
+/**
+ * 날짜(entry_date) 기준 저장. DB에 날짜 유니크 제약이 없으면(42P10) 수정 → 없으면 추가 방식으로 저장합니다.
+ * 근본 해결: supabase/migrations/20261021_entry_unique_constraints.sql 실행
+ */
+async function upsertEntryByDate(table: "diary_entries" | "info_entries", row: Record<string, unknown> & { entry_date: string }) {
+  if (!supabase) return { message: "Supabase 미설정" };
+  const { error } = await supabase.from(table).upsert(row, { onConflict: "entry_date" });
+  if (!error) return null;
+  if (error.code !== "42P10") return error;
+  const updated = await supabase.from(table).update(row).eq("entry_date", row.entry_date).select("entry_date");
+  if (updated.error) return updated.error;
+  if (updated.data && updated.data.length > 0) return null;
+  const inserted = await supabase.from(table).insert(row);
+  return inserted.error;
+}
+
 function formatDiarySavedAt(iso: string | null) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -1362,15 +1378,12 @@ export default function HomePage() {
     const savedAt = new Date().toISOString();
     let ok = false;
     try {
-      const { error } = await supabase.from("diary_entries").upsert(
-        {
-          entry_date: job.date,
-          diary_text: job.diaryText,
-          voice_text: job.voiceText,
-          updated_at: savedAt,
-        },
-        { onConflict: "entry_date" }
-      );
+      const error = await upsertEntryByDate("diary_entries", {
+        entry_date: job.date,
+        diary_text: job.diaryText,
+        voice_text: job.voiceText,
+        updated_at: savedAt,
+      });
       if (error) console.warn("Supabase diary save error:", error.message);
       ok = !error;
     } catch (error) {
@@ -1427,19 +1440,13 @@ export default function HomePage() {
   function saveInfoEntryToSupabase(month: number, day: number, nextInfoText: string, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return;
 
-    void supabase
-      .from("info_entries")
-      .upsert(
-        {
-          entry_date: entryDate(month, day, year),
-          info_text: nextInfoText,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "entry_date" }
-      )
-      .then(({ error }) => {
-        if (error) console.warn("Supabase info save error:", error.message);
-      });
+    void upsertEntryByDate("info_entries", {
+      entry_date: entryDate(month, day, year),
+      info_text: nextInfoText,
+      updated_at: new Date().toISOString(),
+    }).then((error) => {
+      if (error) console.warn("Supabase info save error:", error.message);
+    });
   }
 
   function saveInfoTextCards(month: number, day: number, nextCards: InfoTextCard[], year: number = currentYear) {
@@ -1666,18 +1673,12 @@ export default function HomePage() {
   function saveWeatherToSupabase(month: number, day: number, weatherData: Record<string, string>, year: number = currentYear) {
     if (!isSupabaseConfigured || !supabase) return;
 
-    void supabase
-      .from("diary_entries")
-      .upsert(
-        {
-          entry_date: entryDate(month, day, year),
-          weather: weatherData,
-        },
-        { onConflict: "entry_date" }
-      )
-      .then(({ error }) => {
-        if (error) console.warn("Supabase weather save error:", error.message);
-      });
+    void upsertEntryByDate("diary_entries", {
+      entry_date: entryDate(month, day, year),
+      weather: weatherData,
+    }).then((error) => {
+      if (error) console.warn("Supabase weather save error:", error.message);
+    });
   }
   async function searchDiaryAndInfo() {
     const keyword = searchKeyword.trim();
