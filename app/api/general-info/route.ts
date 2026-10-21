@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createHash } from "node:crypto";
 
 type GeneralInfoPayload = {
   id: number;
@@ -320,9 +321,53 @@ const upsertGeneralInfoRow = async (
   };
 };
 
-export async function GET() {
+/**
+ * 목록이 바뀌었는지 알려 주는 짧은 값.
+ * 글 추가·삭제, 제목·분류·확정 여부 변경이 있으면 값이 달라진다.
+ * (본문만 고친 경우는 달라지지 않아서, 앱이 몇 분에 한 번 전체를 다시 받는다.)
+ */
+const SIGNATURE_COLUMNS = "id, title, primary_category, secondary_category, third_category, confirmed, created_at";
+
+const listSignature = (rows: Array<Record<string, unknown>>) =>
+  createHash("sha1")
+    .update(
+      JSON.stringify(
+        rows.map((row) => [
+          row.id,
+          row.title,
+          row.primary_category,
+          row.secondary_category,
+          row.third_category,
+          row.confirmed,
+          row.created_at,
+        ]),
+      ),
+    )
+    .digest("hex")
+    .slice(0, 16);
+
+export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
+
+    // 확인만 하는 요청: 본문·사진 정보를 빼고 가볍게 보낸다 (전체의 약 3%)
+    if (request.nextUrl.searchParams.get("probe") === "1") {
+      const probe = await supabase
+        .from("general_info_items")
+        .select(SIGNATURE_COLUMNS)
+        .order("created_at", { ascending: false })
+        .limit(300);
+      if (probe.error) {
+        return NextResponse.json(
+          { ok: false, error: "일반 정보 확인 실패", detail: probe.error.message },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json(
+        { ok: true, sig: listSignature(probe.data || []), count: (probe.data || []).length },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
 
     const { data, error } = await supabase
       .from("general_info_items")
@@ -343,6 +388,7 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
+      sig: listSignature(data || []),
       items: (data || []).map(fromDbRow),
     });
   } catch (error) {

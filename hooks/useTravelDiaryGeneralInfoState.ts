@@ -94,6 +94,7 @@ const uploadFileToSupabaseStorage = async (file: File): Promise<{ storagePath: s
     .from(TRAVEL_DIARY_BUCKET)
     .upload(storagePath, file, {
       contentType: file.type || "image/jpeg",
+      cacheControl: "31536000",
       upsert: true,
     });
 
@@ -285,6 +286,9 @@ export function useTravelDiaryGeneralInfoState({
   syncGeneralInfoItemToSupabaseRef.current = syncGeneralInfoItemToSupabase;
   const generalInfoLoadInFlightRef = useRef(false);
   const generalInfoLoadAgainRef = useRef(false);
+  /** 서버 목록 변경 확인용: 마지막 전체 불러오기의 서명과 시각 */
+  const generalInfoServerSigRef = useRef("");
+  const generalInfoLastFullLoadAtRef = useRef(0);
 
   // --- Chapter 3 일반 정보 Supabase CRUD 헬퍼 (API Router 호출 복원) ---
   const loadGeneralInfoItemsFromSupabase = useCallback(async () => {
@@ -311,6 +315,9 @@ export function useTravelDiaryGeneralInfoState({
         if (!response.ok || !data.ok) {
           throw new Error(data.detail || data.error || "일반 정보 불러오기 실패");
         }
+
+        generalInfoServerSigRef.current = typeof data.sig === "string" ? data.sig : "";
+        generalInfoLastFullLoadAtRef.current = Date.now();
 
         const remoteItems = Array.isArray(data.items) ? data.items : [];
         const remoteIdSet = new Set<number>();
@@ -3085,12 +3092,36 @@ export function useTravelDiaryGeneralInfoState({
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [isGeneralInfoDraftDirty, persistGeneralInfoTempDraft]);
 
+  // 목록이 바뀌었을 때만 전체를 받는다.
+  // 전에는 30초마다 전체(약 300KB)를 받아 Supabase 전송량을 많이 썼다.
+  // 지금은 가벼운 확인(약 10KB)만 하고, 바뀌었거나 5분이 지났을 때만 전체를 받는다.
+  const syncGeneralInfoIfChanged = useCallback(async () => {
+    const FULL_RELOAD_MS = 5 * 60 * 1000;
+    const stale = Date.now() - generalInfoLastFullLoadAtRef.current > FULL_RELOAD_MS;
+    if (stale || !generalInfoServerSigRef.current) {
+      await loadGeneralInfoItemsFromSupabase();
+      return;
+    }
+    try {
+      const response = await fetch("/api/general-info?probe=1", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || !data?.ok || typeof data.sig !== "string") {
+        await loadGeneralInfoItemsFromSupabase();
+        return;
+      }
+      if (data.sig !== generalInfoServerSigRef.current) {
+        await loadGeneralInfoItemsFromSupabase();
+      }
+    } catch {
+      // 네트워크 오류면 이번에는 넘어가고 다음 주기에 다시 확인한다.
+    }
+  }, [loadGeneralInfoItemsFromSupabase]);
+
   // Tab visibility change and periodic (30s) polling sync from Supabase
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        console.log("Tab became visible: syncing general info items from Supabase...");
-        void loadGeneralInfoItemsFromSupabase();
+        void syncGeneralInfoIfChanged();
       }
     };
 
@@ -3098,8 +3129,7 @@ export function useTravelDiaryGeneralInfoState({
 
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
-        console.log("Periodic background sync: loading general info items from Supabase...");
-        void loadGeneralInfoItemsFromSupabase();
+        void syncGeneralInfoIfChanged();
       }
     }, 30000);
 
@@ -3107,7 +3137,7 @@ export function useTravelDiaryGeneralInfoState({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(interval);
     };
-  }, [loadGeneralInfoItemsFromSupabase]);
+  }, [loadGeneralInfoItemsFromSupabase, syncGeneralInfoIfChanged]);
 
   // Initial sync from Supabase on mount
   useEffect(() => {

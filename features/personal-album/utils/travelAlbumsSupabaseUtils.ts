@@ -344,6 +344,28 @@ export function scheduleChapter3CloudSave(delayMs = 800): void {
   }, delayMs);
 }
 
+/**
+ * 서버 앨범의 수정 시각만 확인한다 (몇십 바이트).
+ * 주기적으로 확인할 때 전체 자료(수백 KB)를 매번 받지 않으려고 쓴다.
+ * 확인하지 못하면 null → 호출한 쪽에서 전체를 받아 확인한다.
+ */
+export const probeTravelAlbumsUpdatedAt = async (): Promise<string | null> => {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("travel_albums_state")
+      .select("updated_at_kst")
+      .eq("session_id", getTravelAlbumsSessionId())
+      .maybeSingle();
+    if (error || !data) return null;
+    const value = (data as { updated_at_kst?: string | null }).updated_at_kst;
+    return typeof value === "string" && value ? value : null;
+  } catch {
+    return null;
+  }
+};
+
 export const loadTravelAlbumsFromSupabase = async (): Promise<TravelAlbumsState | null> => {
   if (!isSupabaseConfigured) return null;
   try {

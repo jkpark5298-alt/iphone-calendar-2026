@@ -24,6 +24,7 @@ import { listChapter3AlbumPlanEntries } from "../utils/chapter3Storage";
 import {
   applyTravelAlbumsStateToLocalStorage,
   loadTravelAlbumsFromSupabase,
+  probeTravelAlbumsUpdatedAt,
   mergeTravelAlbumsStates,
   readTravelAlbumsStateFromLocalStorage,
   saveTravelAlbumsToSupabase,
@@ -102,6 +103,8 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
   const showPasteHintRef = useRef(showPasteHint);
   const refreshingRef = useRef(false);
   const lastRemoteUpdatedAtRef = useRef("");
+  /** 서버에서 마지막으로 받은 수정 시각 (바뀌지 않았으면 전체를 다시 받지 않는다) */
+  const lastServerUpdatedAtRef = useRef("");
 
   const applyAlbumLists = useCallback(
     (nextAlbums: SavedTravelAlbum[], nextDeleted: SavedTravelAlbum[]) => {
@@ -166,8 +169,14 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
     if (!hydratedRef.current || refreshingRef.current) return;
     refreshingRef.current = true;
     try {
+      // 서버 수정 시각이 그대로면 전체(수백 KB)를 받지 않는다.
+      if (lastServerUpdatedAtRef.current) {
+        const serverUpdatedAt = await probeTravelAlbumsUpdatedAt();
+        if (serverUpdatedAt && serverUpdatedAt === lastServerUpdatedAtRef.current) return;
+      }
       const remoteState = await loadTravelAlbumsFromSupabase();
       if (!remoteState) return;
+      lastServerUpdatedAtRef.current = remoteState.updatedAt || "";
 
       const localState = readTravelAlbumsStateFromLocalStorage();
       const merged = mergeTravelAlbumsStates(localState, remoteState);
@@ -269,6 +278,7 @@ export function useTravelDiarySavedAlbums(showPasteHint: (msg: string) => void) 
 
       const remoteState = await loadTravelAlbumsFromSupabase();
       if (cancelled) return;
+      lastServerUpdatedAtRef.current = remoteState?.updatedAt || "";
 
       const merged = mergeTravelAlbumsStates(localState, remoteState);
       if (merged) {

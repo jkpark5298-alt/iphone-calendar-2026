@@ -46,6 +46,7 @@ async function uploadThemeImages(files: File[], themeId: string) {
         const storagePath = `themes/${themeId}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}-${compressed.name || "photo.jpg"}`;
         const { error } = await supabase.storage.from("diary-photos").upload(storagePath, compressed, {
           contentType: compressed.type || "image/jpeg",
+          cacheControl: "31536000",
           upsert: true,
         });
         if (!error) {

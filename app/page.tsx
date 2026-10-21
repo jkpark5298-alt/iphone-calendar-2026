@@ -3038,6 +3038,8 @@ export default function HomePage() {
         .from(bucket)
         .upload(storagePath, blob, {
           contentType: "image/jpeg",
+          // 파일 이름이 매번 새로 만들어지므로 오래 보관해도 안전 (다시 받는 전송량 절약)
+          cacheControl: "31536000",
           upsert: true,
         });
 
