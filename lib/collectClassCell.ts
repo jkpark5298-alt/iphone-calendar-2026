@@ -1,4 +1,5 @@
 /** Extra white writing cells stacked under the main editor. */
+import { stripTransientImageUiHtml } from "./richImageSlots";
 
 const WHITE_CELL_ATTR = "data-white-cell";
 
@@ -48,8 +49,9 @@ export function joinWhiteCells(main: string, extras: string[]) {
 export function readStackedHtml(editor: HTMLElement | null) {
   if (!editor) return "";
   const wraps = editor.parentElement?.querySelectorAll(":scope > .collect-white-cell-wrap .collect-white-cell");
-  const extras = Array.from(wraps || []).map((node) => (node as HTMLElement).innerHTML);
-  return joinWhiteCells(editor.innerHTML || "", extras);
+  // 사진 위 버튼·선택 표시처럼 화면에서만 쓰는 것은 저장하지 않는다.
+  const extras = Array.from(wraps || []).map((node) => stripTransientImageUiHtml((node as HTMLElement).innerHTML));
+  return joinWhiteCells(stripTransientImageUiHtml(editor.innerHTML || ""), extras);
 }
 
 export function readStackedText(editor: HTMLElement | null) {

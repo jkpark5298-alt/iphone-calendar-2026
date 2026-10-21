@@ -9,6 +9,12 @@ export const INLINE_IMG_WRAP_CLASS = "rich-inline-img-wrap";
 export const INLINE_IMG_DEL_CLASS = "rich-inline-img-del";
 export const INLINE_IMG_RESIZE_CLASS = "rich-inline-img-resize";
 export const INLINE_IMG_ROW_CLASS = "rich-inline-img-row";
+/** 사진을 탭하면 나오는 작은 버튼 묶음 ([크기 조절] [2열로]) */
+export const INLINE_IMG_TOOLS_CLASS = "rich-inline-img-tools";
+const INLINE_IMG_TOOL_CLASS = "rich-inline-img-tool";
+/** 이 표시가 붙은 사진만 크기 조절 손잡이가 보이고 움직인다 */
+export const INLINE_IMG_RESIZE_MODE_CLASS = "is-resize-mode";
+const INLINE_IMG_SELECTED_CLASS = "is-image-selected";
 export const IMG_SLOT_CLASS = "rich-img-slot";
 export const INLINE_IMG_WIDTH_VAR = "--inline-img-width";
 export const INLINE_IMG_HEIGHT_VAR = "--inline-img-height";
@@ -80,6 +86,21 @@ export function applyInlineImageDisplaySize(frame: HTMLElement, widthPx: number,
   }
 }
 
+/** 직접 바꾼 크기를 지운다 (2열로 묶거나 풀 때 칸에 맞게 다시 그리기 위해). */
+export function clearInlineImageDisplaySize(frame: HTMLElement) {
+  delete frame.dataset.resized;
+  delete frame.dataset.height;
+  for (const prop of [INLINE_IMG_WIDTH_VAR, INLINE_IMG_HEIGHT_VAR, "width", "height", "display", "max-width", "box-sizing"]) {
+    frame.style.removeProperty(prop);
+  }
+  if (!frame.getAttribute("style")) frame.removeAttribute("style");
+  const img = frame.querySelector("img");
+  if (img instanceof HTMLElement) {
+    for (const prop of ["width", "height", "max-width", "max-height", "object-fit"]) img.style.removeProperty(prop);
+    if (!img.getAttribute("style")) img.removeAttribute("style");
+  }
+}
+
 /** Re-apply saved CSS vars after HTML reload (width:100% editor rules otherwise win). */
 function restoreInlineImageDisplaySize(frame: HTMLElement) {
   if (frame.dataset.resized !== "1") return;
@@ -120,10 +141,54 @@ function ensureResizeControl(frame: HTMLElement) {
   paintResizeHandle(frame, "both");
 }
 
+function refreshImageTools(frame: HTMLElement) {
+  const tools = frame.querySelector(`:scope > .${INLINE_IMG_TOOLS_CLASS}`);
+  if (!tools) return;
+  const resize = tools.querySelector('[data-act="resize"]');
+  const pair = tools.querySelector('[data-act="pair"]');
+  const resizing = frame.classList.contains(INLINE_IMG_RESIZE_MODE_CLASS);
+  if (resize) resize.textContent = resizing ? "완료" : "크기 조절";
+  if (pair) pair.textContent = frameInImageRow(frame) ? "1열로" : "2열로";
+}
+
+function ensureImageTools(frame: HTMLElement) {
+  let tools = frame.querySelector(`:scope > .${INLINE_IMG_TOOLS_CLASS}`) as HTMLElement | null;
+  if (!tools) {
+    tools = document.createElement("span");
+    tools.className = INLINE_IMG_TOOLS_CLASS;
+    for (const act of ["resize", "pair"]) {
+      const button = document.createElement("span");
+      button.className = INLINE_IMG_TOOL_CLASS;
+      button.dataset.act = act;
+      button.setAttribute("role", "button");
+      tools.appendChild(button);
+    }
+    frame.appendChild(tools);
+  }
+  tools.setAttribute("contenteditable", "false");
+  refreshImageTools(frame);
+}
+
+/** 저장할 HTML에서 화면 전용 표시(버튼 묶음, 선택·조절 중 표시)를 뺀다. */
+export function stripTransientImageUiHtml(html: string) {
+  if (!html) return html;
+  return html
+    .replace(
+      /<span class="rich-inline-img-tools"[^>]*>(?:<span[^>]*>[^<]*<\/span>)*<\/span>/g,
+      "",
+    )
+    .replace(/ ?\b(?:is-image-selected|is-resize-mode|is-resizing)\b/g, "");
+}
+
 function resizeHandleAtPoint(editor: HTMLElement, x: number, y: number) {
-  const handles = Array.from(editor.querySelectorAll(`.${INLINE_IMG_RESIZE_CLASS}`)).reverse();
+  // 「크기 조절」을 누른 사진의 손잡이만 본다. (예전에는 모든 사진의 손잡이가 항상 켜져 있어서
+  //  아이폰에서 스크롤하거나 사진 근처를 누르기만 해도 크기가 바뀌었다.)
+  const handles = Array.from(
+    editor.querySelectorAll(`.${INLINE_IMG_RESIZE_MODE_CLASS} > .${INLINE_IMG_RESIZE_CLASS}`),
+  ).reverse();
   for (const node of handles) {
     const rect = node.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) continue; // 숨겨진 손잡이
     const slop = 12;
     if (
       x >= rect.left - slop &&
@@ -288,15 +353,155 @@ function bindInlineImageResize(editor: HTMLElement) {
     { capture: true, signal },
   );
 
+  const exitResizeMode = (except?: HTMLElement | null) => {
+    let changed = false;
+    editor.querySelectorAll(`.${INLINE_IMG_RESIZE_MODE_CLASS}`).forEach((node) => {
+      if (node === except) return;
+      node.classList.remove(INLINE_IMG_RESIZE_MODE_CLASS);
+      refreshImageTools(node as HTMLElement);
+      changed = true;
+    });
+    return changed;
+  };
+
+  const selectFrame = (frame: HTMLElement) => {
+    editor.querySelectorAll(`.${INLINE_IMG_SELECTED_CLASS}`).forEach((node) => {
+      if (node !== frame) node.classList.remove(INLINE_IMG_SELECTED_CLASS);
+    });
+    frame.classList.add(INLINE_IMG_SELECTED_CLASS);
+  };
+
   editor.addEventListener(
     "click",
     (event: MouseEvent) => {
-      if (!resizeHandleAtPoint(editor, event.clientX, event.clientY)) return;
-      event.preventDefault();
-      event.stopPropagation();
+      if (resizeHandleAtPoint(editor, event.clientX, event.clientY)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      const target = event.target instanceof Element ? event.target : null;
+      const tool = target?.closest(`.${INLINE_IMG_TOOL_CLASS}`) as HTMLElement | null;
+      if (tool && editor.contains(tool)) {
+        event.preventDefault();
+        event.stopPropagation();
+        const frame = tool.closest(INLINE_IMG_FRAME_SELECTOR) as HTMLElement | null;
+        if (!frame) return;
+        if (tool.dataset.act === "resize") {
+          const wasResizing = frame.classList.contains(INLINE_IMG_RESIZE_MODE_CLASS);
+          exitResizeMode(frame);
+          if (wasResizing) {
+            frame.classList.remove(INLINE_IMG_RESIZE_MODE_CLASS);
+            editor.dispatchEvent(new Event("input", { bubbles: true }));
+          } else {
+            // 처음 조절할 때는 지금 보이는 크기에서 시작한다 (손잡이가 사진 가장자리에 붙도록)
+            const img = frame.querySelector("img");
+            if (img && frame.dataset.resized !== "1" && !frameInImageRow(frame)) {
+              const rect = img.getBoundingClientRect();
+              applyInlineImageDisplaySize(frame, rect.width, rect.height);
+            }
+            frame.classList.add(INLINE_IMG_RESIZE_MODE_CLASS);
+          }
+          selectFrame(frame);
+          refreshImageTools(frame);
+        } else if (tool.dataset.act === "pair") {
+          exitResizeMode();
+          if (toggleImagePair(editor, frame)) editor.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        return;
+      }
+      // 사진 밖(또는 다른 사진)을 누르면 크기 조절을 끝낸다
+      const frame = target?.closest(INLINE_IMG_FRAME_SELECTOR) as HTMLElement | null;
+      const activeFrame = frame && editor.contains(frame) && frame.querySelector("img") ? frame : null;
+      if (exitResizeMode(activeFrame)) editor.dispatchEvent(new Event("input", { bubbles: true }));
+      if (activeFrame) selectFrame(activeFrame);
     },
     { capture: true, signal },
   );
+
+  // 편집 칸 밖을 누르면 선택과 크기 조절을 끝낸다
+  document.addEventListener(
+    "click",
+    (event: MouseEvent) => {
+      if (event.target instanceof Node && editor.contains(event.target)) return;
+      const changed = exitResizeMode();
+      editor.querySelectorAll(`.${INLINE_IMG_SELECTED_CLASS}`).forEach((node) => node.classList.remove(INLINE_IMG_SELECTED_CLASS));
+      if (changed) editor.dispatchEvent(new Event("input", { bubbles: true }));
+    },
+    { signal },
+  );
+}
+
+function isImageFrame(node: Element | null): node is HTMLElement {
+  return Boolean(node && node instanceof HTMLElement && node.matches(INLINE_IMG_FRAME_SELECTOR) && node.querySelector("img"));
+}
+
+/** a와 b 사이에 글자·다른 사진이 없으면 붙어 있는 사진으로 본다. */
+function framesAreAdjacent(a: HTMLElement, b: HTMLElement) {
+  const range = document.createRange();
+  range.setStartAfter(a);
+  range.setEndBefore(b);
+  const between = range.cloneContents();
+  if ((between.textContent || "").replace(/\u00a0/g, " ").trim()) return false;
+  return !between.querySelector(`img, video, .${IMG_SLOT_CLASS}, .${INLINE_IMG_ROW_CLASS}`);
+}
+
+function removeIfBlank(node: HTMLElement | null, editor: HTMLElement) {
+  if (!node || node === editor || !editor.contains(node)) return;
+  if (node.querySelector("img, video")) return;
+  if ((node.textContent || "").replace(/\u00a0/g, " ").trim()) return;
+  node.remove();
+}
+
+/**
+ * 「2열로」: 바로 앞이나 뒤의 사진과 나란히 놓는다.
+ * 「1열로」: 나란히 놓인 두 장을 다시 한 줄에 한 장씩 놓는다.
+ */
+export function toggleImagePair(editor: HTMLElement, frame: HTMLElement): boolean {
+  const row = frameInImageRow(frame);
+  if (row) {
+    const frames = Array.from(row.children).filter(isImageFrame);
+    frames.forEach((item) => {
+      clearInlineImageDisplaySize(item);
+      row.before(item);
+      refreshImageTools(item);
+    });
+    row.remove();
+    return true;
+  }
+
+  const frames = Array.from(editor.querySelectorAll(INLINE_IMG_FRAME_SELECTOR)).filter(
+    (node): node is HTMLElement => isImageFrame(node) && !frameInImageRow(node as HTMLElement),
+  );
+  const index = frames.indexOf(frame);
+  const next = frames[index + 1];
+  const prev = frames[index - 1];
+  let first: HTMLElement | null = null;
+  let second: HTMLElement | null = null;
+  if (next && framesAreAdjacent(frame, next)) {
+    first = frame;
+    second = next;
+  } else if (prev && framesAreAdjacent(prev, frame)) {
+    first = prev;
+    second = frame;
+  }
+  if (!first || !second) {
+    window.alert("바로 앞이나 뒤에 붙어 있는 사진이 없습니다. 사진 두 장을 연달아 넣은 뒤 「2열로」를 눌러 주세요.");
+    return false;
+  }
+
+  const secondParent = second.parentElement;
+  const pair = document.createElement("div");
+  pair.className = INLINE_IMG_ROW_CLASS;
+  pair.setAttribute("contenteditable", "false");
+  pair.setAttribute("data-img-row", "2");
+  first.before(pair);
+  for (const item of [first, second]) {
+    clearInlineImageDisplaySize(item);
+    pair.appendChild(item);
+    refreshImageTools(item);
+  }
+  removeIfBlank(secondParent, editor);
+  return true;
 }
 
 function ensureDeleteControl(wrap: HTMLElement, img: HTMLImageElement) {
@@ -322,12 +527,14 @@ export function ensureInlineImageWrap(img: HTMLImageElement) {
     parent.classList.remove(IMG_SLOT_CLASS);
     ensureDeleteControl(parent, img);
     ensureResizeControl(parent);
+    ensureImageTools(parent);
     restoreInlineImageDisplaySize(parent);
     return parent;
   }
   if (parent?.classList.contains("generalInfoInlineImageBlock")) {
     parent.setAttribute("contenteditable", "false");
     ensureResizeControl(parent);
+    ensureImageTools(parent);
     restoreInlineImageDisplaySize(parent);
     return parent;
   }
@@ -338,6 +545,7 @@ export function ensureInlineImageWrap(img: HTMLImageElement) {
   wrap.appendChild(img);
   ensureDeleteControl(wrap, img);
   ensureResizeControl(wrap);
+  ensureImageTools(wrap);
   return wrap;
 }
 
@@ -729,6 +937,7 @@ export function enhanceRichInlineImages(editor: HTMLElement | null) {
     if (!frame.querySelector("img")) return;
     frame.setAttribute("contenteditable", "false");
     ensureResizeControl(frame);
+    ensureImageTools(frame);
     restoreInlineImageDisplaySize(frame);
   });
   bindInlineImageResize(editor);
