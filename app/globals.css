@@ -13455,3 +13455,130 @@ body {
   word-break: break-word;
 }
 
+
+/* 정보 인덱스 · 아이폰(A안): 한 항목을 두 줄로. 1줄 = 제목 전체 폭, 2줄 = 일자·발생처·상태·버튼·우선 */
+@media (max-width: 640px) {
+  .infoIndexTable,
+  .infoIndexTable tbody {
+    display: block;
+    width: 100%;
+  }
+  .infoIndexTable thead {
+    display: none;
+  }
+  .infoIndexTable tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 4px 10px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  }
+  .infoIndexTable tr.pinned {
+    background: rgba(234, 179, 8, 0.08);
+  }
+  .infoIndexTable tr.appFileRemoved {
+    background: rgba(239, 68, 68, 0.08);
+  }
+  .infoIndexTable td,
+  .infoIndexTable td:first-child,
+  .infoIndexTable tr.pinned td,
+  .infoIndexTable tr.appFileRemoved td {
+    display: block;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .infoIndexTable td.infoIndexTitleCell {
+    order: -1;
+    flex: 0 0 100%;
+  }
+  .infoIndexTitleButton {
+    width: 100%;
+  }
+  .infoIndexTitleButton strong {
+    font-size: 14.5px;
+    line-height: 1.4;
+    -webkit-line-clamp: 3;
+  }
+  .infoIndexSourceBadge.infoIndexSourceUnderTitle {
+    display: none;
+  }
+  .infoIndexTable td.infoIndexGroupCell {
+    font-size: 11.5px;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .infoIndexTable td.infoIndexDateCol {
+    display: block;
+    font-size: 11.5px;
+    color: #94a3b8;
+    white-space: nowrap;
+  }
+  .infoIndexTable td.infoIndexSourceCol {
+    display: block;
+  }
+  .infoIndexTable td.infoIndexSourceCol .infoIndexSourceBadge {
+    min-height: 19px;
+    padding: 0 7px;
+    font-size: 10.5px;
+  }
+  .infoIndexSaveStatus {
+    min-height: 19px;
+    padding: 0 7px;
+    font-size: 10.5px;
+  }
+  .infoIndexTable td.infoIndexDetailCell {
+    margin-left: auto;
+  }
+  .infoIndexDetailActions {
+    gap: 4px;
+  }
+  .infoIndexDetailActions .infoIndexDetailButton,
+  .infoIndexDeleteButton,
+  .infoIndexExcludeButton {
+    min-height: 26px;
+    padding: 2px 9px;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+  .infoIndexPinButton,
+  .infoIndexPinButton.hasThumb {
+    width: 30px;
+    height: 26px;
+  }
+  .infoIndexThumb {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+/* 좁은 아이폰(SE·mini 등): 둘째 줄이 한 줄에 들어가도록 간격과 버튼을 조금 줄임 */
+@media (max-width: 400px) {
+  .infoIndexTable tr {
+    gap: 4px;
+  }
+  .infoIndexTable td.infoIndexGroupCell,
+  .infoIndexTable td.infoIndexDateCol {
+    font-size: 11px;
+  }
+  .infoIndexTable td.infoIndexSourceCol .infoIndexSourceBadge,
+  .infoIndexSaveStatus {
+    padding: 0 5px;
+  }
+  .infoIndexDetailActions {
+    gap: 3px;
+  }
+  .infoIndexDetailActions .infoIndexDetailButton,
+  .infoIndexDeleteButton,
+  .infoIndexExcludeButton {
+    padding: 2px 6px;
+  }
+  .infoIndexPinButton,
+  .infoIndexPinButton.hasThumb {
+    width: 28px;
+  }
+}
