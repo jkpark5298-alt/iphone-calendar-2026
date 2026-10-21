@@ -167,6 +167,8 @@ export function Chapter3MapAlbum({
   const savedAlbums = useTravelDiarySavedAlbums(showPasteHint);
   const focusPlaceConsumedRef = useRef<string | null>(null);
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
+  /** 연결 정보는 있는데 Google이 거절하는 경우(권한 철회·만료 등)의 안내 문구 */
+  const [driveProblem, setDriveProblem] = useState("");
 
   useEffect(() => {
     setSavedSims(readSavedSims());
@@ -184,9 +186,17 @@ export function Chapter3MapAlbum({
     if (activeTab !== "album" && activeTab !== "personal") return;
     let cancelled = false;
     void fetch("/api/google-drive/status")
-      .then((response) => response.json() as Promise<{ connected?: boolean }>)
+      .then((response) => response.json() as Promise<{ connected?: boolean; healthy?: boolean; reason?: string; message?: string }>)
       .then((status) => {
-        if (!cancelled) setDriveConnected(Boolean(status.connected));
+        if (cancelled) return;
+        // 연결 정보만 있고 실제로는 못 쓰는 경우를 「연결됨」으로 보여 주지 않는다.
+        const usable = status.healthy ?? status.connected;
+        setDriveConnected(Boolean(usable));
+        setDriveProblem(
+          status.connected && status.healthy === false && status.reason === "token-revoked"
+            ? status.message || "Google이 연결을 끊었습니다. 다시 연결해 주세요."
+            : "",
+        );
       })
       .catch(() => {
         if (!cancelled) setDriveConnected(false);
@@ -2440,6 +2450,11 @@ export function Chapter3MapAlbum({
           <p className="chapter3DriveBannerText">Google Drive 연결됨 — 압축 앨범을 Drive에서 엽니다.</p>
         ) : (
           <>
+                {driveProblem ? (
+                  <p className="chapter3DriveBannerText" role="alert">
+                    ⚠️ {driveProblem}
+                  </p>
+                ) : null}
                 <p className="chapter3DriveBannerText">
                   저장 공간이 부족하면 압축본을 Google Drive로 옮깁니다. 먼저 연결해 주세요.
                   Google 경고 화면에서는 큰 파란 버튼이 아니라 왼쪽 「계속」을 누른 뒤 「허용」하세요.

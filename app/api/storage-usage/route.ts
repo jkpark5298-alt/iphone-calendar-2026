@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { measureStorageSummary } from "../../../lib/storageUsage";
 
 export const dynamic = "force-dynamic";
 
@@ -112,9 +113,17 @@ const loadPagedRows = async (
   return rows;
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
+
+    // 가벼운 요약: 전체 버킷 합계만 (개인앨범·보관량 표시·Drive 이동 판단이 함께 쓰는 숫자)
+    if (request.nextUrl.searchParams.get("summary") === "1") {
+      const summary = await measureStorageSummary(supabase, request.nextUrl.searchParams.get("force") === "1");
+      return NextResponse.json({ ok: true, ...summary }, { headers: { "Cache-Control": "no-store" } });
+    }
+
+    const supabaseSummary = await measureStorageSummary(supabase);
     const generalInfo = emptyPart();
     const photobook = emptyPart();
 
@@ -163,6 +172,7 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
+      supabase: supabaseSummary,
       generalInfo,
       photobook,
       total: {

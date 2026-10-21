@@ -10,6 +10,27 @@ import {
   isInstagramPostUrl,
   normalizeInstagramUrl,
 } from "../../../lib/instagramMeta";
+import { mirrorRemoteImage } from "../../../lib/mirrorImage";
+
+// 이미지 복사까지 하므로 여유를 둔다.
+export const maxDuration = 30;
+
+/**
+ * 가져온 대표 이미지를 우리 Supabase에 복사하고 주소를 바꿔 돌려준다.
+ * 인스타그램 이미지 주소는 며칠 뒤 만료되어 사진이 사라지기 때문이다.
+ * 복사에 실패하면 원래 주소를 그대로 돌려준다 (가져오기 자체는 실패시키지 않는다).
+ */
+const withMirroredImage = async <T extends { image?: string }>(result: T): Promise<T> => {
+  const image = String(result.image || "").trim();
+  if (!/^https?:\/\//i.test(image)) return result;
+  try {
+    const mirrored = await mirrorRemoteImage(image);
+    if (mirrored) return { ...result, image: mirrored.url };
+  } catch (error) {
+    console.warn("extract-url image mirror skipped", error instanceof Error ? error.message : error);
+  }
+  return result;
+};
 
 type ExtractUrlRequest = {
   url?: string;
@@ -390,7 +411,7 @@ export async function POST(request: NextRequest) {
         const caption = cleanInstagramCaption(instagram.description || instagram.text || "");
         return NextResponse.json({
           ok: true,
-          result: {
+          result: await withMirroredImage({
             ...instagram,
             title: caption
               ? caption.split("\n").map((line) => line.trim()).find(Boolean)?.slice(0, 80) ||
@@ -398,7 +419,7 @@ export async function POST(request: NextRequest) {
               : instagram.title,
             description: caption,
             text: caption,
-          },
+          }),
         });
       }
       return NextResponse.json(
@@ -593,14 +614,14 @@ async function buildExtractResponse(response: Response, url: string) {
 
   return NextResponse.json({
     ok: true,
-    result: {
+    result: await withMirroredImage({
       url,
       title: decodeHtmlEntities(title),
       description,
       image,
       siteName,
       text,
-    },
+    }),
   });
 }
 

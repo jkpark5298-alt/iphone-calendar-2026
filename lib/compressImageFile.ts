@@ -2,17 +2,36 @@
 export const UPLOAD_MAX_EDGE = 2560;
 export const UPLOAD_JPEG_QUALITY = 0.9;
 
-export async function compressImageFile(file: File): Promise<File> {
+export type CompressImageOptions = {
+  /** 긴 변의 최대 길이(px) */
+  maxEdge?: number;
+  /** JPEG 품질 0~1 */
+  quality?: number;
+  /** 이 크기 이하의 사진은 그대로 둔다 */
+  skipUnderBytes?: number;
+};
+
+/** 일반정보수집 사진: 글 읽기용이라 일기장 사진보다 더 작게 줄인다. */
+export const GENERAL_INFO_COMPRESS: CompressImageOptions = {
+  maxEdge: 1920,
+  quality: 0.82,
+  skipUnderBytes: 600_000,
+};
+
+export async function compressImageFile(file: File, options: CompressImageOptions = {}): Promise<File> {
+  const maxEdge = options.maxEdge ?? UPLOAD_MAX_EDGE;
+  const quality = options.quality ?? UPLOAD_JPEG_QUALITY;
+  const skipUnderBytes = options.skipUnderBytes ?? 1_800_000;
   const isHeic =
     /heic|heif/i.test(file.type || "") ||
     /\.(heic|heif)$/i.test(file.name || "");
   // HEIC often fails later — always try JPEG convert. Keep small JPEG/PNG as-is.
-  if (!isHeic && file.size > 0 && file.size <= 1_800_000) return file;
+  if (!isHeic && file.size > 0 && file.size <= skipUnderBytes) return file;
   try {
     const bitmap = await createImageBitmap(file, {
       imageOrientation: "from-image",
     });
-    const max = UPLOAD_MAX_EDGE;
+    const max = maxEdge;
     let width = bitmap.width;
     let height = bitmap.height;
     if (width > max || height > max) {
@@ -28,9 +47,10 @@ export async function compressImageFile(file: File): Promise<File> {
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close?.();
     const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/jpeg", UPLOAD_JPEG_QUALITY);
+      canvas.toBlob(resolve, "image/jpeg", quality);
     });
-    if (!blob || blob.size === 0) return file;
+    // 줄였는데 오히려 커지면 원본을 쓴다 (이미 잘 압축된 사진)
+    if (!blob || blob.size === 0 || (blob.size >= file.size && !isHeic)) return file;
     return new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
       type: "image/jpeg",
     });

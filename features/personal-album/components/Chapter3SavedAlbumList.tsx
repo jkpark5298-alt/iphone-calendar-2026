@@ -67,7 +67,7 @@ export function Chapter3SavedAlbumList({
     onProgress: (done: number, total: number, albumTitle?: string) => void,
   ) => Promise<void>;
 }) {
-  const [driveState, setDriveState] = useState<"unknown" | "connected" | "needed">("needed");
+  const [driveState, setDriveState] = useState<"unknown" | "connected" | "broken" | "needed">("needed");
   const [searchTerm, setSearchTerm] = useState("");
   const [showPcBackup, setShowPcBackup] = useState(false);
   const [packBusy, setPackBusy] = useState<{
@@ -86,9 +86,11 @@ export function Chapter3SavedAlbumList({
     if (variant !== "saved") return;
     let cancelled = false;
     void fetch("/api/google-drive/status")
-      .then((response) => response.json() as Promise<{ connected?: boolean }>)
+      .then((response) => response.json() as Promise<{ connected?: boolean; healthy?: boolean }>)
       .then((status) => {
-        if (!cancelled) setDriveState(status.connected ? "connected" : "needed");
+        if (cancelled) return;
+        if (status.connected && status.healthy === false) setDriveState("broken");
+        else setDriveState(status.connected ? "connected" : "needed");
       })
       .catch(() => {
         if (!cancelled) setDriveState("needed");
@@ -190,6 +192,11 @@ export function Chapter3SavedAlbumList({
           {storageStatus && <p className="chapter3Muted">{storageStatus}</p>}
           {variant === "saved" && driveState === "connected" && (
             <p className="chapter3Muted">Google Drive 연결됨</p>
+          )}
+          {variant === "saved" && driveState === "broken" && (
+            <p className="chapter3Muted" role="alert">
+              ⚠️ Google Drive 연결이 끊겼습니다. 새 앨범 탭에서 다시 연결해 주세요.
+            </p>
           )}
           {variant === "saved" && !searchTerm.trim() && maxVisible && albums.length > maxVisible && (
             <p className="chapter3AlbumListHint">

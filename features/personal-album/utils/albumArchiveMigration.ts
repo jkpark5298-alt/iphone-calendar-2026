@@ -122,7 +122,22 @@ function writePendingDeletes(paths: string[]): void {
   else localStorage.setItem(PENDING_DELETE_KEY, JSON.stringify(unique));
 }
 
+/**
+ * Supabase 저장 사용량. 서버에서 모든 버킷을 합쳐서 잰 값을 쓴다 (보관량 표시와 같은 숫자).
+ * 서버 확인에 실패하면 예전 방식(앨범 폴더만)으로 계산한다.
+ */
 export async function measureStorageBytes(): Promise<number> {
+  try {
+    const response = await fetch("/api/storage-usage?summary=1", { cache: "no-store" });
+    const body = (await response.json()) as { ok?: boolean; usedBytes?: number };
+    if (response.ok && body.ok && typeof body.usedBytes === "number") return body.usedBytes;
+  } catch {
+    // 아래 예전 방식으로 계속
+  }
+  return measureAlbumBucketBytes();
+}
+
+async function measureAlbumBucketBytes(): Promise<number> {
   const supabase = getSupabase();
   const walk = async (prefix: string, depth: number): Promise<number> => {
     if (depth > 6) return 0;
@@ -378,10 +393,14 @@ async function runAlbumStorageMigrationInner(
     }
 
     const driveStatus = await fetch("/api/google-drive/status")
-      .then((response) => response.json() as Promise<{ connected?: boolean }>)
-      .catch(() => ({ connected: false }));
+      .then((response) => response.json() as Promise<{ connected?: boolean; healthy?: boolean }>)
+      .catch(() => ({ connected: false, healthy: false }));
     if (!driveStatus.connected) {
       onStatus("무료 저장 공간이 한도를 넘었습니다. Google Drive를 연결하면 압축본을 그쪽으로 옮깁니다.");
+      return unchanged;
+    }
+    if (driveStatus.healthy === false) {
+      onStatus("Google Drive 연결이 끊겨 압축본을 옮기지 못했습니다. Google Drive를 다시 연결해 주세요.");
       return unchanged;
     }
 

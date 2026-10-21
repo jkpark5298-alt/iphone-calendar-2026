@@ -10,6 +10,8 @@ type UsagePart = {
 };
 
 type StorageUsage = {
+  /** 모든 버킷을 합친 Supabase 파일 저장 공간 (80% 넘으면 Drive로 옮기는 기준과 같은 숫자) */
+  supabase?: { usedBytes: number; quotaBytes: number; percent: number; files: number };
   generalInfo: UsagePart;
   photobook: UsagePart;
   total: { bytes: number; files: number };
@@ -30,6 +32,15 @@ const formatBytes = (bytes: number) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+};
+
+/** 개인앨범 화면의 「Supabase 저장 공간 371MB / 1GB」와 같은 표기(1000 단위)로 맞춘다. */
+const formatPlanBytes = (bytes: number) => {
+  if (bytes >= 1_000_000_000) {
+    const gb = bytes / 1_000_000_000;
+    return `${gb >= 10 ? gb.toFixed(0) : gb.toFixed(1).replace(/\.0$/, "")}GB`;
+  }
+  return `${Math.round(bytes / 1_000_000)}MB`;
 };
 
 const detail = (part: UsagePart) =>
@@ -88,6 +99,15 @@ export function StorageUsageBar() {
           <span title={`파일 ${state.usage.total.files}개`}>
             전체 <b>{formatBytes(state.usage.total.bytes)}</b>
           </span>
+          {state.usage.supabase ? (
+            <span title={`모든 폴더 합계 · 파일 ${state.usage.supabase.files}개 · 80%를 넘으면 사진을 Drive로 옮깁니다`}>
+              Supabase{" "}
+              <b>
+                {formatPlanBytes(state.usage.supabase.usedBytes)} / {formatPlanBytes(state.usage.supabase.quotaBytes)} (
+                {Math.round(state.usage.supabase.percent)}%)
+              </b>
+            </span>
+          ) : null}
         </>
       ) : null}
       <button type="button" onClick={() => load(true)} disabled={state.status === "loading"}>

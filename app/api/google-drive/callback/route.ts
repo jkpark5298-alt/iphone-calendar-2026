@@ -1,6 +1,7 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   connectGoogleDrive,
+  DriveOwnerMismatchError,
   exchangeGoogleDriveCode,
   googleDriveRedirectUri,
 } from "../../../../lib/googleDrive";
@@ -47,6 +48,11 @@ export async function GET(request: NextRequest) {
     response.cookies.delete("google_drive_oauth_state");
     return response;
   } catch (cause) {
+    // 이미 연결된 계정과 다른 계정으로 바꾸려는 시도는 거절한다 (기존 연결은 그대로 유지)
+    if (cause instanceof DriveOwnerMismatchError) {
+      console.warn("google drive callback rejected: different account");
+      return back("owner");
+    }
     const message = cause instanceof Error ? cause.message : String(cause);
     console.error("google drive callback failed", message, cause);
     if (/service role|Supabase|bucket|storage/i.test(message)) return back("storage");

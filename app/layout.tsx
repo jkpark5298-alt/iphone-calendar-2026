@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { LegacyMediaUrlFix } from "../components/LegacyMediaUrlFix";
+import { StorageArchiveRunner } from "../components/StorageArchiveRunner";
 
 export const metadata: Metadata = {
   title: "2026년 아이폰 캘린더",
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ko">
       <body>
         <LegacyMediaUrlFix />
+        <StorageArchiveRunner />
         {children}
       </body>
     </html>

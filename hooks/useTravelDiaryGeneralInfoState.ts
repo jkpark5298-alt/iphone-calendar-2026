@@ -51,7 +51,7 @@ import {
   tryConsumeDateTimeTrigger,
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
-import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
+import { compressImageFile, filterUploadImageFiles, GENERAL_INFO_COMPRESS, imageFilesFromClipboard } from "../lib/compressImageFile";
 import { runCollectRichCommand } from "../lib/collectRichFormat";
 import {
   cleanInstagramCaption,
@@ -82,8 +82,14 @@ const generalInfoHtmlLooksEmpty = (html: string) => {
     .trim();
 };
 
-const uploadFileToSupabaseStorage = async (file: File): Promise<{ storagePath: string; fileUrl: string }> => {
+const uploadFileToSupabaseStorage = async (inputFile: File): Promise<{ storagePath: string; fileUrl: string }> => {
   if (!supabase) throw new Error("Supabase가 연결되지 않았습니다.");
+
+  // 사진은 올리기 전에 줄인다. (예전에는 원본 그대로 올라가 화면 캡처 PNG 한 장이 5~6MB까지 차지했다)
+  // 이미 충분히 작은 JPEG, GIF(움직임 유지), SVG, 영상은 그대로 올린다.
+  const isStillImage = /^image\//i.test(inputFile.type || "") && !/gif|svg/i.test(inputFile.type || "");
+  const alreadySmallJpeg = /jpe?g/i.test(inputFile.type || "") && inputFile.size <= 1_200_000;
+  const file = isStillImage && !alreadySmallJpeg ? await compressImageFile(inputFile, GENERAL_INFO_COMPRESS) : inputFile;
   
   const originalName = file.name || "upload-file";
   const extensionMatch = originalName.match(/\.([a-zA-Z0-9]{1,10})$/);
@@ -3126,6 +3132,9 @@ export function useTravelDiaryGeneralInfoState({
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    // 사진을 Drive로 옮긴 뒤 글의 사진 주소가 바뀌므로 목록을 바로 새로 받는다.
+    const handleReload = () => void loadGeneralInfoItemsFromSupabase();
+    window.addEventListener("general-info:reload", handleReload);
 
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
@@ -3135,6 +3144,7 @@ export function useTravelDiaryGeneralInfoState({
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("general-info:reload", handleReload);
       clearInterval(interval);
     };
   }, [loadGeneralInfoItemsFromSupabase, syncGeneralInfoIfChanged]);

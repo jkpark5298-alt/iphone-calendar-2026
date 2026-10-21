@@ -1,5 +1,6 @@
-﻿import { randomBytes } from "crypto";
+import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { assertRateLimit, clientIpFromRequest } from "../../../../lib/apiSecurity";
 import {
   googleDriveAuthUrl,
   googleDriveConfigured,
@@ -7,6 +8,8 @@ import {
 } from "../../../../lib/googleDrive";
 
 export async function GET(request: NextRequest) {
+  const limited = assertRateLimit(`drive-start:${clientIpFromRequest(request)}`, 10, 60_000);
+  if (limited) return limited;
   if (!googleDriveConfigured()) {
     return NextResponse.redirect(
       new URL("/?googleDrive=missing&personalAlbum=1", request.url),

@@ -366,7 +366,35 @@ export const probeTravelAlbumsUpdatedAt = async (): Promise<string | null> => {
   }
 };
 
+/**
+ * 앨범 전체(약 80KB)를 서버에서 받는다.
+ * 앱을 열 때 여러 곳에서 거의 동시에 호출해 같은 데이터를 4번씩 받던 문제를 막으려고,
+ * 이미 받는 중이면 그 결과를 같이 쓰고, 방금(3초 안에) 받았으면 그 값을 다시 쓴다.
+ */
+const ALBUM_LOAD_REUSE_MS = 3000;
+let albumLoadInFlight: Promise<TravelAlbumsState | null> | null = null;
+let albumLoadRecent: { at: number; value: TravelAlbumsState | null } | null = null;
+
 export const loadTravelAlbumsFromSupabase = async (): Promise<TravelAlbumsState | null> => {
+  if (albumLoadInFlight) return albumLoadInFlight;
+  if (albumLoadRecent && Date.now() - albumLoadRecent.at < ALBUM_LOAD_REUSE_MS) return albumLoadRecent.value;
+  albumLoadInFlight = fetchTravelAlbumsFromSupabase()
+    .then((value) => {
+      albumLoadRecent = value ? { at: Date.now(), value } : null;
+      return value;
+    })
+    .finally(() => {
+      albumLoadInFlight = null;
+    });
+  return albumLoadInFlight;
+};
+
+/** 저장한 직후에는 예전 값을 다시 쓰지 않도록 비운다. */
+export const forgetRecentTravelAlbumsLoad = () => {
+  albumLoadRecent = null;
+};
+
+const fetchTravelAlbumsFromSupabase = async (): Promise<TravelAlbumsState | null> => {
   if (!isSupabaseConfigured) return null;
   try {
     const supabase = getSupabase();
@@ -451,6 +479,8 @@ export const saveTravelAlbumsToSupabase = async (
 ): Promise<boolean> => {
   if (!isSupabaseConfigured) return false;
   try {
+    // 저장 전에 서버와 맞출 때는 방금 받아 둔 값을 쓰지 않고 새로 받는다.
+    forgetRecentTravelAlbumsLoad();
     const stateToSave = await withRemoteAlbumsKept(state);
 
     const supabase = getSupabase();
@@ -490,6 +520,7 @@ export const saveTravelAlbumsToSupabase = async (
     const { error } = await supabase
       .from("travel_albums_state")
       .upsert(remotePayload, { onConflict: "session_id" });
+    forgetRecentTravelAlbumsLoad();
     if (error) {
       console.error("travel albums Supabase save failed", error);
       return false;
