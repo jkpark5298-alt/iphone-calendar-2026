@@ -11,6 +11,8 @@ import type { GeneralInfoDraft, GeneralInfoItem, GeneralInfoMediaItem } from "..
 import { stepCollectFontSize } from "../lib/collectFormatPalette";
 import {
   IMAGE_SLOT_GUIDE,
+  ensureImageSlot,
+  removeImageSlot,
   enhanceRichInlineImages,
   findAwaitingSlotId,
   insertImagesAtSlotOrCaret,
@@ -309,10 +311,13 @@ export function Chapter3Info({
     [generalInfoRichTextRef, syncGeneralInfoRichTextToDraft],
   );
 
-  const handleCollectPasteImage = React.useCallback(async () => {
+  const handleCollectPasteImage = React.useCallback(async (createdSlotId: string | null = null) => {
+    // 이 버튼이 새로 만든 칸인데 넣을 이미지가 없으면 그 칸을 지운다
+    const dropCreatedSlot = () => removeImageSlot(generalInfoRichTextRef.current, createdSlotId);
     try {
       const files = await readClipboardImageFiles();
       if (!files.length) {
+        dropCreatedSlot();
         alert("클립보드에서 이미지를 찾지 못했습니다. 이미지를 복사한 뒤 다시 눌러 주세요.");
         return;
       }
@@ -321,9 +326,10 @@ export function Chapter3Info({
       handleGeneralInfoRichImagePick(list.files);
       setImageSlotPrompt(null);
     } catch {
+      dropCreatedSlot();
       alert("클립보드 읽기가 막혀 있습니다. 사진 칸의 붙여넣기 칸에 직접 붙여넣으세요.");
     }
-  }, [handleGeneralInfoRichImagePick]);
+  }, [generalInfoRichTextRef, handleGeneralInfoRichImagePick]);
 
   const handleCollectFontSizeStep = React.useCallback(
     (delta: number) => {
@@ -701,18 +707,20 @@ export function Chapter3Info({
                 onHighlight={(c) => handleGeneralInfoRichCommand("highlight", c)}
                 onInsertChar={(ch) => handleGeneralInfoRichCommand("insertText", ch)}
                 onImage={() => {
-                  if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
+                  // 빈 사진 칸이 없으면 커서 위치에 만든다 (s. 입력 없이도 사용 가능)
+                  if (!ensureImageSlot(generalInfoRichTextRef.current).slotId) {
                     alert(IMAGE_SLOT_GUIDE);
                     return;
                   }
                   generalInfoImageFileRef.current?.click();
                 }}
                 onPasteImage={() => {
-                  if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
+                  const { slotId, created } = ensureImageSlot(generalInfoRichTextRef.current);
+                  if (!slotId) {
                     alert(IMAGE_SLOT_GUIDE);
                     return;
                   }
-                  void handleCollectPasteImage();
+                  void handleCollectPasteImage(created ? slotId : null);
                 }}
                 onTextImage={() => setShowTextToImageModal(true)}
                 onHandwriting={() => setShowHandwritingModal(true)}

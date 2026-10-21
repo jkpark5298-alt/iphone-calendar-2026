@@ -97,6 +97,9 @@ All three editors are `contentEditable` divs. They share `lib/richImageSlots.ts`
 - **Inserting photos (all three editors):**
   - Typing `s.` / `S.` / `s1.` inserts an empty slot and opens `components/SlotImagePanel.tsx`, which offers 사진찍기, 사진보관함 and 복사한 이미지 붙여넣기.
   - Tapping an empty slot reopens the panel.
+  - The toolbar buttons `사진보관함` and `붙여넣기` also work without typing `s.`.
+    - `ensureImageSlot(editor)` reuses the last empty slot, or inserts one at the remembered caret (`selectionchange` → `__lastCaret`, because tapping the toolbar steals the selection).
+    - If the paste finds no image, `removeImageSlot` deletes the slot it just created.
   - The panel is `position: fixed` and positions itself above the iPhone keyboard (visualViewport inset). Without a `bottom` it rendered off-screen.
 - **Frames:** every image sits in a `.rich-inline-img-wrap` frame (older data may use `.generalInfoInlineImageBlock`).
 - **Controls added to each frame:**

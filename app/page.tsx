@@ -12,6 +12,8 @@ import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import { loadRedDatesFromSupabase, saveRedDateToSupabase } from "../lib/redDateApi";
 import {
   IMAGE_SLOT_GUIDE,
+  ensureImageSlot,
+  removeImageSlot,
   enhanceRichInlineImages,
   findAwaitingSlotId,
   insertImagesAtSlotOrCaret,
@@ -898,27 +900,33 @@ export default function HomePage() {
     }
   }
 
+  /** 도구줄 사진 버튼: 빈 사진 칸이 없으면 커서 위치에 만든다 (s. 입력 없이도 사용 가능) */
   function diarySlotOrGuide() {
-    const slotId = findAwaitingSlotId(diaryRichTextRef.current);
-    if (!slotId) {
+    const result = ensureImageSlot(diaryRichTextRef.current);
+    if (!result.slotId) {
       setDiaryImageSlotId(null);
       alert(IMAGE_SLOT_GUIDE);
     }
-    return slotId;
+    return result;
   }
 
   async function handleDiaryCollectPasteImage() {
-    const slotId = diarySlotOrGuide();
+    const { slotId, created } = diarySlotOrGuide();
     if (!slotId) return;
+    const dropCreatedSlot = () => {
+      if (created) removeImageSlot(diaryRichTextRef.current, slotId);
+    };
     try {
       const files = await readClipboardImageFiles();
       if (!files.length) {
-        alert("클립보드에서 이미지를 찾지 못했습니다. 이미지를 복사한 뒤 사진 칸에 붙여넣으세요.");
+        dropCreatedSlot();
+        alert("클립보드에서 이미지를 찾지 못했습니다. 이미지를 복사한 뒤 다시 눌러 주세요.");
         return;
       }
       void insertDiaryInlineImages(files, slotId);
       setDiaryImageSlotId(null);
     } catch {
+      dropCreatedSlot();
       alert("클립보드 읽기가 막혀 있습니다. 사진 칸의 붙여넣기 칸에 직접 붙여넣으세요.");
     }
   }
@@ -4692,7 +4700,7 @@ export default function HomePage() {
             onHighlight={(c) => handleDiaryRichCommand("highlight", c)}
             onInsertChar={(ch) => handleDiaryRichCommand("insertText", ch)}
             onImage={() => {
-              const slotId = diarySlotOrGuide();
+              const { slotId } = diarySlotOrGuide();
               if (!slotId) return;
               diaryPendingSlotRef.current = slotId;
               diaryImageFileRef.current?.click();

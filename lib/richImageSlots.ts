@@ -302,6 +302,8 @@ function bindInlineImageResize(editor: HTMLElement) {
     endDrag(true);
   };
 
+  rememberEditorCaret(editor, signal);
+
   // Window/document listeners stay for the editor lifetime; abort removes them on rebind.
   window.addEventListener("pointermove", onPointerMove, { passive: false, signal });
   window.addEventListener("pointerup", onPointerUp, { signal });
@@ -793,10 +795,40 @@ export function tryConsumeImageTriggerToSlot(editor: HTMLElement | null): string
   return lastId;
 }
 
+type CaretMemoryEditor = HTMLElement & { __lastCaret?: Range };
+
+/** 편집 칸 안의 마지막 커서 위치. 도구줄 버튼을 누르는 순간 커서가 빠져도 그 자리에 넣기 위해 기억한다. */
+function rememberEditorCaret(editor: HTMLElement, signal: AbortSignal) {
+  document.addEventListener(
+    "selectionchange",
+    () => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      if (editor.contains(range.commonAncestorContainer)) {
+        (editor as CaretMemoryEditor).__lastCaret = range.cloneRange();
+      }
+    },
+    { signal },
+  );
+}
+
 /** Insert empty slot at caret (toolbar image button). */
 export function insertEmptyImageSlot(editor: HTMLElement | null): string | null {
   if (!editor) return null;
   editor.focus();
+  // 버튼을 누르느라 커서가 빠졌으면 마지막 커서 위치로 되돌린다
+  const saved = (editor as CaretMemoryEditor).__lastCaret;
+  const current = window.getSelection();
+  if (
+    saved &&
+    current &&
+    editor.contains(saved.commonAncestorContainer) &&
+    !(current.rangeCount > 0 && editor.contains(current.getRangeAt(0).commonAncestorContainer))
+  ) {
+    current.removeAllRanges();
+    current.addRange(saved);
+  }
   const id = nextSlotId(editor.innerHTML);
   const slot = createImageSlotElement(id);
   const sel = window.getSelection();
@@ -814,6 +846,27 @@ export function insertEmptyImageSlot(editor: HTMLElement | null): string | null 
     editor.appendChild(slot);
   }
   return id;
+}
+
+/**
+ * 도구줄 사진 버튼용: 빈 사진 칸이 있으면 그 칸을, 없으면 커서 위치에 새 칸을 만들어 돌려준다.
+ * (s. 를 먼저 입력하지 않아도 도구줄 버튼만으로 사진을 넣을 수 있게)
+ */
+export function ensureImageSlot(editor: HTMLElement | null): { slotId: string | null; created: boolean } {
+  if (!editor) return { slotId: null, created: false };
+  const existing = findAwaitingSlotId(editor);
+  if (existing) return { slotId: existing, created: false };
+  const slotId = insertEmptyImageSlot(editor);
+  return { slotId, created: Boolean(slotId) };
+}
+
+/** 자동으로 만든 칸에 넣을 사진이 없으면(붙여넣기 실패 등) 그 칸을 지운다. */
+export function removeImageSlot(editor: HTMLElement | null, slotId: string | null) {
+  if (!editor || !slotId) return;
+  const escaped =
+    typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(slotId) : slotId.replace(/"/g, '\\"');
+  const slot = editor.querySelector(`.${IMG_SLOT_CLASS}[data-img-slot="${escaped}"]`);
+  if (slot && !slot.querySelector("img")) slot.remove();
 }
 
 export function findAwaitingSlotId(editor: HTMLElement | null): string | null {

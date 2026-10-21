@@ -14,6 +14,8 @@ import { readClipboardImageFiles, runCollectRichCommand } from "../lib/collectRi
 import { makeWhiteCellId, readStackedHtml, removeClassCellFromEvent, splitWhiteCells } from "../lib/collectClassCell";
 import {
   IMAGE_SLOT_GUIDE,
+  ensureImageSlot,
+  removeImageSlot,
   enhanceRichInlineImages,
   findAwaitingSlotId,
   handleRichImageSlotPointer,
@@ -329,7 +331,8 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
             onHighlight={(color) => runCommand("highlight", color)}
             onInsertChar={(ch) => runCommand("insertText", ch)}
             onImage={() => {
-              const slotId = findAwaitingSlotId(editorRef.current);
+              // 빈 사진 칸이 없으면 커서 위치에 만든다 (s. 입력 없이도 사용 가능)
+              const { slotId } = ensureImageSlot(editorRef.current);
               if (!slotId) {
                 setImageSlotId(null);
                 alert(IMAGE_SLOT_GUIDE);
@@ -339,20 +342,25 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
               imageFileRef.current?.click();
             }}
             onPasteImage={() => {
-              const slotId = findAwaitingSlotId(editorRef.current);
+              const { slotId, created } = ensureImageSlot(editorRef.current);
               if (!slotId) {
                 setImageSlotId(null);
                 alert(IMAGE_SLOT_GUIDE);
                 return;
               }
+              const dropCreatedSlot = () => {
+                if (created) removeImageSlot(editorRef.current, slotId);
+              };
               void readClipboardImageFiles().then((files) => {
                 if (!files.length) {
-                  alert("클립보드에서 이미지를 찾지 못했습니다. 사진 칸에 붙여넣으세요.");
+                  dropCreatedSlot();
+                  alert("클립보드에서 이미지를 찾지 못했습니다. 이미지를 복사한 뒤 다시 눌러 주세요.");
                   return;
                 }
                 void insertImages(files, slotId);
                 setImageSlotId(null);
               }).catch(() => {
+                dropCreatedSlot();
                 alert("클립보드 읽기가 막혀 있습니다. 사진 칸의 붙여넣기 칸에 직접 붙여넣으세요.");
               });
             }}
