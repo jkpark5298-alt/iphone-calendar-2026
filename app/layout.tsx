@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { LegacyMediaUrlFix } from "../components/LegacyMediaUrlFix";
 
 export const metadata: Metadata = {
   title: "2026년 아이폰 캘린더",
@@ -28,7 +29,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <LegacyMediaUrlFix />
+        {children}
+      </body>
     </html>
   );
 }
