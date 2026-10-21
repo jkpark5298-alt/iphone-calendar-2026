@@ -1,7 +1,29 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { imageFilesFromClipboard } from "../lib/compressImageFile";
+
+/** 아이폰 키보드가 올라와 있으면 그 높이만큼 창을 위로 올린다. */
+function useKeyboardInset() {
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    const update = () => {
+      const viewport = window.visualViewport;
+      if (!viewport) return setInset(0);
+      setInset(Math.max(0, window.innerHeight - (viewport.height + viewport.offsetTop)));
+    };
+    update();
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+  return inset;
+}
 
 function imageFiles(list: FileList | null) {
   return Array.from(list || []).filter((file) => {
@@ -20,6 +42,7 @@ export function SlotImagePanel({
   onClose: () => void;
   style?: CSSProperties;
 }) {
+  const keyboardInset = useKeyboardInset();
   const pick = (list: FileList | null) => {
     const files = imageFiles(list);
     if (list && list.length && !files.length) {
@@ -31,7 +54,13 @@ export function SlotImagePanel({
   };
 
   return (
-    <div className="collectSlotImagePanel" role="dialog" aria-label="이미지 넣기" style={style}>
+    <div
+      className="collectSlotImagePanel"
+      role="dialog"
+      aria-label="이미지 넣기"
+      // 위치를 정하지 않으면 화면 밖(본문 아래쪽)에 떠서 안 보일 수 있다. 항상 화면 아래(키보드 위)에 띄운다.
+      style={{ bottom: `calc(${keyboardInset + 8}px + env(safe-area-inset-bottom, 0px))`, ...style }}
+    >
       <div className="collectSlotImagePanelHead">
         <strong>사진</strong>
         <span>이 칸에 사진을 찍거나, 사진첩에서 고르거나, 복사한 이미지를 붙여넣으세요.</span>

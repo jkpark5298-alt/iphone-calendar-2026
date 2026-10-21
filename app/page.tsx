@@ -72,12 +72,17 @@ async function upsertEntryByDate(table: "diary_entries" | "info_entries", row: R
   if (!supabase) return { message: "Supabase 미설정" };
   const { error } = await supabase.from(table).upsert(row, { onConflict: "entry_date" });
   if (!error) return null;
-  if (error.code !== "42P10") return error;
+  // 42P10: 날짜 유니크 제약 없음 / 23502: id 자동 생성(기본값) 없음 → 수정, 없으면 id를 직접 만들어 추가
+  // 근본 해결: supabase/migrations/20261021_restore_id_defaults.sql 실행
+  if (error.code !== "42P10" && error.code !== "23502") return error;
   const updated = await supabase.from(table).update(row).eq("entry_date", row.entry_date).select("entry_date");
   if (updated.error) return updated.error;
   if (updated.data && updated.data.length > 0) return null;
   const inserted = await supabase.from(table).insert(row);
-  return inserted.error;
+  if (!inserted.error) return null;
+  if (inserted.error.code !== "23502") return inserted.error;
+  const withId = await supabase.from(table).insert({ ...row, id: crypto.randomUUID() });
+  return withId.error;
 }
 
 function formatDiarySavedAt(iso: string | null) {
@@ -817,10 +822,10 @@ export default function HomePage() {
       return;
     }
     const slotId = slot.getAttribute("data-img-slot");
-    if (!slotId || !diaryImageFileRef.current) return;
+    if (!slotId) return;
     event.preventDefault();
-    diaryPendingSlotRef.current = slotId;
-    diaryImageFileRef.current.click();
+    // 사진찍기 · 사진보관함 · 붙여넣기 중에서 고르는 창을 띄운다
+    setDiaryImageSlotId(slotId);
   }
 
   const [diaryImageSlotId, setDiaryImageSlotId] = useState<string | null>(null);

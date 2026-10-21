@@ -477,10 +477,10 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
               const slot = target.closest?.(".rich-img-slot") as HTMLElement | null;
               if (!slot || !editor.contains(slot) || slot.classList.contains("rich-inline-img-wrap") || slot.querySelector("img")) return;
               const slotId = slot.getAttribute("data-img-slot");
-              if (!slotId || !imageFileRef.current) return;
+              if (!slotId) return;
               event.preventDefault();
-              pendingSlotRef.current = slotId;
-              imageFileRef.current.click();
+              // 사진찍기 · 사진보관함 · 붙여넣기 중에서 고르는 창을 띄운다
+              setImageSlotId(slotId);
             }}
             onPaste={(event) => {
               const pastedFiles = imageFilesFromClipboard(event.clipboardData);
