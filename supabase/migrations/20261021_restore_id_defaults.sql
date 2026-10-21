@@ -12,9 +12,6 @@ ALTER TABLE public.info_text_cards    ALTER COLUMN id SET DEFAULT gen_random_uui
 ALTER TABLE public.calendar_marks     ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;
 ALTER TABLE public.calendar_schedules ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;
 
--- 숫자형 id(red_dates): 기존 최대값 다음부터 이어지는 번호
-CREATE SEQUENCE IF NOT EXISTS public.red_dates_id_seq OWNED BY public.red_dates.id;
-SELECT setval('public.red_dates_id_seq', COALESCE((SELECT MAX(id) FROM public.red_dates), 0) + 1, false);
-ALTER TABLE public.red_dates ALTER COLUMN id SET DEFAULT nextval('public.red_dates_id_seq');
+-- red_dates.id 는 이미 identity(자동 번호) 칸이라 손댈 필요가 없다.
 
 NOTIFY pgrst, 'reload schema';
