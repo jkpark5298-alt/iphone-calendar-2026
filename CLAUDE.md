@@ -86,6 +86,30 @@ Note: `lib/generalInfoHelpers.ts` has its own local `TRAVEL_DIARY_BUCKET = "info
   - Drive photos are served through `/api/google-drive/file?id=` with immutable caching. 일반정보수집 rows store the absolute URL (`driveAbsolutePhotoUrl`) because other apps read that data.
   - The OAuth consent screen (GCP project `travel-501405`) is published to production, which is required to avoid 7-day token expiry. `/privacy` exists for that.
 
+### Rich-text editor images (diary, theme, 일반정보수집)
+All three editors are `contentEditable` divs. They share `lib/richImageSlots.ts`, wired up by `enhanceRichInlineImages(editor)`.
+
+- **Frames:** every image sits in a `.rich-inline-img-wrap` frame (older data may use `.generalInfoInlineImageBlock`).
+- **Controls added to each frame:**
+  - a delete ×
+  - three resize handles: `data-axis` = `x`, `y`, `both`
+  - a tools bar `.rich-inline-img-tools` with two buttons: `[크기 조절]` and `[2열로]/[1열로]`
+- **Resize is opt-in (iPhone fix):**
+  - Tapping an image only selects it (`is-image-selected`) and shows the tools bar.
+  - Handles show and react only on a frame with `is-resize-mode`, entered with `[크기 조절]` and left with `완료`, a tap elsewhere, or a tap outside the editor.
+  - `resizeHandleAtPoint` only hit-tests handles of frames in resize mode and skips zero-size rects. Before this, always-on handles with a large touch area resized images while scrolling.
+- **Saved size:** stored on the frame as `data-resized` / `data-height` plus `--inline-img-width` / `--inline-img-height`. `restoreInlineImageDisplaySize` re-applies it on load.
+- **2-column rows:**
+  - `.rich-inline-img-row` (grid, 2 columns, 3:4 cover crop). It is created when several images are inserted at once, or with `[2열로]` (`toggleImagePair`).
+  - `[2열로]` pairs an image with the next or previous image only if no text or media sits between them (`framesAreAdjacent`).
+  - Pairing or unpairing clears custom sizes (`clearInlineImageDisplaySize`).
+- **iPhone height cap:** at ≤820px, unresized single images in `.diaryPaperEditor` (diary and theme) are capped at `max-height: 45vh`, so about two images fit on one screen (rules at the end of `app/globals.css`).
+- **Save cleanup:** `readStackedHtml` (`lib/collectClassCell.ts`) runs `stripTransientImageUiHtml` before saving. The tools bar and the `is-image-selected` / `is-resize-mode` / `is-resizing` classes never reach the DB; `enhanceRichInlineImages` re-adds the controls on load.
+- **Commit after a change:** call `editor.dispatchEvent(new Event("input", { bubbles: true }))`. The React `onInput` handlers save the content.
+- **Testing on iPhone size:** use headless Chrome with `Emulation.setDeviceMetricsOverride` (390×844, mobile) and `Emulation.setTouchEmulationEnabled`, then send `Input.dispatchTouchEvent` taps and drags.
+  - To get a test theme without touching real notes, put it in localStorage `iphone-calendar-2026-themes-v1`.
+  - Editing it syncs to `theme_notes`, so delete the row afterwards.
+
 ### Images coming in
 - Browser uploads go through `lib/compressImageFile.ts`. `GENERAL_INFO_COMPRESS` (1920px, q0.82, skip under 600KB) is applied inside the general-info `uploadFileToSupabaseStorage`.
 - `/api/extract-url` copies the og:image (including Instagram, whose CDN URLs expire after a few days) into `info-photos` via `lib/mirrorImage.ts` (server-side `sharp`, SSRF-checked redirects).
