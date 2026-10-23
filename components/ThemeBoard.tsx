@@ -25,6 +25,7 @@ import {
   tryConsumeDateTimeTrigger,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles } from "../lib/compressImageFile";
+import { insertPositionForNewCell, moveWhiteCell, removeTargetCellId } from "../lib/whiteCellOps";
 import { PASTE_IMAGE_FAILED_MESSAGE, pasteClipboardImages, readPastedClipboard } from "../lib/richPaste";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import {
@@ -35,6 +36,25 @@ import {
   writeLocalThemes,
   type ThemeNote,
 } from "../lib/themeNotes";
+
+/** 목록 위에 바로 보이는 테마 칩 수(고정한 테마 + 최근 수정한 테마). 나머지는 [전체 보기]에서 고른다. */
+const VISIBLE_THEME_CHIPS = 6;
+const THEME_PINS_KEY = "iphone-calendar-2026-theme-pins";
+
+function readPinnedThemeIds(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(THEME_PINS_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatThemeDate(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime()) || d.getTime() === 0) return "";
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+}
 
 async function uploadThemeImages(files: File[], themeId: string) {
   const ready = filterUploadImageFiles(files).slice(0, 8);
@@ -94,6 +114,10 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
   const [themeLookupHits, setThemeLookupHits] = useState<LookupHit[]>([]);
   const [themeLookupStatus, setThemeLookupStatus] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState("");
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [showAllThemes, setShowAllThemes] = useState(false);
+  const [themeListQuery, setThemeListQuery] = useState("");
+  const [themeListSort, setThemeListSort] = useState<"recent" | "name">("recent");
   const [saveState, setSaveState] = useState<{ state: SaveBarState; at: string | null } | null>(null);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -237,6 +261,20 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
     setActiveId(note.id);
   }
 
+  useEffect(() => {
+    setPinnedIds(readPinnedThemeIds());
+  }, []);
+
+  function togglePin(id: string) {
+    const next = pinnedIds.includes(id) ? pinnedIds.filter((item) => item !== id) : [...pinnedIds, id];
+    setPinnedIds(next);
+    try {
+      localStorage.setItem(THEME_PINS_KEY, JSON.stringify(next));
+    } catch {
+      /* 저장 공간이 없으면 이번 화면에서만 적용 */
+    }
+  }
+
   function removeTheme(id: string) {
     if (pendingDeleteId !== id) return;
     const note = notesRef.current.find((item) => item.id === id);
@@ -326,28 +364,126 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
         status={themeLookupStatus}
         onOpen={switchTheme}
       />
-      <div className="themeChipRow" role="tablist" aria-label="테마 목록">
-        {notes.map((note) => {
-          const title = note.title || "새 테마";
-          const confirming = note.id === pendingDeleteId;
-          return (
-            <div key={note.id} className={`themeChip ${note.id === activeId ? "active" : ""} ${confirming ? "confirming" : ""}`}>
-              {confirming ? (
-                <>
-                  <span>{title} 삭제할까요?</span>
-                  <button type="button" className="themeChipConfirm" onClick={() => removeTheme(note.id)}>삭제</button>
-                  <button type="button" onClick={() => setPendingDeleteId("")}>취소</button>
-                </>
-              ) : (
-                <>
-                  <button type="button" onClick={() => { setPendingDeleteId(""); switchTheme(note.id); }}>{title}</button>
-                  <button type="button" aria-label={`${title} 삭제`} onClick={() => setPendingDeleteId(note.id)}>×</button>
-                </>
-              )}
+      {(() => {
+        const pinnedSet = new Set(pinnedIds);
+        const byRecent = [...notes].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+        const pinned = byRecent.filter((note) => pinnedSet.has(note.id));
+        const rest = byRecent.filter((note) => !pinnedSet.has(note.id));
+        const chipNotes = [...pinned, ...rest.slice(0, Math.max(0, VISIBLE_THEME_CHIPS - pinned.length))];
+        const activeNote = notes.find((note) => note.id === activeId);
+        if (activeNote && !chipNotes.some((note) => note.id === activeNote.id)) chipNotes.push(activeNote);
+        const renderDeleteConfirm = (note: ThemeNote) => (
+          <>
+            <span>{note.title || "새 테마"} 삭제할까요?</span>
+            <button type="button" className="themeChipConfirm" onClick={() => removeTheme(note.id)}>삭제</button>
+            <button type="button" onClick={() => setPendingDeleteId("")}>취소</button>
+          </>
+        );
+
+        const query = themeListQuery.trim().toLowerCase();
+        const listed = notes
+          .filter((note) => !query || (note.title || "새 테마").toLowerCase().includes(query))
+          .sort((a, b) => {
+            const pin = Number(pinnedSet.has(b.id)) - Number(pinnedSet.has(a.id));
+            if (pin) return pin;
+            return themeListSort === "name"
+              ? (a.title || "").localeCompare(b.title || "", "ko")
+              : String(b.updatedAt).localeCompare(String(a.updatedAt));
+          });
+
+        return (
+          <>
+            <div className="themeChipRow" role="tablist" aria-label="테마 목록">
+              {chipNotes.map((note) => {
+                const title = note.title || "새 테마";
+                const confirming = note.id === pendingDeleteId;
+                const isPinned = pinnedSet.has(note.id);
+                return (
+                  <div key={note.id} className={`themeChip ${note.id === activeId ? "active" : ""} ${confirming ? "confirming" : ""}`}>
+                    {confirming ? (
+                      renderDeleteConfirm(note)
+                    ) : (
+                      <>
+                        <button type="button" onClick={() => { setPendingDeleteId(""); switchTheme(note.id); }}>{title}</button>
+                        <button
+                          type="button"
+                          className={`themePinBtn ${isPinned ? "is-pinned" : ""}`}
+                          aria-label={isPinned ? `${title} 고정 해제` : `${title} 맨 앞에 고정`}
+                          title={isPinned ? "고정 해제" : "맨 앞에 고정"}
+                          onClick={() => togglePin(note.id)}
+                        >
+                          {isPinned ? "★" : "☆"}
+                        </button>
+                        <button type="button" aria-label={`${title} 삭제`} onClick={() => setPendingDeleteId(note.id)}>×</button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                className="themeShowAllBtn"
+                aria-expanded={showAllThemes}
+                onClick={() => setShowAllThemes((open) => !open)}
+              >
+                {showAllThemes ? "목록 접기 ▴" : `전체 ${notes.length}개 ▾`}
+              </button>
             </div>
-          );
-        })}
-      </div>
+            {showAllThemes && (
+              <div className="themeAllList">
+                <div className="themeAllListTools">
+                  <input
+                    value={themeListQuery}
+                    onChange={(event) => setThemeListQuery(event.target.value)}
+                    placeholder="테마 이름 찾기"
+                    aria-label="테마 이름 찾기"
+                  />
+                  <button type="button" className={themeListSort === "recent" ? "is-on" : ""} onClick={() => setThemeListSort("recent")}>최근순</button>
+                  <button type="button" className={themeListSort === "name" ? "is-on" : ""} onClick={() => setThemeListSort("name")}>이름순</button>
+                </div>
+                <div className="themeAllListRows">
+                  {listed.length === 0 ? <p className="themeAllListEmpty">맞는 테마가 없습니다.</p> : null}
+                  {listed.map((note) => {
+                    const title = note.title || "새 테마";
+                    const isPinned = pinnedSet.has(note.id);
+                    return (
+                      <div key={note.id} className={`themeAllRow ${note.id === activeId ? "active" : ""}`}>
+                        {note.id === pendingDeleteId ? (
+                          renderDeleteConfirm(note)
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className={`themePinBtn ${isPinned ? "is-pinned" : ""}`}
+                              aria-label={isPinned ? `${title} 고정 해제` : `${title} 맨 앞에 고정`}
+                              onClick={() => togglePin(note.id)}
+                            >
+                              {isPinned ? "★" : "☆"}
+                            </button>
+                            <button
+                              type="button"
+                              className="themeAllRowTitle"
+                              onClick={() => {
+                                setPendingDeleteId("");
+                                switchTheme(note.id);
+                                setShowAllThemes(false);
+                              }}
+                            >
+                              {title}
+                            </button>
+                            <span className="themeAllRowDate">{formatThemeDate(note.updatedAt)}</span>
+                            <button type="button" className="themeAllRowDel" aria-label={`${title} 삭제`} onClick={() => setPendingDeleteId(note.id)}>×</button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {active && (
         <div className="generalInfoTextBox generalInfoRichTextBox themeEditorBox">
@@ -430,7 +566,9 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
               onClick={() => {
                 const id = makeWhiteCellId();
                 whiteHtmlRef.current[id] = "";
-                setWhiteCellIds((prev) => [...prev, id]);
+                // 커서가 있는 칸 바로 아래에 끼워 넣습니다(커서 위치를 모르면 맨 아래).
+                const position = insertPositionForNewCell(whiteCellIds);
+                setWhiteCellIds((prev) => [...prev.slice(0, position), id, ...prev.slice(position)]);
                 window.setTimeout(() => commitActive(), 0);
               }}
             >
@@ -440,7 +578,7 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
-                const id = whiteCellIds[whiteCellIds.length - 1];
+                const id = removeTargetCellId(whiteCellIds);
                 if (!id) {
                   alert("삭제할 칸이 없습니다.");
                   return;
@@ -560,10 +698,17 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
               setImageSlotId(null);
             }}
           />
-          {whiteCellIds.map((id) => (
+          {whiteCellIds.map((id, cellIndex) => (
             <CollectWhiteCell
               key={id}
               cellId={id}
+              onMove={(direction) => {
+                const moved = moveWhiteCell(whiteCellIds, id, direction, editorRef.current);
+                if (!moved) return;
+                if ("ids" in moved) setWhiteCellIds(moved.ids);
+                window.setTimeout(() => commitActive(), 0);
+              }}
+              canMoveDown={cellIndex < whiteCellIds.length - 1}
               initialHtml={whiteHtmlRef.current[id] || ""}
               placeholder="이 테마의 기록을 남겨보세요...."
               imageDeleteOnly

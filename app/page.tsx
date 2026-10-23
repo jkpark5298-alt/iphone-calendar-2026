@@ -22,6 +22,7 @@ import {
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
+import { insertPositionForNewCell, moveWhiteCell, removeTargetCellId } from "../lib/whiteCellOps";
 import { PASTE_IMAGE_FAILED_MESSAGE, pasteClipboardImages, readPastedClipboard } from "../lib/richPaste";
 import { makeWhiteCellId, readStackedHtml, removeClassCellFromEvent, splitWhiteCells } from "../lib/collectClassCell";
 import { stepCollectFontSize } from "../lib/collectFormatPalette";
@@ -758,14 +759,25 @@ export default function HomePage() {
   function handleDiaryInsertClassCell() {
     const id = makeWhiteCellId();
     diaryWhiteHtmlRef.current[id] = "";
-    setDiaryWhiteCellIds((prev) => [...prev, id]);
+    // 커서가 있는 칸 바로 아래에 끼워 넣습니다(커서 위치를 모르면 맨 아래).
+    const position = insertPositionForNewCell(diaryWhiteCellIds);
+    setDiaryWhiteCellIds((prev) => [...prev.slice(0, position), id, ...prev.slice(position)]);
+    window.setTimeout(() => {
+      saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
+    }, 0);
+  }
+
+  function handleDiaryMoveWhiteCell(id: string, direction: -1 | 1) {
+    const moved = moveWhiteCell(diaryWhiteCellIds, id, direction, diaryRichTextRef.current);
+    if (!moved) return;
+    if ("ids" in moved) setDiaryWhiteCellIds(moved.ids);
     window.setTimeout(() => {
       saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
     }, 0);
   }
 
   function handleDiaryRemoveLastWhiteCell() {
-    const id = diaryWhiteCellIds[diaryWhiteCellIds.length - 1];
+    const id = removeTargetCellId(diaryWhiteCellIds);
     if (!id) {
       alert("삭제할 칸이 없습니다.");
       return;
@@ -4743,10 +4755,10 @@ export default function HomePage() {
             <span>분류를 고르면 이 칸 본문에 #태그가 붙습니다. 본문에 직접 입력할 수도 있습니다.</span>
           </div>
           <div className="collectFormatSlotRow">
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertClassCell} title="아래에 하얀 칸 추가">
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryInsertClassCell} title="커서가 있는 칸 아래에 하얀 칸 추가">
               ＋ 칸
             </button>
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryRemoveLastWhiteCell} title="마지막 칸 삭제">
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleDiaryRemoveLastWhiteCell} title="커서가 있는 칸 삭제(없으면 마지막 칸)">
               － 칸
             </button>
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleDiaryRichCommand("removeFormat")}>
@@ -4815,10 +4827,12 @@ export default function HomePage() {
               wordBreak: "break-word",
             }}
           />
-          {diaryWhiteCellIds.map((id) => (
+          {diaryWhiteCellIds.map((id, cellIndex) => (
             <CollectWhiteCell
               key={id}
               cellId={id}
+              onMove={(direction) => handleDiaryMoveWhiteCell(id, direction)}
+              canMoveDown={cellIndex < diaryWhiteCellIds.length - 1}
               initialHtml={diaryWhiteHtmlRef.current[id] || ""}
               placeholder="오늘의 기록을 남겨보세요...."
               imageDeleteOnly

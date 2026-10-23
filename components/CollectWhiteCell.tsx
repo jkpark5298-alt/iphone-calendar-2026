@@ -17,6 +17,8 @@ export function CollectWhiteCell({
   imageDeleteOnly = false,
   showClassTag = false,
   onUploadImages,
+  onMove,
+  canMoveDown = true,
 }: {
   cellId: string;
   initialHtml: string;
@@ -29,6 +31,9 @@ export function CollectWhiteCell({
   showClassTag?: boolean;
   /** S. 또는 s. 로 연 사진 칸에 넣을 주소. 없으면 data URL로 넣습니다. */
   onUploadImages?: (files: File[]) => Promise<string[]>;
+  /** 칸을 위(-1)나 아래(1)로 옮긴다. 없으면 이동 버튼을 숨긴다. */
+  onMove?: (direction: -1 | 1) => void;
+  canMoveDown?: boolean;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const wrapRef = React.useRef<HTMLDivElement>(null);
@@ -82,10 +87,15 @@ export function CollectWhiteCell({
     setImageSlotId(null);
   };
 
+  // 칸을 위아래로 옮길 때 효과가 다시 실행되어 입력한 내용이 지워지지 않도록, 처음 값이 바뀐 때만 채운다.
+  const appliedHtmlRef = React.useRef<string | null>(null);
   React.useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.innerHTML = initialHtml || "";
+    const html = initialHtml || "";
+    if (appliedHtmlRef.current === html) return;
+    appliedHtmlRef.current = html;
+    el.innerHTML = html;
     enhanceRichInlineImages(el);
   }, [initialHtml]);
 
@@ -159,6 +169,26 @@ export function CollectWhiteCell({
       >
         ×
       </button>
+      {onMove ? (
+        <div className="collect-white-cell-move">
+          {([-1, 1] as const).map((direction) => (
+            <button
+              key={direction}
+              type="button"
+              aria-label={direction === -1 ? "칸을 위로" : "칸을 아래로"}
+              title={direction === -1 ? "칸을 위로" : "칸을 아래로"}
+              disabled={direction === 1 && !canMoveDown}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={() => onMove(direction)}
+            >
+              {direction === -1 ? "↑" : "↓"}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div
         ref={ref}
         className="generalInfoRichTextEditor collectPaperEditor collect-white-cell"

@@ -13653,3 +13653,145 @@ body {
     object-fit: contain !important;
   }
 }
+
+/* 칸 이동 버튼 (↑ ↓) */
+.collect-white-cell-move {
+  position: absolute;
+  top: 42px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.collect-white-cell-move button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+.collect-white-cell-move button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.collect-white-cell-wrap:has(.classTagSelect) .collect-white-cell-move {
+  top: 80px;
+}
+
+/* 테마 목록: 고정·전체 보기 */
+.themeChip button.themePinBtn {
+  color: #a8a29e;
+  padding-left: 2px;
+  padding-right: 6px;
+}
+.themeChip button.themePinBtn.is-pinned,
+.themeAllRow button.themePinBtn.is-pinned {
+  color: #d99a00;
+}
+.themeShowAllBtn {
+  border: 1px dashed #9aa8a0;
+  border-radius: 999px;
+  background: transparent;
+  color: #3f554b;
+  font-weight: 800;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.themeAllList {
+  border: 1px solid #d9d4ca;
+  border-radius: 14px;
+  background: #fbfcfb;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+.themeAllListTools {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.themeAllListTools input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #d6d6d2;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 16px;
+}
+.themeAllListTools button {
+  border: 1px solid #d6d6d2;
+  border-radius: 10px;
+  background: #fff;
+  font-weight: 800;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.themeAllListTools button.is-on {
+  background: #e7f6ec;
+  border-color: #1f7a45;
+}
+.themeAllListRows {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.themeAllListEmpty {
+  margin: 8px 4px;
+  color: #6b7a72;
+}
+.themeAllRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 10px;
+  padding: 2px 4px;
+}
+.themeAllRow.active {
+  background: #e7f6ec;
+}
+.themeAllRow button {
+  border: 0;
+  background: transparent;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 8px 6px;
+}
+.themeAllRow button.themePinBtn {
+  color: #a8a29e;
+}
+.themeAllRowTitle {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.themeAllRowDate {
+  font-size: 12px;
+  color: #6b7a72;
+  white-space: nowrap;
+}
+.themeAllRow button.themeAllRowDel {
+  color: #9f3d3d;
+}
+@media (prefers-color-scheme: dark) {
+  .themeShowAllBtn { color: #cfe3d8; border-color: #5a6b62; }
+  .themeAllList { background: #1b201e; border-color: #3d4a44; }
+  .themeAllListTools input { background: #111; color: #eee; border-color: #555; }
+  .themeAllListTools button { background: #232826; color: #e6e8ea; border-color: #3d4a44; }
+  .themeAllListTools button.is-on { background: #1a3d2c; border-color: #3dbe78; }
+  .themeAllRow button, .themeAllRow span { color: #e6e8ea; }
+  .themeAllRow button.themePinBtn { color: #8d948f; }
+  .themeAllRow button.themePinBtn.is-pinned, .themeChip button.themePinBtn.is-pinned { color: #f2b928; }
+  .themeAllRow.active { background: #1a3d2c; }
+  .themeAllRowDate, .themeAllListEmpty { color: #9fb0a7; }
+  .themeAllRow button.themeAllRowDel { color: #ffb4b4; }
+}
