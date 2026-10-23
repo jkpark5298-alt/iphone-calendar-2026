@@ -202,6 +202,10 @@ export function useTravelDiaryGeneralInfoState({
     text: string;
   } | null>(null);
   const [generalInfoUrlNotice, setGeneralInfoUrlNotice] = useState("");
+  // 웹페이지(신문·블로그) 읽기 도구로 본문 가져오기
+  const [webReaderUrl, setWebReaderUrl] = useState("");
+  const [isReadingWebUrl, setIsReadingWebUrl] = useState(false);
+  const [webReaderNotice, setWebReaderNotice] = useState("");
 
   const syncGeneralInfoItemToSupabase = useCallback(async (
     item: GeneralInfoItem,
@@ -985,6 +989,88 @@ export function useTravelDiaryGeneralInfoState({
       return { ...prev, paragraphs, text, formattedTextHtml };
     });
   }, [getDraftParagraphs]);
+
+  /**
+   * 웹페이지 주소를 읽기 도구(Reader) 형식으로 가져와 본문 편집기 맨 아래에 이어 붙인다.
+   * 기존 내용은 지우지 않는다. Instagram URL 기능과는 별개로 동작한다.
+   */
+  const importWebPageIntoBody = useCallback(async (rawUrl?: string) => {
+    const target = String(rawUrl ?? webReaderUrl).trim();
+    if (!target) {
+      setWebReaderNotice("웹페이지 주소를 입력해 주세요.");
+      return;
+    }
+    const editor = generalInfoRichTextRef.current;
+    if (!editor) {
+      setWebReaderNotice("본문 편집기를 찾지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
+      return;
+    }
+    const escapeHtml = (value: string) =>
+      String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+    setIsReadingWebUrl(true);
+    setWebReaderNotice("읽기 모드로 가져오는 중… (사진이 많으면 몇 초 걸립니다)");
+    try {
+      const response = await fetch("/api/read-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: target }),
+        signal: AbortSignal.timeout(70_000),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "웹페이지를 가져오지 못했습니다.");
+      }
+      const result = data.result as {
+        url: string;
+        title: string;
+        siteName: string;
+        byline: string;
+        publishedTime: string;
+        html: string;
+        textLength: number;
+        imageCount: number;
+        mirroredCount: number;
+        truncated: boolean;
+      };
+      const published = result.publishedTime ? result.publishedTime.slice(0, 10) : "";
+      const meta = [result.siteName, result.byline, published].filter(Boolean).join(" · ");
+      const headerHtml =
+        (result.title ? `<h2>${escapeHtml(result.title)}</h2>` : "") +
+        `<p>${meta ? `${escapeHtml(meta)} · ` : ""}<a href="${escapeHtml(result.url)}">원문 보기</a></p>`;
+      const tailHtml = result.truncated ? "<p>(본문이 길어 앞부분만 가져왔습니다.)</p>" : "";
+      const html = sanitizeGeneralInfoHtml(`${headerHtml}${result.html}${tailHtml}<p><br></p>`);
+
+      // 맨 위 칸(현재 단락) 끝에 이어 붙인다.
+      editor.insertAdjacentHTML("beforeend", html);
+      enhanceRichInlineImages(editor);
+      syncGeneralInfoRichTextToDraft();
+      setGeneralInfoDraft((prev) => (prev.title.trim() ? prev : { ...prev, title: result.title.slice(0, 120) }));
+      persistGeneralInfoTempDraft(true);
+      setWebReaderUrl("");
+      setWebReaderNotice(
+        `✅ 본문 ${result.textLength.toLocaleString("ko-KR")}자, 사진 ${result.imageCount}장을 넣었습니다.` +
+          (result.truncated ? " (길어서 앞부분만)" : "") +
+          " 확인 후 저장하세요.",
+      );
+      showPasteHint("✅ 읽기 모드로 본문에 붙였습니다.");
+    } catch (error) {
+      console.error("travel-diary web reader failed", error);
+      const message =
+        error instanceof Error && error.name === "TimeoutError"
+          ? "시간이 너무 오래 걸려 중단했습니다. 잠시 뒤 다시 시도해 주세요."
+          : error instanceof Error
+            ? error.message
+            : "웹페이지를 가져오지 못했습니다.";
+      setWebReaderNotice(`⚠️ ${message}`);
+    } finally {
+      setIsReadingWebUrl(false);
+    }
+  }, [persistGeneralInfoTempDraft, syncGeneralInfoRichTextToDraft, showPasteHint, webReaderUrl]);
 
   const handleAddGeneralInfoParagraph = useCallback(() => {
     const liveHtml = sanitizeGeneralInfoHtml(
@@ -3291,6 +3377,11 @@ export function useTravelDiaryGeneralInfoState({
     isExtractingGeneralInfoUrl,
     generalInfoUrlMeta,
     generalInfoUrlNotice,
+    webReaderUrl,
+    setWebReaderUrl,
+    isReadingWebUrl,
+    webReaderNotice,
+    importWebPageIntoBody,
     handleGeneralInfoFileUpload,
     handleGeneralInfoIphonePasteZonePaste,
     handleClearGeneralInfoCoverImage,

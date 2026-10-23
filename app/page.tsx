@@ -6893,6 +6893,11 @@ ${photo.memoText}
               isExtractingGeneralInfoUrl={infoState.isExtractingGeneralInfoUrl}
               generalInfoUrlMeta={infoState.generalInfoUrlMeta}
               generalInfoUrlNotice={infoState.generalInfoUrlNotice}
+              webReaderUrl={infoState.webReaderUrl}
+              setWebReaderUrl={infoState.setWebReaderUrl}
+              isReadingWebUrl={infoState.isReadingWebUrl}
+              webReaderNotice={infoState.webReaderNotice}
+              importWebPageIntoBody={infoState.importWebPageIntoBody}
               handleCancelEditGeneralInfo={infoState.handleCancelEditGeneralInfo}
               handleStartNewGeneralInfo={infoState.handleStartNewGeneralInfo}
               confirmLeaveGeneralInfoCollect={infoState.confirmLeaveGeneralInfoCollect}

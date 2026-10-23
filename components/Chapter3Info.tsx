@@ -84,6 +84,11 @@ export interface Chapter3InfoProps {
     text: string;
   } | null;
   generalInfoUrlNotice: string;
+  webReaderUrl: string;
+  setWebReaderUrl: (value: string) => void;
+  isReadingWebUrl: boolean;
+  webReaderNotice: string;
+  importWebPageIntoBody: (rawUrl?: string) => void;
   handleSaveTemporaryGeneralInfoDraft: () => void;
   handleCancelEditGeneralInfo: () => void;
   handleStartNewGeneralInfo: () => void;
@@ -149,6 +154,11 @@ export function Chapter3Info({
   isExtractingGeneralInfoUrl,
   generalInfoUrlMeta,
   generalInfoUrlNotice,
+  webReaderUrl,
+  setWebReaderUrl,
+  isReadingWebUrl,
+  webReaderNotice,
+  importWebPageIntoBody,
   handleSaveTemporaryGeneralInfoDraft,
   handleCancelEditGeneralInfo,
   handleStartNewGeneralInfo,
@@ -649,6 +659,42 @@ export function Chapter3Info({
                       {generalInfoUrlMeta.description || generalInfoUrlMeta.text || "설명 없음"}
                     </p>
                   </div>
+                )}
+              </div>
+
+              <div className="webReaderBox" style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", marginBottom: 6 }}>
+                  웹페이지 URL (신문·블로그 등) → 읽기 모드로 본문에 넣기
+                  <input
+                    value={webReaderUrl}
+                    onChange={(e) => setWebReaderUrl(e.target.value)}
+                    placeholder="https://… 기사나 글 주소"
+                    inputMode="url"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    disabled={isReadingWebUrl}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        importWebPageIntoBody(webReaderUrl);
+                      }
+                    }}
+                  />
+                </label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="primaryButton"
+                    disabled={isReadingWebUrl || !webReaderUrl.trim()}
+                    onClick={() => importWebPageIntoBody(webReaderUrl)}
+                  >
+                    {isReadingWebUrl ? "가져오는 중..." : "본문으로 가져오기"}
+                  </button>
+                </div>
+                {webReaderNotice && (
+                  <p className="mutedText" role="status" style={{ margin: "8px 0 0", whiteSpace: "pre-wrap" }}>
+                    {webReaderNotice}
+                  </p>
                 )}
               </div>
 
