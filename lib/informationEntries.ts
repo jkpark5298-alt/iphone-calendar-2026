@@ -84,7 +84,28 @@ function normalizeRow(row: Record<string, unknown>): InformationCalendarItem | n
   };
 }
 
-/** 해당 월에 걸리는 정보함 항목 로드 (primary_date 또는 event_dates) */
+/**
+ * event_dates 열 형식: 예전 DB는 날짜 배열(date[]), DB를 옮긴 뒤에는 jsonb 입니다.
+ * 형식마다 "이 날짜들 중 하나라도 포함" 조건 문법이 달라서, 먼저 배열 방식으로 물어보고
+ * 형식 오류(42883 등)가 나면 jsonb 방식으로 바꿔 기억해 둡니다.
+ */
+type EventDatesColumnKind = "array" | "jsonb";
+let eventDatesKind: EventDatesColumnKind | null = null;
+
+function monthFilter(kind: EventDatesColumnKind, monthDates: string[]) {
+  const start = monthDates[0];
+  const end = monthDates[monthDates.length - 1];
+  const primary = `and(primary_date.gte.${start},primary_date.lte.${end})`;
+  const events =
+    kind === "array"
+      ? `event_dates.ov.{${monthDates.join(",")}}`
+      : monthDates.map((d) => `event_dates.cs.["${d}"]`).join(",");
+  return `${primary},${events}`;
+}
+
+const INFORMATION_SELECT = "id, title, category, primary_date, event_dates, checked, important, summary";
+
+/** 해당 월에 걸리는 정보함 항목 로드 (primary_date 또는 event_dates). 실패하면 예외를 던진다. */
 export async function loadInformationEntriesForMonth(
   year: number,
   month: number,
@@ -92,19 +113,30 @@ export async function loadInformationEntriesForMonth(
   if (!isSupabaseConfigured || !supabase) return [];
 
   const monthDates = datesInMonth(year, month);
-  const start = monthDates[0];
-  const end = monthDates[monthDates.length - 1];
+  const order: EventDatesColumnKind[] = eventDatesKind
+    ? [eventDatesKind]
+    : ["array", "jsonb"];
 
-  const { data, error } = await supabase
-    .from("information_entries")
-    .select("id, title, category, primary_date, event_dates, checked, important, summary")
-    .or(
-      `and(primary_date.gte.${start},primary_date.lte.${end}),event_dates.ov.{${monthDates.join(",")}}`,
-    );
-
-  if (error) {
-    console.warn("information_entries load error:", error.message);
-    return [];
+  let data: unknown[] | null = null;
+  let lastError: { message: string } | null = null;
+  for (const kind of order) {
+    const result = await supabase
+      .from("information_entries")
+      .select(INFORMATION_SELECT)
+      .or(monthFilter(kind, monthDates));
+    if (!result.error) {
+      data = result.data || [];
+      eventDatesKind = kind;
+      lastError = null;
+      break;
+    }
+    lastError = result.error;
+  }
+  // 기억해 둔 형식으로 물었는데 실패했다면(열 형식이 다시 바뀐 경우) 다음 번에 다시 알아본다.
+  if (lastError) {
+    eventDatesKind = null;
+    console.warn("information_entries load error:", lastError.message);
+    throw new Error(lastError.message);
   }
 
   const monthSet = new Set(monthDates);

@@ -148,6 +148,11 @@ Under the Instagram URL box there is a second input, `웹페이지 URL (신문·
 - Client: `importWebPageIntoBody` in the hook appends `<h2>title</h2>`, a source line with a link, and the body to the end of the main editor, fills an empty title, and writes the temp draft. Instagram URLs are rejected here with a hint to use the Instagram box.
 - Not verified on real Naver news/blog, Daum or Tistory pages. Login/paywalled or JS-only pages return a "본문을 찾지 못했습니다" message.
 
+### 정보함 app link (information_entries)
+The calendar shows items from the separate 정보함 app (`iphone-information`, deployed at `iphone-information.vercel.app`, local folder next to this repo) through the shared table `information_entries` (`lib/informationEntries.ts`). The calendar reads it for the month in view and shows chips on the day cells; the info app writes it (upsert by `id`, `event_dates` as a plain array).
+- **Both apps must use the same Supabase project.** After the 2026-10 migration the info app still pointed at the old project (`ykumumrvcapnehafexdl`, which no longer resolves), so nothing it sent reached the calendar. Its `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (`.env.local` and Vercel env vars, then Redeploy because they are baked in at build time) must match this repo's. Quick check: the newest `information_entries.updated_at` should keep moving.
+- `event_dates` is `jsonb` in the new project (it was `date[]`). `loadInformationEntriesForMonth` tries the array filter (`event_dates.ov.{…}`), falls back to the jsonb filter (`event_dates.cs.["date"]` OR-ed per day) and remembers which one worked. It throws on failure and the page shows `⚠️ 정보함 항목을 불러오지 못했습니다.` instead of an empty month.
+
 ### Images coming in
 - Browser uploads go through `lib/compressImageFile.ts`. `GENERAL_INFO_COMPRESS` (1920px, q0.82, skip under 600KB) is applied inside the general-info `uploadFileToSupabaseStorage`.
 - `/api/read-url` (web page reader, see above) copies the first article images the same way.

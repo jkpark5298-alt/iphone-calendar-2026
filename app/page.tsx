@@ -2325,7 +2325,7 @@ export default function HomePage() {
       .catch(() => {
         if (!isActive) return;
         setInformationItems([]);
-        setInformationItemsStatus("");
+        setInformationItemsStatus("⚠️ 정보함 항목을 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.");
       });
     return () => {
       isActive = false;
