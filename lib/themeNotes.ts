@@ -39,8 +39,13 @@ export function readLocalThemes(): ThemeNote[] {
   }
 }
 
+/** 기기 저장소가 가득 차거나 막혀 있어도 오류로 멈추지 않는다(서버 저장은 계속 진행). */
 export function writeLocalThemes(notes: ThemeNote[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+  } catch (error) {
+    console.warn("테마를 기기에 저장하지 못했습니다:", error);
+  }
 }
 
 function mergeThemes(base: ThemeNote[], incoming: ThemeNote[]) {
@@ -58,15 +63,39 @@ function mergeThemes(base: ThemeNote[], incoming: ThemeNote[]) {
   return order;
 }
 
-export async function loadThemeNotes(): Promise<ThemeNote[]> {
-  const local = readLocalThemes();
-  if (!isSupabaseConfigured || !supabase) return local;
+const REMOTE_LOAD_TIMEOUT_MS = 12000;
 
+/**
+ * 테마를 불러온다. 서버에서 못 받아오면(오류·시간 초과) 기기에 있는 것만 돌려주고 remoteOk=false로 알린다.
+ * 절대 예외를 던지지 않는다.
+ */
+export async function loadThemeNotesWithStatus(): Promise<{ notes: ThemeNote[]; remoteOk: boolean }> {
+  const local = readLocalThemes();
+  if (!isSupabaseConfigured || !supabase) return { notes: local, remoteOk: true };
+  try {
+    const notes = await Promise.race([
+      loadThemeNotesFromServer(local),
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), REMOTE_LOAD_TIMEOUT_MS)),
+    ]);
+    return notes ? { notes, remoteOk: true } : { notes: local, remoteOk: false };
+  } catch (error) {
+    console.warn("테마 불러오기 실패:", error);
+    return { notes: local, remoteOk: false };
+  }
+}
+
+export async function loadThemeNotes(): Promise<ThemeNote[]> {
+  return (await loadThemeNotesWithStatus()).notes;
+}
+
+/** 서버에서 받아 기기 것과 합친다. 서버 오류면 null. */
+async function loadThemeNotesFromServer(local: ThemeNote[]): Promise<ThemeNote[] | null> {
+  if (!supabase) return local;
   const { data, error } = await supabase
     .from("theme_notes")
     .select("id,title,body_html,updated_at");
 
-  if (error || !data) return local;
+  if (error || !data) return null;
 
   const remote: ThemeNote[] = data.map((row) => ({
     id: String(row.id),
@@ -84,15 +113,21 @@ export async function loadThemeNotes(): Promise<ThemeNote[]> {
     return !remoteIds.has(note.id) || (match && match.updatedAt < note.updatedAt);
   });
   if (pending.length) {
-    await supabase.from("theme_notes").upsert(
-      pending.map((note) => ({
-        id: note.id,
-        title: note.title,
-        body_html: note.html,
-        updated_at: note.updatedAt,
-      })),
-      { onConflict: "id" },
-    );
+    // 화면을 막지 않도록 기다리지 않고 올린다(실패해도 기기에 남아 다음에 다시 시도).
+    void supabase
+      .from("theme_notes")
+      .upsert(
+        pending.map((note) => ({
+          id: note.id,
+          title: note.title,
+          body_html: note.html,
+          updated_at: note.updatedAt,
+        })),
+        { onConflict: "id" },
+      )
+      .then(({ error: uploadError }) => {
+        if (uploadError) console.warn("기기에만 있던 테마 올리기 실패:", uploadError.message);
+      });
   }
 
   return merged;

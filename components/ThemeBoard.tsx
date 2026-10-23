@@ -31,7 +31,7 @@ import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import {
   createThemeNote,
   deleteThemeNote,
-  loadThemeNotes,
+  loadThemeNotesWithStatus,
   persistThemes,
   writeLocalThemes,
   type ThemeNote,
@@ -110,6 +110,8 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
   const [imageSlotId, setImageSlotId] = useState<string | null>(null);
   const [showTextImage, setShowTextImage] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [remoteFailed, setRemoteFailed] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
   const [themeLookup, setThemeLookup] = useState("");
   const [themeLookupHits, setThemeLookupHits] = useState<LookupHit[]>([]);
   const [themeLookupStatus, setThemeLookupStatus] = useState("");
@@ -144,11 +146,22 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
 
   useEffect(() => {
     let alive = true;
-    void loadThemeNotes().then((items) => {
+    setRemoteFailed(false);
+    void loadThemeNotesWithStatus().then(({ notes: items, remoteOk }) => {
       if (!alive) return;
+      setRemoteFailed(!remoteOk);
+      // 서버를 못 읽었는데 기기에도 없으면 빈 테마를 만들어 서버에 올리지 않고 안내만 보여 준다.
+      if (!items.length && !remoteOk) {
+        setNotes([]);
+        setLoaded(true);
+        return;
+      }
       const next = items.length ? items : [createThemeNote("새 테마")];
       if (!items.length) void persistThemes(next, next[0].id);
       const focus = next.find((note) => note.id === initialThemeId) || next[0];
+      // 다시 시도로 목록이 바뀌어도 편집창이 새로 채워지도록 한다.
+      appliedIdRef.current = "";
+      readyRef.current = false;
       setNotes(next);
       setActiveId(focus.id);
       setDraftTitle(focus.title);
@@ -157,7 +170,7 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
     return () => {
       alive = false;
     };
-  }, [initialThemeId]);
+  }, [initialThemeId, reloadTick]);
 
   /** 서버 저장을 순서대로 보냅니다(늦게 끝난 옛 저장이 새 내용을 덮어쓰지 않도록 항상 최신 내용을 보냄). */
   function saveToServer(id: string): Promise<boolean> {
@@ -364,6 +377,15 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
         status={themeLookupStatus}
         onOpen={switchTheme}
       />
+      {!loaded ? <p className="themeBoardHint">테마를 불러오는 중…</p> : null}
+      {remoteFailed ? (
+        <p className="themeBoardHint" role="alert" style={{ color: "#c0392b" }}>
+          서버에서 테마를 불러오지 못했습니다{notes.length ? " (이 기기에 있는 것만 표시 중)" : ""}.{" "}
+          <button type="button" className="pill-btn compact-pill" onClick={() => { setLoaded(false); setReloadTick((tick) => tick + 1); }}>
+            다시 시도
+          </button>
+        </p>
+      ) : null}
       {(() => {
         const pinnedSet = new Set(pinnedIds);
         const byRecent = [...notes].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
