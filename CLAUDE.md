@@ -34,7 +34,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Larger features are split out:
   - `hooks/useTravelDiaryGeneralInfoState.ts`: 일반정보수집 (collected web/Instagram info, rich-text paragraphs).
   - `components/InfoIndexPanel.tsx`: 정보 인덱스 list.
-  - `components/ThemeBoard.tsx`: theme notes.
+  - `components/ThemeBoard.tsx`: theme notes (chip list with pins, full list, save status).
   - `features/personal-album/`: 개인앨범, ported from a separate travel-diary app. It is dynamically imported inside the `info` view and opened with `?personalAlbum=1`.
 
 ### Data: Supabase is the source of truth, localStorage is a cache
@@ -77,6 +77,13 @@ Note: `lib/generalInfoHelpers.ts` has its own local `TRAVEL_DIARY_BUCKET = "info
 - **Album polling:** checks only `travel_albums_state.updated_at_kst` (`probeTravelAlbumsUpdatedAt`).
   - `loadTravelAlbumsFromSupabase` dedupes concurrent loads and reuses results for 3s.
   - Saves call `forgetRecentTravelAlbumsLoad()` so the pre-save merge always reads fresh data.
+
+### Save UX: nothing may fail silently
+Rule: the screen says "저장됨" only after the server answered OK, and a failed save must keep the user's text.
+- **Diary:** status line `수정됨 · 아직 저장 전` → `저장 중…` → `✓ 저장됨 · 시각` / `⚠ 실패, 자동 재시도`, plus a `[저장]` button. Text typed while the day is still loading (`diaryContentReadyRef` false) is merged after the server text instead of being dropped.
+- **Theme:** `ThemeBoard.saveToServer` chains saves (always sends the latest `notesRef`, so a slow old save cannot overwrite newer text), retries after 5s, and flushes on `pagehide` and when going back to the calendar. `persistThemes` returns `true` only when the server accepted it. Shared status UI: `components/SaveStatusBar.tsx`.
+- **일반정보수집:** `handleConfirmGeneralInfo` awaits `syncGeneralInfoItemToSupabase`. On failure it keeps the draft, writes the temp draft and shows a warning (before, it cleared the editor and said "저장 완료" even when the server failed). It also refuses to save while inline `data:` images are still un-uploaded. `POST/PUT /api/general-info` return 413 when `formattedTextHtml` is over 200,000 chars (it used to cut the text silently). The temp draft is also written on `pagehide`/`visibilitychange`.
+- **localStorage writes must never throw.** iPhone storage can be full, and an uncaught `QuotaExceededError` in `writeLocalThemes` once left the theme screen empty ("전체 0개"). Wrap every write (`try/catch`). `loadThemeNotesWithStatus` never throws, times out after 12s, and the UI shows `다시 시도`; it does not create/upload an empty "새 테마" when the server could not be read.
 
 ### Storage pressure → Google Drive
 - `lib/storageUsage.ts` measures **all buckets**; `GET /api/storage-usage?summary=1` exposes it. The quota is `NEXT_PUBLIC_SUPABASE_STORAGE_QUOTA_BYTES` (1e9). Both the UI and the archive logic must use this number.
@@ -122,10 +129,36 @@ All three editors are `contentEditable` divs. They share `lib/richImageSlots.ts`
   - To get a test theme without touching real notes, put it in localStorage `iphone-calendar-2026-themes-v1`.
   - Editing it syncs to `theme_notes`, so delete the row afterwards.
 
+### Cells (＋ 칸), paste, and view mode in the editors
+- **Cells:** the main editor plus `CollectWhiteCell`s below it. `lib/whiteCellOps.ts` finds the cursor's cell (`activeCellIndex`, with a `focusin` fallback for iPhone toolbar taps).
+  - `＋ 칸` inserts below the cursor's cell (end if unknown). `－ 칸` removes the cursor's cell (last cell if unknown).
+  - Each cell has ↑ ↓ (`onMove`). ↑ on the first cell swaps its content with the main editor (`moveWhiteCell`).
+  - `CollectWhiteCell` fills `innerHTML` only when `initialHtml` actually changed (`appliedHtmlRef`). Without this guard React re-ran the effect when a cell was moved and wiped what the user had typed.
+  - Diary and theme use it; 일반정보수집 has its own copy of the add/remove buttons in `Chapter3Info.tsx` (append only, no move).
+- **Paste:** `lib/richPaste.ts` (`readPastedClipboard`, `pasteClipboardImages`) is used by diary, theme, 일반정보수집 and `CollectWhiteCell`.
+  - Text is always inserted as `text/plain`. Never let the browser paste rich HTML: on iPhone, HTML copied from AI apps came out as mojibake (UTF-8 read as CP949).
+  - Images (clipboard files, or `<img>` in the copied HTML) go into a slot created at the cursor (`ensureImageSlot`). `data:` and fetchable URLs become uploaded files; unfetchable remote URLs are inserted as-is. If nothing can be fetched the slot is removed and an alert says so.
+- **일반정보수집 view mode:** `✏️ 수정 모드` (white background, black text) / `📖 읽기 모드` (sepia `#f4ecd8`, brown text) switch above the body. It is stored in localStorage `general-info-body-view-mode` and applies to the main editor and its cells (`giEditMode`/`giReadMode`, `CollectWhiteCell viewMode`). Diary and theme are unchanged.
+- **Theme list:** chips show pinned themes plus the most recently edited ones (6 total, and the open theme). `전체 N개 ▾` opens a searchable list (recent/name sort, pin, delete). Pins are per device, in localStorage `iphone-calendar-2026-theme-pins` (no DB column).
+
+### Web page reader (일반정보수집)
+Under the Instagram URL box there is a second input, `웹페이지 URL (신문·블로그 등)`. The Instagram flow (`/api/extract-url`, 메타 보기, paste handling) is unchanged and must stay so.
+- `POST /api/read-url` → `lib/readUrl.ts`: SSRF-checked fetch (manual redirects, 3MB cap, EUC-KR aware), Naver blog URL rewrite, `@mozilla/readability` + `linkedom`, then a tag/attribute whitelist (figure/figcaption flattened, consecutive `<br>` collapsed).
+- Images: logo/profile/tiny ones are dropped; the first 5 are copied to `info-photos` with `mirrorRemoteImage` (the rest keep their original URL). Body HTML is capped at 120,000 chars (`truncated` is reported).
+- Client: `importWebPageIntoBody` in the hook appends `<h2>title</h2>`, a source line with a link, and the body to the end of the main editor, fills an empty title, and writes the temp draft. Instagram URLs are rejected here with a hint to use the Instagram box.
+- Not verified on real Naver news/blog, Daum or Tistory pages. Login/paywalled or JS-only pages return a "본문을 찾지 못했습니다" message.
+
 ### Images coming in
 - Browser uploads go through `lib/compressImageFile.ts`. `GENERAL_INFO_COMPRESS` (1920px, q0.82, skip under 600KB) is applied inside the general-info `uploadFileToSupabaseStorage`.
+- `/api/read-url` (web page reader, see above) copies the first article images the same way.
 - `/api/extract-url` copies the og:image (including Instagram, whose CDN URLs expire after a few days) into `info-photos` via `lib/mirrorImage.ts` (server-side `sharp`, SSRF-checked redirects).
 - `components/LegacyMediaUrlFix.tsx` rewrites URLs that still point at the old Supabase project (`ykumumrvcapnehafexdl`) to the current one, both in the DOM and in localStorage.
+
+### Testing notes for this repo
+- Headless Chrome (CDP) works without extra packages: Node 24 has a global `WebSocket`, so a small script can drive `chrome.exe --headless=new --remote-debugging-port=…`. Use a fresh `--user-data-dir` per run (empty localStorage = "new device"). To simulate a full iPhone storage, patch `Storage.prototype.setItem` with `Page.addScriptToEvaluateOnNewDocument`.
+- After editing files the dev server recompiles slowly on the first request (20s+). Warm it with `curl` before driving the page.
+- Test data goes into the production Supabase. Use ids like `zz-*` (theme_notes) and a far date for diary rows, then delete the rows and any uploaded files (`diary-photos/themes/<id>/…`, `diary-photos/<date>/…`, `info-photos/general-info/mirror-*`). Before deleting mirror files check they are not referenced in `general_info_items`.
+- Do not `taskkill /IM chrome.exe`; it closes the user's own Chrome. Stop the dev server by its port (3000) only.
 
 ### API route security
 - Routes use `lib/apiSecurity.ts`: `assertAppApiAccess` (same-origin or `Bearer APP_API_TOKEN`), `isSameOriginRequest`, `assertRateLimit`, and `assertSafePublicHttpUrl` (SSRF guard).

@@ -187,6 +187,22 @@ export function Chapter3Info({
 }: Chapter3InfoProps) {
   const activeTab = generalInfoActiveTab;
   const setActiveTab = setGeneralInfoActiveTab;
+  const [bodyViewMode, setBodyViewMode] = React.useState<"edit" | "read">("edit");
+  React.useEffect(() => {
+    try {
+      if (localStorage.getItem("general-info-body-view-mode") === "read") setBodyViewMode("read");
+    } catch {
+      /* 저장 공간을 못 읽으면 수정 모드로 시작 */
+    }
+  }, []);
+  const changeBodyViewMode = (mode: "edit" | "read") => {
+    setBodyViewMode(mode);
+    try {
+      localStorage.setItem("general-info-body-view-mode", mode);
+    } catch {
+      /* 이번 화면에서만 적용 */
+    }
+  };
   const [infoLookupDraft, setInfoLookupDraft] = React.useState("");
   const [infoLookupNote, setInfoLookupNote] = React.useState("");
   const infoLookupHits = generalInfoSearchTerm.trim()
@@ -552,6 +568,24 @@ export function Chapter3Info({
                 <strong>본문 단락</strong>
                 <span>새 단락은 위에 작성 · 이전 단락은 아래로 이동 · 사진은 본문에 붙여넣거나 이미지 버튼으로 넣기</span>
               </div>
+              <div className="giViewModeSwitch" role="group" aria-label="본문 보기 방식">
+                <button
+                  type="button"
+                  className={bodyViewMode === "edit" ? "is-on" : ""}
+                  aria-pressed={bodyViewMode === "edit"}
+                  onClick={() => changeBodyViewMode("edit")}
+                >
+                  ✏️ 수정 모드
+                </button>
+                <button
+                  type="button"
+                  className={bodyViewMode === "read" ? "is-on" : ""}
+                  aria-pressed={bodyViewMode === "read"}
+                  onClick={() => changeBodyViewMode("read")}
+                >
+                  📖 읽기 모드
+                </button>
+              </div>
 
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: "block", marginBottom: 6 }}>
@@ -874,7 +908,7 @@ export function Chapter3Info({
               <div
                 key={generalInfoRichTextEditorKey}
                 ref={generalInfoRichTextRef}
-                className="generalInfoRichTextEditor collectPaperEditor"
+                className={`generalInfoRichTextEditor collectPaperEditor ${bodyViewMode === "read" ? "giReadMode" : "giEditMode"}`}
                 contentEditable
                 suppressContentEditableWarning
                 spellCheck={false}
@@ -922,6 +956,7 @@ export function Chapter3Info({
                 <CollectWhiteCell
                   key={id}
                   cellId={id}
+                  viewMode={bodyViewMode}
                   initialHtml={whiteCellHtmlRef.current[id] || ""}
                   placeholder="새 항목을 입력하거나 붙여넣으세요."
                   onUploadImages={uploadRichImages}

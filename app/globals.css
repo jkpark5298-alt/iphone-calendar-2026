@@ -13795,3 +13795,44 @@ body {
   .themeAllRowDate, .themeAllListEmpty { color: #9fb0a7; }
   .themeAllRow button.themeAllRowDel { color: #ffb4b4; }
 }
+
+/* 일반정보수집 본문: 수정 모드(흰 바탕·회색 글자) / 읽기 모드(세피아 바탕) */
+.giViewModeSwitch {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 10px;
+}
+.giViewModeSwitch button {
+  flex: 1;
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #475569;
+  font-weight: 800;
+  cursor: pointer;
+}
+.giViewModeSwitch button.is-on {
+  border-color: #b9975b;
+  background: #f4ecd8;
+  color: #5b4636;
+}
+.generalInfoRichTextEditor.collectPaperEditor.giEditMode,
+.collect-white-cell-wrap.is-view-edit .collect-white-cell {
+  background: #ffffff !important;
+  color: #111111 !important;
+}
+.generalInfoRichTextEditor.collectPaperEditor.giReadMode,
+.collect-white-cell-wrap.is-view-read .collect-white-cell {
+  background: #f4ecd8 !important;
+  color: #433422 !important;
+  border-color: #d9c8a0 !important;
+}
+.generalInfoRichTextEditor.giReadMode a,
+.collect-white-cell-wrap.is-view-read .collect-white-cell a {
+  color: #8a4b12;
+}
+.generalInfoRichTextEditor.giReadMode:empty::before,
+.collect-white-cell-wrap.is-view-read .collect-white-cell:empty::before {
+  color: #9a8765;
+}

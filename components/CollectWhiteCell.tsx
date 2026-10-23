@@ -19,6 +19,7 @@ export function CollectWhiteCell({
   onUploadImages,
   onMove,
   canMoveDown = true,
+  viewMode,
 }: {
   cellId: string;
   initialHtml: string;
@@ -34,6 +35,8 @@ export function CollectWhiteCell({
   /** 칸을 위(-1)나 아래(1)로 옮긴다. 없으면 이동 버튼을 숨긴다. */
   onMove?: (direction: -1 | 1) => void;
   canMoveDown?: boolean;
+  /** 일반정보수집: 수정 모드(흰 바탕·회색 글자) / 읽기 모드(세피아 바탕). 없으면 기본 모양. */
+  viewMode?: "edit" | "read";
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const wrapRef = React.useRef<HTMLDivElement>(null);
@@ -142,7 +145,7 @@ export function CollectWhiteCell({
   return (
     <div
       ref={wrapRef}
-      className={`collect-white-cell-wrap${photoSelected ? " is-photo-selected" : ""}${imageDeleteOnly ? " is-image-delete" : ""}`}
+      className={`collect-white-cell-wrap${photoSelected ? " is-photo-selected" : ""}${imageDeleteOnly ? " is-image-delete" : ""}${viewMode ? ` is-view-${viewMode}` : ""}`}
       data-white-id={cellId}
       onClick={selectPhoto}
     >
