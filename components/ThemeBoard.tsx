@@ -7,6 +7,7 @@ import { SlotImagePanel } from "./SlotImagePanel";
 import { ClassTagSelect } from "./ClassTagSelect";
 import { EntryLookup, plainSnippet, type LookupHit } from "./EntryLookup";
 import { HandwritingModal } from "./HandwritingModal";
+import { SaveStatusBar, type SaveBarState } from "./SaveStatusBar";
 import { TextToImageModal } from "./TextToImageModal";
 import { appendHashtagToEditor } from "../lib/contentClass";
 import { stepCollectFontSize } from "../lib/collectFormatPalette";
@@ -23,13 +24,15 @@ import {
   tryConsumeImageTriggerToSlot,
   tryConsumeDateTimeTrigger,
 } from "../lib/richImageSlots";
-import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
+import { compressImageFile, filterUploadImageFiles } from "../lib/compressImageFile";
+import { PASTE_IMAGE_FAILED_MESSAGE, pasteClipboardImages, readPastedClipboard } from "../lib/richPaste";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import {
   createThemeNote,
   deleteThemeNote,
   loadThemeNotes,
   persistThemes,
+  writeLocalThemes,
   type ThemeNote,
 } from "../lib/themeNotes";
 
@@ -91,6 +94,7 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
   const [themeLookupHits, setThemeLookupHits] = useState<LookupHit[]>([]);
   const [themeLookupStatus, setThemeLookupStatus] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState("");
+  const [saveState, setSaveState] = useState<{ state: SaveBarState; at: string | null } | null>(null);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const imageFileRef = useRef<HTMLInputElement | null>(null);
@@ -100,6 +104,11 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
   const activeIdRef = useRef("");
   const readyRef = useRef(false);
   const appliedIdRef = useRef("");
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const saveRetryRef = useRef<number | null>(null);
+  const pendingSavesRef = useRef(0);
+  const draftTitleRef = useRef("");
+  draftTitleRef.current = draftTitle;
 
   useEffect(() => {
     notesRef.current = notes;
@@ -126,21 +135,61 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
     };
   }, [initialThemeId]);
 
-  function commitActive(nextTitle?: string) {
-    if (!readyRef.current) return;
+  /** 서버 저장을 순서대로 보냅니다(늦게 끝난 옛 저장이 새 내용을 덮어쓰지 않도록 항상 최신 내용을 보냄). */
+  function saveToServer(id: string): Promise<boolean> {
+    if (saveRetryRef.current) {
+      window.clearTimeout(saveRetryRef.current);
+      saveRetryRef.current = null;
+    }
+    pendingSavesRef.current += 1;
+    setSaveState((prev) => ({ state: "saving", at: prev?.at ?? null }));
+    const job = saveChainRef.current.then(async () => {
+      const ok = await persistThemes(notesRef.current, id);
+      pendingSavesRef.current -= 1;
+      if (pendingSavesRef.current > 0) return ok; // 뒤에 저장이 더 남아 있으면 마지막 결과만 표시
+      setSaveState({ state: ok ? "saved" : "error", at: new Date().toISOString() });
+      if (!ok) {
+        saveRetryRef.current = window.setTimeout(() => {
+          saveRetryRef.current = null;
+          void saveToServer(id);
+        }, 5000);
+      }
+      return ok;
+    });
+    saveChainRef.current = job.catch(() => false);
+    return job;
+  }
+
+  function commitActive(nextTitle?: string): Promise<boolean> | undefined {
+    if (!readyRef.current) return undefined;
     const id = activeIdRef.current;
     const editor = editorRef.current;
-    if (!id || !editor) return;
+    if (!id || !editor) return undefined;
     const html = readStackedHtml(editor);
-    const title = (nextTitle ?? draftTitle).trim() || "새 테마";
+    const title = (nextTitle ?? draftTitleRef.current).trim() || "새 테마";
     const updatedAt = new Date().toISOString();
     const next = notesRef.current.map((note) =>
       note.id === id ? { ...note, title, html, updatedAt } : note,
     );
     notesRef.current = next;
     setNotes(next);
-    void persistThemes(next, id);
+    writeLocalThemes(next);
+    return saveToServer(id);
   }
+
+  // 앱을 닫거나 다른 앱으로 넘어갈 때 마지막 내용을 바로 보냅니다.
+  useEffect(() => {
+    const flush = () => void commitActive();
+    const onHide = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  }, []);
 
   useLayoutEffect(() => {
     if (!loaded) return;
@@ -180,7 +229,8 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
     const next = [...notesRef.current, note];
     notesRef.current = next;
     setNotes(next);
-    void persistThemes(next, note.id);
+    writeLocalThemes(next);
+    void saveToServer(note.id);
     readyRef.current = false;
     appliedIdRef.current = "";
     setDraftTitle(note.title);
@@ -206,11 +256,12 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
     }
   }
 
-  async function insertImages(files: File[], slotId?: string | null) {
+  async function insertImages(files: File[], slotId?: string | null, extraUrls: string[] = []) {
     const editor = editorRef.current;
     const ready = filterUploadImageFiles(files);
-    if (!editor || !ready.length || !activeIdRef.current) return;
-    const urls = await uploadThemeImages(ready, activeIdRef.current);
+    if (!editor || (!ready.length && !extraUrls.length) || !activeIdRef.current) return;
+    const uploaded = ready.length ? await uploadThemeImages(ready, activeIdRef.current) : [];
+    const urls = [...uploaded, ...extraUrls];
     if (!urls.length) return;
     editor.focus();
     enhanceRichInlineImages(editor);
@@ -261,7 +312,7 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
   return (
     <section className="themeBoard">
       <div className="themeBoardHead">
-        <button type="button" className="pill-btn" onClick={onBack}>📅 캘린더</button>
+        <button type="button" className="pill-btn" onClick={() => { void commitActive(draftTitle); onBack(); }}>📅 캘린더</button>
         <h1>테마</h1>
         <button type="button" className="pill-btn themeAddBtn" onClick={addTheme}>+ 테마</button>
       </div>
@@ -313,6 +364,11 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
             <strong>Text 입력 / 편집</strong>
             <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능</span>
           </div>
+          <SaveStatusBar
+            state={saveState?.state ?? null}
+            at={saveState?.at ?? null}
+            onSave={() => void commitActive(draftTitle)}
+          />
           <CollectFormatToolbar
             onUndo={() => runCommand("undo")}
             onRedo={() => runCommand("redo")}
@@ -491,23 +547,17 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
               setImageSlotId(slotId);
             }}
             onPaste={(event) => {
-              const pastedFiles = imageFilesFromClipboard(event.clipboardData);
-              if (pastedFiles.length > 0) {
-                event.preventDefault();
-                const slotId = findAwaitingSlotId(editorRef.current);
-                if (!slotId) {
-                  setImageSlotId(null);
-                  alert(IMAGE_SLOT_GUIDE);
-                  return;
-                }
-                void insertImages(pastedFiles, slotId);
-                setImageSlotId(null);
-                return;
-              }
               event.preventDefault();
-              const pasteText = event.clipboardData.getData("text/plain");
-              if (pasteText) document.execCommand("insertText", false, pasteText);
+              const clip = readPastedClipboard(event.clipboardData);
+              if (clip.text) document.execCommand("insertText", false, clip.text);
               commitActive();
+              pasteClipboardImages(
+                editorRef.current,
+                clip,
+                (files, slotId, urls) => insertImages(files, slotId, urls),
+                () => alert(PASTE_IMAGE_FAILED_MESSAGE),
+              );
+              setImageSlotId(null);
             }}
           />
           {whiteCellIds.map((id) => (

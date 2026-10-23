@@ -98,12 +98,15 @@ export async function loadThemeNotes(): Promise<ThemeNote[]> {
   return merged;
 }
 
-export async function persistThemes(notes: ThemeNote[], changedId?: string) {
+/** 서버 저장에 성공하면 true. 서버를 쓰지 않는 환경(기기 저장만)에서도 true. */
+export async function persistThemes(notes: ThemeNote[], changedId?: string): Promise<boolean> {
   writeLocalThemes(notes);
-  if (!isSupabaseConfigured || !supabase) return;
+  if (!isSupabaseConfigured || !supabase) return true;
   const targets = changedId ? notes.filter((note) => note.id === changedId) : notes;
-  if (!targets.length) return;
-  const { error } = await supabase.from("theme_notes").upsert(
+  if (!targets.length) return true;
+  let error: { message: string } | null = null;
+  try {
+    ({ error } = await supabase.from("theme_notes").upsert(
     targets.map((note) => ({
       id: note.id,
       title: note.title,
@@ -111,8 +114,12 @@ export async function persistThemes(notes: ThemeNote[], changedId?: string) {
       updated_at: note.updatedAt,
     })),
     { onConflict: "id" },
-  );
+  ));
+  } catch (caught) {
+    error = { message: caught instanceof Error ? caught.message : String(caught) };
+  }
   if (error) console.warn("theme note save error:", error.message);
+  return !error;
 }
 
 export async function deleteThemeNote(id: string) {

@@ -4,7 +4,7 @@ import React from "react";
 import { ClassTagSelect } from "./ClassTagSelect";
 import { SlotImagePanel } from "./SlotImagePanel";
 import { appendHashtagToEditor } from "../lib/contentClass";
-import { imageFilesFromClipboard } from "../lib/compressImageFile";
+import { PASTE_IMAGE_FAILED_MESSAGE, clipboardHasImages, pasteClipboardImages, readPastedClipboard } from "../lib/richPaste";
 import { IMAGE_SLOT_GUIDE, enhanceRichInlineImages, findAwaitingSlotId, handleRichImageSlotPointer, insertImagesAtSlotOrCaret, tryConsumeDateTimeTrigger, tryConsumeImageTriggerToSlot } from "../lib/richImageSlots";
 
 /** A white writing box placed under the main editor. */
@@ -44,11 +44,13 @@ export function CollectWhiteCell({
     if (notify || slotId || stamped) onInput();
   };
 
-  const insertPickedImages = async (files: File[]) => {
+  const insertPickedImages = async (files: File[], extraUrls: string[] = []) => {
     const editor = ref.current;
-    if (!editor || !files.length) return;
+    if (!editor || (!files.length && !extraUrls.length)) return;
     let urls: string[] = [];
-    if (onUploadImages) {
+    if (!files.length) {
+      urls = [];
+    } else if (onUploadImages) {
       urls = await onUploadImages(files);
     } else {
       urls = await Promise.all(
@@ -63,7 +65,7 @@ export function CollectWhiteCell({
         ),
       );
     }
-    const ready = urls.filter(Boolean);
+    const ready = [...urls, ...extraUrls].filter(Boolean);
     if (!ready.length) return;
     editor.focus();
     enhanceRichInlineImages(editor);
@@ -176,14 +178,17 @@ export function CollectWhiteCell({
         onInput={() => consumeImageTrigger(true)}
         onKeyUp={() => consumeImageTrigger(false)}
         onPaste={(event) => {
-          const files = imageFilesFromClipboard(event.clipboardData);
-          if (!files.length) return;
+          const clip = readPastedClipboard(event.clipboardData);
+          if (!clipboardHasImages(clip)) return; // 글자만 있으면 기본 붙여넣기
           event.preventDefault();
-          if (!findAwaitingSlotId(ref.current)) {
-            alert(IMAGE_SLOT_GUIDE);
-            return;
-          }
-          void insertPickedImages(files);
+          if (clip.text) document.execCommand("insertText", false, clip.text);
+          onInput();
+          pasteClipboardImages(
+            ref.current,
+            clip,
+            (files, _slotId, urls) => insertPickedImages(files, urls),
+            () => alert(PASTE_IMAGE_FAILED_MESSAGE),
+          );
         }}
       />
       {imageSlotId ? (

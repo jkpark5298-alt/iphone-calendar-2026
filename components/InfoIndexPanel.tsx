@@ -1014,6 +1014,11 @@ export function InfoIndexPanel({
                 NEWS 열기
               </a>
             </div>
+            {onOpenTheme ? (
+              <button type="button" className="secondaryButton" onClick={() => onOpenTheme("")}>
+                📂 테마 열기
+              </button>
+            ) : null}
             <button
               type="button"
               className="secondaryButton"

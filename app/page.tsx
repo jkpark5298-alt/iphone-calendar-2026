@@ -22,6 +22,7 @@ import {
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
+import { PASTE_IMAGE_FAILED_MESSAGE, pasteClipboardImages, readPastedClipboard } from "../lib/richPaste";
 import { makeWhiteCellId, readStackedHtml, removeClassCellFromEvent, splitWhiteCells } from "../lib/collectClassCell";
 import { stepCollectFontSize } from "../lib/collectFormatPalette";
 import { readClipboardImageFiles, runCollectRichCommand } from "../lib/collectRichFormat";
@@ -731,11 +732,12 @@ export default function HomePage() {
     return urls;
   }
 
-  async function insertDiaryInlineImages(files: File[], slotId?: string | null) {
+  async function insertDiaryInlineImages(files: File[], slotId?: string | null, extraUrls: string[] = []) {
     const editor = diaryRichTextRef.current;
     const ready = filterUploadImageFiles(files);
-    if (!editor || ready.length === 0) return;
-    const urls = await uploadDiaryInlineImages(ready);
+    if (!editor || (ready.length === 0 && extraUrls.length === 0)) return;
+    const uploaded = ready.length ? await uploadDiaryInlineImages(ready) : [];
+    const urls = [...uploaded, ...extraUrls];
     if (!urls.length) return;
     editor.focus();
     enhanceRichInlineImages(editor);
@@ -2157,7 +2159,23 @@ export default function HomePage() {
       const local = readLocalDiaryEntry(diaryStorageName);
       const queued = diarySaveQueueRef.current?.date === dateToken ? diarySaveQueueRef.current : null;
 
-      if (queued || local?.pending) {
+      // 불러오는 동안 입력한 내용은 저장이 막혀 있었으므로, 서버 내용 뒤에 이어 붙여 지우지 않고 저장합니다.
+      const editorNow = diaryRichTextRef.current;
+      const typedDuringLoad =
+        editorNow && diaryBoundDateRef.current === dateToken && !diaryContentReadyRef.current ? readStackedHtml(editorNow) : "";
+      const hasTypedDuringLoad =
+        /<img/i.test(typedDuringLoad) || typedDuringLoad.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim().length > 0;
+
+      if (hasTypedDuringLoad) {
+        const baseDiary = (remoteLoadFailed ? local?.diaryText : remoteData?.diary_text) || "";
+        const baseVoice = (remoteLoadFailed ? local?.voiceText : remoteData?.voice_text) || "";
+        const mergedDiary = baseDiary ? `${baseDiary}<br>${typedDuringLoad}` : typedDuringLoad;
+        setDiaryText(mergedDiary);
+        setVoiceText(baseVoice);
+        publishDiaryEditorContent(dateToken, mergedDiary, true);
+        writeLocalDiaryEntry(diaryStorageName, { diaryText: mergedDiary, voiceText: baseVoice, pending: true, savedAt: local?.savedAt ?? null });
+        saveDiaryEntryToSupabase(currentMonth, currentDay, mergedDiary, baseVoice, currentYear);
+      } else if (queued || local?.pending) {
         // 아직 서버에 반영되지 않은 최신 내용이 있으면 그것을 보여 주고 다시 저장합니다.
         const nextDiary = queued ? queued.diaryText : local!.diaryText;
         const nextVoice = queued ? queued.voiceText : local!.voiceText;
@@ -4667,10 +4685,12 @@ export default function HomePage() {
             }
             const at = formatDiarySavedAt(status.at);
             const label =
-              status.state === "pending" || status.state === "saving"
+              status.state === "pending"
+                ? at ? `수정됨 · 아직 저장 전 (마지막 저장 ${at})` : "수정됨 · 아직 저장 전"
+                : status.state === "saving"
                 ? at ? `저장 중… (마지막 저장 ${at})` : "저장 중…"
                 : status.state === "saved"
-                  ? `자동 저장됨 · ${at}`
+                  ? `✓ 저장됨 · ${at}`
                   : status.state === "local"
                     ? `기기에 저장됨 · ${at}`
                     : status.state === "loadError"
@@ -4764,22 +4784,18 @@ export default function HomePage() {
             }}
             onClick={handleDiaryRichEditorClick}
             onPaste={(e) => {
-              const pastedFiles = imageFilesFromClipboard(e.clipboardData);
-              if (pastedFiles.length > 0) {
-                e.preventDefault();
-                const slotId = findAwaitingSlotId(diaryRichTextRef.current);
-                if (!slotId) {
-                  setDiaryImageSlotId(null);
-                  alert(IMAGE_SLOT_GUIDE);
-                  return;
-                }
-                void insertDiaryInlineImages(pastedFiles, slotId);
-                setDiaryImageSlotId(null);
-                return;
-              }
               e.preventDefault();
-              const pasteText = e.clipboardData.getData("text/plain");
-              if (pasteText) document.execCommand("insertText", false, pasteText);
+              const clip = readPastedClipboard(e.clipboardData);
+              if (clip.text) document.execCommand("insertText", false, clip.text);
+              // 글자는 바로, 사진은 업로드가 끝나는 대로 넣고, 둘 다 저장합니다.
+              saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
+              pasteClipboardImages(
+                diaryRichTextRef.current,
+                clip,
+                (files, slotId, urls) => insertDiaryInlineImages(files, slotId, urls),
+                () => alert(PASTE_IMAGE_FAILED_MESSAGE),
+              );
+              setDiaryImageSlotId(null);
             }}
             style={{
               display: "block",

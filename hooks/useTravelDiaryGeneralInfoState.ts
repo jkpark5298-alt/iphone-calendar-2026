@@ -51,7 +51,8 @@ import {
   tryConsumeDateTimeTrigger,
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
-import { compressImageFile, filterUploadImageFiles, GENERAL_INFO_COMPRESS, imageFilesFromClipboard } from "../lib/compressImageFile";
+import { compressImageFile, filterUploadImageFiles, GENERAL_INFO_COMPRESS } from "../lib/compressImageFile";
+import { PASTE_IMAGE_FAILED_MESSAGE, clipboardHasImages, pasteClipboardImages, readPastedClipboard } from "../lib/richPaste";
 import { runCollectRichCommand } from "../lib/collectRichFormat";
 import {
   cleanInstagramCaption,
@@ -1113,12 +1114,14 @@ export function useTravelDiaryGeneralInfoState({
   /** 파일(사진첩/파일) 또는 클립보드 이미지를 에디터에 인라인 삽입 */
   const insertGeneralInfoRichImages = useCallback(async (
     files: File[],
-    opts?: { slotId?: string | null },
+    opts?: { slotId?: string | null; extraUrls?: string[] },
   ) => {
     const editor = generalInfoRichTextRef.current;
     const ready = filterUploadImageFiles(files);
-    if (!editor || ready.length === 0) return;
-    const urls = await handleGeneralInfoUploadRichImages(ready);
+    const extraUrls = opts?.extraUrls || [];
+    if (!editor || (ready.length === 0 && extraUrls.length === 0)) return;
+    const uploaded = ready.length ? await handleGeneralInfoUploadRichImages(ready) : [];
+    const urls = [...uploaded, ...extraUrls];
     if (!urls.length) return;
     editor.focus();
     enhanceRichInlineImages(editor);
@@ -1215,15 +1218,19 @@ export function useTravelDiaryGeneralInfoState({
     event: React.ClipboardEvent<HTMLDivElement>,
   ) => {
     const clipboardData = event.clipboardData;
-    const pastedFiles = imageFilesFromClipboard(clipboardData);
+    const clip = readPastedClipboard(clipboardData);
 
-    if (pastedFiles.length > 0) {
+    if (clipboardHasImages(clip)) {
       event.preventDefault();
-      if (!findAwaitingSlotId(generalInfoRichTextRef.current)) {
-        showPasteHint(IMAGE_SLOT_GUIDE);
-        return;
-      }
-      void insertGeneralInfoRichImages(pastedFiles);
+      const imageText = decodeGeneralInfoPastedText(clip.text);
+      if (imageText) document.execCommand("insertText", false, imageText);
+      syncGeneralInfoRichTextToDraft();
+      pasteClipboardImages(
+        generalInfoRichTextRef.current,
+        clip,
+        (files, slotId, urls) => insertGeneralInfoRichImages(files, { slotId, extraUrls: urls }),
+        () => showPasteHint(PASTE_IMAGE_FAILED_MESSAGE),
+      );
       return;
     }
 
@@ -1939,6 +1946,12 @@ export function useTravelDiaryGeneralInfoState({
     const { html: uploadedFormattedHtml, replacements } =
       await uploadGeneralInfoRichHtmlImages(rawFormattedHtml);
 
+    if (extractMediaSrcFromHtml(uploadedFormattedHtml).some((src) => src.startsWith("data:"))) {
+      persistGeneralInfoTempDraft(true);
+      showPasteHint("⚠️ 사진 업로드에 실패해 저장하지 않았습니다. 작성한 내용은 그대로 두었습니다. 다시 [저장]을 눌러 주세요.");
+      return;
+    }
+
     const uploadedParagraphs = parseParagraphsFromHtml(uploadedFormattedHtml).map((p, index) => {
       const source = paragraphs[index] || p;
       let html = p.html || source.html;
@@ -2024,7 +2037,17 @@ export function useTravelDiaryGeneralInfoState({
           persistGeneralInfoItemsToLocalStorage(nextItems);
           return nextItems;
         });
-        void syncGeneralInfoItemToSupabase(item, "POST");
+        const synced = await syncGeneralInfoItemToSupabase(item, "POST");
+        if (!synced) {
+          setGeneralInfoItems((prev) => {
+            const nextItems = prev.filter((prevItem) => prevItem.id !== item.id);
+            persistGeneralInfoItemsToLocalStorage(nextItems);
+            return nextItems;
+          });
+          persistGeneralInfoTempDraft(true);
+          showPasteHint("⚠️ 서버 저장에 실패했습니다. 작성한 내용은 그대로 두었습니다. 다시 [저장]을 눌러 주세요.");
+          return;
+        }
         setGeneralInfoDraftBackup(null);
         setGeneralInfoImageLoadFailed(false);
         setGeneralInfoEditingId(null);
@@ -2070,7 +2093,12 @@ export function useTravelDiaryGeneralInfoState({
         return nextItems;
       });
 
-      void syncGeneralInfoItemToSupabase(updatedItem, "PUT");
+      const syncedUpdate = await syncGeneralInfoItemToSupabase(updatedItem, "PUT");
+      if (!syncedUpdate) {
+        persistGeneralInfoTempDraft(true);
+        showPasteHint("⚠️ 서버 수정에 실패했습니다. 작성한 내용은 그대로 두었습니다. 다시 [저장]을 눌러 주세요.");
+        return;
+      }
 
       setGeneralInfoDraftBackup(null);
       setGeneralInfoImageLoadFailed(false);
@@ -2097,7 +2125,17 @@ export function useTravelDiaryGeneralInfoState({
       return nextItems;
     });
 
-    void syncGeneralInfoItemToSupabase(item, "POST");
+    const synced = await syncGeneralInfoItemToSupabase(item, "POST");
+    if (!synced) {
+      setGeneralInfoItems((prev) => {
+        const nextItems = prev.filter((prevItem) => prevItem.id !== item.id);
+        persistGeneralInfoItemsToLocalStorage(nextItems);
+        return nextItems;
+      });
+      persistGeneralInfoTempDraft(true);
+      showPasteHint("⚠️ 서버 저장에 실패했습니다. 작성한 내용은 그대로 두었습니다. 다시 [저장]을 눌러 주세요.");
+      return;
+    }
 
     setGeneralInfoDraftBackup(null);
     setGeneralInfoImageLoadFailed(false);
@@ -2121,6 +2159,7 @@ export function useTravelDiaryGeneralInfoState({
     resetGeneralInfoRichTextEditor,
     showPasteHint,
     syncGeneralInfoItemToSupabase,
+    persistGeneralInfoTempDraft,
     uploadGeneralInfoMediaItemsToSupabaseStorage,
     uploadGeneralInfoRichHtmlImages,
   ]);
@@ -3082,6 +3121,25 @@ export function useTravelDiaryGeneralInfoState({
 
     return () => window.clearInterval(intervalId);
   }, [generalInfoActiveTab, isGeneralInfoDraftDirty, persistGeneralInfoTempDraft]);
+
+  // 앱을 닫거나 다른 앱으로 넘어갈 때 15초를 기다리지 않고 작성 중인 내용을 바로 임시 저장합니다.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saveNow = () => {
+      if (generalInfoActiveTabRef.current !== "collect") return;
+      if (!isGeneralInfoDraftDirty()) return;
+      persistGeneralInfoTempDraft(true);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") saveNow();
+    };
+    window.addEventListener("pagehide", saveNow);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", saveNow);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [isGeneralInfoDraftDirty, persistGeneralInfoTempDraft]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

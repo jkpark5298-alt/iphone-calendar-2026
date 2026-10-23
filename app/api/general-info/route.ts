@@ -119,6 +119,18 @@ const normalizePayload = (value: unknown): GeneralInfoPayload | null => {
   };
 };
 
+/** 본문이 너무 길면 조용히 잘라 저장하지 않고 오류로 알린다. */
+const tooLargeError = (raw: unknown) => {
+  const html = (raw as { formattedTextHtml?: unknown } | null)?.formattedTextHtml;
+  if (typeof html === "string" && html.trim().length > MAX_HTML_LENGTH) {
+    return NextResponse.json(
+      { ok: false, error: "본문이 너무 커서 저장하지 못했습니다. 사진을 줄이거나 나누어 저장해 주세요." },
+      { status: 413 },
+    );
+  }
+  return null;
+};
+
 const getWriteAuthError = (request: NextRequest) => {
   const token = process.env.GENERAL_INFO_API_TOKEN;
   if (!token) return null;
@@ -408,7 +420,10 @@ export async function POST(request: NextRequest) {
     const authError = getWriteAuthError(request);
     if (authError) return authError;
 
-    const item = normalizePayload(await request.json());
+    const rawBody = await request.json();
+    const sizeError = tooLargeError(rawBody);
+    if (sizeError) return sizeError;
+    const item = normalizePayload(rawBody);
     if (!item || !item.id) {
       return NextResponse.json(
         {
@@ -455,7 +470,10 @@ export async function PUT(request: NextRequest) {
     const authError = getWriteAuthError(request);
     if (authError) return authError;
 
-    const item = normalizePayload(await request.json());
+    const rawBody = await request.json();
+    const sizeError = tooLargeError(rawBody);
+    if (sizeError) return sizeError;
+    const item = normalizePayload(rawBody);
     const supabase = getSupabaseAdmin();
 
     if (!item?.id) {
