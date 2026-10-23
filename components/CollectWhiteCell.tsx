@@ -209,7 +209,8 @@ export function CollectWhiteCell({
         onKeyUp={() => consumeImageTrigger(false)}
         onPaste={(event) => {
           const clip = readPastedClipboard(event.clipboardData);
-          if (!clipboardHasImages(clip)) return; // 글자만 있으면 기본 붙여넣기
+          // 서식 있는 내용(HTML)을 브라우저에 맡기면 아이폰에서 AI 앱 글이 깨질 수 있어 항상 글자만 넣는다.
+          if (!clip.text && !clipboardHasImages(clip)) return;
           event.preventDefault();
           if (clip.text) document.execCommand("insertText", false, clip.text);
           onInput();
