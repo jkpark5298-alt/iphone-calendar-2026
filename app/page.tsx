@@ -22,7 +22,7 @@ import {
   handleRichImageSlotPointer,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles, imageFilesFromClipboard } from "../lib/compressImageFile";
-import { insertPositionForNewCell, moveWhiteCell, removeTargetCellId } from "../lib/whiteCellOps";
+import { formatTargetEditor, insertPositionForNewCell, moveWhiteCell, notifyCellFormatted, removeTargetCellId } from "../lib/whiteCellOps";
 import { PASTE_IMAGE_FAILED_MESSAGE, pasteClipboardImages, readPastedClipboard } from "../lib/richPaste";
 import { makeWhiteCellId, readStackedHtml, removeClassCellFromEvent, splitWhiteCells } from "../lib/collectClassCell";
 import { stepCollectFontSize } from "../lib/collectFormatPalette";
@@ -700,7 +700,9 @@ export default function HomePage() {
   const infoEditStartRef = useRef<{ key: string; infoText: string } | null>(null);
 
   function handleDiaryRichCommand(command: string, value?: string) {
-    runCollectRichCommand(diaryRichTextRef.current, command, value);
+    const target = formatTargetEditor(diaryRichTextRef.current);
+    runCollectRichCommand(target, command, value);
+    notifyCellFormatted(target, diaryRichTextRef.current);
   }
 
   /** 일기장 본문에 인라인 이미지 업로드 (insta-fact-library onUploadImages 방식) */

@@ -25,7 +25,7 @@ import {
   tryConsumeDateTimeTrigger,
 } from "../lib/richImageSlots";
 import { compressImageFile, filterUploadImageFiles } from "../lib/compressImageFile";
-import { insertPositionForNewCell, moveWhiteCell, removeTargetCellId } from "../lib/whiteCellOps";
+import { formatTargetEditor, insertPositionForNewCell, moveWhiteCell, notifyCellFormatted, removeTargetCellId } from "../lib/whiteCellOps";
 import { PASTE_IMAGE_FAILED_MESSAGE, pasteClipboardImages, readPastedClipboard } from "../lib/richPaste";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import {
@@ -328,7 +328,9 @@ export function ThemeBoard({ onBack, initialThemeId = "" }: { onBack: () => void
   }
 
   function runCommand(command: string, value?: string) {
-    runCollectRichCommand(editorRef.current, command, value);
+    const target = formatTargetEditor(editorRef.current);
+    runCollectRichCommand(target, command, value);
+    notifyCellFormatted(target, editorRef.current);
     commitActive();
   }
 

@@ -54,6 +54,7 @@ import {
 import { compressImageFile, filterUploadImageFiles, GENERAL_INFO_COMPRESS } from "../lib/compressImageFile";
 import { PASTE_IMAGE_FAILED_MESSAGE, clipboardHasImages, pasteClipboardImages, readPastedClipboard } from "../lib/richPaste";
 import { runCollectRichCommand } from "../lib/collectRichFormat";
+import { formatTargetEditor, notifyCellFormatted } from "../lib/whiteCellOps";
 import {
   cleanInstagramCaption,
   isInstagramHostText,
@@ -1161,7 +1162,9 @@ export function useTravelDiaryGeneralInfoState({
   }), []);
 
   const handleGeneralInfoRichCommand = useCallback((command: string, value?: string) => {
-    runCollectRichCommand(generalInfoRichTextRef.current, command, value);
+    const target = formatTargetEditor(generalInfoRichTextRef.current);
+    runCollectRichCommand(target, command, value);
+    notifyCellFormatted(target, generalInfoRichTextRef.current);
     syncGeneralInfoRichTextToDraft();
   }, [syncGeneralInfoRichTextToDraft]);
 
