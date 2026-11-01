@@ -1242,8 +1242,12 @@ export function useTravelDiaryGeneralInfoState({
       .replace(/\\n/g, "\n")
       .replace(/[\u200B-\u200D\uFEFF]/g, "");
 
-    return basicDecoded
+    // NFKC는 ①~⑳을 숫자 1~20으로 바꾸므로, 정규화하는 동안만 사용자 지정 영역 문자로 바꿔 두었다가 되돌린다.
+    // (AI 검증기 보고서의 3단계 번호 ①이 그대로 붙여넣어지게 한다)
+    const circledKept = basicDecoded.replace(/[①-⑳]/g, (ch) => String.fromCharCode(0xe000 + ch.charCodeAt(0) - 0x2460));
+    return circledKept
       .normalize("NFKC")
+      .replace(/[-]/g, (ch) => String.fromCharCode(0x2460 + ch.charCodeAt(0) - 0xe000))
       .replace(/\r\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
