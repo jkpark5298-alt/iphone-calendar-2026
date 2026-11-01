@@ -9999,6 +9999,14 @@ body {
   white-space: pre-wrap !important;
   word-break: break-word !important;
 }
+/* 상세(보기) 화면의 `.generalInfoDetailSection p`가 문단 글자색을 연한 회색으로 덮어쓰므로,
+   흰 바탕 본문 안의 문단은 본문 색(검정 계열)·크기를 그대로 따르게 한다 */
+.generalInfoDetailSection .generalInfoFormattedTextView p {
+  margin: 0 0 8px;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
 .generalInfoFormattedTextView .rich-inline-img-wrap,
 .generalInfoFormattedTextView .generalInfoInlineImageBlock,
 .generalInfoFormattedTextView figure {
