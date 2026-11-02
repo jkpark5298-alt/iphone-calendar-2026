@@ -20,6 +20,7 @@ export function CollectWhiteCell({
   onMove,
   canMoveDown = true,
   viewMode,
+  representativePhoto = false,
 }: {
   cellId: string;
   initialHtml: string;
@@ -37,6 +38,8 @@ export function CollectWhiteCell({
   canMoveDown?: boolean;
   /** 일반정보수집: 수정 모드(흰 바탕·회색 글자) / 읽기 모드(세피아 바탕). 없으면 기본 모양. */
   viewMode?: "edit" | "read";
+  /** 일기장: 사진을 눌렀을 때 [★ 대표] 버튼을 보여 준다. */
+  representativePhoto?: boolean;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const wrapRef = React.useRef<HTMLDivElement>(null);
@@ -201,6 +204,7 @@ export function CollectWhiteCell({
         role="textbox"
         tabIndex={0}
         data-placeholder={placeholder}
+        data-rep-photo={representativePhoto ? "1" : undefined}
         onClick={(event) => {
           if (handleRichImageSlotPointer(ref.current, event.target)) {
             event.preventDefault();

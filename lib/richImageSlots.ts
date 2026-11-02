@@ -149,6 +149,8 @@ function refreshImageTools(frame: HTMLElement) {
   const resizing = frame.classList.contains(INLINE_IMG_RESIZE_MODE_CLASS);
   if (resize) resize.textContent = resizing ? "완료" : "크기 조절";
   if (pair) pair.textContent = frameInImageRow(frame) ? "1열로" : "2열로";
+  const rep = tools.querySelector('[data-act="rep"]');
+  if (rep) rep.textContent = "★ 대표";
 }
 
 function ensureImageTools(frame: HTMLElement) {
@@ -156,7 +158,8 @@ function ensureImageTools(frame: HTMLElement) {
   if (!tools) {
     tools = document.createElement("span");
     tools.className = INLINE_IMG_TOOLS_CLASS;
-    for (const act of ["resize", "pair"]) {
+    // "rep"(캘린더 대표 사진)은 일기장 편집 칸(data-rep-photo)에서만 보인다.
+    for (const act of ["resize", "pair", "rep"]) {
       const button = document.createElement("span");
       button.className = INLINE_IMG_TOOL_CLASS;
       button.dataset.act = act;
@@ -408,6 +411,9 @@ function bindInlineImageResize(editor: HTMLElement) {
         } else if (tool.dataset.act === "pair") {
           exitResizeMode();
           if (toggleImagePair(editor, frame)) editor.dispatchEvent(new Event("input", { bubbles: true }));
+        } else if (tool.dataset.act === "rep") {
+          const src = frame.querySelector("img")?.getAttribute("src") || "";
+          editor.dispatchEvent(new CustomEvent("rich-image-representative", { bubbles: true, detail: { src } }));
         }
         return;
       }

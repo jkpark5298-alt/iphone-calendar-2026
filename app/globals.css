@@ -14369,3 +14369,19 @@ body {
 .diaryScheduleSummary strong {
   color: #1f2421;
 }
+
+/* 사진을 누르면 나오는 [★ 대표] 버튼은 일기장 편집 칸(data-rep-photo)에서만 보인다 */
+.generalInfoRichTextEditor .rich-inline-img-tool[data-act="rep"] {
+  display: none !important;
+}
+.generalInfoRichTextEditor[data-rep-photo] .rich-inline-img-tool[data-act="rep"] {
+  display: inline-flex !important;
+  background: #b45309 !important;
+}
+.diary-photo-button-group .diaryScheduleSummary,
+.diary-photo-button-group .diaryScheduleSummary strong {
+  color: #e6edf3;
+}
+.diary-photo-button-group .diaryScheduleSummaryText {
+  color: #9aa7b3;
+}

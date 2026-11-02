@@ -224,6 +224,9 @@ function writeScheduleStorage(name: string, value: string) {
   }
 }
 
+/** 본문 사진을 캘린더 대표로 지정할 때 diary_photos에 남기는 기록의 sort_order 표시 */
+const BODY_PHOTO_REP_SORT_ORDER = 999;
+
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -577,11 +580,25 @@ export default function HomePage() {
   const [diaryScheduleFormOpen, setDiaryScheduleFormOpen] = useState(false);
   /** 일기장의 "일정" 박스를 펼쳤는지. 평소에는 한 줄 요약만 보인다. */
   const [diaryScheduleBoxOpen, setDiaryScheduleBoxOpen] = useState(false);
+  /** 일기장의 "사진 보관"(갤러리·사진 버튼)을 펼쳤는지. 평소에는 한 줄만 보인다. */
+  const [diaryPhotoBoxOpen, setDiaryPhotoBoxOpen] = useState(false);
+  const repPhotoHandlerRef = useRef<(src: string) => void>(() => {});
   const scheduleTitleInputRef = useRef<HTMLInputElement | null>(null);
   const scheduleSyncChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const scheduleSaveGenRef = useRef(0);
   const scheduleLatestRef = useRef<Record<string, ScheduleItem[]> | null>(null);
   const scheduleCopySpanRef = useRef(0);
+
+  // 본문 사진의 [★ 대표] 버튼(일기장 편집 칸에서만 보임)을 누르면 그 사진을 캘린더 대표 사진으로 지정한다.
+  useEffect(() => {
+    const onRepresentative = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest("[data-rep-photo]")) return;
+      repPhotoHandlerRef.current(String((event as CustomEvent).detail?.src || ""));
+    };
+    document.addEventListener("rich-image-representative", onRepresentative);
+    return () => document.removeEventListener("rich-image-representative", onRepresentative);
+  }, []);
 
   // 날짜를 옮기면 새 일정의 기본 날짜도 따라가게 한다.
   // 일기장에서 날짜를 옮길 때 다른 날의 일정 수정 폼이 남아 있지 않도록, 수정 중이던 폼은 닫는다.
@@ -1201,6 +1218,8 @@ export default function HomePage() {
     }
 
     return (data || [])
+      // sort_order 999 = 본문 사진을 대표로 지정하면서 만든 기록. 갤러리에는 보이지 않게 한다.
+      .filter(row => Number(row.sort_order) !== BODY_PHOTO_REP_SORT_ORDER)
       .map(row => photoItemFromSupabaseRow(row, month, day, year))
       .filter(item => !isPhotoMarkedDeleted("diary", item, year));
   }
@@ -4289,6 +4308,67 @@ export default function HomePage() {
     alert("선택한 사진을 월간 캘린더에 붙였습니다.");
   }
 
+  /** 본문에 넣은 사진을 이 날짜의 캘린더 대표 사진으로 지정한다. */
+  async function setCalendarPhotoFromBody(src: string) {
+    const marker = "/storage/v1/object/public/diary-photos/";
+    const markerIndex = src.indexOf(marker);
+    if (!/^https?:/i.test(src) || markerIndex < 0) {
+      alert("업로드가 끝난 일기 사진만 대표로 지정할 수 있습니다. 잠시 뒤 다시 눌러 주세요.");
+      return;
+    }
+    const storagePath = decodeURIComponent(src.slice(markerIndex + marker.length).split("?")[0]);
+    const k = key(currentMonth, currentDay, currentYear);
+    const targetDate = entryDate(currentMonth, currentDay, currentYear);
+
+    if (!isSupabaseConfigured || !supabase) {
+      alert("서버에 연결되어 있지 않아 대표 사진을 지정하지 못했습니다.");
+      return;
+    }
+
+    // 먼저 새 대표를 켜고, 그다음 같은 날의 나머지 대표를 끈다(중간에 실패해도 대표가 없어지지 않게).
+    const { data: updated, error: setError } = await supabase
+      .from("diary_photos")
+      .update({ is_calendar_photo: true })
+      .eq("storage_path", storagePath)
+      .select("id");
+    if (setError) {
+      console.warn("Supabase calendar photo set error:", setError.message);
+      alert("대표 사진을 지정하지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
+      return;
+    }
+    if (!updated || updated.length === 0) {
+      const { error: insertError } = await supabase.from("diary_photos").insert({
+        entry_date: targetDate,
+        storage_path: storagePath,
+        public_url: src,
+        sort_order: BODY_PHOTO_REP_SORT_ORDER,
+        is_calendar_photo: true,
+      });
+      if (insertError) {
+        console.warn("Supabase calendar photo insert error:", insertError.message);
+        alert("대표 사진을 지정하지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
+        return;
+      }
+    }
+    const { error: clearError } = await supabase
+      .from("diary_photos")
+      .update({ is_calendar_photo: false })
+      .eq("entry_date", targetDate)
+      .neq("storage_path", storagePath);
+    if (clearError) console.warn("Supabase calendar photo clear error:", clearError.message);
+
+    const nextCalendarPhotos = { ...calendarPhotos, [k]: src };
+    const nextCalendarPhotoIndexes = { ...calendarPhotoIndexes, [k]: BODY_PHOTO_REP_SORT_ORDER };
+    setCalendarPhotos(nextCalendarPhotos);
+    setCalendarPhotoIndexes(nextCalendarPhotoIndexes);
+    setLocalStorageSafely("iphone-diary-2026-calendar-photos", JSON.stringify(nextCalendarPhotos));
+    setLocalStorageSafely("iphone-diary-2026-calendar-photo-indexes", JSON.stringify(nextCalendarPhotoIndexes));
+    alert("이 사진을 캘린더 대표 사진으로 지정했습니다.");
+  }
+  repPhotoHandlerRef.current = (src: string) => {
+    void setCalendarPhotoFromBody(src);
+  };
+
   function openCalendarPhotoOriginal(k: string) {
     const { year, month, day } = parseScheduleKey(k);
     const dayItems = photos[k] || (() => {
@@ -4300,7 +4380,7 @@ export default function HomePage() {
       }
     })();
     const selectedIndex = calendarPhotoIndexes[k] ?? 0;
-    const original = dayItems[selectedIndex]?.url || dayItems[0]?.url || calendarPhotos[k];
+    const original = dayItems[selectedIndex]?.url || calendarPhotos[k] || dayItems[0]?.url;
     if (original) setOriginalImageUrl(original);
   }
 
@@ -4988,7 +5068,19 @@ export default function HomePage() {
             </>)}
           </div>
           <div className="diary-photo-button-group">
-            <div className="diary-photo-group-label">사진</div>
+            <button
+              type="button"
+              className="diaryScheduleSummary"
+              aria-expanded={diaryPhotoBoxOpen}
+              onClick={() => setDiaryPhotoBoxOpen(open => !open)}
+            >
+              <strong>📷 사진 보관</strong>
+              <span className="diaryScheduleSummaryText">
+                {dayPhotos.length > 0 ? `${dayPhotos.length}장` : "사진을 눌러 ★ 대표 지정"}
+              </span>
+              <span aria-hidden>{diaryPhotoBoxOpen ? "▴" : "▾"}</span>
+            </button>
+            {diaryPhotoBoxOpen && (
             <div className="button-row diary-photo-import-row diary-photo-row-primary">
               <label className="soft-btn compact-photo-btn">
                 📷 사진찍기
@@ -5000,6 +5092,7 @@ export default function HomePage() {
               </label>
               <button type="button" className="soft-btn compact-photo-btn" onClick={pastePhotoFromClipboard}>📋 웹/캡처 붙여넣기</button>
             </div>
+            )}
           </div>
         </div>
         {/* Text 입력 / 편집 (Builder FormatToolbar 이식) */}
@@ -5136,6 +5229,7 @@ export default function HomePage() {
             role="textbox"
             tabIndex={0}
             data-placeholder="오늘의 기록을 남겨보세요...."
+            data-rep-photo="1"
             onInput={() => {
               handleDiaryRichInput();
               saveDiary(readStackedHtml(diaryRichTextRef.current), voiceText);
@@ -5186,6 +5280,7 @@ export default function HomePage() {
               initialHtml={diaryWhiteHtmlRef.current[id] || ""}
               placeholder="오늘의 기록을 남겨보세요...."
               imageDeleteOnly
+              representativePhoto
               showClassTag
               onUploadImages={uploadDiaryInlineImages}
               onInput={() => {
@@ -5234,6 +5329,7 @@ export default function HomePage() {
         )}
         <HyperlinkPreview text={diaryText} />
 
+        {diaryPhotoBoxOpen && (
         <div className="diary-photo-section" onPaste={handlePhotoPaste} tabIndex={0}>
           {dayPhotos.length === 0 && <div className="empty-photo diary-empty-photo">사진을 찍거나 가져오면 여기에 저장됩니다.<br />아이폰에서 붙여넣기가 안 되면 사진 가져오기를 사용하세요.<br />사진을 누르면 대표 설정·삭제가 나타납니다.</div>}
           <div className={`diary-photo-grid-safe diary-photo-gallery ${diaryPhotoCountClass}`}>
@@ -5303,6 +5399,7 @@ export default function HomePage() {
             })}
           </div>
         </div>
+        )}
 
         <div className="box voice-box">
           <div className="box-head compact-box-head voice-head-safe">
