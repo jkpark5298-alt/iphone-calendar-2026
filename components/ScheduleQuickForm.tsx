@@ -2,7 +2,7 @@
 
 import React from "react";
 
-export type ScheduleQuickNotice = { state: "saving" | "saved" | "error" | "invalid"; text: string } | null;
+export type ScheduleQuickNotice = { state: "saving" | "saved" | "error" | "invalid" | "info"; text: string } | null;
 
 /** 일정 입력 폼(일정 / 날짜 / 시간 / 반복 / 색깔). 일정 화면과 일기장 화면에서 같이 쓴다. */
 export function ScheduleQuickForm({
@@ -10,6 +10,8 @@ export function ScheduleQuickForm({
   onTitle,
   date,
   onDate,
+  endDate,
+  onEndDate,
   time,
   onTime,
   repeat,
@@ -28,6 +30,9 @@ export function ScheduleQuickForm({
   onTitle: (value: string) => void;
   date: string;
   onDate: (value: string) => void;
+  /** 종료일(기간). 수정할 때만 보이고, 비워 두면 하루 일정이다. */
+  endDate: string;
+  onEndDate: (value: string) => void;
   time: string;
   onTime: (value: string) => void;
   repeat: string;
@@ -77,6 +82,22 @@ export function ScheduleQuickForm({
           </span>
         </label>
       </div>
+      {editing ? (
+        <div className="scheduleQuickRow">
+          <label>
+            <span>종료일 (기간, 선택)</span>
+            <span className="scheduleQuickTimeWrap">
+              <input type="date" value={endDate} min={date} onChange={(event) => onEndDate(event.target.value)} />
+              {endDate ? (
+                <button type="button" className="scheduleQuickClear" onClick={() => onEndDate("")} aria-label="종료일 지우기">
+                  ×
+                </button>
+              ) : null}
+            </span>
+          </label>
+          <span className="scheduleQuickHint">비워 두면 하루 일정입니다.</span>
+        </div>
+      ) : null}
       <div className="scheduleQuickRow">
         <label>
           <span>반복</span>

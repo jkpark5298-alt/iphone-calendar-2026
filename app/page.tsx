@@ -31,6 +31,7 @@ import { CollectFormatToolbar } from "../components/CollectFormatToolbar";
 import { CollectWhiteCell } from "../components/CollectWhiteCell";
 import { ScheduleQuickForm, type ScheduleQuickNotice } from "../components/ScheduleQuickForm";
 import { addDaysToYmd, daysBetweenYmd, scheduleOccursOn } from "../lib/scheduleOccurrence";
+import { lunarLabel } from "../lib/lunar";
 import { SlotImagePanel } from "../components/SlotImagePanel";
 import { ClassTagSelect } from "../components/ClassTagSelect";
 import { EntryLookup, plainSnippet, type LookupHit } from "../components/EntryLookup";
@@ -572,6 +573,7 @@ export default function HomePage() {
   const scheduleSyncChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const scheduleSaveGenRef = useRef(0);
   const scheduleLatestRef = useRef<Record<string, ScheduleItem[]> | null>(null);
+  const scheduleCopySpanRef = useRef(0);
 
   // 날짜를 옮기면 새 일정의 기본 날짜도 따라가게 한다(수정 중이면 그대로 둔다).
   useEffect(() => {
@@ -3959,7 +3961,18 @@ export default function HomePage() {
     setScheduleStartTime("");
     setScheduleRepeat("없음");
     setScheduleColor("yellow");
+    setScheduleEndDate("");
+    scheduleCopySpanRef.current = 0;
     setEditingScheduleId(null);
+  }
+
+  /** 날짜를 바꾸면(수정 중 종료일이 있으면) 종료일도 같은 만큼 옮긴다. */
+  function handleScheduleDateChange(value: string) {
+    const ymd = /^\d{4}-\d{2}-\d{2}$/;
+    if (editingScheduleId && scheduleEndDate && ymd.test(value) && ymd.test(scheduleStartDate)) {
+      setScheduleEndDate(addDaysToYmd(scheduleEndDate, daysBetweenYmd(scheduleStartDate, value)));
+    }
+    setScheduleStartDate(value);
   }
 
   function addSchedule() {
@@ -3982,13 +3995,21 @@ export default function HomePage() {
         if (existing) break;
       }
     }
-    const spanDays = existing ? Math.max(0, daysBetweenYmd(existing.startDate, existing.endDate)) : 0;
+    // 종료일(기간)은 수정할 때만 입력한다. 비워 두면 하루 일정이고, 복사한 일정은 원래 기간을 이어받는다.
+    let endDate = addDaysToYmd(date, editingScheduleId ? 0 : scheduleCopySpanRef.current);
+    if (editingScheduleId && scheduleEndDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduleEndDate) || scheduleEndDate < date) {
+        setScheduleNotice({ state: "invalid", text: "종료일이 날짜보다 앞섭니다." });
+        return;
+      }
+      endDate = scheduleEndDate;
+    }
     const scheduleData: ScheduleItem = {
       id: editingScheduleId || `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       title: trimmedTitle,
       startDate: date,
       startTime: scheduleStartTime,
-      endDate: addDaysToYmd(date, spanDays),
+      endDate,
       endTime: existing?.endTime || "",
       repeat: scheduleRepeat,
       color: scheduleColor,
@@ -4017,6 +4038,7 @@ export default function HomePage() {
       resetScheduleForm(date);
     } else {
       // 연속 입력: 내용·시간·반복만 비우고 날짜와 색은 그대로 둔다.
+      scheduleCopySpanRef.current = 0;
       setScheduleTitle("");
       setScheduleStartTime("");
       setScheduleRepeat("없음");
@@ -4031,7 +4053,28 @@ export default function HomePage() {
     setScheduleStartTime(item.startTime || "");
     setScheduleRepeat(item.repeat || "없음");
     setScheduleColor(item.color || "yellow");
+    setScheduleEndDate(item.endDate && item.startDate && item.endDate !== item.startDate ? item.endDate : "");
+    scheduleCopySpanRef.current = 0;
     setScheduleNotice(null);
+    setDiaryScheduleFormOpen(true);
+    window.setTimeout(() => {
+      const input = scheduleTitleInputRef.current;
+      input?.scrollIntoView({ behavior: "smooth", block: "center" });
+      input?.focus();
+    }, 120);
+  }
+
+  /** 일정을 복사한다: 같은 내용으로 새 일정 입력 폼을 채워 두고, 날짜만 바꿔 저장하면 된다. */
+  function copySchedule(item: ScheduleItem) {
+    setEditingScheduleId(null);
+    setScheduleTitle(item.title);
+    setScheduleStartDate(item.startDate || scheduleFormDefaultDate());
+    setScheduleStartTime(item.startTime || "");
+    setScheduleRepeat(item.repeat || "없음");
+    setScheduleColor(item.color || "yellow");
+    setScheduleEndDate("");
+    scheduleCopySpanRef.current = Math.max(0, daysBetweenYmd(item.startDate, item.endDate));
+    setScheduleNotice({ state: "info", text: "복사했습니다 · 날짜를 바꿔 저장하세요" });
     setDiaryScheduleFormOpen(true);
     window.setTimeout(() => {
       const input = scheduleTitleInputRef.current;
@@ -4512,7 +4555,11 @@ export default function HomePage() {
             aria-label={`${currentMonth}월 ${day}일 일기장으로 이동`}
           />
           <div className="day-top">
-            <span className={`num ${redMarked ? "num-red" : ""} ${isToday ? "today-num" : ""}`}>{day}</span>
+            {day === 1 && !isToday ? (
+              <span className="calendar-month-flag">{currentMonth}월</span>
+            ) : (
+              <span className={`num ${redMarked ? "num-red" : ""} ${isToday ? "today-num" : ""}`}>{day}</span>
+            )}
             {dayMarks.length > 0 && (
               <div className="calendar-mark-list" aria-label={`${currentMonth}월 ${day}일 표시`}>
                 {dayMarks.slice(0, 4).map(mark => (
@@ -4527,6 +4574,10 @@ export default function HomePage() {
             )}
           </div>
           {holidays[k] && <div className="holiday">{holidays[k]}</div>}
+          {(() => {
+            const lunar = lunarLabel(currentYear, currentMonth, day);
+            return lunar ? <div className="calendar-lunar">{lunar}</div> : null;
+          })()}
           {dayInfoItems.length > 0 && (
             <div className="information-chip-list" aria-label={`${currentMonth}월 ${day}일 정보함 항목`}>
               {dayInfoItems.slice(0, 3).map(item => (
@@ -4561,7 +4612,7 @@ export default function HomePage() {
           </div>
           {daySchedules.length > 0 && (
             <div className="schedule-chip-list">
-              {daySchedules.slice(0, 3).map(item => (
+              {daySchedules.slice(0, 5).map(item => (
                 <button
                   type="button"
                   className={`schedule-chip schedule-${item.color} schedule-chip-button`}
@@ -4576,6 +4627,7 @@ export default function HomePage() {
                   {item.startTime && <span className="schedule-chip-time">{item.startTime}</span>}
                 </button>
               ))}
+              {daySchedules.length > 5 && <div className="schedule-more" aria-label={`일정 ${daySchedules.length - 5}개 더 있음`}>···</div>}
             </div>
           )}
         </div>
@@ -4751,6 +4803,7 @@ export default function HomePage() {
                     <span className="google-schedule-title">입력 · {item.title}{item.repeat && item.repeat !== "없음" ? ` (${item.repeat})` : ""}</span>
                     <span className="appScheduleBtns">
                       <button type="button" onClick={() => editSchedule(item)} aria-label="일정 수정">수정</button>
+                      <button type="button" onClick={() => copySchedule(item)} aria-label="일정 복사">복사</button>
                       <button type="button" onClick={() => deleteSchedule(item.id)} aria-label="일정 삭제">삭제</button>
                     </span>
                   </div>
@@ -5143,7 +5196,9 @@ export default function HomePage() {
         title={scheduleTitle}
         onTitle={setScheduleTitle}
         date={scheduleStartDate}
-        onDate={setScheduleStartDate}
+        onDate={handleScheduleDateChange}
+        endDate={scheduleEndDate}
+        onEndDate={setScheduleEndDate}
         time={scheduleStartTime}
         onTime={setScheduleStartTime}
         repeat={scheduleRepeat}
@@ -5187,6 +5242,7 @@ export default function HomePage() {
                 </div>
                 <div className="saved-schedule-actions">
                   <button type="button" onClick={() => editSchedule(item)}>수정</button>
+                  <button type="button" onClick={() => copySchedule(item)}>복사</button>
                   <button type="button" onClick={() => deleteSchedule(item.id)}>삭제</button>
                 </div>
               </div>

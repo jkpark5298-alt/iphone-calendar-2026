@@ -14012,3 +14012,192 @@ body {
   font-weight: 900;
   cursor: pointer;
 }
+
+/* ===== 아이폰 기본 캘린더 모양(월 보기) =====
+   요일 줄, 일자 숫자, 주말 칸 배경, 일정 막대, 공휴일·음력 알약, 오늘 빨간 동그라미 */
+.calendar {
+  --cal-bg: #ffffff;
+  --cal-line: #e4e7ec;
+  --cal-weekend: #f1f5ff;
+  --cal-num: #1c1c1e;
+  --cal-head: #6c6c70;
+  --cal-selected: rgba(0, 122, 255, 0.1);
+  --cal-flag: #0f3d66;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", system-ui, sans-serif;
+  margin-top: 8px;
+  border: 0;
+  background: var(--cal-bg);
+}
+@media (prefers-color-scheme: dark) {
+  .calendar {
+    --cal-bg: #121615;
+    --cal-line: #2c3230;
+    --cal-weekend: #171d2b;
+    --cal-num: #f2f2f7;
+    --cal-head: #a1a6ab;
+    --cal-selected: rgba(10, 132, 255, 0.18);
+    --cal-flag: #1e5f99;
+  }
+}
+.calendar .weekday {
+  background: transparent;
+  color: var(--cal-head);
+  font-size: 13px;
+  font-weight: 400;
+  padding: 4px 0 6px;
+  border: 0;
+  border-bottom: 1px solid var(--cal-line);
+}
+.calendar .day {
+  min-height: 100px;
+  padding: 2px 0 4px;
+  border: 0;
+  border-right: 1px solid var(--cal-line);
+  border-bottom: 1px solid var(--cal-line);
+  background: var(--cal-bg);
+  box-shadow: none;
+}
+.calendar .day:nth-child(7n) {
+  border-right: 0;
+}
+.calendar .day.empty,
+.calendar .day.holiday-day {
+  background: var(--cal-bg);
+}
+.calendar .day.selected-day,
+.calendar .day.today-day.selected-day {
+  background: var(--cal-selected);
+  box-shadow: none !important;
+}
+.calendar .day.today-day {
+  background: var(--cal-bg);
+  box-shadow: none !important;
+}
+.calendar .day.today-day.selected-day {
+  background: var(--cal-selected);
+}
+.calendar .day:nth-child(7n + 1):not(.selected-day),
+.calendar .day:nth-child(7n):not(.selected-day) {
+  background: var(--cal-weekend);
+}
+.calendar .day-top {
+  min-height: 20px;
+  padding: 0 3px;
+  gap: 2px;
+}
+.calendar .day .num {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--cal-num);
+}
+.calendar .day .num.num-red {
+  color: #e5484d;
+}
+.calendar .day.today-day .num.today-num {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 50% !important;
+  background: #d70015 !important;
+  color: #ffffff !important;
+  font-size: 13px;
+  font-weight: 600 !important;
+}
+.calendar-month-flag {
+  display: inline-block;
+  margin-left: -3px;
+  padding: 1px 8px 1px 5px;
+  border-radius: 0 10px 10px 0;
+  background: var(--cal-flag);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+.calendar .holiday,
+.calendar .calendar-lunar {
+  position: relative;
+  z-index: 2;
+  display: block;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: calc(100% - 6px);
+  margin: 2px 3px 0;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-size: 10px !important;
+  font-weight: 600;
+  line-height: 14px;
+  letter-spacing: -0.03em;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+.calendar .calendar-lunar {
+  background: #8e8e93;
+  color: #ffffff;
+}
+.calendar .holiday {
+  background: #e5484d;
+  color: #ffffff !important;
+}
+.calendar .information-chip-list {
+  padding: 0 1px;
+}
+.calendar .thumb.empty-thumb {
+  display: none;
+}
+.calendar .thumb {
+  height: 36px;
+  margin: 2px 3px 0;
+  border-radius: 4px;
+}
+.calendar .schedule-chip-list {
+  gap: 1px;
+  margin-top: 2px;
+  padding: 0 1px;
+}
+.calendar .schedule-chip.schedule-chip-button {
+  display: block;
+  -webkit-line-clamp: unset;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 14px;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow: hidden;
+  text-overflow: clip;
+  color: #ffffff;
+}
+.calendar .schedule-chip-time {
+  display: none;
+}
+.calendar .schedule-yellow { background: #f5c518; color: #2b2412; }
+.calendar .schedule-lightGreen { background: #b8e986; color: #1f2d12; }
+.calendar .schedule-blue { background: #3a8ff0; }
+.calendar .schedule-red { background: #e5484d; }
+.calendar .schedule-green { background: #34a853; }
+.calendar .schedule-orange { background: #f08a24; }
+.calendar .schedule-navy { background: #3a5ba6; }
+.calendar .schedule-purple { background: #a15bd6; }
+.calendar .schedule-more {
+  position: relative;
+  z-index: 2;
+  color: var(--cal-head);
+  font-size: 11px;
+  line-height: 8px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.scheduleQuickHint {
+  font-size: 12px;
+  color: #7a8594;
+  align-self: center;
+}
