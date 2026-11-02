@@ -582,7 +582,7 @@ export default function HomePage() {
   const [diaryScheduleBoxOpen, setDiaryScheduleBoxOpen] = useState(false);
   /** 일기장의 "사진 보관"(갤러리·사진 버튼)을 펼쳤는지. 평소에는 한 줄만 보인다. */
   const [diaryPhotoBoxOpen, setDiaryPhotoBoxOpen] = useState(false);
-  const repPhotoHandlerRef = useRef<(src: string) => void>(() => {});
+  const repPhotoHandlerRef = useRef<(src: string, img?: HTMLImageElement | null) => void>(() => {});
   const scheduleTitleInputRef = useRef<HTMLInputElement | null>(null);
   const scheduleSyncChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const scheduleSaveGenRef = useRef(0);
@@ -594,7 +594,8 @@ export default function HomePage() {
     const onRepresentative = (event: Event) => {
       const target = event.target instanceof Element ? event.target : null;
       if (!target?.closest("[data-rep-photo]")) return;
-      repPhotoHandlerRef.current(String((event as CustomEvent).detail?.src || ""));
+      const detail = (event as CustomEvent).detail || {};
+      repPhotoHandlerRef.current(String(detail.src || ""), detail.img instanceof HTMLImageElement ? detail.img : null);
     };
     document.addEventListener("rich-image-representative", onRepresentative);
     return () => document.removeEventListener("rich-image-representative", onRepresentative);
@@ -4309,14 +4310,8 @@ export default function HomePage() {
   }
 
   /** 본문에 넣은 사진을 이 날짜의 캘린더 대표 사진으로 지정한다. */
-  async function setCalendarPhotoFromBody(src: string) {
-    const marker = "/storage/v1/object/public/diary-photos/";
-    const markerIndex = src.indexOf(marker);
-    if (!/^https?:/i.test(src) || markerIndex < 0) {
-      alert("업로드가 끝난 일기 사진만 대표로 지정할 수 있습니다. 잠시 뒤 다시 눌러 주세요.");
-      return;
-    }
-    const storagePath = decodeURIComponent(src.slice(markerIndex + marker.length).split("?")[0]);
+  async function setCalendarPhotoFromBody(rawSrc: string, img?: HTMLImageElement | null) {
+    let src = rawSrc;
     const k = key(currentMonth, currentDay, currentYear);
     const targetDate = entryDate(currentMonth, currentDay, currentYear);
 
@@ -4324,6 +4319,37 @@ export default function HomePage() {
       alert("서버에 연결되어 있지 않아 대표 사진을 지정하지 못했습니다.");
       return;
     }
+
+    // 예전 방식으로 글 안에 직접 들어 있는 사진(data:)은 사진 보관함에 올린 뒤 본문 주소도 바꿔 둔다.
+    if (/^data:image\//i.test(src)) {
+      const blob = dataUrlToBlob(src);
+      const uploaded = await uploadPhotoToSupabase(
+        new File([blob], "body-photo.jpg", { type: blob.type || "image/jpeg" }),
+        "diary-photos",
+        currentMonth,
+        currentDay,
+        BODY_PHOTO_REP_SORT_ORDER,
+        currentYear,
+      );
+      if (!uploaded?.url) {
+        alert("사진을 사진 보관함에 올리지 못해 대표로 지정하지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
+        return;
+      }
+      src = uploaded.url;
+      if (img && img.isConnected) {
+        img.setAttribute("src", src);
+        // 본문 저장이 새 주소로 다시 되도록 입력이 있었음을 알린다.
+        img.closest("[data-rep-photo]")?.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
+
+    const marker = "/storage/v1/object/public/diary-photos/";
+    const markerIndex = src.indexOf(marker);
+    if (!/^https?:/i.test(src) || markerIndex < 0) {
+      alert("대표로 지정할 수 없는 사진입니다. (일기 사진 보관함에 올라간 사진만 지정할 수 있습니다.)");
+      return;
+    }
+    const storagePath = decodeURIComponent(src.slice(markerIndex + marker.length).split("?")[0]);
 
     // 먼저 새 대표를 켜고, 그다음 같은 날의 나머지 대표를 끈다(중간에 실패해도 대표가 없어지지 않게).
     const { data: updated, error: setError } = await supabase
@@ -4365,8 +4391,8 @@ export default function HomePage() {
     setLocalStorageSafely("iphone-diary-2026-calendar-photo-indexes", JSON.stringify(nextCalendarPhotoIndexes));
     alert("이 사진을 캘린더 대표 사진으로 지정했습니다.");
   }
-  repPhotoHandlerRef.current = (src: string) => {
-    void setCalendarPhotoFromBody(src);
+  repPhotoHandlerRef.current = (src: string, img?: HTMLImageElement | null) => {
+    void setCalendarPhotoFromBody(src, img);
   };
 
   function openCalendarPhotoOriginal(k: string) {

@@ -412,8 +412,9 @@ function bindInlineImageResize(editor: HTMLElement) {
           exitResizeMode();
           if (toggleImagePair(editor, frame)) editor.dispatchEvent(new Event("input", { bubbles: true }));
         } else if (tool.dataset.act === "rep") {
-          const src = frame.querySelector("img")?.getAttribute("src") || "";
-          editor.dispatchEvent(new CustomEvent("rich-image-representative", { bubbles: true, detail: { src } }));
+          const img = frame.querySelector("img");
+          const src = img?.getAttribute("src") || "";
+          editor.dispatchEvent(new CustomEvent("rich-image-representative", { bubbles: true, detail: { src, img } }));
         }
         return;
       }
