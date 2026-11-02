@@ -93,13 +93,13 @@ export function ScheduleQuickForm({
         </label>
       </div>
       {editing ? (
-        <div className="scheduleQuickRow">
+        <div className="scheduleQuickRow scheduleQuickRowSingle">
           <label>
             <span>종료일 (기간, 선택)</span>
             <span className="scheduleQuickTimeWrap">
               <input type="date" value={endDate} min={date} onChange={(event) => onEndDate(event.target.value)} />
               {endDate ? (
-                <button type="button" className="scheduleQuickClear" onClick={() => onEndDate("")} aria-label="종료일 지우기">
+                <button type="button" className="scheduleQuickClear scheduleQuickClearDate" onClick={() => onEndDate("")} aria-label="종료일 지우기">
                   ×
                 </button>
               ) : null}

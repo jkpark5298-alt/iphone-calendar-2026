@@ -61,6 +61,9 @@ export function PushToggle() {
           </>
         ) : null}
       </div>
+      {status === "on" ? (
+        <div className="pushToggleHint">기기에서 한 번만 켜면 됩니다. 일정마다 위 ‘알림’에서 알릴 시점을 고르세요.</div>
+      ) : null}
       {hint ? <div className="pushToggleHint">{hint}</div> : null}
       {message ? (
         <div className="pushToggleHint" role="status">

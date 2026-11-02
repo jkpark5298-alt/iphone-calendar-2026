@@ -581,9 +581,16 @@ export default function HomePage() {
   const scheduleLatestRef = useRef<Record<string, ScheduleItem[]> | null>(null);
   const scheduleCopySpanRef = useRef(0);
 
-  // 날짜를 옮기면 새 일정의 기본 날짜도 따라가게 한다(수정 중이면 그대로 둔다).
+  // 날짜를 옮기면 새 일정의 기본 날짜도 따라가게 한다.
+  // 일기장에서 날짜를 옮길 때 다른 날의 일정 수정 폼이 남아 있지 않도록, 수정 중이던 폼은 닫는다.
   useEffect(() => {
-    if (editingScheduleId) return;
+    if (editingScheduleId) {
+      if (view === "diary") {
+        cancelScheduleEdit();
+        setDiaryScheduleFormOpen(false);
+      }
+      return;
+    }
     setScheduleStartDate(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`);
   }, [currentYear, currentMonth, currentDay]);
   const [audioUrl, setAudioUrl] = useState("");
@@ -2605,6 +2612,11 @@ export default function HomePage() {
   }
 
   function openDiary(month: number, day: number, year: number = currentYear) {
+    // 일정 화면 등에서 수정하던 일정이 일기장에 그대로 남지 않게 한다.
+    if (editingScheduleId) {
+      cancelScheduleEdit();
+      setDiaryScheduleFormOpen(false);
+    }
     setCurrentYear(year);
     setCurrentMonth(month);
     setCurrentDay(day);

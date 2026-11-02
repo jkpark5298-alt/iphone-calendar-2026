@@ -14328,3 +14328,13 @@ body {
   color: #7a8594;
   line-height: 1.4;
 }
+
+.scheduleQuickRowSingle {
+  grid-template-columns: minmax(0, 1fr);
+}
+.scheduleQuickClearDate {
+  right: 10px;
+}
+.scheduleQuickRowSingle input[type="date"] {
+  padding-right: 36px;
+}
