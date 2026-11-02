@@ -2,6 +2,7 @@
 
 import React from "react";
 import { REMIND_OPTIONS } from "../lib/pushSchedule";
+import { lunarParts } from "../lib/lunar";
 
 export type ScheduleQuickNotice = { state: "saving" | "saved" | "error" | "invalid" | "info"; text: string } | null;
 
@@ -111,7 +112,7 @@ export function ScheduleQuickForm({
         <label>
           <span>반복</span>
           <select value={repeat} onChange={(event) => onRepeat(event.target.value)}>
-            {["없음", "매일", "매주", "매월", "매년"].map((item) => (
+            {["없음", "매일", "매주", "매월", "매년", "매년(음력)"].map((item) => (
               <option key={item}>{item}</option>
             ))}
           </select>
@@ -134,6 +135,16 @@ export function ScheduleQuickForm({
           </div>
         </div>
       </div>
+      {repeat === "매년(음력)" ? (
+        <div className="scheduleQuickHint">
+          {(() => {
+            const lunar = /^\d{4}-\d{2}-\d{2}$/.test(date) ? lunarParts(new Date(`${date}T12:00:00`)) : null;
+            return lunar
+              ? `선택한 날짜는 음력 ${lunar.leap ? "윤" : ""}${lunar.month}월 ${lunar.day}일입니다. 매년 이 음력 날짜에 표시됩니다.`
+              : "선택한 날짜의 음력 날짜에 매년 표시됩니다.";
+          })()}
+        </div>
+      ) : null}
       <div className="scheduleQuickRow">
         <label>
           <span>🔔 알림</span>

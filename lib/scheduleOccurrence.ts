@@ -1,5 +1,7 @@
 /** 일정이 특정 날짜에 보이는지 계산한다(시작일~종료일 범위 + 반복). */
 
+import { lunarParts } from "./lunar";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_SPAN_DAYS = 366;
 
@@ -52,6 +54,12 @@ function repeatMatches(start: Date, occurrence: Date, repeat: string): boolean {
         occurrence.getMonth() === start.getMonth() &&
         occurrence.getDate() === Math.min(start.getDate(), daysInMonth(occurrence.getFullYear(), occurrence.getMonth()))
       );
+    case "매년(음력)": {
+      // 시작일의 음력 월·일과 같은 날(윤달은 제외)에 매년 표시한다.
+      const base = lunarParts(start);
+      const current = lunarParts(occurrence);
+      return Boolean(base && current && !current.leap && base.month === current.month && base.day === current.day);
+    }
     default:
       return false;
   }

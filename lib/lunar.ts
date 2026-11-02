@@ -12,6 +12,22 @@ function getFormatter() {
   return formatter;
 }
 
+/** 날짜의 음력 월·일. 윤달이면 leap=true. 계산할 수 없으면 null. */
+export function lunarParts(date: Date): { month: number; day: number; leap: boolean } | null {
+  const format = getFormatter();
+  if (!format) return null;
+  try {
+    const parts = format.formatToParts(date);
+    const monthText = parts.find((part) => part.type === "month")?.value || "";
+    const day = Number(parts.find((part) => part.type === "day")?.value);
+    const matched = /^(\d+)(bis)?$/.exec(monthText);
+    if (!matched || !Number.isFinite(day)) return null;
+    return { month: Number(matched[1]), day, leap: Boolean(matched[2]) };
+  } catch {
+    return null;
+  }
+}
+
 const SHOWN_LUNAR_DAYS = new Set([1, 10, 20]);
 
 export function lunarLabel(year: number, month: number, day: number): string {
