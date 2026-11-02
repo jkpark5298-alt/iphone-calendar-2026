@@ -14013,6 +14013,19 @@ body {
   cursor: pointer;
 }
 
+/* PC 보기: 아이폰 전용 요소는 숨기고 예전 모양을 유지한다 */
+.calendar-month-flag,
+.calendar-lunar,
+.calendar .day.adjacent,
+.phoneCalBar,
+.schedule-more {
+  display: none;
+}
+.schedule-chip-list > .schedule-chip:nth-child(n + 4) {
+  display: none;
+}
+
+@media (max-width: 820px) {
 /* ===== 아이폰 기본 캘린더 모양(월 보기) =====
    요일 줄, 일자 숫자, 주말 칸 배경, 일정 막대, 공휴일·음력 알약, 오늘 빨간 동그라미 */
 .calendar {
@@ -14057,7 +14070,7 @@ body {
   background: var(--cal-bg);
   box-shadow: none;
 }
-.calendar .day:nth-child(7n) {
+.calendar .day.col-6 {
   border-right: 0;
 }
 .calendar .day.empty,
@@ -14076,8 +14089,8 @@ body {
 .calendar .day.today-day.selected-day {
   background: var(--cal-selected);
 }
-.calendar .day:nth-child(7n + 1):not(.selected-day),
-.calendar .day:nth-child(7n):not(.selected-day) {
+.calendar .day.col-0:not(.selected-day),
+.calendar .day.col-6:not(.selected-day) {
   background: var(--cal-weekend);
 }
 .calendar .day-top {
@@ -14195,6 +14208,88 @@ body {
   line-height: 8px;
   text-align: center;
   letter-spacing: 1px;
+}
+.calendar .day.empty {
+  display: none;
+}
+.calendar .day.adjacent {
+  display: block;
+}
+.calendar .schedule-more {
+  display: block;
+}
+.calendar .day .num.is-month-first:not(.today-num) {
+  display: none;
+}
+.calendar-month-flag {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.calendar .day-top {
+  flex-wrap: wrap;
+}
+/* 이번 달 첫 줄 위쪽과 1일 칸 왼쪽의 진한 선 */
+.calendar .day.month-first-row {
+  border-top: 2px solid var(--cal-flag);
+}
+.calendar .day.month-first-day {
+  border-left: 2px solid var(--cal-flag);
+}
+
+/* 상단 바: 오늘·날짜·검색·일정 추가 + 월/연도 */
+.phoneCalBar {
+  display: block;
+  margin-top: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", system-ui, sans-serif;
+  color: var(--text, #1c1c1e);
+}
+.phoneCalIcons {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 18px;
+  padding: 2px 6px 8px;
+}
+.phoneCalIconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 4px;
+  cursor: pointer;
+}
+.phoneCalDate {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: #5d5f86;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.phoneCalTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 6px 6px;
+}
+.phoneCalTitle strong {
+  font-size: 26px;
+  font-weight: 600;
+}
+.phoneCalTitle span {
+  font-size: 20px;
+  color: #8e8e93;
+}
+.calendar {
+  margin-top: 0;
+}
 }
 .scheduleQuickHint {
   font-size: 12px;

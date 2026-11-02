@@ -32,6 +32,7 @@ import { CollectWhiteCell } from "../components/CollectWhiteCell";
 import { ScheduleQuickForm, type ScheduleQuickNotice } from "../components/ScheduleQuickForm";
 import { addDaysToYmd, daysBetweenYmd, scheduleOccursOn } from "../lib/scheduleOccurrence";
 import { lunarLabel } from "../lib/lunar";
+import { CalendarCheck, Plus, Search } from "lucide-react";
 import { PushToggle } from "../components/PushToggle";
 import { remindLabel } from "../lib/pushSchedule";
 import { SlotImagePanel } from "../components/SlotImagePanel";
@@ -2951,6 +2952,30 @@ export default function HomePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  /** 캘린더를 오늘 날짜가 있는 달로 옮긴다(지원 범위 밖이면 2026년 5월). */
+  function jumpCalendarToToday() {
+    const today = new Date();
+    let year = today.getFullYear();
+    let month = today.getMonth() + 1;
+    let day = today.getDate();
+    if (year < 2026 || year > 2036 || (year === 2026 && month < 5)) {
+      year = 2026;
+      month = 5;
+      day = 1;
+    }
+    setCurrentYear(year);
+    setCurrentMonth(month);
+    setCurrentDay(day);
+    setView("calendar");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function focusCalendarSearch() {
+    const input = document.querySelector<HTMLInputElement>(".calendar-search-input");
+    input?.scrollIntoView({ behavior: "smooth", block: "center" });
+    input?.focus();
+  }
+
   function openTodayDiary() {
     const today = new Date();
     const year = today.getFullYear();
@@ -4548,10 +4573,58 @@ export default function HomePage() {
     const first = new Date(currentYear, currentMonth - 1, 1).getDay();
     const infoByDay = groupInformationEntriesByDay(informationItems, currentYear, currentMonth);
     const cells = [];
-    for (let i = 0; i < first; i++) cells.push(<div key={`empty-${i}`} className="day empty" />);
+    const monthDays = getDaysInMonth(currentYear, currentMonth);
+    const inSupportedRange = (y: number, m: number) => y >= 2026 && y <= 2036 && !(y === 2026 && m < 5);
 
-    for (let day = 1; day <= getDaysInMonth(currentYear, currentMonth); day++) {
+    /** 앞뒤 달 날짜 칸(아이폰에서만 보인다). 숫자·음력·일정 막대만 보여 준다. */
+    const renderAdjacentDay = (cellYear: number, cellMonth: number, cellDay: number, col: number, afterMonth: boolean) => {
+      const adjacentKey = key(cellMonth, cellDay, cellYear);
+      const adjacentSchedules = getVisibleSchedulesForDay(schedules, cellMonth, cellDay, cellYear);
+      const lunar = lunarLabel(cellYear, cellMonth, cellDay);
+      return (
+        <div
+          className={`day adjacent col-${col}${afterMonth ? " month-first-row" : ""}${afterMonth && cellDay === 1 ? " month-first-day" : ""}`}
+          key={`adjacent-${adjacentKey}-${cellYear}`}
+        >
+          <button
+            type="button"
+            className="day-hit"
+            onClick={() => openDiary(cellMonth, cellDay, cellYear)}
+            aria-label={`${cellMonth}월 ${cellDay}일 일기장으로 이동`}
+          />
+          <div className="day-top">
+            {cellDay === 1 ? <span className="calendar-month-flag">{cellMonth}월</span> : <span className="num">{cellDay}</span>}
+          </div>
+          {lunar ? <div className="calendar-lunar">{lunar}</div> : null}
+          {adjacentSchedules.length > 0 && (
+            <div className="schedule-chip-list">
+              {adjacentSchedules.slice(0, 5).map(item => (
+                <div className={`schedule-chip schedule-chip-button schedule-${item.color}`} key={`${item.id}-${cellMonth}-${cellDay}`}>
+                  <span className="schedule-chip-title">{item.title}</span>
+                </div>
+              ))}
+              {adjacentSchedules.length > 5 && <div className="schedule-more">···</div>}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    for (let i = 0; i < first; i++) cells.push(<div key={`empty-${i}`} className="day empty" />);
+    {
+      const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+      const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+      if (first > 0 && inSupportedRange(prevYear, prevMonth)) {
+        const prevDays = getDaysInMonth(prevYear, prevMonth);
+        for (let i = 0; i < first; i++) {
+          cells.push(renderAdjacentDay(prevYear, prevMonth, prevDays - first + 1 + i, i, false));
+        }
+      }
+    }
+
+    for (let day = 1; day <= monthDays; day++) {
       const k = key(currentMonth, day, currentYear);
+      const col = (first + day - 1) % 7;
       const dayInfoItems = infoByDay[`${currentYear}-${pad(currentMonth)}-${pad(day)}`] || [];
       const manuallyRed = (redDates[currentMonth] || []).includes(day);
       const redMarked = manuallyRed;
@@ -4560,7 +4633,7 @@ export default function HomePage() {
       const dayMarks = calendarMarks[k] || [];
       const isSelected = currentDay === day;
       cells.push(
-        <div className={`day ${redMarked ? "holiday-day" : ""} ${isToday ? "today-day" : ""} ${isSelected ? "selected-day" : ""}`} key={k}>
+        <div className={`day col-${col} ${redMarked ? "holiday-day" : ""} ${isToday ? "today-day" : ""} ${isSelected ? "selected-day" : ""} ${first + day - 1 < 7 ? "month-first-row" : ""} ${day === 1 ? "month-first-day" : ""}`} key={k}>
           <button
             type="button"
             className="day-hit"
@@ -4568,11 +4641,8 @@ export default function HomePage() {
             aria-label={`${currentMonth}월 ${day}일 일기장으로 이동`}
           />
           <div className="day-top">
-            {day === 1 && !isToday ? (
-              <span className="calendar-month-flag">{currentMonth}월</span>
-            ) : (
-              <span className={`num ${redMarked ? "num-red" : ""} ${isToday ? "today-num" : ""}`}>{day}</span>
-            )}
+            {day === 1 && !isToday ? <span className="calendar-month-flag">{currentMonth}월</span> : null}
+            <span className={`num ${redMarked ? "num-red" : ""} ${isToday ? "today-num" : ""} ${day === 1 ? "is-month-first" : ""}`}>{day}</span>
             {dayMarks.length > 0 && (
               <div className="calendar-mark-list" aria-label={`${currentMonth}월 ${day}일 표시`}>
                 {dayMarks.slice(0, 4).map(mark => (
@@ -4645,6 +4715,18 @@ export default function HomePage() {
           )}
         </div>
       );
+    }
+
+    {
+      const total = first + monthDays;
+      const trailing = (7 - (total % 7)) % 7;
+      const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+      const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+      if (trailing > 0 && inSupportedRange(nextYear, nextMonth)) {
+        for (let d = 1; d <= trailing; d++) {
+          cells.push(renderAdjacentDay(nextYear, nextMonth, d, (total + d - 1) % 7, true));
+        }
+      }
     }
 
     return (
@@ -4759,6 +4841,27 @@ export default function HomePage() {
               ))}
             </div>
           )}
+        </div>
+
+        <div className="phoneCalBar">
+          <div className="phoneCalIcons">
+            <button type="button" className="phoneCalIconBtn" onClick={jumpCalendarToToday} aria-label="오늘 날짜로 이동">
+              <CalendarCheck size={24} strokeWidth={1.8} />
+            </button>
+            <button type="button" className="phoneCalDate" onClick={openTodayDiary} aria-label="오늘 일기장">
+              {todayDefault.day}
+            </button>
+            <button type="button" className="phoneCalIconBtn" onClick={focusCalendarSearch} aria-label="검색">
+              <Search size={24} strokeWidth={1.8} />
+            </button>
+            <button type="button" className="phoneCalIconBtn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">
+              <Plus size={26} strokeWidth={1.8} />
+            </button>
+          </div>
+          <div className="phoneCalTitle">
+            <strong>{currentMonth}월</strong>
+            <span>{currentYear}</span>
+          </div>
         </div>
 
         <div className="calendar">
