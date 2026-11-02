@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { REMIND_OPTIONS } from "../lib/pushSchedule";
 
 export type ScheduleQuickNotice = { state: "saving" | "saved" | "error" | "invalid" | "info"; text: string } | null;
 
@@ -16,6 +17,9 @@ export function ScheduleQuickForm({
   onTime,
   repeat,
   onRepeat,
+  remind,
+  onRemind,
+  footer,
   color,
   onColor,
   colors,
@@ -37,6 +41,11 @@ export function ScheduleQuickForm({
   onTime: (value: string) => void;
   repeat: string;
   onRepeat: (value: string) => void;
+  /** 알림 시점: "" 없음 / at / 10m / 1h / 1d */
+  remind: string;
+  onRemind: (value: string) => void;
+  /** 폼 맨 아래에 붙일 내용(알림 켜기 버튼 등) */
+  footer?: React.ReactNode;
   color: string;
   onColor: (value: string) => void;
   colors: { value: string; label: string }[];
@@ -125,6 +134,19 @@ export function ScheduleQuickForm({
           </div>
         </div>
       </div>
+      <div className="scheduleQuickRow">
+        <label>
+          <span>🔔 알림</span>
+          <select value={remind} onChange={(event) => onRemind(event.target.value)}>
+            {REMIND_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="scheduleQuickHint">시간 없는 일정은 오전 9시 기준</span>
+      </div>
       <div className="scheduleQuickActions">
         <button type="button" className="scheduleQuickSubmit" onClick={onSubmit}>
           {editing ? "수정 저장" : "저장하고 계속 입력"}
@@ -145,6 +167,7 @@ export function ScheduleQuickForm({
           ) : null}
         </div>
       ) : null}
+      {footer}
     </div>
   );
 }

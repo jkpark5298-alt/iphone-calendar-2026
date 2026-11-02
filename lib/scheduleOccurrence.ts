@@ -79,3 +79,10 @@ export function scheduleOccursOn(startTime: number, endTime: number, repeat: str
   }
   return false;
 }
+
+/** targetTime(자정, ms)이 이 일정이 시작하는 날(반복 포함)인지. 종료일은 보지 않는다. */
+export function occurrenceStartsOn(startTime: number, repeat: string | undefined, targetTime: number): boolean {
+  if (targetTime < startTime) return false;
+  if (!repeat || repeat === "없음") return targetTime === startTime;
+  return repeatMatches(new Date(startTime), new Date(targetTime), repeat);
+}

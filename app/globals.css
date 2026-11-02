@@ -14201,3 +14201,35 @@ body {
   color: #7a8594;
   align-self: center;
 }
+.pushToggle {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.pushToggleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pushToggleRow button {
+  border: 1px solid #cfd8d2;
+  background: #fff;
+  color: #1f2421;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.pushToggleRow button:disabled {
+  opacity: 0.5;
+}
+.pushToggleOn {
+  font-weight: 900;
+  color: #2e7d32;
+}
+.pushToggleHint {
+  margin-top: 4px;
+  color: #7a8594;
+  line-height: 1.4;
+}

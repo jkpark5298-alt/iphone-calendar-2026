@@ -1,0 +1,18 @@
+name: push-dispatch
+
+# 5분마다 일정 알림 시각이 된 일정이 있는지 서버에 알려서 푸시를 보내게 한다.
+# (GitHub 사정에 따라 몇 분 늦게 실행될 수 있다.)
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 알림 확인 요청
+        run: |
+          curl -sS -X POST "https://iphone-calendar-2026.vercel.app/api/push/dispatch" \
+            -H "Authorization: Bearer ${{ secrets.PUSH_CRON_SECRET }}" \
+            --max-time 60 -w "\nHTTP %{http_code}\n"

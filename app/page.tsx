@@ -32,6 +32,8 @@ import { CollectWhiteCell } from "../components/CollectWhiteCell";
 import { ScheduleQuickForm, type ScheduleQuickNotice } from "../components/ScheduleQuickForm";
 import { addDaysToYmd, daysBetweenYmd, scheduleOccursOn } from "../lib/scheduleOccurrence";
 import { lunarLabel } from "../lib/lunar";
+import { PushToggle } from "../components/PushToggle";
+import { remindLabel } from "../lib/pushSchedule";
 import { SlotImagePanel } from "../components/SlotImagePanel";
 import { ClassTagSelect } from "../components/ClassTagSelect";
 import { EntryLookup, plainSnippet, type LookupHit } from "../components/EntryLookup";
@@ -129,6 +131,8 @@ type ScheduleItem = {
   endTime?: string;
   repeat: string;
   color: ScheduleColor;
+  /** 알림: "" 없음 / at 정시 / 10m / 1h / 1d (전날 저녁 8시) */
+  remind?: string;
 };
 type InfoTextCard = {
   id: string;
@@ -567,6 +571,7 @@ export default function HomePage() {
   const [scheduleRepeat, setScheduleRepeat] = useState("없음");
   const [scheduleColor, setScheduleColor] = useState<ScheduleColor>("yellow");
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
+  const [scheduleRemind, setScheduleRemind] = useState("");
   const [scheduleNotice, setScheduleNotice] = useState<ScheduleQuickNotice>(null);
   const [diaryScheduleFormOpen, setDiaryScheduleFormOpen] = useState(false);
   const scheduleTitleInputRef = useRef<HTMLInputElement | null>(null);
@@ -1302,7 +1307,7 @@ export default function HomePage() {
 
     const { data, error } = await supabase
       .from("calendar_schedules")
-      .select("schedule_id, schedule_key, month, day, title, start_date, start_time, end_date, end_time, repeat, color")
+      .select("*")
       .order("month", { ascending: true })
       .order("day", { ascending: true })
       .order("start_time", { ascending: true });
@@ -1336,6 +1341,7 @@ export default function HomePage() {
         endDate: row.end_date || `${year}-${pad(month)}-${pad(day)}`,
         endTime: row.end_time ?? "",
         repeat: row.repeat || "없음",
+        remind: row.remind || "",
         color: ["yellow", "blue", "red", "green", "lightGreen", "orange", "navy", "purple"].includes(color) ? color : "yellow",
       };
       nextSchedules[scheduleKey] = [...(nextSchedules[scheduleKey] || []), item];
@@ -1376,13 +1382,15 @@ export default function HomePage() {
         end_time: item.endTime || "",
         repeat: item.repeat || "없음",
         color: item.color || "yellow",
+        // remind 열은 알림 SQL을 실행한 뒤에만 있으므로, 값이 있을 때만 보낸다.
+        ...(item.remind ? { remind: item.remind } : {}),
         updated_at: new Date().toISOString(),
       }));
     });
 
     const { data: remoteRows, error: loadError } = await supabase
       .from("calendar_schedules")
-      .select("id, schedule_id, schedule_key, title, start_date, start_time, end_date, end_time, repeat, color");
+      .select("*");
     if (loadError) {
       console.warn("Supabase schedule load before save error:", loadError.message);
       return false;
@@ -1404,11 +1412,11 @@ export default function HomePage() {
 
     const toInsert: typeof rows = [];
     const toUpdate: { id: string; row: (typeof rows)[number] }[] = [];
-    const compared = ["schedule_key", "title", "start_date", "start_time", "end_date", "end_time", "repeat", "color"] as const;
+    const compared = ["schedule_key", "title", "start_date", "start_time", "end_date", "end_time", "repeat", "color", "remind"] as const;
     rows.forEach(row => {
       const old = remoteById.get(row.schedule_id);
       if (!old) toInsert.push(row);
-      else if (compared.some(field => String(old[field] ?? "") !== String(row[field] ?? ""))) toUpdate.push({ id: String(old.id), row });
+      else if (compared.some(field => String(old[field] ?? "") !== String(row[field] ?? ""))) toUpdate.push({ id: String(old.id), row: !row.remind && "remind" in old ? { ...row, remind: "" } : row });
     });
 
     if (toInsert.length) {
@@ -3962,6 +3970,7 @@ export default function HomePage() {
     setScheduleRepeat("없음");
     setScheduleColor("yellow");
     setScheduleEndDate("");
+    setScheduleRemind("");
     scheduleCopySpanRef.current = 0;
     setEditingScheduleId(null);
   }
@@ -4013,6 +4022,7 @@ export default function HomePage() {
       endTime: existing?.endTime || "",
       repeat: scheduleRepeat,
       color: scheduleColor,
+      remind: scheduleRemind,
     };
 
     const base: Record<string, ScheduleItem[]> = {};
@@ -4042,6 +4052,7 @@ export default function HomePage() {
       setScheduleTitle("");
       setScheduleStartTime("");
       setScheduleRepeat("없음");
+      setScheduleRemind("");
     }
     window.setTimeout(() => scheduleTitleInputRef.current?.focus(), 0);
   }
@@ -4054,6 +4065,7 @@ export default function HomePage() {
     setScheduleRepeat(item.repeat || "없음");
     setScheduleColor(item.color || "yellow");
     setScheduleEndDate(item.endDate && item.startDate && item.endDate !== item.startDate ? item.endDate : "");
+    setScheduleRemind(item.remind || "");
     scheduleCopySpanRef.current = 0;
     setScheduleNotice(null);
     setDiaryScheduleFormOpen(true);
@@ -4073,6 +4085,7 @@ export default function HomePage() {
     setScheduleRepeat(item.repeat || "없음");
     setScheduleColor(item.color || "yellow");
     setScheduleEndDate("");
+    setScheduleRemind(item.remind || "");
     scheduleCopySpanRef.current = Math.max(0, daysBetweenYmd(item.startDate, item.endDate));
     setScheduleNotice({ state: "info", text: "복사했습니다 · 날짜를 바꿔 저장하세요" });
     setDiaryScheduleFormOpen(true);
@@ -5183,6 +5196,7 @@ export default function HomePage() {
     const parts = [
       item.startTime || "시간 없음",
       item.repeat && item.repeat !== "없음" ? `반복 ${item.repeat}` : "",
+      item.remind ? `🔔 ${remindLabel(item.remind)}` : "",
       item.endDate && item.startDate && item.endDate !== item.startDate ? `${item.startDate} ~ ${item.endDate}` : "",
     ];
     return parts.filter(Boolean).join(" · ");
@@ -5203,6 +5217,9 @@ export default function HomePage() {
         onTime={setScheduleStartTime}
         repeat={scheduleRepeat}
         onRepeat={setScheduleRepeat}
+        remind={scheduleRemind}
+        onRemind={setScheduleRemind}
+        footer={<PushToggle />}
         color={scheduleColor}
         onColor={(value) => setScheduleColor(value as ScheduleColor)}
         colors={(Object.keys(scheduleColorLabels) as ScheduleColor[]).map(value => ({ value, label: scheduleColorLabels[value] }))}
