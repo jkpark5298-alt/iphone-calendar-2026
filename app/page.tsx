@@ -575,6 +575,8 @@ export default function HomePage() {
   const [scheduleRemind, setScheduleRemind] = useState("");
   const [scheduleNotice, setScheduleNotice] = useState<ScheduleQuickNotice>(null);
   const [diaryScheduleFormOpen, setDiaryScheduleFormOpen] = useState(false);
+  /** 일기장의 "일정" 박스를 펼쳤는지. 평소에는 한 줄 요약만 보인다. */
+  const [diaryScheduleBoxOpen, setDiaryScheduleBoxOpen] = useState(false);
   const scheduleTitleInputRef = useRef<HTMLInputElement | null>(null);
   const scheduleSyncChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const scheduleSaveGenRef = useRef(0);
@@ -4106,6 +4108,7 @@ export default function HomePage() {
     scheduleCopySpanRef.current = 0;
     setScheduleNotice(null);
     setDiaryScheduleFormOpen(true);
+    setDiaryScheduleBoxOpen(true);
     window.setTimeout(() => {
       const input = scheduleTitleInputRef.current;
       input?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -4126,6 +4129,7 @@ export default function HomePage() {
     scheduleCopySpanRef.current = Math.max(0, daysBetweenYmd(item.startDate, item.endDate));
     setScheduleNotice({ state: "info", text: "복사했습니다 · 날짜를 바꿔 저장하세요" });
     setDiaryScheduleFormOpen(true);
+    setDiaryScheduleBoxOpen(true);
     window.setTimeout(() => {
       const input = scheduleTitleInputRef.current;
       input?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -4888,6 +4892,8 @@ export default function HomePage() {
     const k = key(currentMonth, currentDay, currentYear);
     const dayPhotos = photos[k] || [];
     const daySchedules = getVisibleSchedulesForDay(schedules, currentMonth, currentDay, currentYear);
+    const scheduleSummaryTitles = [...daySchedules.map(item => item.title), ...googleSchedules.map(item => item.title)];
+    const scheduleSummaryCount = scheduleSummaryTitles.length;
     const diaryPhotoCountClass = `count-${Math.min(Math.max(dayPhotos.length, 1), 4)}`;
     return (
       <section>
@@ -4918,6 +4924,19 @@ export default function HomePage() {
             <span className="weather-time-inline">🕒 {weatherTime}</span>
           </div>
           <div className="google-schedule-box diary-schedule-box">
+            <button
+              type="button"
+              className="diaryScheduleSummary"
+              aria-expanded={diaryScheduleBoxOpen}
+              onClick={() => setDiaryScheduleBoxOpen(open => !open)}
+            >
+              <strong>📅 일정</strong>
+              <span className="diaryScheduleSummaryText">
+                {scheduleSummaryCount > 0 ? `${scheduleSummaryCount}개 · ${scheduleSummaryTitles.join(", ")}` : "없음 · 눌러서 추가"}
+              </span>
+              <span aria-hidden>{diaryScheduleBoxOpen ? "▴" : "▾"}</span>
+            </button>
+            {diaryScheduleBoxOpen && (<>
             <div className="google-schedule-head">
               <strong>일정</strong>
               <button type="button" className="google-refresh-btn" onClick={() => void loadGoogleSchedulesForDay(currentMonth, currentDay)}>구글 새로고침</button>
@@ -4966,6 +4985,7 @@ export default function HomePage() {
                 <button type="button" className="diaryScheduleToggle" onClick={openDiaryScheduleForm}>＋ 일정 추가</button>
               )}
             </div>
+            </>)}
           </div>
           <div className="diary-photo-button-group">
             <div className="diary-photo-group-label">사진</div>
