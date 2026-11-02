@@ -29,6 +29,8 @@ import { stepCollectFontSize } from "../lib/collectFormatPalette";
 import { readClipboardImageFiles, runCollectRichCommand } from "../lib/collectRichFormat";
 import { CollectFormatToolbar } from "../components/CollectFormatToolbar";
 import { CollectWhiteCell } from "../components/CollectWhiteCell";
+import { ScheduleQuickForm, type ScheduleQuickNotice } from "../components/ScheduleQuickForm";
+import { addDaysToYmd, daysBetweenYmd, scheduleOccursOn } from "../lib/scheduleOccurrence";
 import { SlotImagePanel } from "../components/SlotImagePanel";
 import { ClassTagSelect } from "../components/ClassTagSelect";
 import { EntryLookup, plainSnippet, type LookupHit } from "../components/EntryLookup";
@@ -207,6 +209,15 @@ const holidays: Record<string, string> = {
   "12-25": "성탄절",
 };
 
+/** 일정 저장용 기기 저장소 쓰기. 가득 차도 오류 없이 넘어간다(서버 저장은 계속 진행). */
+function writeScheduleStorage(name: string, value: string) {
+  try {
+    localStorage.setItem(name, value);
+  } catch {
+    /* 저장 공간 부족 등 */
+  }
+}
+
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -261,10 +272,7 @@ function scheduleCoversCalendarDay(scheduleKey: string, item: ScheduleItem, mont
   const currentTime = new Date(year, month - 1, day).getTime();
   const endTime = parseScheduleEndDate(item.endDate, startTime);
 
-  const first = Math.min(startTime, endTime);
-  const last = Math.max(startTime, endTime);
-
-  return currentTime >= first && currentTime <= last;
+  return scheduleOccursOn(startTime, endTime, item.repeat, currentTime);
 }
 
 function getCalendarDaySchedules(allSchedules: Record<string, ScheduleItem[]>, month: number, day: number, year: number = 2026) {
@@ -311,10 +319,8 @@ function getVisibleSchedulesForDay(allSchedules: Record<string, ScheduleItem[]>,
         .filter(item => {
           const startTime = dateValueFromYmd(item.startDate) ?? fallbackStart;
           const endTime = dateValueFromYmd(item.endDate) ?? startTime;
-          const first = Math.min(startTime, endTime);
-          const last = Math.max(startTime, endTime);
 
-          return targetTime >= first && targetTime <= last;
+          return scheduleOccursOn(startTime, endTime, item.repeat, targetTime);
         })
         .map(item => ({ ...item, calendarSourceKey: scheduleKey }));
     })
@@ -560,6 +566,18 @@ export default function HomePage() {
   const [scheduleRepeat, setScheduleRepeat] = useState("없음");
   const [scheduleColor, setScheduleColor] = useState<ScheduleColor>("yellow");
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
+  const [scheduleNotice, setScheduleNotice] = useState<ScheduleQuickNotice>(null);
+  const [diaryScheduleFormOpen, setDiaryScheduleFormOpen] = useState(false);
+  const scheduleTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const scheduleSyncChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const scheduleSaveGenRef = useRef(0);
+  const scheduleLatestRef = useRef<Record<string, ScheduleItem[]> | null>(null);
+
+  // 날짜를 옮기면 새 일정의 기본 날짜도 따라가게 한다(수정 중이면 그대로 둔다).
+  useEffect(() => {
+    if (editingScheduleId) return;
+    setScheduleStartDate(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`);
+  }, [currentYear, currentMonth, currentDay]);
   const [audioUrl, setAudioUrl] = useState("");
   const [voiceStatus, setVoiceStatus] = useState("녹음 파일 없음");
   const [lastAudioFile, setLastAudioFile] = useState<File | null>(null);
@@ -1312,9 +1330,9 @@ export default function HomePage() {
         id: String(row.schedule_id || row.id || `${scheduleKey}-${Date.now()}`),
         title: String(row.title || ""),
         startDate: row.start_date || `${year}-${pad(month)}-${pad(day)}`,
-        startTime: row.start_time || "08:00",
+        startTime: row.start_time ?? "",
         endDate: row.end_date || `${year}-${pad(month)}-${pad(day)}`,
-        endTime: row.end_time || "24:00",
+        endTime: row.end_time ?? "",
         repeat: row.repeat || "없음",
         color: ["yellow", "blue", "red", "green", "lightGreen", "orange", "navy", "purple"].includes(color) ? color : "yellow",
       };
@@ -1324,8 +1342,20 @@ export default function HomePage() {
     return nextSchedules;
   }
 
+  // 서버 일정을 이 기기의 일정과 같게 맞춘다. 새 일정 추가 → 바뀐 일정 수정 → 없어진 일정 삭제 순서이며,
+  // 전부 지운 뒤 다시 넣지 않으므로 중간에 실패해도 서버가 빈 상태가 되지 않는다.
+  // 저장 요청은 한 번에 하나씩 순서대로 처리한다(동시에 보내면 같은 일정이 두 번 들어갈 수 있음).
   // 성공 시 true, 실패 시 false 반환 — 호출부에서 pending 플래그 처리에 사용
-  async function saveSchedulesToSupabase(nextSchedules: Record<string, ScheduleItem[]>): Promise<boolean> {
+  function saveSchedulesToSupabase(nextSchedules: Record<string, ScheduleItem[]>): Promise<boolean> {
+    const run = scheduleSyncChainRef.current.then(() => syncSchedulesOnce(nextSchedules));
+    scheduleSyncChainRef.current = run.catch(() => false);
+    return run.catch((error) => {
+      console.warn("Supabase schedule save error:", error);
+      return false;
+    });
+  }
+
+  async function syncSchedulesOnce(nextSchedules: Record<string, ScheduleItem[]>): Promise<boolean> {
     if (!isSupabaseConfigured || !supabase) return false;
 
     const rows = Object.entries(nextSchedules).flatMap(([scheduleKey, items]) => {
@@ -1339,35 +1369,72 @@ export default function HomePage() {
         title: item.title,
         entry_date: item.startDate || `${year}-${pad(month)}-${pad(day)}`,
         start_date: item.startDate || `${year}-${pad(month)}-${pad(day)}`,
-        start_time: item.startTime || "08:00",
+        start_time: item.startTime || "",
         end_date: item.endDate || item.startDate || `${year}-${pad(month)}-${pad(day)}`,
-        end_time: item.endTime || "24:00",
+        end_time: item.endTime || "",
         repeat: item.repeat || "없음",
         color: item.color || "yellow",
         updated_at: new Date().toISOString(),
       }));
     });
 
-    // 전체 삭제 후 현재 상태로 전체 재삽입
-    const { error: deleteError } = await supabase
+    const { data: remoteRows, error: loadError } = await supabase
       .from("calendar_schedules")
-      .delete()
-      .neq("id", "00000000-0000-0000-0000-000000000000");
-
-    if (deleteError) {
-      console.warn("Supabase schedule clear error:", deleteError.message);
-      return false; // 삭제 실패 → pending 유지해야 함
+      .select("id, schedule_id, schedule_key, title, start_date, start_time, end_date, end_time, repeat, color");
+    if (loadError) {
+      console.warn("Supabase schedule load before save error:", loadError.message);
+      return false;
     }
 
-    if (!rows.length) return true; // 모든 일정 삭제 성공 (빈 상태)
+    const remoteById = new Map<string, any>();
+    const staleIds: string[] = [];
+    (remoteRows || []).forEach((row: any) => {
+      const scheduleId = row.schedule_id ? String(row.schedule_id) : "";
+      // 일정 번호가 없거나 같은 번호가 두 번 있는 행은 정리 대상
+      if (!scheduleId || remoteById.has(scheduleId)) staleIds.push(String(row.id));
+      else remoteById.set(scheduleId, row);
+    });
 
-    const { error: insertError } = await supabase
-      .from("calendar_schedules")
-      .insert(rows);
+    const nextIds = new Set(rows.map(row => row.schedule_id));
+    remoteById.forEach((row, scheduleId) => {
+      if (!nextIds.has(scheduleId)) staleIds.push(String(row.id));
+    });
 
-    if (insertError) {
-      console.warn("Supabase schedule save error:", insertError.message);
-      return false; // 삽입 실패 → pending 유지
+    const toInsert: typeof rows = [];
+    const toUpdate: { id: string; row: (typeof rows)[number] }[] = [];
+    const compared = ["schedule_key", "title", "start_date", "start_time", "end_date", "end_time", "repeat", "color"] as const;
+    rows.forEach(row => {
+      const old = remoteById.get(row.schedule_id);
+      if (!old) toInsert.push(row);
+      else if (compared.some(field => String(old[field] ?? "") !== String(row[field] ?? ""))) toUpdate.push({ id: String(old.id), row });
+    });
+
+    if (toInsert.length) {
+      let { error } = await supabase.from("calendar_schedules").insert(toInsert);
+      // id 기본값이 없는 DB면 id를 직접 넣어 다시 시도
+      if (error && error.code === "23502") {
+        ({ error } = await supabase.from("calendar_schedules").insert(toInsert.map(row => ({ ...row, id: crypto.randomUUID() }))));
+      }
+      if (error) {
+        console.warn("Supabase schedule insert error:", error.message);
+        return false;
+      }
+    }
+
+    for (const { id, row } of toUpdate) {
+      const { error } = await supabase.from("calendar_schedules").update(row).eq("id", id);
+      if (error) {
+        console.warn("Supabase schedule update error:", error.message);
+        return false;
+      }
+    }
+
+    for (let index = 0; index < staleIds.length; index += 100) {
+      const { error } = await supabase.from("calendar_schedules").delete().in("id", staleIds.slice(index, index + 100));
+      if (error) {
+        console.warn("Supabase schedule delete error:", error.message);
+        return false;
+      }
     }
 
     return true;
@@ -2040,8 +2107,11 @@ export default function HomePage() {
         }
       });
     } else {
+      const genAtStart = scheduleSaveGenRef.current;
       void loadCalendarSchedulesFromSupabase().then(remoteSchedules => {
         if (!remoteSchedules) return; // 네트워크 오류 → 로컬 유지
+        // 조회하는 동안 이 기기에서 저장했다면 오래된 서버 목록이므로 버린다
+        if (scheduleSaveGenRef.current !== genAtStart) return;
 
         if (Object.keys(remoteSchedules).length > 0) {
           // Supabase에 데이터 있음 → 다른 기기의 최신 상태로 로컬 업데이트
@@ -2065,8 +2135,12 @@ export default function HomePage() {
       const savedAt = Number(localStorage.getItem("iphone-calendar-schedule-saved-at") || "0");
       if (Date.now() - savedAt < 35000) return;
 
+      const genAtStart = scheduleSaveGenRef.current;
       void loadCalendarSchedulesFromSupabase().then(remoteSchedules => {
         if (!remoteSchedules) return; // 네트워크 오류 → 로컬 유지
+        // 조회하는 동안 이 기기에서 저장했다면 오래된 서버 목록이므로 버린다(연속 입력 중 방금 입력한 일정이 사라지는 문제)
+        if (scheduleSaveGenRef.current !== genAtStart) return;
+        if (localStorage.getItem("iphone-calendar-schedule-pending") === "true") return;
         if (Object.keys(remoteSchedules).length === 0) {
           // Supabase가 비어있음 = 다른 기기에서 전부 삭제 → 로컬도 비워야 함
           setSchedules({});
@@ -2617,14 +2691,8 @@ export default function HomePage() {
   function openSchedule(month: number, day: number) {
     setCurrentMonth(month);
     setCurrentDay(day);
-    setScheduleTitle("");
-    setScheduleStartDate(`${currentYear}-${pad(month)}-${pad(day)}`);
-    setScheduleStartTime("08:00");
-    setScheduleEndDate(`${currentYear}-${pad(month)}-${pad(day)}`);
-    setScheduleEndTime("24:00");
-    setScheduleRepeat("없음");
-    setScheduleColor("yellow");
-    setEditingScheduleId(null);
+    resetScheduleForm(`${currentYear}-${pad(month)}-${pad(day)}`);
+    setScheduleNotice(null);
     setView("schedule");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -3727,19 +3795,39 @@ export default function HomePage() {
     window.addEventListener("pointercancel", handlePointerUp);
   }
 
-  function saveSchedules(nextSchedules: Record<string, ScheduleItem[]>) {
+  function saveSchedules(nextSchedules: Record<string, ScheduleItem[]>): Promise<boolean> {
     setSchedules(nextSchedules);
-    localStorage.setItem("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
+    writeScheduleStorage("iphone-calendar-2026-schedules", JSON.stringify(nextSchedules));
     // pending=true: 저장 중임을 표시 → 폴링이 Supabase로 덮어씌우는 것 방지
-    localStorage.setItem("iphone-calendar-schedule-pending", "true");
-    // 저장 완료 시간 기록 → 저장 직후 폴링 스킵용
-    void saveSchedulesToSupabase(nextSchedules).then((success) => {
-      if (success) {
-        localStorage.setItem("iphone-calendar-schedule-pending", "false");
-        localStorage.setItem("iphone-calendar-schedule-saved-at", String(Date.now()));
+    writeScheduleStorage("iphone-calendar-schedule-pending", "true");
+    scheduleLatestRef.current = nextSchedules;
+    const gen = ++scheduleSaveGenRef.current;
+    return saveSchedulesToSupabase(nextSchedules).then((success) => {
+      // 더 최근 저장이 시작됐다면 그쪽 결과가 최종이므로 표시만 건너뛴다.
+      if (success && gen === scheduleSaveGenRef.current) {
+        writeScheduleStorage("iphone-calendar-schedule-pending", "false");
+        // 저장 완료 시간 기록 → 저장 직후 폴링 스킵용
+        writeScheduleStorage("iphone-calendar-schedule-saved-at", String(Date.now()));
       }
       // 실패 시 pending=true 유지 → 다음 앱 실행 시 로컬 데이터로 재시도
+      return success;
     });
+  }
+
+  /** 일정 저장 결과를 입력 폼 아래에 표시한다. 더 최근 저장이 있으면 오래된 결과는 무시한다. */
+  function trackScheduleSave(promise: Promise<boolean>, okText: string) {
+    const gen = scheduleSaveGenRef.current;
+    setScheduleNotice({ state: "saving", text: "저장 중…" });
+    void promise.then((ok) => {
+      if (gen !== scheduleSaveGenRef.current) return;
+      setScheduleNotice(ok ? { state: "saved", text: okText } : { state: "error", text: "⚠ 서버 저장 실패 · 이 기기에 보관 중" });
+    });
+  }
+
+  function retryScheduleSave() {
+    const latest = scheduleLatestRef.current;
+    if (!latest) return;
+    trackScheduleSave(saveSchedules(latest), "✓ 저장됨");
   }
 
   function registerUndo(nextUndo: UndoState) {
@@ -3861,35 +3949,57 @@ export default function HomePage() {
     }
   }
 
+  function scheduleFormDefaultDate() {
+    return `${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`;
+  }
+
+  function resetScheduleForm(date: string = scheduleFormDefaultDate()) {
+    setScheduleTitle("");
+    setScheduleStartDate(date);
+    setScheduleStartTime("");
+    setScheduleRepeat("없음");
+    setScheduleColor("yellow");
+    setEditingScheduleId(null);
+  }
+
   function addSchedule() {
     const trimmedTitle = scheduleTitle.trim();
     if (!trimmedTitle) {
-      alert("일정 제목을 입력해 주세요.");
+      setScheduleNotice({ state: "invalid", text: "일정 내용을 입력해 주세요." });
+      scheduleTitleInputRef.current?.focus();
       return;
     }
 
-    const selectedStartDate = scheduleStartDate || `${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`;
-    const startYear = Number(selectedStartDate.slice(0, 4));
-    const startMonth = Number(selectedStartDate.slice(5, 7));
-    const startDay = Number(selectedStartDate.slice(8, 10));
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(scheduleStartDate) ? scheduleStartDate : scheduleFormDefaultDate();
+    const [startYear, startMonth, startDay] = date.split("-").map(Number);
     const k = key(startMonth, startDay, startYear);
+
+    // 수정이면 원래 일정을 모든 날짜에서 찾아 옮긴다(날짜를 바꿔도 사라지지 않게).
+    let existing: ScheduleItem | undefined;
+    if (editingScheduleId) {
+      for (const items of Object.values(schedules)) {
+        existing = items.find(item => item.id === editingScheduleId);
+        if (existing) break;
+      }
+    }
+    const spanDays = existing ? Math.max(0, daysBetweenYmd(existing.startDate, existing.endDate)) : 0;
     const scheduleData: ScheduleItem = {
-      id: editingScheduleId || `${Date.now()}`,
+      id: editingScheduleId || `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       title: trimmedTitle,
-      startDate: selectedStartDate,
-      startTime: scheduleStartTime || "08:00",
-      endDate: scheduleEndDate || selectedStartDate,
-      endTime: scheduleEndTime || "24:00",
+      startDate: date,
+      startTime: scheduleStartTime,
+      endDate: addDaysToYmd(date, spanDays),
+      endTime: existing?.endTime || "",
       repeat: scheduleRepeat,
       color: scheduleColor,
     };
 
-    const currentItems = schedules[k] || [];
-    const nextForDay = editingScheduleId
-      ? currentItems.map(item => (item.id === editingScheduleId ? scheduleData : item))
-      : [...currentItems, scheduleData];
-
-    const nextSchedules = { ...schedules, [k]: nextForDay };
+    const base: Record<string, ScheduleItem[]> = {};
+    for (const [scheduleKey, items] of Object.entries(schedules)) {
+      const kept = editingScheduleId ? items.filter(item => item.id !== editingScheduleId) : items;
+      if (kept.length) base[scheduleKey] = kept;
+    }
+    const nextSchedules = { ...base, [k]: [...(base[k] || []), scheduleData] };
 
     registerUndo({
       label: editingScheduleId ? "일정 수정" : "일정 추가",
@@ -3897,39 +4007,50 @@ export default function HomePage() {
       previousData: JSON.stringify(schedules),
     });
 
-    saveSchedules(nextSchedules);
+    const wasEditing = Boolean(editingScheduleId);
+    trackScheduleSave(
+      saveSchedules(nextSchedules),
+      wasEditing ? "✓ 수정됨" : `✓ 저장됨 · ${trimmedTitle} · 이어서 입력하세요`,
+    );
 
-    setScheduleTitle("");
-    setScheduleStartDate(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`);
-    setScheduleStartTime("08:00");
-    setScheduleEndTime("24:00");
-    setScheduleRepeat("없음");
-    setScheduleColor("yellow");
-    setEditingScheduleId(null);
-    alert(editingScheduleId ? "일정이 수정되었습니다." : "일정이 저장되었습니다.");
+    if (wasEditing) {
+      resetScheduleForm(date);
+    } else {
+      // 연속 입력: 내용·시간·반복만 비우고 날짜와 색은 그대로 둔다.
+      setScheduleTitle("");
+      setScheduleStartTime("");
+      setScheduleRepeat("없음");
+    }
+    window.setTimeout(() => scheduleTitleInputRef.current?.focus(), 0);
   }
 
   function editSchedule(item: ScheduleItem) {
     setEditingScheduleId(item.id);
     setScheduleTitle(item.title);
-    setScheduleStartDate(item.startDate || `${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`);
+    setScheduleStartDate(item.startDate || scheduleFormDefaultDate());
     setScheduleStartTime(item.startTime || "");
-    setScheduleEndDate(item.endDate || `${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`);
-    setScheduleEndTime(item.endTime || "24:00");
     setScheduleRepeat(item.repeat || "없음");
     setScheduleColor(item.color || "yellow");
-    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    setScheduleNotice(null);
+    setDiaryScheduleFormOpen(true);
+    window.setTimeout(() => {
+      const input = scheduleTitleInputRef.current;
+      input?.scrollIntoView({ behavior: "smooth", block: "center" });
+      input?.focus();
+    }, 120);
   }
 
   function cancelScheduleEdit() {
-    setEditingScheduleId(null);
-    setScheduleTitle("");
-    setScheduleStartTime("");
-    setScheduleEndDate(`${currentYear}-${pad(currentMonth)}-${pad(currentDay)}`);
-    setScheduleRepeat("없음");
-    setScheduleColor("yellow");
+    resetScheduleForm();
+    setScheduleNotice(null);
   }
 
+  function openDiaryScheduleForm() {
+    resetScheduleForm();
+    setScheduleNotice(null);
+    setDiaryScheduleFormOpen(true);
+    window.setTimeout(() => scheduleTitleInputRef.current?.focus(), 120);
+  }
 
   function openScheduleEditorForItem(item: ScheduleItem, month: number, day: number) {
     setCurrentMonth(month);
@@ -3940,9 +4061,12 @@ export default function HomePage() {
   }
 
   function deleteSchedule(scheduleId: string) {
-    const k = key(currentMonth, currentDay, currentYear);
-    const nextForDay = (schedules[k] || []).filter(item => item.id !== scheduleId);
-    const nextSchedules = { ...schedules, [k]: nextForDay };
+    if (!window.confirm("이 일정을 지울까요?")) return;
+    const nextSchedules: Record<string, ScheduleItem[]> = {};
+    for (const [scheduleKey, items] of Object.entries(schedules)) {
+      const kept = items.filter(item => item.id !== scheduleId);
+      if (kept.length) nextSchedules[scheduleKey] = kept;
+    }
 
     registerUndo({
       label: "일정 삭제",
@@ -3950,9 +4074,7 @@ export default function HomePage() {
       previousData: JSON.stringify(schedules),
     });
 
-    // saveSchedules = state + localStorage + Supabase 전체 동기화
-    // Supabase는 전체 삭제 후 재삽입 → 삭제된 일정이 확실히 제거됨
-    saveSchedules(nextSchedules);
+    trackScheduleSave(saveSchedules(nextSchedules), "✓ 삭제됨");
 
     if (editingScheduleId === scheduleId) cancelScheduleEdit();
   }
@@ -4450,7 +4572,8 @@ export default function HomePage() {
                   }}
                   aria-label={`${item.title} 일정 수정`}
                 >
-                  {item.startTime && <span>{item.startTime}</span>} {item.title}
+                  <span className="schedule-chip-title">{item.title}</span>
+                  {item.startTime && <span className="schedule-chip-time">{item.startTime}</span>}
                 </button>
               ))}
             </div>
@@ -4624,8 +4747,12 @@ export default function HomePage() {
               <div className="google-schedule-list">
                 {daySchedules.map(item => (
                   <div className="google-schedule-item app-schedule-item" key={item.id}>
-                    <span className="google-schedule-time">{item.startTime || "08:00"}~{item.endTime || "24:00"}</span>
-                    <span className="google-schedule-title">입력 · {item.title}</span>
+                    <span className="google-schedule-time">{item.startTime || "종일"}</span>
+                    <span className="google-schedule-title">입력 · {item.title}{item.repeat && item.repeat !== "없음" ? ` (${item.repeat})` : ""}</span>
+                    <span className="appScheduleBtns">
+                      <button type="button" onClick={() => editSchedule(item)} aria-label="일정 수정">수정</button>
+                      <button type="button" onClick={() => deleteSchedule(item.id)} aria-label="일정 삭제">삭제</button>
+                    </span>
                   </div>
                 ))}
                 {googleSchedules.map((item, index) => (
@@ -4638,6 +4765,26 @@ export default function HomePage() {
             ) : (
               <div className="google-schedule-empty">저장된 일정이 없습니다.</div>
             )}
+            <div className="diaryScheduleAdd">
+              {diaryScheduleFormOpen ? (
+                <>
+                  {renderScheduleQuickForm()}
+                  <button
+                    type="button"
+                    className="diaryScheduleToggle"
+                    style={{ marginTop: 8 }}
+                    onClick={() => {
+                      cancelScheduleEdit();
+                      setDiaryScheduleFormOpen(false);
+                    }}
+                  >
+                    입력 닫기
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="diaryScheduleToggle" onClick={openDiaryScheduleForm}>＋ 일정 추가</button>
+              )}
+            </div>
           </div>
           <div className="diary-photo-button-group">
             <div className="diary-photo-group-label">사진</div>
@@ -4979,9 +5126,42 @@ export default function HomePage() {
     );
   }
 
+  function describeScheduleMeta(item: ScheduleItem) {
+    const parts = [
+      item.startTime || "시간 없음",
+      item.repeat && item.repeat !== "없음" ? `반복 ${item.repeat}` : "",
+      item.endDate && item.startDate && item.endDate !== item.startDate ? `${item.startDate} ~ ${item.endDate}` : "",
+    ];
+    return parts.filter(Boolean).join(" · ");
+  }
+
+  /** 일정 / 날짜 / 시간 / 반복 / 색깔만 받는 입력 폼. 일정 화면과 일기장에서 같이 쓴다. */
+  function renderScheduleQuickForm() {
+    return (
+      <ScheduleQuickForm
+        titleRef={scheduleTitleInputRef}
+        title={scheduleTitle}
+        onTitle={setScheduleTitle}
+        date={scheduleStartDate}
+        onDate={setScheduleStartDate}
+        time={scheduleStartTime}
+        onTime={setScheduleStartTime}
+        repeat={scheduleRepeat}
+        onRepeat={setScheduleRepeat}
+        color={scheduleColor}
+        onColor={(value) => setScheduleColor(value as ScheduleColor)}
+        colors={(Object.keys(scheduleColorLabels) as ScheduleColor[]).map(value => ({ value, label: scheduleColorLabels[value] }))}
+        editing={Boolean(editingScheduleId)}
+        onSubmit={addSchedule}
+        onCancel={cancelScheduleEdit}
+        notice={scheduleNotice}
+        onRetry={retryScheduleSave}
+      />
+    );
+  }
+
   function ScheduleView() {
-    const k = key(currentMonth, currentDay, currentYear);
-    const daySchedules = schedules[k] || [];
+    const daySchedules = getVisibleSchedulesForDay(schedules, currentMonth, currentDay, currentYear);
 
     return (
       <section>
@@ -4994,69 +5174,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="schedule-form">
-            <label>
-              <span>제목</span>
-              <input value={scheduleTitle} onChange={e => setScheduleTitle(e.target.value)} placeholder="일정 제목" />
-            </label>
-            <label>
-              <span>시작일</span>
-              <input type="date" value={scheduleStartDate} onChange={e => setScheduleStartDate(e.target.value)} />
-            </label>
-            <label>
-              <span>시작시간</span>
-              <input type="time" value={scheduleStartTime} onChange={e => setScheduleStartTime(e.target.value)} />
-            </label>
-            <label>
-              <span>종료일</span>
-              <input type="date" value={scheduleEndDate} onChange={e => setScheduleEndDate(e.target.value)} />
-            </label>
-            <label>
-              <span>종료시간</span>
-              <input
-                type="text"
-                value={scheduleEndTime}
-                onChange={e => setScheduleEndTime(e.target.value)}
-                placeholder="24:00"
-                inputMode="numeric"
-              />
-            </label>
-            <label>
-              <span>반복</span>
-              <select value={scheduleRepeat} onChange={e => setScheduleRepeat(e.target.value)}>
-                <option>없음</option>
-                <option>매일</option>
-                <option>매주</option>
-                <option>매월</option>
-                <option>매년</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="color-picker">
-            <span>색깔 선택</span>
-            <div className="color-options">
-              {(Object.keys(scheduleColorLabels) as ScheduleColor[]).map(color => (
-                <button
-                  type="button"
-                  key={color}
-                  className={`color-option schedule-${color} ${scheduleColor === color ? "active" : ""}`}
-                  onClick={() => setScheduleColor(color)}
-                >
-                  {scheduleColorLabels[color]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button type="button" className="save-schedule-btn" onClick={addSchedule}>
-            {editingScheduleId ? "일정 수정 저장" : "일정 저장"}
-          </button>
-          {editingScheduleId && (
-            <button type="button" className="cancel-schedule-edit-btn" onClick={cancelScheduleEdit}>
-              수정 취소
-            </button>
-          )}
+          {renderScheduleQuickForm()}
 
           <div className="saved-schedules">
             <h3>저장된 일정</h3>
@@ -5065,7 +5183,7 @@ export default function HomePage() {
               <div className={`saved-schedule schedule-${item.color}`} key={item.id}>
                 <div>
                   <strong>{item.title}</strong>
-                  <span>시작일 {item.startDate || "미지정"} · {item.startTime || "08:00"} ~ {item.endTime || "24:00"} · 종료일 {item.endDate || "미지정"} · 반복 {item.repeat}</span>
+                  <span>{describeScheduleMeta(item)}</span>
                 </div>
                 <div className="saved-schedule-actions">
                   <button type="button" onClick={() => editSchedule(item)}>수정</button>

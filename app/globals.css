@@ -13844,3 +13844,171 @@ body {
 .collect-white-cell-wrap.is-view-read .collect-white-cell:empty::before {
   color: #9a8765;
 }
+
+/* 캘린더 일정 칩: 내용을 먼저, 시간은 뒤에 작게. 좁은 칸에서도 내용이 보이도록 줄바꿈 */
+.schedule-chip.schedule-chip-button {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: normal;
+  word-break: break-all;
+  font-size: 9px;
+  line-height: 1.2;
+  padding: 2px 4px;
+}
+.schedule-chip-time {
+  font-size: 8px;
+  font-weight: 700;
+  opacity: 0.7;
+  margin-left: 2px;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+/* 일정 입력 폼(일정 화면·일기장 공용) */
+.scheduleQuick {
+  display: grid;
+  gap: 10px;
+}
+.scheduleQuickTitle {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d6d6d2;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 16px;
+  background: #fff;
+  color: var(--text);
+}
+.scheduleQuickRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+.scheduleQuickRow label,
+.scheduleQuickColors {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--deep);
+  min-width: 0;
+}
+.scheduleQuickRow input,
+.scheduleQuickRow select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d6d6d2;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 16px;
+  background: #fff;
+  color: var(--text);
+}
+.scheduleQuickTimeWrap {
+  position: relative;
+  display: block;
+}
+.scheduleQuickClear {
+  position: absolute;
+  right: 34px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: #e6e6e1;
+  color: #444;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.scheduleQuickColors > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.scheduleQuickColor {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.scheduleQuickColor.active {
+  border-color: var(--deep);
+  box-shadow: 0 0 0 2px #fff inset;
+}
+.scheduleQuickActions {
+  display: flex;
+  gap: 8px;
+}
+.scheduleQuickSubmit {
+  flex: 1;
+  border: 0;
+  border-radius: 12px;
+  background: var(--deep);
+  color: #fff;
+  padding: 13px;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.scheduleQuickCancel {
+  border: 1px solid #d6d6d2;
+  border-radius: 12px;
+  background: #fff;
+  padding: 13px 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.scheduleQuickNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.scheduleQuickNotice button {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.diaryScheduleAdd {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #d9d9d2;
+}
+.diaryScheduleToggle {
+  border: 1px solid #cfd8d2;
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.app-schedule-item .appScheduleBtns {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.app-schedule-item .appScheduleBtns button {
+  border: 0;
+  background: #eceeea;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
