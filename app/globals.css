@@ -14504,3 +14504,18 @@ body {
     --cal-selected: rgba(255, 255, 255, 0.1);
   }
 }
+
+/* 일정 색: 회색·흰색 (흰색은 밝은 칸에서도 보이도록 옅은 테두리) */
+.schedule-gray { background: #b4b9bf; color: #1f2421; }
+.schedule-white { background: #ffffff; color: #1f2421; box-shadow: inset 0 0 0 1px #b8bec6; }
+.scheduleQuickColor.schedule-white:not(.active) { border-color: #c7ccd1; }
+.calendar .schedule-gray { background: #b4b9bf; color: #1f2421; }
+.calendar .schedule-white { background: #ffffff; color: #1f2421; box-shadow: inset 0 0 0 1px #b8bec6; }
+
+/* 아이폰 달력 막대: 밝은 바탕색(노랑·연두·회색·흰색)은 진한 글자로 (막대 기본 흰 글자보다 우선) */
+.calendar .schedule-chip.schedule-yellow,
+.calendar .schedule-chip.schedule-lightGreen,
+.calendar .schedule-chip.schedule-gray,
+.calendar .schedule-chip.schedule-white {
+  color: #1f2421;
+}

@@ -118,7 +118,7 @@ type PhotoItem = {
   isCalendarPhoto?: boolean;
   isPinned?: boolean;
 };
-type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple";
+type ScheduleColor = "yellow" | "blue" | "red" | "green" | "lightGreen" | "orange" | "navy" | "purple" | "gray" | "white";
 type OriginalImageTarget = 
   | { type: "diary"; photoKey: string; index: number } 
   | { type: "insta"; id: string }
@@ -180,6 +180,8 @@ const scheduleColorLabels: Record<ScheduleColor, string> = {
   orange: "주황색",
   navy: "남색",
   purple: "보라색",
+  gray: "회색",
+  white: "흰색",
 };
 
 const calendarMarkLabels: Record<CalendarMarkType, string> = {
@@ -1446,7 +1448,7 @@ export default function HomePage() {
         endTime: row.end_time ?? "",
         repeat: row.repeat || "없음",
         remind: row.remind || "",
-        color: ["yellow", "blue", "red", "green", "lightGreen", "orange", "navy", "purple"].includes(color) ? color : "yellow",
+        color: ["yellow", "blue", "red", "green", "lightGreen", "orange", "navy", "purple", "gray", "white"].includes(color) ? color : "yellow",
       };
       nextSchedules[scheduleKey] = [...(nextSchedules[scheduleKey] || []), item];
     });
