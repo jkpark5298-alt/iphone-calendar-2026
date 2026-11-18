@@ -580,6 +580,10 @@ export default function HomePage() {
   const [diaryScheduleFormOpen, setDiaryScheduleFormOpen] = useState(false);
   /** 일기장의 "일정" 박스를 펼쳤는지. 평소에는 한 줄 요약만 보인다. */
   const [diaryScheduleBoxOpen, setDiaryScheduleBoxOpen] = useState(false);
+  /** 일기장 본문의 "조회" 입력칸과 서식 도구줄을 보이는지. 평소에는 숨기고, 본문을 선택하면 서식이 나타난다. */
+  const [diaryLookupOpen, setDiaryLookupOpen] = useState(false);
+  const [diaryToolsOpen, setDiaryToolsOpen] = useState(false);
+  const diaryTextBoxRef = useRef<HTMLDivElement | null>(null);
   /** 일기장의 "사진 보관"(갤러리·사진 버튼)을 펼쳤는지. 평소에는 한 줄만 보인다. */
   const [diaryPhotoBoxOpen, setDiaryPhotoBoxOpen] = useState(false);
   const repPhotoHandlerRef = useRef<(src: string, img?: HTMLImageElement | null) => void>(() => {});
@@ -600,6 +604,17 @@ export default function HomePage() {
     document.addEventListener("rich-image-representative", onRepresentative);
     return () => document.removeEventListener("rich-image-representative", onRepresentative);
   }, []);
+
+  // 서식 도구줄은 본문 영역 밖을 누르면 다시 숨긴다.
+  useEffect(() => {
+    if (!diaryToolsOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const box = diaryTextBoxRef.current;
+      if (box && event.target instanceof Node && !box.contains(event.target)) setDiaryToolsOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [diaryToolsOpen]);
 
   // 날짜를 옮기면 새 일정의 기본 날짜도 따라가게 한다.
   // 일기장에서 날짜를 옮길 때 다른 날의 일정 수정 폼이 남아 있지 않도록, 수정 중이던 폼은 닫는다.
@@ -5122,24 +5137,47 @@ export default function HomePage() {
           </div>
         </div>
         {/* Text 입력 / 편집 (Builder FormatToolbar 이식) */}
-        <div className="generalInfoTextBox generalInfoRichTextBox" style={{ margin: "10px 0" }}>
-          <EntryLookup
-            placeholder="일기장 내용 조회"
-            query={diaryLookup}
-            onQuery={setDiaryLookup}
-            onSearch={() => void lookupDiaryEntries()}
-            hits={diaryLookupHits}
-            status={diaryLookupStatus}
-            onOpen={(id) => {
-              const date = monthDayFromEntryDate(id);
-              if (!date) return;
-              openDiary(date.month, date.day, date.year);
-            }}
-          />
-          <div className="generalInfoRichTextHeader">
+        <div
+          ref={diaryTextBoxRef}
+          className="generalInfoTextBox generalInfoRichTextBox"
+          style={{ margin: "10px 0" }}
+          onFocus={(event) => {
+            // 본문(또는 추가 칸)을 선택하면 서식 도구줄을 보여 준다.
+            if (event.target instanceof HTMLElement && event.target.isContentEditable) setDiaryToolsOpen(true);
+          }}
+        >
+          <div className="generalInfoRichTextHeader diaryEditHeader">
             <strong>Text 입력 / 편집</strong>
-            <span>줄바꿈, 띄어쓰기, 글자색, 굵게, 밑줄, 형광, 크기 편집 가능 (Builder 서식)</span>
+            <span className="diaryEditHeaderBtns">
+              <button type="button" className="diaryToggleChip" aria-pressed={diaryLookupOpen} onClick={() => setDiaryLookupOpen(open => !open)}>
+                🔍 조회
+              </button>
+              <button
+                type="button"
+                className="diaryToggleChip"
+                aria-pressed={diaryToolsOpen}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setDiaryToolsOpen(open => !open)}
+              >
+                Aa 서식
+              </button>
+            </span>
           </div>
+          {diaryLookupOpen && (
+            <EntryLookup
+              placeholder="일기장 내용 조회"
+              query={diaryLookup}
+              onQuery={setDiaryLookup}
+              onSearch={() => void lookupDiaryEntries()}
+              hits={diaryLookupHits}
+              status={diaryLookupStatus}
+              onOpen={(id) => {
+                const date = monthDayFromEntryDate(id);
+                if (!date) return;
+                openDiary(date.month, date.day, date.year);
+              }}
+            />
+          )}
           {(() => {
             const status = diarySaveStatus?.date === entryDate(currentMonth, currentDay, currentYear) ? diarySaveStatus : null;
             const saveNowButton = (
@@ -5187,6 +5225,7 @@ export default function HomePage() {
               </div>
             );
           })()}
+          {diaryToolsOpen && (<>
           <CollectFormatToolbar
             onUndo={() => handleDiaryRichCommand("undo")}
             onRedo={() => handleDiaryRichCommand("redo")}
@@ -5234,6 +5273,7 @@ export default function HomePage() {
               서식 지우기
             </button>
           </div>
+          </>)}
           <input
             ref={diaryImageFileRef}
             type="file"

@@ -14385,3 +14385,29 @@ body {
 .diary-photo-button-group .diaryScheduleSummaryText {
   color: #9aa7b3;
 }
+
+/* 일기장: 조회·서식 도구는 평소에 숨기고 버튼/본문 선택으로 연다 */
+.diaryEditHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.diaryEditHeaderBtns {
+  display: inline-flex;
+  gap: 6px;
+}
+.diaryToggleChip {
+  border: 1px solid #475569;
+  background: transparent;
+  color: #cbd5e1;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.diaryToggleChip[aria-pressed="true"] {
+  background: #334155;
+  color: #ffffff;
+}
