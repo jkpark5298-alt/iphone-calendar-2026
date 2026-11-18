@@ -14460,3 +14460,30 @@ body {
     text-overflow: clip;
   }
 }
+
+/* 아이폰 달력: 날짜 옆에 근무 표시(👍C 등)를 한 줄로, 글자를 줄여서 */
+@media (max-width: 820px) {
+  .calendar .day-top {
+    gap: 1px;
+    padding: 0 2px;
+  }
+  .calendar .day .calendar-mark-list {
+    flex-wrap: nowrap;
+    gap: 2px;
+  }
+  .calendar .day .calendar-mark {
+    min-width: 17px;
+    min-height: 16px;
+    padding: 1px 4px;
+    font-size: 10px;
+  }
+  .calendar .day .calendar-mark-like {
+    margin-right: 0;
+    font-size: 9px;
+  }
+  /* 당 근무는 밝은 노란색 바탕 */
+  .calendar .calendar-mark-dang {
+    background: #ffe14d;
+    color: #3b2f00;
+  }
+}
