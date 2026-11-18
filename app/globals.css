@@ -14535,3 +14535,10 @@ body {
     white-space: nowrap;
   }
 }
+
+/* 김현숙 휴무(休) 막대: 연한 분홍 바탕에 붉은 글자 */
+.schedule-chip.schedule-chip-partner-rest,
+.calendar .schedule-chip.schedule-chip-button.schedule-chip-partner-rest {
+  background: #fbd5d8;
+  color: #9b1c1c;
+}

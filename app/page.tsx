@@ -234,18 +234,9 @@ function isPartnerScheduleItem(item: ScheduleItem) {
   return String(item.id).startsWith(PARTNER_ID_PREFIX);
 }
 
-/** 김현숙 휴무(休)는 "함께" 표기 계산에만 쓰고 달력 막대로는 그리지 않는다. */
+/** 김현숙 휴무(休) 일정인지(달력에서 연한 분홍 막대로 구분해 그린다) */
 function isPartnerRestItem(item: ScheduleItem) {
   return isPartnerScheduleItem(item) && /^현숙 休/.test(item.title);
-}
-
-function withoutPartnerRestSchedules(all: Record<string, ScheduleItem[]>) {
-  const next: Record<string, ScheduleItem[]> = {};
-  for (const [scheduleKey, items] of Object.entries(all)) {
-    const kept = items.filter(item => !isPartnerRestItem(item));
-    if (kept.length) next[scheduleKey] = kept;
-  }
-  return next;
 }
 
 function withoutPartnerSchedules(all: Record<string, ScheduleItem[]>) {
@@ -630,7 +621,7 @@ export default function HomePage() {
   const [diaryToolsOpen, setDiaryToolsOpen] = useState(false);
   const diaryTextBoxRef = useRef<HTMLDivElement | null>(null);
   const displaySchedules = useMemo(
-    () => (showPartnerShifts ? withoutPartnerRestSchedules(schedules) : withoutPartnerSchedules(schedules)),
+    () => (showPartnerShifts ? schedules : withoutPartnerSchedules(schedules)),
     [schedules, showPartnerShifts],
   );
   const hasPartnerShifts = useMemo(
@@ -4925,7 +4916,7 @@ export default function HomePage() {
           {adjacentSchedules.length > 0 && (
             <div className="schedule-chip-list">
               {adjacentSchedules.slice(0, 5).map(item => (
-                <div className={`schedule-chip schedule-chip-button schedule-${item.color}`} key={`${item.id}-${cellMonth}-${cellDay}`}>
+                <div className={`schedule-chip schedule-chip-button schedule-${item.color}${isPartnerRestItem(item) ? " schedule-chip-partner-rest" : ""}`} key={`${item.id}-${cellMonth}-${cellDay}`}>
                   <span className="schedule-chip-title">{item.title}</span>
                 </div>
               ))}
@@ -5026,7 +5017,7 @@ export default function HomePage() {
               {daySchedules.slice(0, 5).map(item => (
                 <button
                   type="button"
-                  className={`schedule-chip schedule-${item.color} schedule-chip-button`}
+                  className={`schedule-chip schedule-${item.color} schedule-chip-button${isPartnerRestItem(item) ? " schedule-chip-partner-rest" : ""}`}
                   key={`${item.id}-${day}`}
                   onClick={(event) => {
                     event.stopPropagation();
