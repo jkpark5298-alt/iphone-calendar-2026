@@ -14483,7 +14483,7 @@ body {
   }
   /* 당 근무는 밝은 노란색 바탕 */
   .calendar .calendar-mark-dang {
-    background: #ffe14d;
+    background: #fefd48;
     color: #3b2f00;
   }
 }
