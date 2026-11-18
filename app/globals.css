@@ -14519,3 +14519,19 @@ body {
 .calendar .schedule-chip.schedule-white {
   color: #1f2421;
 }
+
+/* 아이폰 캘린더 헤더: 되돌리기·정보함 앱을 김현숙 같이 보기 옆(같은 줄)으로 */
+@media (max-width: 820px) {
+  .calendar-headline .calendar-mobile-break {
+    display: none;
+  }
+  .calendar-headline .partnerToggleBtn.mark-btn,
+  .calendar-headline .undo-btn,
+  .calendar-headline .calendar-nav-infoapp {
+    height: 36px;
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
