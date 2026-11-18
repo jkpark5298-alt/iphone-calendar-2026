@@ -5026,7 +5026,7 @@ export default function HomePage() {
                   aria-label={`${item.title} 일정 수정`}
                 >
                   <span className="schedule-chip-title">{item.title}</span>
-                  {item.startTime && <span className="schedule-chip-time">{item.startTime}</span>}
+                  {item.startTime && !isPartnerScheduleItem(item) && <span className="schedule-chip-time">{item.startTime}</span>}
                 </button>
               ))}
               {daySchedules.length > 5 && <div className="schedule-more" aria-label={`일정 ${daySchedules.length - 5}개 더 있음`}>···</div>}
