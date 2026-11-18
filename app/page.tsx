@@ -32,6 +32,7 @@ import { CollectWhiteCell } from "../components/CollectWhiteCell";
 import { ScheduleQuickForm, type ScheduleQuickNotice } from "../components/ScheduleQuickForm";
 import { addDaysToYmd, daysBetweenYmd, scheduleOccursOn } from "../lib/scheduleOccurrence";
 import { lunarLabel } from "../lib/lunar";
+import { getDualPairLabel } from "../lib/pairLabel";
 import { CalendarCheck, Plus, Search } from "lucide-react";
 import { PushToggle } from "../components/PushToggle";
 import { remindLabel } from "../lib/pushSchedule";
@@ -229,6 +230,20 @@ const PARTNER_ID_PREFIX = "partner-";
 
 function isPartnerScheduleItem(item: ScheduleItem) {
   return String(item.id).startsWith(PARTNER_ID_PREFIX);
+}
+
+/** 김현숙 휴무(休)는 "함께" 표기 계산에만 쓰고 달력 막대로는 그리지 않는다. */
+function isPartnerRestItem(item: ScheduleItem) {
+  return isPartnerScheduleItem(item) && /^현숙 休/.test(item.title);
+}
+
+function withoutPartnerRestSchedules(all: Record<string, ScheduleItem[]>) {
+  const next: Record<string, ScheduleItem[]> = {};
+  for (const [scheduleKey, items] of Object.entries(all)) {
+    const kept = items.filter(item => !isPartnerRestItem(item));
+    if (kept.length) next[scheduleKey] = kept;
+  }
+  return next;
 }
 
 function withoutPartnerSchedules(all: Record<string, ScheduleItem[]>) {
@@ -613,7 +628,7 @@ export default function HomePage() {
   const [diaryToolsOpen, setDiaryToolsOpen] = useState(false);
   const diaryTextBoxRef = useRef<HTMLDivElement | null>(null);
   const displaySchedules = useMemo(
-    () => (showPartnerShifts ? schedules : withoutPartnerSchedules(schedules)),
+    () => (showPartnerShifts ? withoutPartnerRestSchedules(schedules) : withoutPartnerSchedules(schedules)),
     [schedules, showPartnerShifts],
   );
   const hasPartnerShifts = useMemo(
@@ -2922,6 +2937,18 @@ export default function HomePage() {
     }
   }
 
+  /** 그날 김현숙 근무 코드(B7/A5/P/D/P6/休…). 가져온 같이 보기 일정이 없으면 null */
+  function partnerCodeOn(month: number, day: number, year: number): string | null {
+    const item = (schedules[key(month, day, year)] || []).find(isPartnerScheduleItem);
+    return item?.title.match(/^현숙 (\S+)/)?.[1] ?? null;
+  }
+
+  /** 그날 박종규 근무(C/A/당/休). 근무 표시가 없으면 null */
+  function opsShiftOn(markKey: string): string | null {
+    const types = (calendarMarks[markKey] || []).map(mark => mark.type as string);
+    return ["C", "A", "당", "休"].find(type => types.includes(type)) ?? null;
+  }
+
   function togglePartnerShifts() {
     const next = !showPartnerShifts;
     setShowPartnerShifts(next);
@@ -2949,8 +2976,10 @@ export default function HomePage() {
   async function applyPartnerShifts(partner: PartnerImportResult) {
     const months = Array.from(new Set(partner.shifts.map(shift => `${shift.year}-${pad(shift.month)}`))).sort();
     const monthText = months.length > 4 ? `${months[0]} ~ ${months[months.length - 1]}` : months.join(", ");
+    const workCount = partner.shifts.filter(shift => shift.code !== "休").length;
+    const restCount = partner.shifts.length - workCount;
     const confirmMessage =
-      `${partner.name} 같이 보기 근무 ${partner.shifts.length}건(${monthText})을 캘린더에 추가합니다.\n\n` +
+      `${partner.name} 같이 보기 근무 ${workCount}건${restCount ? `, 휴무 ${restCount}건` : ""}(${monthText})을 캘린더에 추가합니다.\n\n` +
       `같은 달에 이미 가져온 ${partner.name} 근무는 새 내용으로 바꿉니다. 계속할까요?`;
     if (!window.confirm(confirmMessage)) return;
 
@@ -2995,7 +3024,7 @@ export default function HomePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
     alert(
       saved
-        ? `${partner.name} 같이 보기 근무 ${partner.shifts.length}건을 가져왔습니다.`
+        ? `${partner.name} 같이 보기 근무 ${workCount}건${restCount ? `, 휴무 ${restCount}건` : ""}을 가져왔습니다.`
         : `기기에는 ${partner.shifts.length}건을 넣었지만 서버 저장에 실패했습니다. 잠시 뒤 일정 화면에서 '다시 저장'을 눌러 주세요.`,
     );
   }
@@ -4926,6 +4955,7 @@ export default function HomePage() {
       const isToday = todayDefault.month === currentMonth && todayDefault.day === day && todayDefault.year === currentYear;
       const daySchedules = getVisibleSchedulesForDay(displaySchedules, currentMonth, day, currentYear);
       const dayMarks = calendarMarks[k] || [];
+      const pairLabel = showPartnerShifts ? getDualPairLabel(opsShiftOn(k), partnerCodeOn(currentMonth, day, currentYear)) : null;
       const isSelected = currentDay === day;
       cells.push(
         <div className={`day col-${col} ${redMarked ? "holiday-day" : ""} ${isToday ? "today-day" : ""} ${isSelected ? "selected-day" : ""} ${first + day - 1 < 7 ? "month-first-row" : ""} ${day === 1 ? "month-first-day" : ""}`} key={k}>
@@ -4988,8 +5018,9 @@ export default function HomePage() {
               </button>
             ) : null}
           </div>
-          {daySchedules.length > 0 && (
+          {(daySchedules.length > 0 || pairLabel) && (
             <div className="schedule-chip-list">
+              {pairLabel && <div className="schedule-chip pair-chip">{pairLabel}</div>}
               {daySchedules.slice(0, 5).map(item => (
                 <button
                   type="button"
@@ -5188,6 +5219,7 @@ export default function HomePage() {
     const daySchedules = getVisibleSchedulesForDay(displaySchedules, currentMonth, currentDay, currentYear);
     const scheduleSummaryTitles = [...daySchedules.map(item => item.title), ...googleSchedules.map(item => item.title)];
     const scheduleSummaryCount = scheduleSummaryTitles.length;
+    const diaryPairLabel = showPartnerShifts ? getDualPairLabel(opsShiftOn(k), partnerCodeOn(currentMonth, currentDay, currentYear)) : null;
     const diaryPhotoCountClass = `count-${Math.min(Math.max(dayPhotos.length, 1), 4)}`;
     return (
       <section>
@@ -5226,7 +5258,10 @@ export default function HomePage() {
             >
               <strong>📅 일정</strong>
               <span className="diaryScheduleSummaryText">
-                {scheduleSummaryCount > 0 ? `${scheduleSummaryCount}개 · ${scheduleSummaryTitles.join(", ")}` : "없음 · 눌러서 추가"}
+                {[
+                  diaryPairLabel ? `함께 ${diaryPairLabel}` : "",
+                  scheduleSummaryCount > 0 ? `${scheduleSummaryCount}개 · ${scheduleSummaryTitles.join(", ")}` : diaryPairLabel ? "" : "없음 · 눌러서 추가",
+                ].filter(Boolean).join(" · ")}
               </span>
               <span aria-hidden>{diaryScheduleBoxOpen ? "▴" : "▾"}</span>
             </button>
@@ -5236,6 +5271,14 @@ export default function HomePage() {
               <button type="button" className="google-refresh-btn" onClick={() => void loadGoogleSchedulesForDay(currentMonth, currentDay)}>구글 새로고침</button>
               <span>{daySchedules.length + googleSchedules.length}개 일정</span>
             </div>
+            {diaryPairLabel && (
+              <div className="google-schedule-list">
+                <div className="google-schedule-item">
+                  <span className="google-schedule-time">함께</span>
+                  <span className="google-schedule-title">{diaryPairLabel}</span>
+                </div>
+              </div>
+            )}
             {(daySchedules.length > 0 || googleSchedules.length > 0) ? (
               <div className="google-schedule-list">
                 {daySchedules.map(item => (

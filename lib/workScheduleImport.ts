@@ -418,8 +418,11 @@ function partnerShiftsFromIcs(text: string): PartnerShift[] {
     if (!date) continue;
     const summary = String(event.summary || "").trim();
     if (!isPartnerSummary(summary)) continue;
-    const code = extractShiftFromSummary(summary);
-    if (!PARTNER_SHIFT_CODES.has(code)) continue; // 休 등은 같이 보기에 넣지 않는다
+    const rawCode = extractShiftFromSummary(summary);
+    // 휴무(休)도 담는다: 두 사람이 같이 쉬는 날("동시休") 표기를 계산하는 데 필요하다. 달력에는 휴무 막대를 그리지 않는다.
+    const rest = mapShiftToMarkType(rawCode) === "休";
+    if (!rest && !PARTNER_SHIFT_CODES.has(rawCode)) continue;
+    const code = rest ? "休" : rawCode;
     shifts.push({ ...date, code, ...partnerTimes(code, summary), leader: summaryHasLeaderMark(summary) });
   }
   return dedupePartnerShifts(shifts);
@@ -443,8 +446,10 @@ function partnerShiftsFromJson(raw: unknown): PartnerShift[] {
     const monthNumber = Number(month.month);
     for (const day of month.days || []) {
       const date = Number(day.date);
-      const code = String(day.myShift || "").trim();
-      if (!Number.isInteger(date) || date < 1 || date > 31 || !PARTNER_SHIFT_CODES.has(code)) continue;
+      const rawCode = String(day.myShift || "").trim();
+      const rest = mapShiftToMarkType(rawCode) === "休";
+      const code = rest ? "休" : rawCode;
+      if (!Number.isInteger(date) || date < 1 || date > 31 || (!rest && !PARTNER_SHIFT_CODES.has(code))) continue;
       shifts.push({ year, month: monthNumber, day: date, code, ...partnerTimes(code, ""), leader: Boolean(day.isLeader) });
     }
   }
