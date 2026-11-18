@@ -60,7 +60,7 @@ import {
   groupInformationEntriesByDay,
   type InformationCalendarItem,
 } from "../lib/informationEntries";
-import { importWorkScheduleFromFile, type ImportedWorkMarkType } from "../lib/workScheduleImport";
+import { importPartnerShiftsFromFile, importWorkScheduleFromFile, type ImportedWorkMarkType, type PartnerImportResult } from "../lib/workScheduleImport";
 import { readAppFileIndexArchive } from "../lib/infoIndex";
 
 // 개인 앨범 (travel-diary Chapter3 개인 앨범 엔진) — heic2any/leaflet 등 브라우저 전용 모듈이라 SSR 제외
@@ -222,6 +222,28 @@ function writeScheduleStorage(name: string, value: string) {
   } catch {
     /* 저장 공간 부족 등 */
   }
+}
+
+/** 김현숙 "같이 보기" 근무로 가져온 일정의 id 머리말 */
+const PARTNER_ID_PREFIX = "partner-";
+
+function isPartnerScheduleItem(item: ScheduleItem) {
+  return String(item.id).startsWith(PARTNER_ID_PREFIX);
+}
+
+function withoutPartnerSchedules(all: Record<string, ScheduleItem[]>) {
+  const next: Record<string, ScheduleItem[]> = {};
+  for (const [scheduleKey, items] of Object.entries(all)) {
+    const kept = items.filter(item => !isPartnerScheduleItem(item));
+    if (kept.length) next[scheduleKey] = kept;
+  }
+  return next;
+}
+
+/** "11:00" → "11", "05:40" → "5:40" (좁은 달력 칸용) */
+function shortClock(value: string) {
+  const [hour, minute] = value.split(":");
+  return minute && minute !== "00" ? `${Number(hour)}:${minute}` : String(Number(hour));
 }
 
 /** 본문 사진을 캘린더 대표로 지정할 때 diary_photos에 남기는 기록의 sort_order 표시 */
@@ -581,9 +603,23 @@ export default function HomePage() {
   /** 일기장의 "일정" 박스를 펼쳤는지. 평소에는 한 줄 요약만 보인다. */
   const [diaryScheduleBoxOpen, setDiaryScheduleBoxOpen] = useState(false);
   /** 일기장 본문의 "조회" 입력칸과 서식 도구줄을 보이는지. 평소에는 숨기고, 본문을 선택하면 서식이 나타난다. */
+  /** 캘린더 화면의 "보관량"·"검색"을 펼쳤는지. 평소에는 숨긴다. */
+  const [calendarStorageOpen, setCalendarStorageOpen] = useState(false);
+  const [calendarSearchOpen, setCalendarSearchOpen] = useState(false);
+  /** 김현숙 "같이 보기" 근무를 캘린더에 보일지(이 기기 설정) */
+  const [showPartnerShifts, setShowPartnerShifts] = useState(true);
+  const calendarSwipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const [diaryLookupOpen, setDiaryLookupOpen] = useState(false);
   const [diaryToolsOpen, setDiaryToolsOpen] = useState(false);
   const diaryTextBoxRef = useRef<HTMLDivElement | null>(null);
+  const displaySchedules = useMemo(
+    () => (showPartnerShifts ? schedules : withoutPartnerSchedules(schedules)),
+    [schedules, showPartnerShifts],
+  );
+  const hasPartnerShifts = useMemo(
+    () => Object.values(schedules).some(items => items.some(isPartnerScheduleItem)),
+    [schedules],
+  );
   /** 일기장의 "사진 보관"(갤러리·사진 버튼)을 펼쳤는지. 평소에는 한 줄만 보인다. */
   const [diaryPhotoBoxOpen, setDiaryPhotoBoxOpen] = useState(false);
   const repPhotoHandlerRef = useRef<(src: string, img?: HTMLImageElement | null) => void>(() => {});
@@ -603,6 +639,14 @@ export default function HomePage() {
     };
     document.addEventListener("rich-image-representative", onRepresentative);
     return () => document.removeEventListener("rich-image-representative", onRepresentative);
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("calendar-show-partner-shifts") === "0") setShowPartnerShifts(false);
+    } catch {
+      /* 저장소를 못 읽으면 기본값(보이기) */
+    }
   }, []);
 
   // 서식 도구줄은 본문 영역 밖을 누르면 다시 숨긴다.
@@ -2878,7 +2922,85 @@ export default function HomePage() {
     }
   }
 
+  function togglePartnerShifts() {
+    const next = !showPartnerShifts;
+    setShowPartnerShifts(next);
+    try {
+      localStorage.setItem("calendar-show-partner-shifts", next ? "1" : "0");
+    } catch {
+      /* 이 기기 설정만 저장하지 못함 */
+    }
+  }
+
+  /** 근무표 파일을 가져온다: 박종규 근무(표시)와 김현숙 같이 보기(일정)를 함께 처리한다. */
   async function importWorkScheduleMarksFromFile(file: File | null) {
+    if (!file) return;
+    const partner = await importPartnerShiftsFromFile(file);
+    if (!partner.shifts.length) {
+      await importWorkOpsMarksFromFile(file);
+      return;
+    }
+    const ops = await importWorkScheduleFromFile(file);
+    if (ops.ok && ops.marks.length) await importWorkOpsMarksFromFile(file);
+    await applyPartnerShifts(partner);
+  }
+
+  /** 김현숙 근무를 "같이 보기" 일정으로 캘린더에 넣는다. 같은 달에 이미 가져온 김현숙 근무는 새 내용으로 바꾼다. */
+  async function applyPartnerShifts(partner: PartnerImportResult) {
+    const months = Array.from(new Set(partner.shifts.map(shift => `${shift.year}-${pad(shift.month)}`))).sort();
+    const monthText = months.length > 4 ? `${months[0]} ~ ${months[months.length - 1]}` : months.join(", ");
+    const confirmMessage =
+      `${partner.name} 같이 보기 근무 ${partner.shifts.length}건(${monthText})을 캘린더에 추가합니다.\n\n` +
+      `같은 달에 이미 가져온 ${partner.name} 근무는 새 내용으로 바꿉니다. 계속할까요?`;
+    if (!window.confirm(confirmMessage)) return;
+
+    const monthSet = new Set(months);
+    const next: Record<string, ScheduleItem[]> = {};
+    for (const [scheduleKey, items] of Object.entries(schedules)) {
+      const kept = items.filter(
+        item => !(isPartnerScheduleItem(item) && monthSet.has(String(item.startDate || "").slice(0, 7))),
+      );
+      if (kept.length) next[scheduleKey] = kept;
+    }
+    for (const shift of partner.shifts) {
+      const ymd = `${shift.year}-${pad(shift.month)}-${pad(shift.day)}`;
+      const range = shift.start && shift.end ? ` ${shortClock(shift.start)}~${shortClock(shift.end)}` : "";
+      const item: ScheduleItem = {
+        id: `${PARTNER_ID_PREFIX}${ymd}`,
+        title: `현숙 ${shift.code}${range}`,
+        startDate: ymd,
+        startTime: shift.start,
+        endDate: ymd,
+        endTime: shift.end,
+        repeat: "없음",
+        color: "green",
+        remind: "",
+      };
+      const scheduleKey = key(shift.month, shift.day, shift.year);
+      next[scheduleKey] = [...(next[scheduleKey] || []), item];
+    }
+
+    registerUndo({ label: "김현숙 같이 보기 가져오기", target: "schedules", previousData: JSON.stringify(schedules) });
+    setShowPartnerShifts(true);
+    try {
+      localStorage.setItem("calendar-show-partner-shifts", "1");
+    } catch {
+      /* 이 기기 설정만 저장하지 못함 */
+    }
+    const saved = await saveSchedules(next);
+    const first = partner.shifts[0];
+    setCurrentYear(first.year);
+    setCurrentMonth(first.month);
+    setView("calendar");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    alert(
+      saved
+        ? `${partner.name} 같이 보기 근무 ${partner.shifts.length}건을 가져왔습니다.`
+        : `기기에는 ${partner.shifts.length}건을 넣었지만 서버 저장에 실패했습니다. 잠시 뒤 일정 화면에서 '다시 저장'을 눌러 주세요.`,
+    );
+  }
+
+  async function importWorkOpsMarksFromFile(file: File | null) {
     if (!file) return;
 
     try {
@@ -3020,9 +3142,45 @@ export default function HomePage() {
   }
 
   function focusCalendarSearch() {
-    const input = document.querySelector<HTMLInputElement>(".calendar-search-input");
-    input?.scrollIntoView({ behavior: "smooth", block: "center" });
-    input?.focus();
+    setCalendarSearchOpen(true);
+    window.setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>(".calendar-search-input");
+      input?.scrollIntoView({ behavior: "smooth", block: "center" });
+      input?.focus();
+    }, 80);
+  }
+
+  /** 한 달 앞(-1)·뒤(1)로 옮긴다. 지원 범위(2026년 5월~2036년 12월) 밖이면 그대로 둔다. */
+  function moveCalendarMonth(delta: -1 | 1) {
+    let year = currentYear;
+    let month = currentMonth + delta;
+    if (month < 1) {
+      month = 12;
+      year -= 1;
+    } else if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+    if (year < 2026 || year > 2036 || (year === 2026 && month < 5)) return;
+    setCurrentYear(year);
+    setCurrentMonth(month);
+  }
+
+  function handleCalendarTouchStart(event: React.TouchEvent) {
+    const touch = event.touches[0];
+    calendarSwipeRef.current = touch && event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY, t: Date.now() } : null;
+  }
+
+  /** 달력을 좌우로 밀면 다음/이전 달로 이동한다(아래위로 스크롤하는 동작과는 구분한다). */
+  function handleCalendarTouchEnd(event: React.TouchEvent) {
+    const start = calendarSwipeRef.current;
+    calendarSwipeRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.6 || Date.now() - start.t > 900) return;
+    moveCalendarMonth(dx < 0 ? 1 : -1);
   }
 
   function openTodayDiary() {
@@ -4716,7 +4874,7 @@ export default function HomePage() {
     /** 앞뒤 달 날짜 칸(아이폰에서만 보인다). 숫자·음력·일정 막대만 보여 준다. */
     const renderAdjacentDay = (cellYear: number, cellMonth: number, cellDay: number, col: number, afterMonth: boolean) => {
       const adjacentKey = key(cellMonth, cellDay, cellYear);
-      const adjacentSchedules = getVisibleSchedulesForDay(schedules, cellMonth, cellDay, cellYear);
+      const adjacentSchedules = getVisibleSchedulesForDay(displaySchedules, cellMonth, cellDay, cellYear);
       const lunar = lunarLabel(cellYear, cellMonth, cellDay);
       return (
         <div
@@ -4766,7 +4924,7 @@ export default function HomePage() {
       const manuallyRed = (redDates[currentMonth] || []).includes(day);
       const redMarked = manuallyRed;
       const isToday = todayDefault.month === currentMonth && todayDefault.day === day && todayDefault.year === currentYear;
-      const daySchedules = getVisibleSchedulesForDay(schedules, currentMonth, day, currentYear);
+      const daySchedules = getVisibleSchedulesForDay(displaySchedules, currentMonth, day, currentYear);
       const dayMarks = calendarMarks[k] || [];
       const isSelected = currentDay === day;
       cells.push(
@@ -4911,6 +5069,11 @@ export default function HomePage() {
               />
             </label>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
+            {hasPartnerShifts && (
+              <button type="button" className="mark-btn partnerToggleBtn" aria-pressed={showPartnerShifts} onClick={togglePartnerShifts} title="김현숙 근무를 캘린더에 겹쳐 보기">
+                김현숙 같이 보기{showPartnerShifts ? " ✓" : ""}
+              </button>
+            )}
             <span className="calendar-mobile-break" aria-hidden="true" />
             <button type="button" className="undo-btn" onClick={applyUndo} disabled={!undoHistory.length}>↩ 되돌리기</button>
           </div>
@@ -4921,11 +5084,18 @@ export default function HomePage() {
             <button type="button" className="pill-btn compact-pill calendar-nav-collect" onClick={() => openGeneralInfoCollect(currentMonth, currentDay)}>일반정보수집</button>
             <button type="button" className="pill-btn compact-pill calendar-nav-index" onClick={() => openInfoIndex(currentMonth, currentDay)}>정보인덱스</button>
             <button type="button" className="pill-btn compact-pill calendar-nav-photo" onClick={() => openPhotoBook(currentMonth, currentDay)}>포토북</button>
+            <button type="button" className="pill-btn compact-pill calendar-nav-storage" aria-pressed={calendarStorageOpen} onClick={() => setCalendarStorageOpen(open => !open)}>보관량</button>
+            <button type="button" className="pill-btn compact-pill calendar-nav-search" aria-pressed={calendarSearchOpen} onClick={() => setCalendarSearchOpen(open => !open)}>검색</button>
           </div>
         </div>
 
-        <StorageUsageBar />
+        {calendarStorageOpen && <StorageUsageBar />}
 
+        {!calendarSearchOpen && informationItemsStatus.startsWith("⚠") && (
+          <div className="information-sync-status">{informationItemsStatus}</div>
+        )}
+
+        {calendarSearchOpen && (
         <div className="calendar-search-box">
           <div className="calendar-search-row">
             <input
@@ -4979,7 +5149,9 @@ export default function HomePage() {
             </div>
           )}
         </div>
+        )}
 
+        <div className="calendarSwipeArea" onTouchStart={handleCalendarTouchStart} onTouchEnd={handleCalendarTouchEnd}>
         <div className="phoneCalBar">
           <div className="phoneCalIcons">
             <button type="button" className="phoneCalIconBtn" onClick={jumpCalendarToToday} aria-label="오늘 날짜로 이동">
@@ -5005,6 +5177,7 @@ export default function HomePage() {
           {weekdays.map(label => <div key={label} className="weekday">{label}</div>)}
           {cells}
         </div>
+        </div>
       </section>
     );
   }
@@ -5012,7 +5185,7 @@ export default function HomePage() {
   function DiaryView() {
     const k = key(currentMonth, currentDay, currentYear);
     const dayPhotos = photos[k] || [];
-    const daySchedules = getVisibleSchedulesForDay(schedules, currentMonth, currentDay, currentYear);
+    const daySchedules = getVisibleSchedulesForDay(displaySchedules, currentMonth, currentDay, currentYear);
     const scheduleSummaryTitles = [...daySchedules.map(item => item.title), ...googleSchedules.map(item => item.title)];
     const scheduleSummaryCount = scheduleSummaryTitles.length;
     const diaryPhotoCountClass = `count-${Math.min(Math.max(dayPhotos.length, 1), 4)}`;
@@ -5531,7 +5704,7 @@ export default function HomePage() {
   }
 
   function ScheduleView() {
-    const daySchedules = getVisibleSchedulesForDay(schedules, currentMonth, currentDay, currentYear);
+    const daySchedules = getVisibleSchedulesForDay(displaySchedules, currentMonth, currentDay, currentYear);
 
     return (
       <section>

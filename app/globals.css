@@ -14411,3 +14411,31 @@ body {
   background: #334155;
   color: #ffffff;
 }
+
+/* 달력(상단 바 + 격자)은 좌우로 밀어 달을 옮기므로, 가로 밀기는 앱이 받고 세로 스크롤만 브라우저에 맡긴다 */
+.calendarSwipeArea {
+  touch-action: pan-y;
+}
+.pill-btn[aria-pressed="true"],
+.mark-btn[aria-pressed="true"] {
+  background: #334155;
+  color: #ffffff;
+}
+
+/* 캘린더 헤더: 보관량·검색 버튼 순서, 김현숙 같이 보기 버튼 폭 */
+@media (max-width: 820px) {
+  .calendar-headline .calendar-nav-storage { order: 5; }
+  .calendar-headline .calendar-nav-search { order: 5; }
+  .calendar-headline .partnerToggleBtn { order: 10; }
+}
+.calendar-headline .partnerToggleBtn.mark-btn {
+  width: auto;
+  min-width: 0;
+  padding: 0 12px;
+}
+/* 어두운 모드에서 상단 바(아이콘·월 제목)가 배경에 묻히지 않게 */
+@media (prefers-color-scheme: dark) {
+  .phoneCalBar {
+    color: #f2f2f7;
+  }
+}

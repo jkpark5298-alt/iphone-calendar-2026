@@ -161,6 +161,8 @@ export function importWorkScheduleFromIcs(icsText: string): WorkScheduleImportRe
     }
 
     const summary = String(event.summary || "").trim();
+    // 김현숙(탑승수속) 일정은 "같이 보기"로 따로 가져온다.
+    if (isPartnerSummary(summary)) continue;
     // SUMMARY: "👍 박종규 C근무" → 이름 추출
     const nameMatch = summary.replace(/^👍\s*/u, "").match(/^([가-힣A-Za-z0-9]+)\s+/u);
     if (nameMatch?.[1] && !targetName) targetName = nameMatch[1];
@@ -249,10 +251,10 @@ export function importWorkScheduleFromJson(raw: unknown): WorkScheduleImportResu
   if (raw && typeof raw === "object") {
     const obj = raw as Record<string, unknown>;
     if (Array.isArray(obj.days) && obj.year && obj.month) {
-      schedule = obj as ExcelScheduleMonth;
+      schedule = (obj as ExcelScheduleMonth).targetName === PARTNER_NAME ? null : (obj as ExcelScheduleMonth);
     } else if (obj.schedules && typeof obj.schedules === "object") {
       const schedules = obj.schedules as Record<string, ExcelScheduleMonth>;
-      const values = Object.values(schedules).filter(Boolean);
+      const values = Object.values(schedules).filter(Boolean).filter((item) => item.targetName !== PARTNER_NAME);
       // 가장 최근/첫 월
       schedule = values.sort((a, b) => {
         const ay = Number(a.year || 0) * 100 + Number(a.month || 0);
@@ -351,5 +353,114 @@ export async function importWorkScheduleFromFile(file: File): Promise<WorkSchedu
       marks: [],
       skipped: 0,
     };
+  }
+}
+
+
+// ---------------- 김현숙 같이 보기 ----------------
+
+/** 근무표 앱의 "같이 보기" 대상(탑승수속) */
+export const PARTNER_NAME = "김현숙";
+const PARTNER_SHIFT_CODES = new Set(["B7", "A5", "P", "D", "P6", "P7", "교육", "파견"]);
+/** 근무표 앱(SHIFT_TIME_LABELS)과 같은 근무 시간 */
+const PARTNER_SHIFT_TIMES: Record<string, [string, string]> = {
+  B7: ["11:00", "20:00"],
+  A5: ["05:40", "14:40"],
+  P: ["13:00", "22:00"],
+  D: ["05:00", "11:30"],
+  P6: ["13:30", "22:30"],
+};
+
+export type PartnerShift = {
+  year: number;
+  month: number;
+  day: number;
+  code: string;
+  /** HH:MM, 시간을 모르는 근무(교육 등)는 빈 값 */
+  start: string;
+  end: string;
+  leader: boolean;
+};
+
+export type PartnerImportResult = { shifts: PartnerShift[]; name: string };
+
+function summaryName(summary: string) {
+  return summary.replace(/^👍\s*/u, "").match(/^([가-힣A-Za-z0-9]+)\s+/u)?.[1] || "";
+}
+
+/** 김현숙 일정인지: 이름이 김현숙이거나, 탑승수속 근무 코드(B7/A5/P/D/P6…)면 같이 보기 대상 */
+function isPartnerSummary(summary: string): boolean {
+  if (summaryName(summary) === PARTNER_NAME) return true;
+  return PARTNER_SHIFT_CODES.has(extractShiftFromSummary(summary));
+}
+
+function padHm(hour: string, minute?: string) {
+  return `${hour.padStart(2, "0")}:${(minute || "00").padStart(2, "0")}`;
+}
+
+function partnerTimes(code: string, summary: string): { start: string; end: string } {
+  const matched = summary.match(/\((\d{1,2})(?::(\d{2}))?\s*~\s*(\d{1,2})(?::(\d{2}))?\)/);
+  if (matched) return { start: padHm(matched[1], matched[2]), end: padHm(matched[3], matched[4]) };
+  const preset = PARTNER_SHIFT_TIMES[code];
+  return preset ? { start: preset[0], end: preset[1] } : { start: "", end: "" };
+}
+
+function dedupePartnerShifts(shifts: PartnerShift[]) {
+  const map = new Map<string, PartnerShift>();
+  for (const shift of shifts) map.set(`${shift.year}-${shift.month}-${shift.day}`, shift);
+  return Array.from(map.values());
+}
+
+function partnerShiftsFromIcs(text: string): PartnerShift[] {
+  const shifts: PartnerShift[] = [];
+  for (const event of parseIcsEvents(text)) {
+    const date = parseIcsDate(event.start);
+    if (!date) continue;
+    const summary = String(event.summary || "").trim();
+    if (!isPartnerSummary(summary)) continue;
+    const code = extractShiftFromSummary(summary);
+    if (!PARTNER_SHIFT_CODES.has(code)) continue; // 休 등은 같이 보기에 넣지 않는다
+    shifts.push({ ...date, code, ...partnerTimes(code, summary), leader: summaryHasLeaderMark(summary) });
+  }
+  return dedupePartnerShifts(shifts);
+}
+
+function partnerShiftsFromJson(raw: unknown): PartnerShift[] {
+  if (!raw || typeof raw !== "object") return [];
+  const obj = raw as Record<string, unknown>;
+  const months: ExcelScheduleMonth[] = [];
+  if (Array.isArray(obj.days) && obj.year && obj.month) {
+    if ((obj as ExcelScheduleMonth).targetName === PARTNER_NAME) months.push(obj as ExcelScheduleMonth);
+  } else if (obj.schedules && typeof obj.schedules === "object") {
+    for (const [key, value] of Object.entries(obj.schedules as Record<string, ExcelScheduleMonth>)) {
+      if (!value) continue;
+      if (value.targetName === PARTNER_NAME || key.startsWith(`${PARTNER_NAME}|`)) months.push(value);
+    }
+  }
+  const shifts: PartnerShift[] = [];
+  for (const month of months) {
+    const year = Number(month.year);
+    const monthNumber = Number(month.month);
+    for (const day of month.days || []) {
+      const date = Number(day.date);
+      const code = String(day.myShift || "").trim();
+      if (!Number.isInteger(date) || date < 1 || date > 31 || !PARTNER_SHIFT_CODES.has(code)) continue;
+      shifts.push({ year, month: monthNumber, day: date, code, ...partnerTimes(code, ""), leader: Boolean(day.isLeader) });
+    }
+  }
+  return dedupePartnerShifts(shifts);
+}
+
+/** 근무표 ICS / PC 저장 JSON에서 김현숙 근무를 읽는다. 김현숙 근무가 없으면 shifts가 비어 있다. */
+export async function importPartnerShiftsFromFile(file: File): Promise<PartnerImportResult> {
+  try {
+    const name = String(file.name || "").toLowerCase();
+    const text = await file.text();
+    if (name.endsWith(".ics") || /BEGIN:VCALENDAR/i.test(text)) {
+      return { name: PARTNER_NAME, shifts: partnerShiftsFromIcs(text) };
+    }
+    return { name: PARTNER_NAME, shifts: partnerShiftsFromJson(JSON.parse(text)) };
+  } catch {
+    return { name: PARTNER_NAME, shifts: [] };
   }
 }
