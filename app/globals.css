@@ -14442,8 +14442,9 @@ body {
 
 /* 두 사람 함께 표기(동시休·현숙🚗 등) */
 .schedule-chip.pair-chip {
-  background: #f59e0b;
-  color: #1f1300;
+  background: #22d3ee;
+  color: #0b1f24;
+  box-shadow: inset 0 0 0 1px #0891b2;
   font-weight: 800;
   text-align: center;
 }
