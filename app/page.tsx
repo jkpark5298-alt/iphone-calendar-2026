@@ -570,7 +570,27 @@ type UndoState = {
 };
 
 export default function HomePage() {
-  const todayDefault = useMemo(() => getSafeToday(), []);
+  // 오늘 날짜. 홈 화면 앱은 며칠씩 켜져 있을 수 있어서, 앱으로 돌아올 때와 1분마다 다시 확인한다.
+  const [todayDefault, setTodayDefault] = useState(() => getSafeToday());
+  useEffect(() => {
+    const refreshToday = () => {
+      const next = getSafeToday();
+      setTodayDefault(prev => (prev.year === next.year && prev.month === next.month && prev.day === next.day ? prev : next));
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshToday();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refreshToday);
+    window.addEventListener("pageshow", refreshToday);
+    const timer = window.setInterval(refreshToday, 60000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refreshToday);
+      window.removeEventListener("pageshow", refreshToday);
+      window.clearInterval(timer);
+    };
+  }, []);
   const [view, setView] = useState<View>("calendar");
   const [themeFocusId, setThemeFocusId] = useState("");
   const [currentYear, setCurrentYear] = useState(todayDefault.year ?? 2026);
@@ -616,7 +636,7 @@ export default function HomePage() {
   const [calendarSearchOpen, setCalendarSearchOpen] = useState(false);
   /** 김현숙 "같이 보기" 근무를 캘린더에 보일지(이 기기 설정) */
   const [showPartnerShifts, setShowPartnerShifts] = useState(true);
-  const calendarSwipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const calendarSwipeRef = useRef<{ x: number; y: number; t: number; lastX: number; lastY: number } | null>(null);
   const [diaryLookupOpen, setDiaryLookupOpen] = useState(false);
   const [diaryToolsOpen, setDiaryToolsOpen] = useState(false);
   const diaryTextBoxRef = useRef<HTMLDivElement | null>(null);
@@ -3190,19 +3210,43 @@ export default function HomePage() {
 
   function handleCalendarTouchStart(event: React.TouchEvent) {
     const touch = event.touches[0];
-    calendarSwipeRef.current = touch && event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY, t: Date.now() } : null;
+    calendarSwipeRef.current =
+      touch && event.touches.length === 1
+        ? { x: touch.clientX, y: touch.clientY, t: Date.now(), lastX: touch.clientX, lastY: touch.clientY }
+        : null;
   }
 
-  /** 달력을 좌우로 밀면 다음/이전 달로 이동한다(아래위로 스크롤하는 동작과는 구분한다). */
-  function handleCalendarTouchEnd(event: React.TouchEvent) {
+  function handleCalendarTouchMove(event: React.TouchEvent) {
+    const swipe = calendarSwipeRef.current;
+    const touch = event.touches[0];
+    if (!swipe || !touch) return;
+    swipe.lastX = touch.clientX;
+    swipe.lastY = touch.clientY;
+  }
+
+  /**
+   * 달력을 좌우로 밀면 다음/이전 달로 이동한다. 엄지로 밀면 대각선으로 휘므로 가로가 세로보다 조금만 커도 인정하고,
+   * 아래위 스크롤(세로가 훨씬 큼)과는 구분한다. 브라우저가 세로 스크롤로 가져가 touchcancel이 와도 마지막 위치로 판정한다.
+   */
+  function finishCalendarSwipe(endX: number, endY: number) {
     const start = calendarSwipeRef.current;
     calendarSwipeRef.current = null;
-    const touch = event.changedTouches[0];
-    if (!start || !touch) return;
-    const dx = touch.clientX - start.x;
-    const dy = touch.clientY - start.y;
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.6 || Date.now() - start.t > 900) return;
+    if (!start) return;
+    const dx = endX - start.x;
+    const dy = endY - start.y;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.15 || Date.now() - start.t > 1500) return;
     moveCalendarMonth(dx < 0 ? 1 : -1);
+  }
+
+  function handleCalendarTouchEnd(event: React.TouchEvent) {
+    const touch = event.changedTouches[0];
+    const swipe = calendarSwipeRef.current;
+    finishCalendarSwipe(touch ? touch.clientX : swipe?.lastX ?? 0, touch ? touch.clientY : swipe?.lastY ?? 0);
+  }
+
+  function handleCalendarTouchCancel() {
+    const swipe = calendarSwipeRef.current;
+    if (swipe) finishCalendarSwipe(swipe.lastX, swipe.lastY);
   }
 
   function openTodayDiary() {
@@ -5175,7 +5219,13 @@ export default function HomePage() {
         </div>
         )}
 
-        <div className="calendarSwipeArea" onTouchStart={handleCalendarTouchStart} onTouchEnd={handleCalendarTouchEnd}>
+        <div
+          className="calendarSwipeArea"
+          onTouchStart={handleCalendarTouchStart}
+          onTouchMove={handleCalendarTouchMove}
+          onTouchEnd={handleCalendarTouchEnd}
+          onTouchCancel={handleCalendarTouchCancel}
+        >
         <div className="phoneCalBar">
           <div className="phoneCalIcons">
             <button type="button" className="phoneCalIconBtn" onClick={jumpCalendarToToday} aria-label="오늘 날짜로 이동">
