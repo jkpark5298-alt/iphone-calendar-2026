@@ -87,7 +87,10 @@ async function safeFetch(url: URL, init: RequestInit = {}, redirects = 4): Promi
     const next = new URL(res.headers.get("location")!, url);
     // 리다이렉트로 메서드가 바뀌면(303) GET, 그 외는 그대로
     const keep = res.status === 307 || res.status === 308;
-    return safeFetch(next, keep ? init : { headers: init.headers }, redirects - 1);
+    // 다른 서버로 넘어가면 로그인 정보(Authorization)는 보내지 않는다
+    const headers = { ...((init.headers ?? {}) as Record<string, string>) };
+    if (next.host !== url.host) delete headers.Authorization;
+    return safeFetch(next, keep ? { ...init, headers } : { headers }, redirects - 1);
   }
   return res;
 }
@@ -179,18 +182,21 @@ async function fetchCaldav(usernameRaw: string, password: string, serverRaw?: st
   const homeHref = firstHref(principal.xml, "calendar-home-set") ?? principalHref;
 
   // 3) 캘린더 목록
-  const listBody = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:resourcetype/><d:displayname/><c:supported-calendar-component-set/></d:prop></d:propfind>`;
+  const listBody = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/"><d:prop><d:resourcetype/><d:displayname/><c:supported-calendar-component-set/><cs:source/></d:prop></d:propfind>`;
   const list = await dav(new URL(homeHref, base), "PROPFIND", auth, listBody, "1");
   const calendars = tagContents(list.xml, "response")
     .filter((r) => {
       const rt = tagContents(r, "resourcetype")[0] ?? "";
-      if (!hasTag(rt, "calendar")) return false;
+      // 구독 캘린더(네이버 예약 등)는 resourcetype이 subscribed로 올 수 있다
+      if (!hasTag(rt, "calendar") && !hasTag(rt, "subscribed")) return false;
       const comps = tagContents(r, "supported-calendar-component-set")[0];
       return !comps || /VEVENT/i.test(comps);
     })
     .map((r) => ({
       href: xmlUnescape((tagContents(r, "href")[0] ?? "").trim()),
       name: xmlUnescape((tagContents(r, "displayname")[0] ?? "").trim()),
+      /** 구독 캘린더의 원본 주소 (있으면) */
+      source: xmlUnescape((tagContents(tagContents(r, "source")[0] ?? "", "href")[0] ?? "").trim()),
     }))
     .filter((c) => c.href);
   if (calendars.length === 0) throw new UserError("가져올 캘린더가 없습니다.", 404);
@@ -210,11 +216,29 @@ async function fetchCaldav(usernameRaw: string, password: string, serverRaw?: st
     const url = new URL(cal.href, base);
     let r = await dav(url, "REPORT", auth, reportBody(true), "1");
     if (r.status >= 400) r = await dav(url, "REPORT", auth, reportBody(false), "1");
+    const parts = r.status >= 400 ? [] : tagContents(r.xml, "calendar-data").map((s) => xmlUnescape(s).trim()).filter(Boolean);
+    if (!parts.length && cal.source) {
+      // 구독 캘린더: 일정 조회가 안 되면 원본(ICS) 주소에서 받는다. 같은 네이버 서버면 로그인 정보를 함께 보낸다.
+      const ics = await fetchSubscribedSource(cal.source, base, auth).catch(() => "");
+      if (ics) {
+        out.push({ name: cal.name || "캘린더", href: cal.href, ics });
+        continue;
+      }
+    }
     if (r.status >= 400) continue;
-    const parts = tagContents(r.xml, "calendar-data").map((s) => xmlUnescape(s).trim()).filter(Boolean);
     out.push({ name: cal.name || "캘린더", href: cal.href, ics: parts.join("\r\n") });
   }
   return out;
+}
+
+async function fetchSubscribedSource(source: string, base: URL, auth: string): Promise<string> {
+  const url = normalizeUrl(new URL(source, base).toString());
+  const headers: Record<string, string> = { Accept: "text/calendar, */*" };
+  if (url.host === base.host) headers.Authorization = auth;
+  const res = await safeFetch(url, { headers });
+  if (!res.ok) return "";
+  const text = await readLimited(res);
+  return /BEGIN:VCALENDAR/i.test(text) ? text : "";
 }
 
 export async function POST(req: NextRequest) {
