@@ -62,6 +62,12 @@ import {
   type InformationCalendarItem,
 } from "../lib/informationEntries";
 import { importPartnerShiftsFromFile, importWorkScheduleFromFile, type ImportedWorkMarkType, type PartnerImportResult } from "../lib/workScheduleImport";
+import ExternalCalendarModal from "../components/ExternalCalendarModal";
+import {
+  AUTO_SYNC_AGE_MS, eventsToScheduleItems, loadSources, refreshSources, saveSources, sourceIdPrefix,
+  type ExternalSource,
+} from "../lib/externalCalendars";
+import type { ImportedEvent } from "../lib/icsImport";
 import { readAppFileIndexArchive } from "../lib/infoIndex";
 
 // 개인 앨범 (travel-diary Chapter3 개인 앨범 엔진) — heic2any/leaflet 등 브라우저 전용 모듈이라 SSR 제외
@@ -656,6 +662,11 @@ export default function HomePage() {
   const scheduleSaveGenRef = useRef(0);
   const scheduleLatestRef = useRef<Record<string, ScheduleItem[]> | null>(null);
   const scheduleCopySpanRef = useRef(0);
+  // 외부 캘린더(ICS 파일·구독 주소·네이버) 가져오기
+  const [showExternalImport, setShowExternalImport] = useState(false);
+  const [externalSources, setExternalSources] = useState<ExternalSource[]>([]);
+  const schedulesRef = useRef(schedules);
+  schedulesRef.current = schedules;
 
   // 본문 사진의 [★ 대표] 버튼(일기장 편집 칸에서만 보임)을 누르면 그 사진을 캘린더 대표 사진으로 지정한다.
   useEffect(() => {
@@ -3042,6 +3053,104 @@ export default function HomePage() {
     );
   }
 
+  function storeExternalSources(updated: ExternalSource[], removedIds: string[] = []) {
+    setExternalSources(previous => {
+      const byId = new Map(previous.filter(source => !removedIds.includes(source.id)).map(source => [source.id, source]));
+      updated.forEach(source => byId.set(source.id, source));
+      const merged = Array.from(byId.values());
+      saveSources(merged);
+      return merged;
+    });
+  }
+
+  /** 출처마다 이전에 넣은 일정을 지우고 새로 받은 일정으로 바꾼다. base를 주면 그 목록 위에 반영한다. */
+  async function applyExternalCalendars(
+    results: Array<{ source: ExternalSource; events?: ImportedEvent[] }>,
+    base: Record<string, ScheduleItem[]> = schedulesRef.current,
+    withUndo = true,
+  ): Promise<boolean> {
+    storeExternalSources(results.map(result => result.source));
+    const replaced = results.filter(result => result.events);
+    if (!replaced.length) return true;
+    const prefixes = replaced.map(result => sourceIdPrefix(result.source.id));
+    const next: Record<string, ScheduleItem[]> = {};
+    for (const [scheduleKey, items] of Object.entries(base)) {
+      const kept = items.filter(item => !prefixes.some(prefix => item.id.startsWith(prefix)));
+      if (kept.length) next[scheduleKey] = kept;
+    }
+    for (const result of replaced) {
+      for (const item of eventsToScheduleItems(result.source, result.events || [])) {
+        const [year, month, day] = item.startDate.split("-").map(Number);
+        if (!year || !month || !day) continue;
+        const scheduleKey = key(month, day, year);
+        next[scheduleKey] = [...(next[scheduleKey] || []), { ...item, color: item.color as ScheduleColor }];
+      }
+    }
+    if (withUndo) registerUndo({ label: "외부 일정 가져오기", target: "schedules", previousData: JSON.stringify(base) });
+    return saveSchedules(next);
+  }
+
+  /** 아이콘·색·알림을 바꾸면 이미 넣은 일정에도 반영한다. */
+  async function updateExternalSource(source: ExternalSource): Promise<boolean> {
+    const old = externalSources.find(item => item.id === source.id);
+    storeExternalSources([source]);
+    const prefix = sourceIdPrefix(source.id);
+    const oldIcon = old?.icon ? `${old.icon} ` : "";
+    const newIcon = source.icon ? `${source.icon} ` : "";
+    let changed = false;
+    const next: Record<string, ScheduleItem[]> = {};
+    for (const [scheduleKey, items] of Object.entries(schedulesRef.current)) {
+      next[scheduleKey] = items.map(item => {
+        if (!item.id.startsWith(prefix)) return item;
+        changed = true;
+        const bare = oldIcon && item.title.startsWith(oldIcon) ? item.title.slice(oldIcon.length) : item.title;
+        return { ...item, title: `${newIcon}${bare}`, color: source.color as ScheduleColor, remind: source.remind };
+      });
+    }
+    return changed ? saveSchedules(next) : true;
+  }
+
+  async function removeExternalSource(source: ExternalSource): Promise<boolean> {
+    const prefix = sourceIdPrefix(source.id);
+    const base = schedulesRef.current;
+    const next: Record<string, ScheduleItem[]> = {};
+    for (const [scheduleKey, items] of Object.entries(base)) {
+      const kept = items.filter(item => !item.id.startsWith(prefix));
+      if (kept.length) next[scheduleKey] = kept;
+    }
+    storeExternalSources([], [source.id]);
+    registerUndo({ label: `${source.name} 일정 삭제`, target: "schedules", previousData: JSON.stringify(base) });
+    return saveSchedules(next);
+  }
+
+  /** 앱을 열 때 오래된 구독만 조용히 갱신. 서버의 최신 일정 위에 반영하고, 저장 대기 중인 수정이 있으면 건너뛴다. */
+  async function autoRefreshExternalCalendars(sources: ExternalSource[]) {
+    try {
+      const results = await refreshSources(sources, AUTO_SYNC_AGE_MS);
+      if (!results.length) return;
+      if (!results.some(result => result.events)) {
+        storeExternalSources(results.map(result => result.source));
+        return;
+      }
+      if (localStorage.getItem("iphone-calendar-schedule-pending") === "true") return;
+      const remote = await loadCalendarSchedulesFromSupabase();
+      if (!remote) return;
+      await applyExternalCalendars(results, remote, false);
+    } catch (error) {
+      console.warn("external calendar auto refresh error:", (error as Error)?.message);
+    }
+  }
+
+  useEffect(() => {
+    const loaded = loadSources();
+    setExternalSources(loaded);
+    if (!loaded.some(source => source.kind !== "file")) return;
+    const timer = window.setTimeout(() => { void autoRefreshExternalCalendars(loaded); }, 4000);
+    return () => window.clearTimeout(timer);
+    // 처음 열 때 한 번만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function importWorkOpsMarksFromFile(file: File | null) {
     if (!file) return;
 
@@ -5123,19 +5232,14 @@ export default function HomePage() {
             <button type="button" className="today-circle calendar-date-shortcut" onClick={openTodayDiary} aria-label="오늘 날짜 일기장으로 이동">{todayDefault.day}</button>
             <button type="button" className="red-plus-btn" onClick={openRedDateInput} aria-label="빨간 날짜 표시">+</button>
             <button type="button" className="mark-btn" onClick={openCalendarMarkInput} aria-label="근무 표시 입력">근무</button>
-            <label className="mark-btn work-ics-import-btn" title="근무표 ICS/JSON 가져오기">
+            <button
+              type="button"
+              className="mark-btn work-ics-import-btn"
+              title="근무표·일정(ICS·구독·네이버) 가져오기"
+              onClick={() => setShowExternalImport(true)}
+            >
               가져오기
-              <input
-                className="work-ics-import-input"
-                type="file"
-                accept=".ics,.json,text/calendar,application/json"
-                onChange={(event) => {
-                  const file = event.target.files?.[0] || null;
-                  void importWorkScheduleMarksFromFile(file);
-                  event.target.value = "";
-                }}
-              />
-            </label>
+            </button>
             <button type="button" className="plus-btn" onClick={() => openSchedule(currentMonth, currentDay)} aria-label="일정 추가">+</button>
             {hasPartnerShifts && (
               <button type="button" className="mark-btn partnerToggleBtn" aria-pressed={showPartnerShifts} onClick={togglePartnerShifts} title="김현숙 근무를 캘린더에 겹쳐 보기">
@@ -8750,6 +8854,16 @@ ${photo.memoText}
             </div>
           </div>
         </div>
+      )}
+      {showExternalImport && (
+        <ExternalCalendarModal
+          sources={externalSources}
+          onApply={(results) => applyExternalCalendars(results)}
+          onUpdateSource={updateExternalSource}
+          onRemoveSource={removeExternalSource}
+          onWorkScheduleFile={(file) => { void importWorkScheduleMarksFromFile(file); }}
+          onClose={() => setShowExternalImport(false)}
+        />
       )}
       {editingInfoTextCard && (
         <div className="info-text-card-edit-overlay" role="dialog" aria-modal="true" onClick={() => setEditingInfoTextCard(null)}>
