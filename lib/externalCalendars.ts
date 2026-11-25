@@ -89,6 +89,32 @@ export function withSourceIcon(icon: string, title: string): string {
   return `${icon} ${title}`;
 }
 
+const DOUBLE_LEADING_EMOJI = new RegExp("^\\p{Extended_Pictographic}\\uFE0F?\\s+(?=\\p{Extended_Pictographic})", "u");
+
+/**
+ * 예전에 가져온 외부 일정 정리 (ext- 일정만):
+ * - 제목 앞 아이콘 중복("⚽ ⚽️ …") → 하나만
+ * - 시간이 있는 일정은 시작일 하루에만 (23:00 경기가 다음 날까지 잡히던 것)
+ * 바뀐 것이 없으면 null.
+ */
+export function normalizeExternalItems<T extends { id: string; title: string; startDate?: string; startTime?: string; endDate?: string }>(
+  schedules: Record<string, T[]>,
+): Record<string, T[]> | null {
+  let changed = false;
+  const next: Record<string, T[]> = {};
+  for (const [key, items] of Object.entries(schedules)) {
+    next[key] = items.map((item) => {
+      if (!item.id.startsWith(EXTERNAL_ID_PREFIX)) return item;
+      const title = item.title.replace(DOUBLE_LEADING_EMOJI, "");
+      const endDate = item.startTime && item.startDate ? item.startDate : item.endDate;
+      if (title === item.title && endDate === item.endDate) return item;
+      changed = true;
+      return { ...item, title, endDate };
+    });
+  }
+  return changed ? next : null;
+}
+
 /** 기본 알림: 시간이 정해진 일정(경기 등)이 대부분이면 3시간 전 + 1시간 전, 종일 일정(공휴일 등) 위주면 없음 */
 export function defaultRemind(events: ImportedEvent[]): string {
   if (!events.length) return "";

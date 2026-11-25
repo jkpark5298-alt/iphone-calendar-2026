@@ -64,7 +64,7 @@ import {
 import { importPartnerShiftsFromFile, importWorkScheduleFromFile, type ImportedWorkMarkType, type PartnerImportResult } from "../lib/workScheduleImport";
 import ExternalCalendarModal from "../components/ExternalCalendarModal";
 import {
-  AUTO_SYNC_AGE_MS, eventsToScheduleItems, loadSources, refreshSources, saveSources, sourceIdPrefix, withSourceIcon,
+  AUTO_SYNC_AGE_MS, eventsToScheduleItems, loadSources, refreshSources, saveSources, sourceIdPrefix, withSourceIcon, normalizeExternalItems,
   type ExternalSource,
 } from "../lib/externalCalendars";
 import type { ImportedEvent } from "../lib/icsImport";
@@ -3122,6 +3122,19 @@ export default function HomePage() {
     return saveSchedules(next);
   }
 
+  /** 예전에 가져온 외부 일정(아이콘 중복, 밤 경기 이틀 표시)을 서버 최신 일정 기준으로 한 번 정리한다. 출처가 없는 기기(PC)에서도 돈다. */
+  async function cleanupExternalSchedules() {
+    try {
+      if (localStorage.getItem("iphone-calendar-schedule-pending") === "true") return;
+      const remote = await loadCalendarSchedulesFromSupabase();
+      if (!remote) return;
+      const fixed = normalizeExternalItems(remote);
+      if (fixed) await saveSchedules(fixed);
+    } catch (error) {
+      console.warn("external calendar cleanup error:", (error as Error)?.message);
+    }
+  }
+
   /** 앱을 열 때 오래된 구독만 조용히 갱신. 서버의 최신 일정 위에 반영하고, 저장 대기 중인 수정이 있으면 건너뛴다. */
   async function autoRefreshExternalCalendars(sources: ExternalSource[]) {
     try {
@@ -3143,8 +3156,12 @@ export default function HomePage() {
   useEffect(() => {
     const loaded = loadSources();
     setExternalSources(loaded);
-    if (!loaded.some(source => source.kind !== "file")) return;
-    const timer = window.setTimeout(() => { void autoRefreshExternalCalendars(loaded); }, 4000);
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        if (loaded.some(source => source.kind !== "file")) await autoRefreshExternalCalendars(loaded);
+        await cleanupExternalSchedules();
+      })();
+    }, 4000);
     return () => window.clearTimeout(timer);
     // 처음 열 때 한 번만
     // eslint-disable-next-line react-hooks/exhaustive-deps
