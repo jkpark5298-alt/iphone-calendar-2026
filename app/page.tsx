@@ -64,7 +64,7 @@ import {
 import { importPartnerShiftsFromFile, importWorkScheduleFromFile, type ImportedWorkMarkType, type PartnerImportResult } from "../lib/workScheduleImport";
 import ExternalCalendarModal from "../components/ExternalCalendarModal";
 import {
-  AUTO_SYNC_AGE_MS, eventsToScheduleItems, loadSources, refreshSources, saveSources, sourceIdPrefix,
+  AUTO_SYNC_AGE_MS, eventsToScheduleItems, loadSources, refreshSources, saveSources, sourceIdPrefix, withSourceIcon,
   type ExternalSource,
 } from "../lib/externalCalendars";
 import type { ImportedEvent } from "../lib/icsImport";
@@ -3096,7 +3096,6 @@ export default function HomePage() {
     storeExternalSources([source]);
     const prefix = sourceIdPrefix(source.id);
     const oldIcon = old?.icon ? `${old.icon} ` : "";
-    const newIcon = source.icon ? `${source.icon} ` : "";
     let changed = false;
     const next: Record<string, ScheduleItem[]> = {};
     for (const [scheduleKey, items] of Object.entries(schedulesRef.current)) {
@@ -3104,7 +3103,7 @@ export default function HomePage() {
         if (!item.id.startsWith(prefix)) return item;
         changed = true;
         const bare = oldIcon && item.title.startsWith(oldIcon) ? item.title.slice(oldIcon.length) : item.title;
-        return { ...item, title: `${newIcon}${bare}`, color: source.color as ScheduleColor, remind: source.remind };
+        return { ...item, title: withSourceIcon(source.icon, bare), color: source.color as ScheduleColor, remind: source.remind };
       });
     }
     return changed ? saveSchedules(next) : true;

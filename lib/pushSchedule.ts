@@ -6,11 +6,24 @@ export const REMIND_OPTIONS = [
   { value: "at", label: "정시" },
   { value: "10m", label: "10분 전" },
   { value: "1h", label: "1시간 전" },
+  { value: "3h", label: "3시간 전" },
+  { value: "3h,1h", label: "3시간 전 + 1시간 전" },
   { value: "1d", label: "전날 저녁 8시" },
 ];
 
 export function remindLabel(value?: string) {
-  return REMIND_OPTIONS.find((option) => option.value === (value || ""))?.label || "";
+  const found = REMIND_OPTIONS.find((option) => option.value === (value || ""));
+  if (found) return found.label;
+  // "3h,1h"처럼 여러 개를 고른 값
+  return splitRemind(value)
+    .map((part) => REMIND_OPTIONS.find((option) => option.value === part)?.label || "")
+    .filter(Boolean)
+    .join(" + ");
+}
+
+/** remind 값은 쉼표로 여러 개를 담을 수 있다 ("3h,1h" → 3시간 전과 1시간 전에 각각 알림). */
+export function splitRemind(value?: string | null): string[] {
+  return Array.from(new Set(String(value || "").split(",").map((part) => part.trim()).filter(Boolean)));
 }
 
 export type RemindRow = {
@@ -69,8 +82,8 @@ export function dueReminders(rows: RemindRow[], nowMs: number, graceMs = 40 * MI
     if (targetTime === null) continue;
 
     for (const row of rows) {
-      const remind = row.remind || "";
-      if (!remind) continue;
+      const reminds = splitRemind(row.remind);
+      if (!reminds.length) continue;
       const startTime = ymdToTime(row.start_date);
       if (startTime === null || !occurrenceStartsOn(startTime, row.repeat || "없음", targetTime)) continue;
 
@@ -79,24 +92,26 @@ export function dueReminders(rows: RemindRow[], nowMs: number, graceMs = 40 * MI
       const minute = hm ? hm.minute : 0;
       const timeLabel = hm ? `${pad2(hm.hour)}:${pad2(hm.minute)}` : "종일";
 
-      let fireMs: number;
-      let body: string;
-      if (remind === "at") {
-        fireMs = kstWallToMs(year, month, date, hour, minute);
-        body = hm ? `지금 시작 · ${timeLabel}` : "오늘 종일 일정";
-      } else if (remind === "10m" || remind === "1h") {
-        const minutesBefore = remind === "10m" ? 10 : 60;
-        fireMs = kstWallToMs(year, month, date, hour, minute) - minutesBefore * MINUTE_MS;
-        body = `${remind === "10m" ? "10분" : "1시간"} 후 · ${timeLabel}`;
-      } else if (remind === "1d") {
-        fireMs = kstWallToMs(year, month, date - 1, EVENING_HOUR, 0);
-        body = `내일 ${timeLabel}`;
-      } else {
-        continue;
-      }
+      for (const remind of reminds) {
+        let fireMs: number;
+        let body: string;
+        if (remind === "at") {
+          fireMs = kstWallToMs(year, month, date, hour, minute);
+          body = hm ? `지금 시작 · ${timeLabel}` : "오늘 종일 일정";
+        } else if (remind === "10m" || remind === "1h" || remind === "3h") {
+          const minutesBefore = remind === "10m" ? 10 : remind === "1h" ? 60 : 180;
+          fireMs = kstWallToMs(year, month, date, hour, minute) - minutesBefore * MINUTE_MS;
+          body = `${remind === "10m" ? "10분" : remind === "1h" ? "1시간" : "3시간"} 후 · ${timeLabel}`;
+        } else if (remind === "1d") {
+          fireMs = kstWallToMs(year, month, date - 1, EVENING_HOUR, 0);
+          body = `내일 ${timeLabel}`;
+        } else {
+          continue;
+        }
 
-      if (fireMs <= nowMs && fireMs > nowMs - graceMs) {
-        results.push({ scheduleId: row.schedule_id, occurrence, remind, title: row.title, body, fireMs });
+        if (fireMs <= nowMs && fireMs > nowMs - graceMs) {
+          results.push({ scheduleId: row.schedule_id, occurrence, remind, title: row.title, body, fireMs });
+        }
       }
     }
   }

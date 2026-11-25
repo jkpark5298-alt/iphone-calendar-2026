@@ -32,7 +32,7 @@ export type ExternalSource = {
   name: string;
   icon: string;
   color: string;
-  /** "" 없음 / at / 10m / 1h / 1d (lib/pushSchedule) */
+  /** "" 없음 / at / 10m / 1h / 3h / 1d, 여러 개는 쉼표 ("3h,1h") (lib/pushSchedule) */
   remind: string;
   url?: string;
   /** 네이버(CalDAV) */
@@ -80,11 +80,20 @@ export function guessIcon(name: string, events: ImportedEvent[] = []): string {
   return "📅";
 }
 
-/** 기본 알림: 시간이 정해진 일정(경기 등)이 대부분이면 1시간 전, 종일 일정(공휴일 등) 위주면 없음 */
+/** 제목이 이미 그림문자(⚽️ 등)로 시작하면 아이콘을 또 붙이지 않는다 (⚽ ⚽️ 중복 방지) */
+const LEADING_EMOJI = new RegExp("^\\p{Extended_Pictographic}", "u");
+
+export function withSourceIcon(icon: string, title: string): string {
+  if (!icon) return title;
+  if (LEADING_EMOJI.test(title.trimStart())) return title;
+  return `${icon} ${title}`;
+}
+
+/** 기본 알림: 시간이 정해진 일정(경기 등)이 대부분이면 3시간 전 + 1시간 전, 종일 일정(공휴일 등) 위주면 없음 */
 export function defaultRemind(events: ImportedEvent[]): string {
   if (!events.length) return "";
   const timed = events.filter((e) => !e.allDay).length;
-  return timed >= events.length / 2 ? "1h" : "";
+  return timed >= events.length / 2 ? "3h,1h" : "";
 }
 
 // ---------- 출처 목록 저장 (이 기기) ----------
@@ -131,11 +140,10 @@ export function sourceIdPrefix(sourceId: string) {
 /** 한 달 전 이후 일정만 넣는다 (지난 일정이 쌓이지 않게) */
 export function eventsToScheduleItems(source: ExternalSource, events: ImportedEvent[], now = Date.now()): ExternalScheduleItem[] {
   const from = kstDateKey(now - 31 * 24 * 60 * 60 * 1000);
-  const prefix = source.icon ? `${source.icon} ` : "";
   return events
     .filter((e) => e.lastDate >= from)
     .map((e) => {
-      const title = `${prefix}${e.title}${e.location ? ` @${e.location}` : ""}`.slice(0, 200);
+      const title = withSourceIcon(source.icon, `${e.title}${e.location ? ` @${e.location}` : ""}`).slice(0, 200);
       if (e.allDay) {
         return {
           id: `${sourceIdPrefix(source.id)}${hash(e.id)}`,
