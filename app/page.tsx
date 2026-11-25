@@ -3103,7 +3103,7 @@ export default function HomePage() {
         if (!item.id.startsWith(prefix)) return item;
         changed = true;
         const bare = oldIcon && item.title.startsWith(oldIcon) ? item.title.slice(oldIcon.length) : item.title;
-        return { ...item, title: withSourceIcon(source.icon, bare), color: source.color as ScheduleColor, remind: source.remind };
+        return { ...item, title: withSourceIcon(source.icon, bare), ...(item.startTime ? { endDate: item.startDate } : {}), color: source.color as ScheduleColor, remind: source.remind };
       });
     }
     return changed ? saveSchedules(next) : true;

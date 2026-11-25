@@ -163,7 +163,8 @@ export function eventsToScheduleItems(source: ExternalSource, events: ImportedEv
         title,
         startDate: e.startDate,
         startTime: kstTimeLabel(e.start),
-        endDate: kstDateKey(endUtc),
+        // 시간이 있는 일정은 시작일 하루에만 표시한다 (23:00 시작 경기가 다음 날까지 두 번 잡히지 않게)
+        endDate: e.startDate,
         endTime: e.end > e.start ? kstTimeLabel(endUtc) : "",
         repeat: "없음",
         color: source.color,
